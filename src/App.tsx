@@ -549,8 +549,12 @@ function App() {
     }
 
     useEffect(() => {
-      const config = Amplify.getConfig() as Record<string, unknown>
-      const hasData = Boolean((config as { data?: unknown }).data)
+      const config = Amplify.getConfig() as Record<string, unknown> & {
+        API?: { GraphQL?: unknown }
+      }
+      const hasData =
+        Boolean((config as { data?: unknown }).data) ||
+        Boolean(config.API?.GraphQL)
       const hasAuth = Boolean(
         (config as { Auth?: { Cognito?: unknown } }).Auth?.Cognito,
       )
@@ -563,6 +567,14 @@ function App() {
       }))
 
       const checkOutputs = async () => {
+        if (!import.meta.env.DEV) {
+          setDebugInfo((current) => ({
+            ...current,
+            outputsStatus: 'Not checked (production)',
+          }))
+          return
+        }
+
         try {
           const response = await fetch('/amplify_outputs.json', {
             cache: 'no-store',
