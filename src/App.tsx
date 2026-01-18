@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Amplify } from 'aws-amplify'
+import outputs from '../amplify_outputs.json'
 import type {
   ConversationMessage,
   ConversationMessageContent,
@@ -771,7 +772,8 @@ function App() {
       return fallback
     }
     const config = Amplify.getConfig() as { custom?: Record<string, string> }
-    return config.custom?.[key]
+    const outputCustom = (outputs as { custom?: Record<string, string> }).custom
+    return config.custom?.[key] ?? outputCustom?.[key]
   }
 
   const fetchInventory = useCallback(async () => {
