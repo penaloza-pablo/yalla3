@@ -1,0 +1,180 @@
+DOCUMENTATION
+
+Purpose
+This document captures the evolving functionality of the Yalla solution. Each
+feature is described with its purpose, UI behavior, and data flow, including
+AWS services involved. Keep it up to date as changes are made.
+
+Authentication - Amplify Auth
+Overview
+- Scope: App-level sign-in and sign-out using Amplify Authenticator.
+- Status: Enabled in the frontend and backed by Amplify Auth resource.
+
+UI behavior
+- Users must sign in before accessing the app.
+- Auth UI follows Amplify defaults and is rendered around the main app.
+
+Data flow
+- Frontend: `Authenticator` wraps the root app after `Amplify.configure`.
+- Backend: Auth resource allows email login.
+
+Files
+- `src/main.tsx`: Amplify configuration and `Authenticator` wrapper.
+
+Inventory - UI foundation
+Overview
+- Scope: Ops > Inventory view (initial UI baseline).
+- Status: UI scaffold only; no live data connections yet.
+
+UI behavior
+- Left navigation follows the defined sitemap with Ops > Inventory highlighted.
+- Inventory page includes a header, summary cards, and a data table layout.
+- All content is in English and designed for desktop, tablet, and mobile.
+
+Data flow
+- Current state: mock rows only.
+- Target state: data will be read from the production DynamoDB table via Lambda.
+
+Files
+- `src/App.tsx`: page layout, navigation, and inventory data fetch/mapping.
+- `src/App.css`: layout, navigation, cards, and table styling.
+- `src/index.css`: base UI resets and typography.
+
+Inventory - GetInventory Lambda (in progress)
+Overview
+- Scope: Lambda function reads from the production DynamoDB table
+  `yalla-inventory` and provides data to the Inventory UI.
+- Status: Implemented in backend code; awaiting AWS configuration and access
+  details to deploy and wire to the frontend.
+
+Data flow
+- Lambda: `GetInventory` performs a DynamoDB Scan on `yalla-inventory`.
+- Frontend: `VITE_GET_INVENTORY_URL` or `custom.getInventoryUrl` must point to
+  the Lambda endpoint.
+- Refresh: the Inventory Refresh button triggers a new fetch.
+ - Field mapping (DynamoDB -> UI):
+  - `id` -> Item ID
+  - `Item name` -> Item name
+  - `Location` -> Location
+  - `Status` -> Status
+  - `Quantity` -> Quantity
+  - `Last Updated` or `Last updated` -> Last updated
+  - `rebuyQty` -> Rebuy quantity (hidden)
+  - `unitPrice` -> Unit price (hidden)
+  - `Tolerance` -> Tolerance (hidden)
+  - `consumptionRules` -> Consumption rules (hidden)
+
+Endpoint
+- Current Lambda URL:
+  - https://ynsqdnyv4hai32rnyca7r3qgxa0bkohm.lambda-url.eu-central-1.on.aws/
+
+Inventory - UpsertInventory Lambda (in progress)
+Overview
+- Scope: Lambda function creates or updates inventory items in
+  `yalla-inventory` and supports the Inventory UI form.
+- Status: Implemented in backend code; awaiting AWS configuration and access
+  details to deploy and wire to the frontend.
+
+Data flow
+- Lambda: `UpsertInventory` performs DynamoDB PutItem on `yalla-inventory`.
+- Frontend: `VITE_UPSERT_INVENTORY_URL` or `custom.upsertInventoryUrl` must point
+  to the Lambda endpoint.
+- Actions: "Add item" opens the form, "Edit" updates an existing item.
+
+Endpoint
+- Current Lambda URL:
+  - https://h4kjsmbbffvo2fd2dcd36op4fm0uywdc.lambda-url.eu-central-1.on.aws/
+
+Files
+- `amplify/functions/upsert-inventory/resource.ts`: Lambda definition.
+- `amplify/functions/upsert-inventory/handler.ts`: PutItem handler.
+- `src/App.tsx`: inventory form UI and save action.
+
+Navigation - Core features
+Overview
+- Scope: Core navigation items sit under Yalla! and are independent of sections.
+- Current items: Chatbot, Alerts.
+
+UI behavior
+- Selecting Chatbot displays the AI conversation interface.
+- Selecting Alerts displays the Alerts experience.
+
+Inventory - Expanded row details
+Overview
+- Scope: Additional inventory fields are hidden by default and shown on demand.
+
+UI behavior
+- Each row has a toggle caret inside Actions to expand hidden fields.
+- Hidden fields: Item ID, Consumption rules, Last updated, Rebuy quantity,
+  Unit price, Tolerance.
+
+Inventory - Form and sorting
+Overview
+- Scope: Inventory form supports editing extended fields and user-driven sorting.
+
+UI behavior
+- Form fields include Rebuy quantity, Unit price, Tolerance, and Consumption rules.
+- Consumption rules must be valid JSON to save.
+- Sorting is triggered by clicking table headers for Item name and Status.
+- Filters icon opens a modal with multi-select options for Location and Status.
+
+Inventory - Consumption rules UI
+Overview
+- Scope: Consumption rules are editable via structured fields.
+
+UI behavior
+- Users edit Apartment, Hostel, and Room rules with amount/unit inputs.
+- The app assembles and persists valid JSON behind the scenes.
+
+Chatbot - AI conversation (in progress)
+Overview
+- Scope: AI chatbot for questions about inventory and alerts.
+- Status: Conversation route defined in Amplify Data.
+
+UI behavior
+- Selecting Chatbot displays the AI conversation interface.
+- Quick prompts are available to validate the AI route quickly.
+- Enter sends a message (Shift+Enter adds a new line).
+
+Data flow
+- AI route: `chatbot` conversation using Claude 3.5 Haiku.
+- Frontend uses `useAIConversation('chatbot')`.
+- Authentication is enforced at the app level via Authenticator.
+
+Alerts - UI and data flow (in progress)
+Overview
+- Scope: Alerts feature mirrors Inventory layout for `yalla-alarms`.
+- Status: Backend and UI scaffolded; awaiting deployment and endpoints.
+
+Data flow
+- Lambda: `GetAlerts` scans `yalla-alarms` and releases expired snoozes.
+- Lambda: `UpdateAlertStatus` updates Status and SnoozeUntil.
+- Frontend: `VITE_GET_ALERTS_URL` / `VITE_UPDATE_ALERT_STATUS_URL` or
+  `custom.getAlertsUrl` / `custom.updateAlertStatusUrl` are required.
+
+Endpoints
+- GetAlerts:
+  - https://uni4qz5q4pcye2iyyph7zcyh3y0thjqw.lambda-url.eu-central-1.on.aws/
+- UpdateAlertStatus:
+  - https://opsa3esyd3co4vk7j4nxn6bnn40zoico.lambda-url.eu-central-1.on.aws/
+
+UI behavior
+- Default filter shows only Pending alerts.
+- Filters support multi-select for Status and Origin.
+- Hidden fields: Alert ID, Origin, Created by.
+- Actions: Done (Pending -> Done), Snooze (Pending -> Snoozed until user date).
+
+Files
+- `amplify/functions/get-alerts/resource.ts`: Lambda definition.
+- `amplify/functions/get-alerts/handler.ts`: Alerts scan and snooze release.
+- `amplify/functions/update-alert-status/resource.ts`: Lambda definition.
+- `amplify/functions/update-alert-status/handler.ts`: Status update handler.
+- `src/App.tsx`: Alerts UI and actions.
+
+Files
+- `src/App.tsx`: navigation and placeholder views.
+
+Files
+- `amplify/functions/get-inventory/resource.ts`: Lambda definition.
+- `amplify/functions/get-inventory/handler.ts`: DynamoDB Scan handler.
+- `src/App.tsx`: fetches and renders live inventory data.

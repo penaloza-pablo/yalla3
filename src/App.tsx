@@ -766,8 +766,19 @@ function App() {
     [alertRows],
   )
 
+  const getEndpoint = (key: string, fallback?: string) => {
+    if (fallback) {
+      return fallback
+    }
+    const config = Amplify.getConfig() as { custom?: Record<string, string> }
+    return config.custom?.[key]
+  }
+
   const fetchInventory = useCallback(async () => {
-    const endpoint = import.meta.env.VITE_GET_INVENTORY_URL
+    const endpoint = getEndpoint(
+      'getInventoryUrl',
+      import.meta.env.VITE_GET_INVENTORY_URL,
+    )
     if (!endpoint) {
       setError(
         'Missing inventory endpoint. Set VITE_GET_INVENTORY_URL in the environment.',
@@ -806,7 +817,10 @@ function App() {
   }, [])
 
   const fetchAlerts = useCallback(async () => {
-    const endpoint = import.meta.env.VITE_GET_ALERTS_URL
+    const endpoint = getEndpoint(
+      'getAlertsUrl',
+      import.meta.env.VITE_GET_ALERTS_URL,
+    )
     if (!endpoint) {
       setAlertsError(
         'Missing alerts endpoint. Set VITE_GET_ALERTS_URL in the environment.',
@@ -1001,7 +1015,10 @@ function App() {
   }
 
   const saveItem = async () => {
-    const endpoint = import.meta.env.VITE_UPSERT_INVENTORY_URL
+    const endpoint = getEndpoint(
+      'upsertInventoryUrl',
+      import.meta.env.VITE_UPSERT_INVENTORY_URL,
+    )
     if (!endpoint) {
       setFormError(
         'Missing upsert endpoint. Set VITE_UPSERT_INVENTORY_URL in the environment.',
@@ -1096,7 +1113,10 @@ function App() {
     status: 'Done' | 'Snoozed',
     snoozeUntil?: string,
   ) => {
-    const endpoint = import.meta.env.VITE_UPDATE_ALERT_STATUS_URL
+    const endpoint = getEndpoint(
+      'updateAlertStatusUrl',
+      import.meta.env.VITE_UPDATE_ALERT_STATUS_URL,
+    )
     if (!endpoint) {
       setAlertsError(
         'Missing alerts update endpoint. Set VITE_UPDATE_ALERT_STATUS_URL in the environment.',
