@@ -69,8 +69,8 @@ export const handler = async (event: {
 
     await Promise.all(
       items
-        .filter((item) => shouldReleaseSnooze(item, now))
-        .map((item) =>
+        .filter((item: Record<string, unknown>) => shouldReleaseSnooze(item, now))
+        .map((item: Record<string, unknown>) =>
           client.send(
             new UpdateCommand({
               TableName: tableName,
