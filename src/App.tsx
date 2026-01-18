@@ -489,7 +489,6 @@ function App() {
     locations: [],
     statuses: [],
   })
-  const [isChatbotConfigured, setIsChatbotConfigured] = useState(false)
   const conversationName =
     import.meta.env.VITE_CHATBOT_NAME?.trim() || 'chatbot'
 
@@ -528,6 +527,7 @@ function App() {
     const [{ data: chatData, isLoading: isChatLoading }, handleSendMessage] =
       useAIConversation(conversationName)
     const chatMessages = (chatData?.messages ?? []) as ConversationMessage[]
+    const isAiConfigured = debugInfo.configHasData || debugInfo.outputsHasData
     const quickPrompts = [
       'Show low stock items and locations.',
       'Summarize pending alerts from the last 7 days.',
@@ -603,6 +603,12 @@ function App() {
         </p>
         <div className="chat-layout">
           <div className="chat-panel">
+            {!isAiConfigured ? (
+              <div className="alert">
+                Amplify AI is not configured yet. Verify that
+                amplify_outputs.json includes data outputs.
+              </div>
+            ) : null}
             <div className="chat-window">
               {chatMessages.length ? (
                 chatMessages.map((message) => (
@@ -664,7 +670,9 @@ function App() {
           <div className="chat-side">
             <div className="card card-compact">
               <p className="card-label">Amplify AI</p>
-              <p className="card-value">Connected</p>
+              <p className="card-value">
+                {isAiConfigured ? 'Connected' : 'Not configured'}
+              </p>
               <p className="card-meta">
                 Conversation: {conversationName || 'chatbot'}
               </p>
@@ -832,10 +840,6 @@ function App() {
   }
 
   useEffect(() => {
-    const config = Amplify.getConfig() as {
-      data?: Record<string, unknown>
-    }
-    setIsChatbotConfigured(Boolean(config?.data))
     if (activePage === 'Inventory') {
       void fetchInventory()
     }
@@ -1881,54 +1885,7 @@ function App() {
             </section>
           </>
         ) : activePage === 'Chatbot' ? (
-          isChatbotConfigured ? (
-            <ChatbotView />
-          ) : (
-            <section className="card">
-              <h1 className="page-title">Chatbot</h1>
-              <p className="subtitle">
-                Chatbot is not configured in this environment yet.
-              </p>
-              <p className="chat-empty">
-                Ensure the Amplify AI backend outputs are available in hosting.
-              </p>
-              <div className="chatbot-container">
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={() => {
-                    const debugPanel = document.querySelector(
-                      '[data-chatbot-debug]',
-                    ) as HTMLDivElement | null
-                    if (debugPanel) {
-                      debugPanel.removeAttribute('data-hidden')
-                      return
-                    }
-                  }}
-                >
-                  Show debug
-                </button>
-                <div data-chatbot-debug>
-                  <ChatbotDebugPanel
-                    debugInfo={{
-                      outputsStatus: 'Not checked',
-                      outputsKeys: [],
-                      outputsHasData: false,
-                      outputsHasAuth: false,
-                      configKeys: Object.keys(Amplify.getConfig() ?? {}),
-                      configHasData: Boolean(
-                        (Amplify.getConfig() as { data?: unknown }).data,
-                      ),
-                      configHasAuth: Boolean(
-                        (Amplify.getConfig() as { Auth?: { Cognito?: unknown } })
-                          .Auth?.Cognito,
-                      ),
-                    }}
-                  />
-                </div>
-              </div>
-            </section>
-          )
+          <ChatbotView />
         ) : (
           <section className="card">
             <h1 className="page-title">{activePage}</h1>
