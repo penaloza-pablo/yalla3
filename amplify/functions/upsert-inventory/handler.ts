@@ -304,39 +304,44 @@ export const handler = async (event: {
 
     const alertsTable = process.env.ALERTS_TABLE;
     if (alertsTable && item.Status === 'Reorder') {
-      const alertTemplate = buildReorderAlert({
-        name: item['Item name'],
-        category: item.category,
-        quantity: item.Quantity,
-        location: item.Location || 'Unknown location',
-        createdBy,
-      });
+      try {
+        const alertTemplate = buildReorderAlert({
+          name: item['Item name'],
+          category: item.category,
+          quantity: item.Quantity,
+          location: item.Location || 'Unknown location',
+          createdBy,
+        });
 
-      if (alertTemplate) {
-        const isDuplicate = await hasDuplicateReorderAlert(
-          alertsTable,
-          alertTemplate.name,
-          alertTemplate.description,
-        );
-        if (isDuplicate) {
-          const response = { item };
-          return isHttp ? buildHttpResponse(200, response) : response;
+        if (alertTemplate) {
+          const isDuplicate = await hasDuplicateReorderAlert(
+            alertsTable,
+            alertTemplate.name,
+            alertTemplate.description,
+          );
+          if (!isDuplicate) {
+            const alertId = await getNextAlertId(alertsTable);
+            await client.send(
+              new PutCommand({
+                TableName: alertsTable,
+                Item: {
+                  id: alertId,
+                  'Name ': alertTemplate.name,
+                  Description: alertTemplate.description,
+                  Date: formatAlertDate(),
+                  Status: 'Pending',
+                  Origin: 'Inventory',
+                  'Create by': createdBy,
+                },
+              }),
+            );
+          }
         }
-        const alertId = await getNextAlertId(alertsTable);
-        await client.send(
-          new PutCommand({
-            TableName: alertsTable,
-            Item: {
-              id: alertId,
-              'Name ': alertTemplate.name,
-              Description: alertTemplate.description,
-              Date: formatAlertDate(),
-              Status: 'Pending',
-              Origin: 'Inventory',
-              'Create by': createdBy,
-            },
-          }),
-        );
+      } catch (alertError) {
+        console.error('Failed to create reorder alert', {
+          itemId: item.id,
+          error: alertError,
+        });
       }
     }
 
