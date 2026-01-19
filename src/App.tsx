@@ -213,27 +213,6 @@ const formatDateForStorage = (value: string) => {
   return `${day}/${month}/${parsed.getFullYear()}`
 }
 
-const parseDateInputValue = (value: string) => {
-  if (!value) {
-    return ''
-  }
-
-  const slashMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (slashMatch) {
-    const [, day, month, year] = slashMatch
-    return `${year}-${month}-${day}`
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return ''
-  }
-
-  const day = String(parsed.getDate()).padStart(2, '0')
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  return `${parsed.getFullYear()}-${month}-${day}`
-}
-
 const formatUpdatedDate = (value: unknown) => {
   if (value === null || value === undefined) {
     return '—'
