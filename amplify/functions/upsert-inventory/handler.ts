@@ -122,6 +122,7 @@ const buildReorderAlert = (item: {
 const hasDuplicateReorderAlert = async (
   tableName: string,
   alertName: string,
+  alertDescription: string,
 ) => {
   let lastEvaluatedKey: Record<string, unknown> | undefined;
   do {
@@ -129,16 +130,19 @@ const hasDuplicateReorderAlert = async (
       new ScanCommand({
         TableName: tableName,
         ProjectionExpression: 'id',
-        FilterExpression: '#status = :status AND #origin = :origin AND #name = :name',
+        FilterExpression:
+          '#status = :status AND #origin = :origin AND #name = :name AND #description = :description',
         ExpressionAttributeNames: {
           '#status': 'Status',
           '#origin': 'Origin',
           '#name': 'Name ',
+          '#description': 'Description',
         },
         ExpressionAttributeValues: {
           ':status': 'Pending',
           ':origin': 'Inventory',
           ':name': alertName,
+          ':description': alertDescription,
         },
         ExclusiveStartKey: lastEvaluatedKey,
       }),
@@ -312,6 +316,7 @@ export const handler = async (event: {
         const isDuplicate = await hasDuplicateReorderAlert(
           alertsTable,
           alertTemplate.name,
+          alertTemplate.description,
         );
         if (isDuplicate) {
           const response = { item };
