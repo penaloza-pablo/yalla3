@@ -1,9 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  ScanCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -12,34 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
 };
 
+type InventoryRebuyArgs = {
+  limit?: number;
+  buffer?: number;
+  status?: string;
+  location?: string;
+};
+
 const parseLimit = (value?: string) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return 200;
   }
   return Math.min(Math.trunc(parsed), 500);
-};
-
-const shouldReleaseSnooze = (item: Record<string, unknown>, now: number) => {
-  if (item.Status !== 'Snoozed') {
-    return false;
-  }
-  const snoozeUntil = item.SnoozeUntil;
-  if (!snoozeUntil || typeof snoozeUntil !== 'string') {
-    return false;
-  }
-  const parsed = Date.parse(snoozeUntil);
-  if (Number.isNaN(parsed)) {
-    return false;
-  }
-  return parsed <= now;
-};
-
-type AlertsQueryArgs = {
-  limit?: number;
-  status?: string;
-  origin?: string;
-  includeSnoozed?: boolean;
 };
 
 const isHttpRequest = (event: {
@@ -55,7 +36,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
   body: JSON.stringify(payload),
 });
 
-const buildScanFilters = (args: AlertsQueryArgs) => {
+const buildScanFilters = (args: InventoryRebuyArgs) => {
   const filters: string[] = [];
   const expressionValues: Record<string, unknown> = {};
   const expressionNames: Record<string, string> = {};
@@ -66,16 +47,10 @@ const buildScanFilters = (args: AlertsQueryArgs) => {
     expressionValues[':status'] = args.status;
   }
 
-  if (args.origin) {
-    filters.push('#origin = :origin');
-    expressionNames['#origin'] = 'Origin';
-    expressionValues[':origin'] = args.origin;
-  }
-
-  if (args.includeSnoozed === false) {
-    filters.push('#status <> :snoozed');
-    expressionNames['#status'] = 'Status';
-    expressionValues[':snoozed'] = 'Snoozed';
+  if (args.location) {
+    filters.push('#location = :location');
+    expressionNames['#location'] = 'Location';
+    expressionValues[':location'] = args.location;
   }
 
   return {
@@ -88,7 +63,7 @@ const buildScanFilters = (args: AlertsQueryArgs) => {
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   queryStringParameters?: Record<string, string | undefined>;
-  arguments?: AlertsQueryArgs;
+  arguments?: InventoryRebuyArgs;
 }) => {
   const isHttp = isHttpRequest(event);
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
@@ -110,18 +85,17 @@ export const handler = async (event: {
   const args = isHttp
     ? {
         limit: parseLimit(event.queryStringParameters?.limit),
+        buffer: event.queryStringParameters?.buffer
+          ? Number(event.queryStringParameters.buffer)
+          : undefined,
         status: event.queryStringParameters?.status,
-        origin: event.queryStringParameters?.origin,
-        includeSnoozed:
-          event.queryStringParameters?.includeSnoozed === undefined
-            ? undefined
-            : event.queryStringParameters?.includeSnoozed === 'true',
+        location: event.queryStringParameters?.location,
       }
     : {
         limit: event.arguments?.limit,
+        buffer: event.arguments?.buffer,
         status: event.arguments?.status,
-        origin: event.arguments?.origin,
-        includeSnoozed: event.arguments?.includeSnoozed,
+        location: event.arguments?.location,
       };
 
   const limit = typeof args.limit === 'number' ? parseLimit(String(args.limit)) : undefined;
@@ -135,39 +109,42 @@ export const handler = async (event: {
     });
 
     const result = await client.send(command);
-    const items = result.Items ?? [];
-    const now = Date.now();
+    const items = (result.Items ?? []).map((item) => {
+      const quantity = Number(item.Quantity) || 0;
+      const rebuyQty = Number(item.rebuyQty) || 0;
+      const tolerance = Number(item.Tolerance) || 0;
+      const buffer =
+        typeof args.buffer === 'number' && Number.isFinite(args.buffer)
+          ? args.buffer
+          : tolerance;
+      const rebuyThreshold = rebuyQty + buffer;
+      const rebuyGap = quantity - rebuyQty;
 
-    await Promise.all(
-      items
-        .filter((item: Record<string, unknown>) => shouldReleaseSnooze(item, now))
-        .map((item: Record<string, unknown>) =>
-          client.send(
-            new UpdateCommand({
-              TableName: tableName,
-              Key: { id: item.id },
-              UpdateExpression: 'SET #status = :status REMOVE SnoozeUntil',
-              ExpressionAttributeNames: {
-                '#status': 'Status',
-              },
-              ExpressionAttributeValues: {
-                ':status': 'Pending',
-              },
-            }),
-          ),
-        ),
-    );
+      return {
+        id: item.id,
+        name: item['Item name'] ?? '',
+        category: item.category ?? '',
+        location: item.Location ?? '',
+        status: item.Status ?? '',
+        quantity,
+        rebuyQty,
+        tolerance,
+        rebuyThreshold,
+        rebuyGap,
+        updated: item['Last updated'] ?? '',
+      };
+    });
+
+    const nearRebuy = items.filter((item) => item.quantity <= item.rebuyThreshold);
 
     const payload = {
-      items,
-      count: result.Count ?? 0,
-      scannedCount: result.ScannedCount ?? 0,
-      lastEvaluatedKey: result.LastEvaluatedKey ?? null,
+      items: nearRebuy,
+      count: nearRebuy.length,
     };
 
     return isHttp ? buildHttpResponse(200, payload) : payload;
   } catch (error) {
-    const message = 'Failed to read alerts from DynamoDB.';
+    const message = 'Failed to read inventory rebuy data.';
     if (isHttp) {
       return buildHttpResponse(500, { message });
     }

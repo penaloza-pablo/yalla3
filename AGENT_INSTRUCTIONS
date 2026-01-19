@@ -1,0 +1,66 @@
+You are a coding agent operating in this repository. Use these instructions as
+the persistent baseline for all future requests in this project.
+
+UI/UX
+- Follow modern, simple, minimal UI best practices.
+- Design with clarity, accessibility, and visual hierarchy.
+- Prefer clean layouts and restrained visual noise.
+
+Responsive behavior
+- Ensure all UI is responsive.
+- Provide good usability on desktop, tablet, and mobile.
+
+Language
+- All UI text must be in English.
+- All code, identifiers, and comments must be in English.
+- If the user provides incorrect English, correct it in the final output.
+  Example: "niqname" -> "nickname".
+
+Data access and persistence
+
+- Never create or reference sandbox tables.
+- Always reference production tables via Lambda functions to avoid temporary
+  tables.
+
+AWS operations and access
+- If an AWS action is required and you do not have access, ask the user to run it
+  and provide step-by-step instructions.
+
+Quality bar
+- Do not be complacent; prioritize a solid, scalable app over speed.
+- Prefer the higher-quality approach even if it takes longer.
+
+Platform direction
+- Build within AWS services, with a strong preference for Amplify.
+
+AI assistant
+- Plan for an AI chatbot that can read, write, and interpret data across all
+  tables.
+
+Navigation schema
+- The app navigation must follow this hierarchy:
+  APP (Yalla!) -> Sections (Ops) > Solution (Inventory) > Functionality
+  (Inventory Spot Check)
+- Use the following structure as the baseline sitemap:
+  - YALLA
+    - Ops
+      - Inventory
+      - Properties
+      - Cleaning Report
+      - Task Scheduler
+    - Tech
+      - Tech solution 1
+      - Tech solution 2
+      - Tech solution 3
+    - Grow
+      - Grow solution 1
+      - Grow solution 2
+      - Grow solution 3
+    - Finance
+      - Finance solution 1
+      - Finance solution 2
+      - Finance solution 3
+
+Documentation
+- Every new functionality must be documented in `DOCUMENTATION`.
+- Keep `DOCUMENTATION` updated so the overall system behavior is clear.

@@ -72,6 +72,23 @@ Inventory - UpsertInventory Lambda (in progress)
 Overview
 - Scope: Lambda function creates or updates inventory items in
   `yalla-inventory` and supports the Inventory UI form.
+Inventory - ExportInventory Lambda (in progress)
+Overview
+- Scope: Lambda function exports all inventory records to an XLS download and
+  stores a copy in S3.
+- Status: Implemented in backend code; awaiting AWS configuration and access
+  details to deploy and wire to the frontend.
+
+Data flow
+- Lambda: `ExportInventory` scans `yalla-inventory`, builds an XLSX document, and
+  saves it to `s3://yalla-s3storage/inventory/`.
+- Frontend: `VITE_EXPORT_INVENTORY_URL` or `custom.exportInventoryUrl` must point
+  to the Lambda endpoint.
+- Filename format: `inventory-export-{YYYYMMDD-HHMMSS}.xlsx`.
+
+Files
+- `amplify/functions/export-inventory/resource.ts`: Lambda definition.
+- `amplify/functions/export-inventory/handler.ts`: export and S3 upload handler.
 - Status: Implemented in backend code; awaiting AWS configuration and access
   details to deploy and wire to the frontend.
 
@@ -106,17 +123,19 @@ Overview
 UI behavior
 - Each row has a toggle caret inside Actions to expand hidden fields.
 - Hidden fields: Item ID, Consumption rules, Last updated, Rebuy quantity,
-  Unit price, Tolerance.
+  Unit price, Tolerance, Category.
 
 Inventory - Form and sorting
 Overview
 - Scope: Inventory form supports editing extended fields and user-driven sorting.
 
 UI behavior
+- Form entry uses two steps: details first, restock/consumption second.
+- Item ID, Last updated, and Status are auto-generated on save.
 - Form fields include Rebuy quantity, Unit price, Tolerance, and Consumption rules.
 - Consumption rules must be valid JSON to save.
 - Sorting is triggered by clicking table headers for Item name and Status.
-- Filters icon opens a modal with multi-select options for Location and Status.
+- Filters icon opens a modal with multi-select options for Location, Status, and Category.
 
 Inventory - Consumption rules UI
 Overview
@@ -129,7 +148,7 @@ UI behavior
 Chatbot - AI conversation (in progress)
 Overview
 - Scope: AI chatbot for questions about inventory and alerts.
-- Status: Conversation route defined in Amplify Data.
+- Status: Conversation route defined in Amplify Data with tool access.
 
 UI behavior
 - Selecting Chatbot displays the AI conversation interface.
@@ -137,9 +156,28 @@ UI behavior
 - Enter sends a message (Shift+Enter adds a new line).
 
 Data flow
-- AI route: `chatbot` conversation using Claude 3.5 Haiku.
+- AI route: `chatbot` conversation using Claude 3 Haiku.
+- Tools: the conversation exposes data tools for inventory and alerts via
+  custom GraphQL queries backed by Lambda functions.
 - Frontend uses `useAIConversation('chatbot')`.
 - Authentication is enforced at the app level via Authenticator.
+
+Tool catalog
+- list_inventory: reads inventory items with optional filters.
+- list_inventory_near_rebuy: returns items near rebuy threshold using tolerance.
+- upsert_inventory_item: creates or updates a single inventory item.
+- list_alerts: reads alerts with optional filters.
+- upsert_alert: creates or updates a single alert.
+- update_alert_status: updates alert status and snooze details.
+
+Files
+- `amplify/data/resource.ts`: conversation prompt and tool definitions.
+- `amplify/functions/get-inventory/handler.ts`: inventory query handler.
+- `amplify/functions/get-inventory-rebuy/handler.ts`: rebuy logic handler.
+- `amplify/functions/upsert-inventory/handler.ts`: inventory upsert handler.
+- `amplify/functions/get-alerts/handler.ts`: alerts query handler.
+- `amplify/functions/upsert-alert/handler.ts`: alert upsert handler.
+- `amplify/functions/update-alert-status/handler.ts`: alert status handler.
 
 Alerts - UI and data flow (in progress)
 Overview
@@ -149,8 +187,13 @@ Overview
 Data flow
 - Lambda: `GetAlerts` scans `yalla-alarms` and releases expired snoozes.
 - Lambda: `UpdateAlertStatus` updates Status and SnoozeUntil.
+- Lambda: `UpsertAlert` creates or updates alerts in `yalla-alarms`.
 - Frontend: `VITE_GET_ALERTS_URL` / `VITE_UPDATE_ALERT_STATUS_URL` or
   `custom.getAlertsUrl` / `custom.updateAlertStatusUrl` are required.
+
+Local configuration
+- Copy `env.local.example` to `.env.local` and set the endpoint URLs.
+- Or run `sh create-env-local.sh` to generate `.env.local` with the current URLs.
 
 Endpoints
 - GetAlerts:

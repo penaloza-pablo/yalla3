@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Amplify } from 'aws-amplify'
-import outputs from '../amplify_outputs.json'
+import outputs from "../amplify_outputs.json";
 import type {
   ConversationMessage,
   ConversationMessageContent,
@@ -25,7 +25,6 @@ type InventoryRow = {
   location: string
   status: string
   quantity: number
-  category: string
   updated: string
   updatedRaw: string
   rebuyQty: number
@@ -48,11 +47,10 @@ type AlertRow = {
 type InventoryFormState = {
   id: string
   name: string
-  categoryChoice: string
-  categoryOther: string
-  locationChoice: string
-  locationOther: string
+  location: string
+  status: string
   quantity: string
+  updated: string
   rebuyQty: string
   unitPrice: string
   tolerance: string
@@ -94,12 +92,10 @@ const navigation = [
 ]
 
 const coreItems = ['Chatbot', 'Alerts']
-const OTHER_OPTION = '__other__'
 
 const inventoryFieldMap = {
   id: ['id', 'ID'],
   name: ['Item name', 'item name', 'name'],
-  category: ['category', 'Category'],
   location: ['Location', 'location'],
   status: ['Status', 'status'],
   quantity: ['Quantity', 'quantity'],
@@ -364,41 +360,12 @@ const getRuleValue = (rule?: ConsumptionRule) => ({
 const statusRank: Record<string, number> = {
   Reorder: 3,
   'Low Stock': 2,
-  OK: 1,
   'In Stock': 1,
-}
-
-const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
-  if (quantity <= rebuyQty) {
-    return 'Reorder'
-  }
-  const okThreshold = Math.floor(rebuyQty * 1.25)
-  if (quantity >= okThreshold) {
-    return 'OK'
-  }
-  return 'Low Stock'
-}
-
-const resolveChoice = (choice: string, other: string) =>
-  choice === OTHER_OPTION ? other.trim() : choice.trim()
-
-const getNextInventoryId = (rows: InventoryRow[]) => {
-  const maxId = rows.reduce((currentMax, row) => {
-    const match = row.id.match(/^INV-(\d+)$/i)
-    if (!match) {
-      return currentMax
-    }
-    const value = Number(match[1])
-    return Number.isFinite(value) ? Math.max(currentMax, value) : currentMax
-  }, 0)
-  const nextValue = String(maxId + 1).padStart(3, '0')
-  return `INV-${nextValue}`
 }
 
 const mapInventoryRow = (item: Record<string, unknown>): InventoryRow => ({
   id: getStringValue(getItemValue(item, inventoryFieldMap.id)) || '—',
   name: getStringValue(getItemValue(item, inventoryFieldMap.name)) || '—',
-  category: getStringValue(getItemValue(item, inventoryFieldMap.category)),
   location:
     getStringValue(getItemValue(item, inventoryFieldMap.location)) || '—',
   status:
@@ -454,11 +421,10 @@ const getStatusClassName = (status: string) => {
 const emptyFormState: InventoryFormState = {
   id: '',
   name: '',
-  categoryChoice: '',
-  categoryOther: '',
-  locationChoice: '',
-  locationOther: '',
+  location: '',
+  status: 'In Stock',
   quantity: '',
+  updated: '',
   rebuyQty: '',
   unitPrice: '',
   tolerance: '',
@@ -473,7 +439,6 @@ const emptyFormState: InventoryFormState = {
 function App() {
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [alertRows, setAlertRows] = useState<AlertRow[]>([])
@@ -501,7 +466,6 @@ function App() {
     origins: [],
   })
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formStep, setFormStep] = useState<'details' | 'restock'>('details')
   const [formValues, setFormValues] = useState<InventoryFormState>(emptyFormState)
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -515,23 +479,18 @@ function App() {
   const [filters, setFilters] = useState<{
     locations: string[]
     statuses: string[]
-    categories: string[]
   }>({
     locations: [],
     statuses: [],
-    categories: [],
   })
   const [filterDraft, setFilterDraft] = useState<{
     locations: string[]
     statuses: string[]
-    categories: string[]
   }>({
     locations: [],
     statuses: [],
-    categories: [],
   })
-  const conversationName =
-    import.meta.env.VITE_CHATBOT_NAME?.trim() || 'chatbot'
+  const [isChatbotConfigured, setIsChatbotConfigured] = useState(false)
 
   const formatChatContent = (content: ConversationMessageContent[]) =>
     content
@@ -546,7 +505,6 @@ function App() {
 
   const ChatbotView = () => {
     const [chatInput, setChatInput] = useState('')
-    const [chatError, setChatError] = useState<string | null>(null)
     const [debugOpen, setDebugOpen] = useState(false)
     const [debugInfo, setDebugInfo] = useState<{
       outputsStatus: string
@@ -566,36 +524,12 @@ function App() {
       configHasAuth: false,
     })
     const [{ data: chatData, isLoading: isChatLoading }, handleSendMessage] =
-      useAIConversation(conversationName)
+      useAIConversation('chatbot')
     const chatMessages = (chatData?.messages ?? []) as ConversationMessage[]
-    const isAiConfigured = debugInfo.configHasData || debugInfo.outputsHasData
-    const quickPrompts = [
-      'Show low stock items and locations.',
-      'Summarize pending alerts from the last 7 days.',
-      'Which items need reorder this week?',
-    ]
-
-    const sendMessage = async (content: string) => {
-      const trimmed = content.trim()
-      if (!trimmed) {
-        return
-      }
-      setChatError(null)
-      try {
-        await Promise.resolve(handleSendMessage({ content: [{ text: trimmed }] }))
-        setChatInput('')
-      } catch {
-        setChatError('Unable to send message. Please try again.')
-      }
-    }
 
     useEffect(() => {
-      const config = Amplify.getConfig() as Record<string, unknown> & {
-        API?: { GraphQL?: unknown }
-      }
-      const hasData =
-        Boolean((config as { data?: unknown }).data) ||
-        Boolean(config.API?.GraphQL)
+      const config = Amplify.getConfig() as Record<string, unknown>
+      const hasData = Boolean((config as { data?: unknown }).data)
       const hasAuth = Boolean(
         (config as { Auth?: { Cognito?: unknown } }).Auth?.Cognito,
       )
@@ -608,14 +542,6 @@ function App() {
       }))
 
       const checkOutputs = async () => {
-        if (!import.meta.env.DEV) {
-          setDebugInfo((current) => ({
-            ...current,
-            outputsStatus: 'Not checked (production)',
-          }))
-          return
-        }
-
         try {
           const response = await fetch('/amplify_outputs.json', {
             cache: 'no-store',
@@ -652,104 +578,64 @@ function App() {
       <section className="card">
         <h1 className="page-title">Chatbot</h1>
         <p className="subtitle">
-          Test conversational AI powered by Amplify in this environment.
+          Ask questions about inventory and alerts data.
         </p>
-        <div className="chat-layout">
-          <div className="chat-panel">
-            {!isAiConfigured ? (
-              <div className="alert">
-                Amplify AI is not configured yet. Verify that
-                amplify_outputs.json includes data outputs.
-              </div>
-            ) : null}
-            <div className="chat-window">
-              {chatMessages.length ? (
-                chatMessages.map((message) => (
-                  <div
-                    className={`chat-message ${
-                      message.role === 'user' ? 'is-user' : 'is-assistant'
-                    }`}
-                    key={message.id}
-                  >
-                    <p className="chat-role">
-                      {message.role === 'user' ? 'You' : 'Assistant'}
-                    </p>
-                    <p className="chat-content">
-                      {formatChatContent(message.content)}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="chat-empty">
-                  Start a conversation to see responses here.
-                </p>
-              )}
-            </div>
-            <div className="chat-input-row">
-              <textarea
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void sendMessage(chatInput)
-                  }
-                }}
-                placeholder="Ask about inventory or alerts..."
-                className="chat-input"
-                rows={2}
-              />
-              <div className="chat-actions">
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={() => void sendMessage(chatInput)}
-                  disabled={isChatLoading || !chatInput.trim()}
+        <div className="chatbot-container">
+          <div className="chat-window">
+            {chatMessages.length ? (
+              chatMessages.map((message) => (
+                <div
+                  className={`chat-message ${
+                    message.role === 'user' ? 'is-user' : 'is-assistant'
+                  }`}
+                  key={message.id}
                 >
-                  {isChatLoading ? 'Sending...' : 'Send'}
-                </button>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={() => setDebugOpen((current) => !current)}
-                >
-                  {debugOpen ? 'Hide debug' : 'Show debug'}
-                </button>
-              </div>
-            </div>
-            {chatError ? <div className="alert">{chatError}</div> : null}
-            {debugOpen ? <ChatbotDebugPanel debugInfo={debugInfo} /> : null}
+                  <p className="chat-role">
+                    {message.role === 'user' ? 'You' : 'Assistant'}
+                  </p>
+                  <p className="chat-content">
+                    {formatChatContent(message.content)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="chat-empty">
+                Start a conversation to see responses here.
+              </p>
+            )}
           </div>
-          <div className="chat-side">
-            <div className="card card-compact">
-              <p className="card-label">Amplify AI</p>
-              <p className="card-value">
-                {isAiConfigured ? 'Connected' : 'Not configured'}
-              </p>
-              <p className="card-meta">
-                Conversation: {conversationName || 'chatbot'}
-              </p>
-            </div>
-            <div className="card">
-              <h2 className="card-title">Quick prompts</h2>
-              <p className="card-subtitle">
-                Try a starter prompt to validate the AI route.
-              </p>
-              <div className="quick-prompts">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    className="btn-secondary btn-prompt"
-                    type="button"
-                    key={prompt}
-                    onClick={() => void sendMessage(prompt)}
-                    disabled={isChatLoading}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="chat-input-row">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Ask about inventory or alerts..."
+              className="chat-input"
+            />
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={() => {
+                const trimmed = chatInput.trim()
+                if (!trimmed) {
+                  return
+                }
+                handleSendMessage({ content: [{ text: trimmed }] })
+                setChatInput('')
+              }}
+              disabled={isChatLoading}
+            >
+              {isChatLoading ? 'Sending...' : 'Send'}
+            </button>
+            <button
+              className="btn-ghost"
+              type="button"
+              onClick={() => setDebugOpen((current) => !current)}
+            >
+              {debugOpen ? 'Hide debug' : 'Show debug'}
+            </button>
           </div>
+          {debugOpen ? <ChatbotDebugPanel debugInfo={debugInfo} /> : null}
         </div>
       </section>
     )
@@ -807,20 +693,8 @@ function App() {
     [alertRows],
   )
 
-  const getEndpoint = (key: string, fallback?: string) => {
-    if (fallback) {
-      return fallback
-    }
-    const config = Amplify.getConfig() as { custom?: Record<string, string> }
-    const outputCustom = (outputs as { custom?: Record<string, string> }).custom
-    return config.custom?.[key] ?? outputCustom?.[key]
-  }
-
   const fetchInventory = useCallback(async () => {
-    const endpoint = getEndpoint(
-      'getInventoryUrl',
-      import.meta.env.VITE_GET_INVENTORY_URL,
-    )
+    const endpoint = import.meta.env.VITE_GET_INVENTORY_URL
     if (!endpoint) {
       setError(
         'Missing inventory endpoint. Set VITE_GET_INVENTORY_URL in the environment.',
@@ -834,10 +708,7 @@ function App() {
     try {
       const response = await fetch(endpoint)
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(
-          `Inventory request failed (${response.status}). ${errorText}`.trim(),
-        )
+        throw new Error('Inventory request failed.')
       }
       const payload = (await response.json()) as InventoryApiResponse
       const items = Array.isArray(payload.items) ? payload.items : []
@@ -855,21 +726,14 @@ function App() {
         }),
       )
     } catch (requestError) {
-      const message =
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to load inventory data. Please try again.'
-      setError(message)
+      setError('Unable to load inventory data. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }, [])
 
   const fetchAlerts = useCallback(async () => {
-    const endpoint = getEndpoint(
-      'getAlertsUrl',
-      import.meta.env.VITE_GET_ALERTS_URL,
-    )
+    const endpoint = import.meta.env.VITE_GET_ALERTS_URL
     if (!endpoint) {
       setAlertsError(
         'Missing alerts endpoint. Set VITE_GET_ALERTS_URL in the environment.',
@@ -883,10 +747,7 @@ function App() {
     try {
       const response = await fetch(endpoint)
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(
-          `Alerts request failed (${response.status}). ${errorText}`.trim(),
-        )
+        throw new Error('Alerts request failed.')
       }
       const payload = (await response.json()) as AlertsApiResponse
       const items = Array.isArray(payload.items) ? payload.items : []
@@ -904,66 +765,9 @@ function App() {
         }),
       )
     } catch (requestError) {
-      const message =
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to load alerts. Please try again.'
-      setAlertsError(message)
+      setAlertsError('Unable to load alerts. Please try again.')
     } finally {
       setIsAlertsLoading(false)
-    }
-  }, [])
-
-  const exportInventory = useCallback(async () => {
-    const endpoint = getEndpoint(
-      'exportInventoryUrl',
-      import.meta.env.VITE_EXPORT_INVENTORY_URL,
-    )
-    if (!endpoint) {
-      setError(
-        'Missing export endpoint. Set VITE_EXPORT_INVENTORY_URL in the environment.',
-      )
-      return
-    }
-
-    setIsExporting(true)
-    setError(null)
-
-    try {
-      const response = await fetch(endpoint)
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(
-          `Export request failed (${response.status}). ${errorText}`.trim(),
-        )
-      }
-
-      const contentDisposition = response.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="([^"]+)"/)
-      const fallbackStamp = new Date()
-        .toISOString()
-        .replace(/[-:]/g, '')
-        .replace(/\.\d{3}Z$/, '')
-      const fileName =
-        match?.[1] ?? `inventory-export-${fallbackStamp}.xlsx`
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-    } catch (requestError) {
-      const message =
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to export inventory. Please try again.'
-      setError(message)
-    } finally {
-      setIsExporting(false)
     }
   }, [])
 
@@ -975,6 +779,10 @@ function App() {
   }
 
   useEffect(() => {
+    const config = Amplify.getConfig() as {
+      data?: Record<string, unknown>
+    }
+    setIsChatbotConfigured(Boolean(config?.data))
     if (activePage === 'Inventory') {
       void fetchInventory()
     }
@@ -988,11 +796,7 @@ function App() {
   }, [fetchAlerts])
 
   const openNewItem = () => {
-    setFormValues({
-      ...emptyFormState,
-      id: getNextInventoryId(inventoryRows),
-    })
-    setFormStep('details')
+    setFormValues(emptyFormState)
     setFormError(null)
     setIsFormOpen(true)
   }
@@ -1001,27 +805,13 @@ function App() {
     const apartmentRule = getRuleValue(row.consumptionRules?.apartment)
     const hostelRule = getRuleValue(row.consumptionRules?.hostel)
     const roomRule = getRuleValue(row.consumptionRules?.room)
-    const resolvedCategoryChoice =
-      row.category && categoryOptions.includes(row.category)
-        ? row.category
-        : row.category
-          ? OTHER_OPTION
-          : ''
-    const resolvedLocationChoice =
-      row.location && locationOptions.includes(row.location)
-        ? row.location
-        : row.location
-          ? OTHER_OPTION
-          : ''
-
     setFormValues({
       id: row.id,
       name: row.name,
-      categoryChoice: resolvedCategoryChoice,
-      categoryOther: resolvedCategoryChoice === OTHER_OPTION ? row.category : '',
-      locationChoice: resolvedLocationChoice,
-      locationOther: resolvedLocationChoice === OTHER_OPTION ? row.location : '',
+      location: row.location,
+      status: row.status,
       quantity: row.quantity ? String(row.quantity) : '',
+      updated: parseDateInputValue(row.updatedRaw || row.updated),
       rebuyQty: row.rebuyQty ? String(row.rebuyQty) : '',
       unitPrice: row.unitPrice ? String(row.unitPrice) : '',
       tolerance: row.tolerance ? String(row.tolerance) : '',
@@ -1032,7 +822,6 @@ function App() {
       roomAmount: roomRule.amount,
       roomUnit: roomRule.unit,
     })
-    setFormStep('details')
     setFormError(null)
     setIsFormOpen(true)
   }
@@ -1117,20 +906,13 @@ function App() {
         filters.locations.includes(row.location)
       const statusMatch =
         filters.statuses.length === 0 || filters.statuses.includes(row.status)
-      const categoryMatch =
-        filters.categories.length === 0 ||
-        filters.categories.includes(row.category)
-      return locationMatch && statusMatch && categoryMatch
+      return locationMatch && statusMatch
     })
-  }, [filters.locations, filters.statuses, filters.categories, inventoryRows])
+  }, [filters.locations, filters.statuses, inventoryRows])
 
   const activeFilterCount = useMemo(() => {
-    return (
-      filters.locations.length +
-      filters.statuses.length +
-      filters.categories.length
-    )
-  }, [filters.locations, filters.statuses, filters.categories])
+    return filters.locations.length + filters.statuses.length
+  }, [filters.locations, filters.statuses])
 
   const locationOptions = useMemo(() => {
     const unique = new Set(
@@ -1139,43 +921,7 @@ function App() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
   }, [inventoryRows])
 
-  const categoryOptions = useMemo(() => {
-    const unique = new Set(
-      inventoryRows.map((row) => row.category).filter(Boolean),
-    )
-    return Array.from(unique).sort((a, b) => a.localeCompare(b))
-  }, [inventoryRows])
-
-  const statusOptions = ['OK', 'In Stock', 'Low Stock', 'Reorder']
-
-  const goToRestockStep = () => {
-    setFormError(null)
-    if (!formValues.name.trim()) {
-      setFormError('Item name is required.')
-      return
-    }
-    const resolvedCategory = resolveChoice(
-      formValues.categoryChoice,
-      formValues.categoryOther,
-    )
-    if (!resolvedCategory) {
-      setFormError('Category is required.')
-      return
-    }
-    const resolvedLocation = resolveChoice(
-      formValues.locationChoice,
-      formValues.locationOther,
-    )
-    if (!resolvedLocation) {
-      setFormError('Location is required.')
-      return
-    }
-    if (!formValues.quantity.trim()) {
-      setFormError('Quantity is required.')
-      return
-    }
-    setFormStep('restock')
-  }
+  const statusOptions = ['In Stock', 'Low Stock', 'Reorder']
 
   const closeForm = () => {
     if (isSaving) {
@@ -1183,18 +929,19 @@ function App() {
     }
     setIsFormOpen(false)
     setFormError(null)
-    setFormStep('details')
   }
 
   const saveItem = async () => {
-    const endpoint = getEndpoint(
-      'upsertInventoryUrl',
-      import.meta.env.VITE_UPSERT_INVENTORY_URL,
-    )
+    const endpoint = import.meta.env.VITE_UPSERT_INVENTORY_URL
     if (!endpoint) {
       setFormError(
         'Missing upsert endpoint. Set VITE_UPSERT_INVENTORY_URL in the environment.',
       )
+      return
+    }
+
+    if (!formValues.id.trim()) {
+      setFormError('Item ID is required.')
       return
     }
 
@@ -1203,48 +950,19 @@ function App() {
       return
     }
 
-    const resolvedCategory = resolveChoice(
-      formValues.categoryChoice,
-      formValues.categoryOther,
-    )
-    if (!resolvedCategory) {
-      setFormError('Category is required.')
-      return
-    }
-
-    const resolvedLocation = resolveChoice(
-      formValues.locationChoice,
-      formValues.locationOther,
-    )
-    if (!resolvedLocation) {
-      setFormError('Location is required.')
-      return
-    }
-
-    if (!formValues.quantity.trim()) {
-      setFormError('Quantity is required.')
-      return
-    }
-
     setIsSaving(true)
     setFormError(null)
 
     const consumptionRules = buildConsumptionRules(formValues)
-    const itemId = formValues.id.trim() || getNextInventoryId(inventoryRows)
-    const quantityValue = Number(formValues.quantity) || 0
-    const rebuyQtyValue = Number(formValues.rebuyQty) || 0
-    const statusValue = computeInventoryStatus(quantityValue, rebuyQtyValue)
-    const lastUpdatedValue = formatDateForStorage('')
 
     const payload = {
-      id: itemId,
+      id: formValues.id.trim(),
       'Item name': formValues.name.trim(),
-      category: resolvedCategory,
-      Location: resolvedLocation,
-      Status: statusValue,
-      Quantity: quantityValue,
-      'Last updated': lastUpdatedValue,
-      rebuyQty: rebuyQtyValue,
+      Location: formValues.location.trim(),
+      Status: formValues.status.trim(),
+      Quantity: Number(formValues.quantity) || 0,
+      'Last updated': formatDateForStorage(formValues.updated),
+      rebuyQty: Number(formValues.rebuyQty) || 0,
       unitPrice: Number(formValues.unitPrice) || 0,
       Tolerance: Number(formValues.tolerance) || 0,
       consumptionRules: consumptionRules ?? undefined,
@@ -1265,7 +983,6 @@ function App() {
       const updatedRow: InventoryRow = {
         id: payload.id,
         name: payload['Item name'],
-        category: payload.category ?? '',
         location: payload.Location || '—',
         status: payload.Status || 'Unknown',
         quantity: payload.Quantity,
@@ -1310,10 +1027,7 @@ function App() {
     status: 'Done' | 'Snoozed',
     snoozeUntil?: string,
   ) => {
-    const endpoint = getEndpoint(
-      'updateAlertStatusUrl',
-      import.meta.env.VITE_UPDATE_ALERT_STATUS_URL,
-    )
+    const endpoint = import.meta.env.VITE_UPDATE_ALERT_STATUS_URL
     if (!endpoint) {
       setAlertsError(
         'Missing alerts update endpoint. Set VITE_UPDATE_ALERT_STATUS_URL in the environment.',
@@ -1413,13 +1127,8 @@ function App() {
                 </p>
               </div>
               <div className="header-actions">
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  onClick={exportInventory}
-                  disabled={isExporting}
-                >
-                  {isExporting ? 'Exporting...' : 'Export'}
+                <button className="btn-secondary" type="button">
+                  Export
                 </button>
                 <button className="btn-ghost" type="button" onClick={openNewItem}>
                   Add item
@@ -1482,7 +1191,6 @@ function App() {
                       setFilterDraft({
                         locations: [...filters.locations],
                         statuses: [...filters.statuses],
-                        categories: [...filters.categories],
                       })
                       setIsFilterOpen(true)
                     }}
@@ -1565,44 +1273,6 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Category</p>
-                          <div className="filter-options">
-                            {categoryOptions.map((option) => {
-                              const isChecked =
-                                filterDraft.categories.includes(option)
-                              return (
-                                <label className="filter-option" key={option}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={(event) => {
-                                      setFilterDraft((current) => {
-                                        if (event.target.checked) {
-                                          return {
-                                            ...current,
-                                            categories: [
-                                              ...current.categories,
-                                              option,
-                                            ],
-                                          }
-                                        }
-                                        return {
-                                          ...current,
-                                          categories:
-                                            current.categories.filter(
-                                              (value) => value !== option,
-                                            ),
-                                        }
-                                      })
-                                    }}
-                                  />
-                                  <span>{option}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div className="filter-group">
                           <p className="filter-title">Status</p>
                           <div className="filter-options">
                             {statusOptions.map((option) => {
@@ -1647,11 +1317,7 @@ function App() {
                         className="btn-secondary"
                         type="button"
                         onClick={() => {
-                          setFilterDraft({
-                            locations: [],
-                            statuses: [],
-                            categories: [],
-                          })
+                          setFilterDraft({ locations: [], statuses: [] })
                         }}
                       >
                         Clear
@@ -1663,7 +1329,6 @@ function App() {
                           setFilters({
                             locations: [...filterDraft.locations],
                             statuses: [...filterDraft.statuses],
-                            categories: [...filterDraft.categories],
                           })
                           setIsFilterOpen(false)
                         }}
@@ -1776,12 +1441,6 @@ function App() {
                                 <div>
                                   <p className="detail-label">Item ID</p>
                                   <p className="detail-value">{row.id}</p>
-                                </div>
-                                <div>
-                                  <p className="detail-label">Category</p>
-                                  <p className="detail-value">
-                                    {row.category || '—'}
-                                  </p>
                                 </div>
                                 <div>
                                   <p className="detail-label">Last updated</p>
@@ -2169,7 +1828,54 @@ function App() {
             </section>
           </>
         ) : activePage === 'Chatbot' ? (
-          <ChatbotView />
+          isChatbotConfigured ? (
+            <ChatbotView />
+          ) : (
+            <section className="card">
+              <h1 className="page-title">Chatbot</h1>
+              <p className="subtitle">
+                Chatbot is not configured in this environment yet.
+              </p>
+              <p className="chat-empty">
+                Ensure the Amplify AI backend outputs are available in hosting.
+              </p>
+              <div className="chatbot-container">
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={() => {
+                    const debugPanel = document.querySelector(
+                      '[data-chatbot-debug]',
+                    ) as HTMLDivElement | null
+                    if (debugPanel) {
+                      debugPanel.removeAttribute('data-hidden')
+                      return
+                    }
+                  }}
+                >
+                  Show debug
+                </button>
+                <div data-chatbot-debug>
+                  <ChatbotDebugPanel
+                    debugInfo={{
+                      outputsStatus: 'Not checked',
+                      outputsKeys: [],
+                      outputsHasData: false,
+                      outputsHasAuth: false,
+                      configKeys: Object.keys(Amplify.getConfig() ?? {}),
+                      configHasData: Boolean(
+                        (Amplify.getConfig() as { data?: unknown }).data,
+                      ),
+                      configHasAuth: Boolean(
+                        (Amplify.getConfig() as { Auth?: { Cognito?: unknown } })
+                          .Auth?.Cognito,
+                      ),
+                    }}
+                  />
+                </div>
+              </div>
+            </section>
+          )
         ) : (
           <section className="card">
             <h1 className="page-title">{activePage}</h1>
@@ -2180,13 +1886,8 @@ function App() {
         )}
 
         {isFormOpen ? (
-          <div
-            className="modal-overlay"
-            role="dialog"
-            aria-modal="true"
-            onClick={closeForm}
-          >
-            <div className="modal" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal">
               <div className="modal-header">
                 <div>
                   <h3 className="modal-title">Inventory item</h3>
@@ -2205,301 +1906,244 @@ function App() {
               </div>
 
               <div className="modal-body">
-                <p className="modal-subtitle">
-                  {formStep === 'details' ? 'Step 1 of 2' : 'Step 2 of 2'}
-                </p>
-                {formStep === 'details' ? (
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>Item name</span>
-                      <input
-                        type="text"
-                        value={formValues.name}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            name: event.target.value,
-                          }))
-                        }
-                        placeholder="Cleaning Kit"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Category</span>
-                      <select
-                        value={formValues.categoryChoice}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            categoryChoice: event.target.value,
-                            categoryOther:
-                              event.target.value === OTHER_OPTION
-                                ? current.categoryOther
-                                : '',
-                          }))
-                        }
-                      >
-                        <option value="">Select</option>
-                        {categoryOptions.map((option) => (
-                          <option value={option} key={option}>
-                            {option}
-                          </option>
-                        ))}
-                        <option value={OTHER_OPTION}>Other</option>
-                      </select>
-                    </label>
-                    {formValues.categoryChoice === OTHER_OPTION ? (
-                      <label className="form-field">
-                        <span>Custom category</span>
-                        <input
-                          type="text"
-                          value={formValues.categoryOther}
-                          onChange={(event) =>
-                            setFormValues((current) => ({
-                              ...current,
-                              categoryOther: event.target.value,
-                            }))
-                          }
-                          placeholder="Welcome kit"
-                        />
-                      </label>
-                    ) : null}
-                    <label className="form-field">
-                      <span>Location</span>
-                      <select
-                        value={formValues.locationChoice}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            locationChoice: event.target.value,
-                            locationOther:
-                              event.target.value === OTHER_OPTION
-                                ? current.locationOther
-                                : '',
-                          }))
-                        }
-                      >
-                        <option value="">Select</option>
-                        {locationOptions.map((option) => (
-                          <option value={option} key={option}>
-                            {option}
-                          </option>
-                        ))}
-                        <option value={OTHER_OPTION}>Other</option>
-                      </select>
-                    </label>
-                    {formValues.locationChoice === OTHER_OPTION ? (
-                      <label className="form-field">
-                        <span>Custom location</span>
-                        <input
-                          type="text"
-                          value={formValues.locationOther}
-                          onChange={(event) =>
-                            setFormValues((current) => ({
-                              ...current,
-                              locationOther: event.target.value,
-                            }))
-                          }
-                          placeholder="Warehouse A"
-                        />
-                      </label>
-                    ) : null}
-                    <label className="form-field">
-                      <span>Quantity</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formValues.quantity}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            quantity: event.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>Rebuy quantity</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formValues.rebuyQty}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            rebuyQty: event.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Unit price</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formValues.unitPrice}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            unitPrice: event.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Tolerance</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formValues.tolerance}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            tolerance: event.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                    </label>
-                    <label className="form-field form-field-span">
-                      <span>Consumption rules</span>
-                      <div className="rule-form-grid">
-                        <div className="rule-form">
-                          <p className="rule-form-title">Apartment</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.apartmentAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  apartmentAmount: event.target.value,
-                                }))
-                              }
-                              placeholder="Amount"
-                            />
-                            <input
-                              type="text"
-                              value={formValues.apartmentUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  apartmentUnit: event.target.value,
-                                }))
-                              }
-                              placeholder="Unit"
-                            />
-                          </div>
-                        </div>
-                        <div className="rule-form">
-                          <p className="rule-form-title">Hostel</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.hostelAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  hostelAmount: event.target.value,
-                                }))
-                              }
-                              placeholder="Amount"
-                            />
-                            <input
-                              type="text"
-                              value={formValues.hostelUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  hostelUnit: event.target.value,
-                                }))
-                              }
-                              placeholder="Unit"
-                            />
-                          </div>
-                        </div>
-                        <div className="rule-form">
-                          <p className="rule-form-title">Room</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.roomAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  roomAmount: event.target.value,
-                                }))
-                              }
-                              placeholder="Amount"
-                            />
-                            <input
-                              type="text"
-                              value={formValues.roomUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  roomUnit: event.target.value,
-                                }))
-                              }
-                              placeholder="Unit"
-                            />
-                          </div>
+                <div className="form-grid">
+                  <label className="form-field">
+                    <span>Item ID</span>
+                    <input
+                      type="text"
+                      value={formValues.id}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          id: event.target.value,
+                        }))
+                      }
+                      placeholder="INV-001"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Item name</span>
+                    <input
+                      type="text"
+                      value={formValues.name}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="Cleaning Kit"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Location</span>
+                    <input
+                      type="text"
+                      value={formValues.location}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          location: event.target.value,
+                        }))
+                      }
+                      placeholder="Warehouse A"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Status</span>
+                    <select
+                      value={formValues.status}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          status: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="In Stock">In Stock</option>
+                      <option value="Low Stock">Low Stock</option>
+                      <option value="Reorder">Reorder</option>
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Quantity</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formValues.quantity}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          quantity: event.target.value,
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Last updated</span>
+                    <input
+                      type="date"
+                      value={formValues.updated}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          updated: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Rebuy quantity</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formValues.rebuyQty}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          rebuyQty: event.target.value,
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Unit price</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formValues.unitPrice}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          unitPrice: event.target.value,
+                        }))
+                      }
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Tolerance</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formValues.tolerance}
+                      onChange={(event) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          tolerance: event.target.value,
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="form-field form-field-span">
+                    <span>Consumption rules</span>
+                    <div className="rule-form-grid">
+                      <div className="rule-form">
+                        <p className="rule-form-title">Apartment</p>
+                        <div className="rule-form-fields">
+                          <input
+                            type="number"
+                            min="0"
+                            value={formValues.apartmentAmount}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                apartmentAmount: event.target.value,
+                              }))
+                            }
+                            placeholder="Amount"
+                          />
+                          <input
+                            type="text"
+                            value={formValues.apartmentUnit}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                apartmentUnit: event.target.value,
+                              }))
+                            }
+                            placeholder="Unit"
+                          />
                         </div>
                       </div>
-                    </label>
-                  </div>
-                )}
+                      <div className="rule-form">
+                        <p className="rule-form-title">Hostel</p>
+                        <div className="rule-form-fields">
+                          <input
+                            type="number"
+                            min="0"
+                            value={formValues.hostelAmount}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                hostelAmount: event.target.value,
+                              }))
+                            }
+                            placeholder="Amount"
+                          />
+                          <input
+                            type="text"
+                            value={formValues.hostelUnit}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                hostelUnit: event.target.value,
+                              }))
+                            }
+                            placeholder="Unit"
+                          />
+                        </div>
+                      </div>
+                      <div className="rule-form">
+                        <p className="rule-form-title">Room</p>
+                        <div className="rule-form-fields">
+                          <input
+                            type="number"
+                            min="0"
+                            value={formValues.roomAmount}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                roomAmount: event.target.value,
+                              }))
+                            }
+                            placeholder="Amount"
+                          />
+                          <input
+                            type="text"
+                            value={formValues.roomUnit}
+                            onChange={(event) =>
+                              setFormValues((current) => ({
+                                ...current,
+                                roomUnit: event.target.value,
+                              }))
+                            }
+                            placeholder="Unit"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                </div>
                 {formError ? <div className="alert">{formError}</div> : null}
               </div>
 
               <div className="modal-footer">
-                {formStep === 'details' ? (
-                  <>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={closeForm}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="btn-primary"
-                      type="button"
-                      onClick={goToRestockStep}
-                    >
-                      Next
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={() => setFormStep('details')}
-                      disabled={isSaving}
-                    >
-                      Back
-                    </button>
-                    <button
-                      className="btn-primary"
-                      type="button"
-                      onClick={saveItem}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? 'Saving...' : 'Save item'}
-                    </button>
-                  </>
-                )}
+                <button className="btn-secondary" type="button" onClick={closeForm}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={saveItem}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : 'Save item'}
+                </button>
               </div>
             </div>
           </div>

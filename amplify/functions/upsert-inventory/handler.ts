@@ -26,17 +26,37 @@ const formatDateForStorage = (value?: string) => {
   return `${day}/${month}/${parsed.getFullYear()}`;
 };
 
+const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
+  if (quantity <= rebuyQty) {
+    return 'Reorder';
+  }
+  const okThreshold = Math.floor(rebuyQty * 1.25);
+  if (quantity >= okThreshold) {
+    return 'OK';
+  }
+  return 'Low Stock';
+};
+
 type InventoryPayload = {
   id?: string;
+  name?: string;
+  category?: string;
+  location?: string;
+  status?: string;
+  quantity?: number;
+  updated?: string;
+  rebuyQty?: number;
+  unitPrice?: number;
+  tolerance?: number;
+  consumptionRulesJson?: string;
+  consumptionRules?: Record<string, unknown>;
   ['Item name']?: string;
+  Category?: string;
   Location?: string;
   Status?: string;
   Quantity?: number;
   ['Last updated']?: string;
-  rebuyQty?: number;
-  unitPrice?: number;
   Tolerance?: number;
-  consumptionRules?: Record<string, unknown>;
 };
 
 const parseBody = (body?: string) => {
@@ -51,11 +71,46 @@ const parseBody = (body?: string) => {
   }
 };
 
+const isHttpRequest = (event: {
+  requestContext?: { http?: { method?: string } };
+}) => Boolean(event.requestContext?.http?.method);
+
+const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>) => ({
+  statusCode,
+  headers: {
+    ...corsHeaders,
+    'content-type': 'application/json',
+  },
+  body: JSON.stringify(payload),
+});
+
+const parseConsumptionRules = (payload: InventoryPayload) => {
+  if (payload.consumptionRules) {
+    return payload.consumptionRules;
+  }
+
+  if (payload.consumptionRulesJson) {
+    try {
+      const parsed = JSON.parse(payload.consumptionRulesJson) as Record<
+        string,
+        unknown
+      >;
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+};
+
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   body?: string;
+  arguments?: InventoryPayload;
 }) => {
-  if (event.requestContext?.http?.method === 'OPTIONS') {
+  const isHttp = isHttpRequest(event);
+  if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return {
       statusCode: 204,
       headers: corsHeaders,
@@ -64,41 +119,54 @@ export const handler = async (event: {
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ message: 'TABLE_NAME is not configured.' }),
-    };
+    const message = 'TABLE_NAME is not configured.';
+    if (isHttp) {
+      return buildHttpResponse(500, { message });
+    }
+    throw new Error(message);
   }
 
-  const payload = parseBody(event.body);
-  if (!payload || !payload.id) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ message: 'Item id is required.' }),
-    };
+  const payload = isHttp ? parseBody(event.body) : event.arguments;
+  if (!payload?.id) {
+    const message = 'Item id is required.';
+    if (isHttp) {
+      return buildHttpResponse(400, { message });
+    }
+    throw new Error(message);
   }
+
+  const name = payload.name ?? payload['Item name'];
+  const category = payload.category ?? payload.Category;
+  const location = payload.location ?? payload.Location;
+  const status = payload.status ?? payload.Status;
+  const quantity = payload.quantity ?? payload.Quantity;
+  const updated = payload.updated ?? payload['Last updated'];
+  const tolerance = payload.tolerance ?? payload.Tolerance;
+  const trimmedCategory = category?.trim();
+  const quantityValue = Number(quantity) || 0;
+  const rebuyQtyValue = Number(payload.rebuyQty) || 0;
+  const statusValue = status?.trim() || computeInventoryStatus(quantityValue, rebuyQtyValue);
 
   const item = {
     id: String(payload.id).trim(),
-    'Item name': payload['Item name']?.trim() ?? '',
-    Location: payload.Location?.trim() ?? '',
-    Status: payload.Status?.trim() ?? '',
-    Quantity: Number(payload.Quantity) || 0,
-    'Last updated': formatDateForStorage(payload['Last updated']),
-    rebuyQty: Number(payload.rebuyQty) || 0,
+    'Item name': name?.trim() ?? '',
+    category: trimmedCategory || undefined,
+    Location: location?.trim() ?? '',
+    Status: statusValue,
+    Quantity: quantityValue,
+    'Last updated': formatDateForStorage(updated),
+    rebuyQty: rebuyQtyValue,
     unitPrice: Number(payload.unitPrice) || 0,
-    Tolerance: Number(payload.Tolerance) || 0,
-    consumptionRules: payload.consumptionRules ?? undefined,
+    Tolerance: Number(tolerance) || 0,
+    consumptionRules: parseConsumptionRules(payload),
   };
 
   if (!item['Item name']) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ message: 'Item name is required.' }),
-    };
+    const message = 'Item name is required.';
+    if (isHttp) {
+      return buildHttpResponse(400, { message });
+    }
+    throw new Error(message);
   }
 
   try {
@@ -109,21 +177,13 @@ export const handler = async (event: {
       }),
     );
 
-    return {
-      statusCode: 200,
-      headers: {
-        ...corsHeaders,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ item }),
-    };
+    const response = { item };
+    return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        message: 'Failed to save inventory item.',
-      }),
-    };
+    const message = 'Failed to save inventory item.';
+    if (isHttp) {
+      return buildHttpResponse(500, { message });
+    }
+    throw new Error(message);
   }
 };

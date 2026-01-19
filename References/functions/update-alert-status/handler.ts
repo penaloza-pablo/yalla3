@@ -25,26 +25,11 @@ const parseBody = (body?: string) => {
   }
 };
 
-const isHttpRequest = (event: {
-  requestContext?: { http?: { method?: string } };
-}) => Boolean(event.requestContext?.http?.method);
-
-const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>) => ({
-  statusCode,
-  headers: {
-    ...corsHeaders,
-    'content-type': 'application/json',
-  },
-  body: JSON.stringify(payload),
-});
-
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   body?: string;
-  arguments?: UpdatePayload;
 }) => {
-  const isHttp = isHttpRequest(event);
-  if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
+  if (event.requestContext?.http?.method === 'OPTIONS') {
     return {
       statusCode: 204,
       headers: corsHeaders,
@@ -53,20 +38,20 @@ export const handler = async (event: {
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {
-    const message = 'TABLE_NAME is not configured.';
-    if (isHttp) {
-      return buildHttpResponse(500, { message });
-    }
-    throw new Error(message);
+    return {
+      statusCode: 500,
+      headers: corsHeaders,
+      body: JSON.stringify({ message: 'TABLE_NAME is not configured.' }),
+    };
   }
 
-  const payload = isHttp ? parseBody(event.body) : event.arguments;
+  const payload = parseBody(event.body);
   if (!payload?.id || !payload.status) {
-    const message = 'id and status are required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return {
+      statusCode: 400,
+      headers: corsHeaders,
+      body: JSON.stringify({ message: 'id and status are required.' }),
+    };
   }
 
   const snoozeUntil =
@@ -74,26 +59,26 @@ export const handler = async (event: {
 
   if (payload.status === 'Snoozed') {
     if (!snoozeUntil) {
-      const message = 'snoozeUntil is required.';
-      if (isHttp) {
-        return buildHttpResponse(400, { message });
-      }
-      throw new Error(message);
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ message: 'snoozeUntil is required.' }),
+      };
     }
     const parsed = Date.parse(snoozeUntil);
     if (Number.isNaN(parsed)) {
-      const message = 'snoozeUntil must be a valid ISO date.';
-      if (isHttp) {
-        return buildHttpResponse(400, { message });
-      }
-      throw new Error(message);
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ message: 'snoozeUntil must be a valid ISO date.' }),
+      };
     }
     if (parsed <= Date.now()) {
-      const message = 'snoozeUntil must be in the future.';
-      if (isHttp) {
-        return buildHttpResponse(400, { message });
-      }
-      throw new Error(message);
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ message: 'snoozeUntil must be in the future.' }),
+      };
     }
   }
 
@@ -120,17 +105,25 @@ export const handler = async (event: {
       }),
     );
 
-    const response = {
-      id: payload.id,
-      status: payload.status,
-      snoozeUntil,
+    return {
+      statusCode: 200,
+      headers: {
+        ...corsHeaders,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: payload.id,
+        status: payload.status,
+        snoozeUntil,
+      }),
     };
-    return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {
-    const message = 'Failed to update alert status.';
-    if (isHttp) {
-      return buildHttpResponse(500, { message });
-    }
-    throw new Error(message);
+    return {
+      statusCode: 500,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        message: 'Failed to update alert status.',
+      }),
+    };
   }
 };
