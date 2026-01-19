@@ -1,5 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -37,6 +41,121 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   return 'Low Stock';
 };
 
+const formatAlertDate = (value?: string) => {
+  const now = new Date();
+  const format = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year}, ${hours}:${minutes}`;
+  };
+
+  if (!value) {
+    return format(now);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return format(parsed);
+};
+
+const getNextAlertId = async (tableName: string) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  let maxValue = 0;
+
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: 'id',
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    (result.Items ?? []).forEach((entry) => {
+      const id = typeof entry.id === 'string' ? entry.id : '';
+      const match = id.match(/^ALM-(\d+)$/i);
+      if (!match) {
+        return;
+      }
+      const value = Number(match[1]);
+      if (Number.isFinite(value)) {
+        maxValue = Math.max(maxValue, value);
+      }
+    });
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  const nextValue = String(maxValue + 1).padStart(3, '0');
+  return `ALM-${nextValue}`;
+};
+
+const buildReorderAlert = (item: {
+  name: string;
+  category?: string;
+  quantity: number;
+  location: string;
+  createdBy: string;
+}) => {
+  const normalizedCategory = item.category?.trim().toLowerCase() ?? '';
+  if (normalizedCategory === 'keys') {
+    return {
+      name: 'Missing key set',
+      description: item.name,
+    };
+  }
+  if (normalizedCategory === 'cleaning' || normalizedCategory === 'welcome kit') {
+    return {
+      name: `Reorder ${item.name}`,
+      description: `${item.quantity} remains on ${item.location}`,
+    };
+  }
+  return null;
+};
+
+const hasDuplicateReorderAlert = async (
+  tableName: string,
+  alertName: string,
+) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: 'id',
+        FilterExpression: '#status = :status AND #origin = :origin AND #name = :name',
+        ExpressionAttributeNames: {
+          '#status': 'Status',
+          '#origin': 'Origin',
+          '#name': 'Name ',
+        },
+        ExpressionAttributeValues: {
+          ':status': 'Pending',
+          ':origin': 'Inventory',
+          ':name': alertName,
+        },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+
+    if ((result.Items ?? []).length > 0) {
+      return true;
+    }
+
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return false;
+};
+
 type InventoryPayload = {
   id?: string;
   name?: string;
@@ -48,6 +167,7 @@ type InventoryPayload = {
   rebuyQty?: number;
   unitPrice?: number;
   tolerance?: number;
+  createdBy?: string;
   consumptionRulesJson?: string;
   consumptionRules?: Record<string, unknown>;
   ['Item name']?: string;
@@ -146,6 +266,7 @@ export const handler = async (event: {
   const quantityValue = Number(quantity) || 0;
   const rebuyQtyValue = Number(payload.rebuyQty) || 0;
   const statusValue = status?.trim() || computeInventoryStatus(quantityValue, rebuyQtyValue);
+  const createdBy = payload.createdBy?.trim() || 'system';
 
   const item = {
     id: String(payload.id).trim(),
@@ -176,6 +297,43 @@ export const handler = async (event: {
         Item: item,
       }),
     );
+
+    const alertsTable = process.env.ALERTS_TABLE;
+    if (alertsTable && item.Status === 'Reorder') {
+      const alertTemplate = buildReorderAlert({
+        name: item['Item name'],
+        category: item.category,
+        quantity: item.Quantity,
+        location: item.Location || 'Unknown location',
+        createdBy,
+      });
+
+      if (alertTemplate) {
+        const isDuplicate = await hasDuplicateReorderAlert(
+          alertsTable,
+          alertTemplate.name,
+        );
+        if (isDuplicate) {
+          const response = { item };
+          return isHttp ? buildHttpResponse(200, response) : response;
+        }
+        const alertId = await getNextAlertId(alertsTable);
+        await client.send(
+          new PutCommand({
+            TableName: alertsTable,
+            Item: {
+              id: alertId,
+              'Name ': alertTemplate.name,
+              Description: alertTemplate.description,
+              Date: formatAlertDate(),
+              Status: 'Pending',
+              Origin: 'Inventory',
+              'Create by': createdBy,
+            },
+          }),
+        );
+      }
+    }
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;
