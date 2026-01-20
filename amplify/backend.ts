@@ -43,7 +43,7 @@ inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
 inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
 alarmsTable.grantReadWriteData(backend.getAlerts.resources.lambda);
 alarmsTable.grantWriteData(backend.updateAlertStatus.resources.lambda);
-alarmsTable.grantWriteData(backend.upsertAlert.resources.lambda);
+alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantWriteData(backend.upsertInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
