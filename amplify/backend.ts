@@ -44,6 +44,7 @@ inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
 alarmsTable.grantReadWriteData(backend.getAlerts.resources.lambda);
 alarmsTable.grantWriteData(backend.updateAlertStatus.resources.lambda);
 alarmsTable.grantWriteData(backend.upsertAlert.resources.lambda);
+alarmsTable.grantWriteData(backend.upsertInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
@@ -61,6 +62,9 @@ const updateAlertStatusUrl =
   backend.updateAlertStatus.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const upsertAlertUrl = backend.upsertAlert.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 const exportInventoryUrl = backend.exportInventory.resources.lambda.addFunctionUrl(
   {
     authType: FunctionUrlAuthType.NONE,
@@ -73,6 +77,7 @@ backend.addOutput({
     upsertInventoryUrl: upsertInventoryUrl.url,
     getAlertsUrl: getAlertsUrl.url,
     updateAlertStatusUrl: updateAlertStatusUrl.url,
+    upsertAlertUrl: upsertAlertUrl.url,
     exportInventoryUrl: exportInventoryUrl.url,
   },
 });

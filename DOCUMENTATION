@@ -190,6 +190,7 @@ Data flow
 - Lambda: `UpsertAlert` creates or updates alerts in `yalla-alarms`.
 - Frontend: `VITE_GET_ALERTS_URL` / `VITE_UPDATE_ALERT_STATUS_URL` or
   `custom.getAlertsUrl` / `custom.updateAlertStatusUrl` are required.
+- Optional: `VITE_UPSERT_ALERT_URL` or `custom.upsertAlertUrl` for direct alert creation.
 
 Local configuration
 - Copy `env.local.example` to `.env.local` and set the endpoint URLs.
