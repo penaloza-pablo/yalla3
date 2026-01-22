@@ -464,7 +464,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [alertRows, setAlertRows] = useState<AlertRow[]>([])
   const [isAlertsLoading, setIsAlertsLoading] = useState(false)
   const [alertsError, setAlertsError] = useState<string | null>(null)
@@ -830,15 +829,6 @@ function App() {
         mapInventoryRow(normalizeInventoryItem(entry)),
       )
       setInventoryRows(mappedRows)
-      setLastUpdated(
-        new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      )
     } catch (requestError) {
       const message =
         requestError instanceof Error
@@ -1289,15 +1279,6 @@ function App() {
         return [updatedRow, ...current]
       })
 
-      setLastUpdated(
-        new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      )
 
       setIsFormOpen(false)
     } catch (saveError) {
