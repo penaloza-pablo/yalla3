@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Amplify } from 'aws-amplify'
+import { fetchUserAttributes } from 'aws-amplify/auth'
 import outputs from '../amplify_outputs.json'
 import type {
   ConversationMessage,
@@ -374,6 +375,15 @@ const getNextInventoryId = (rows: InventoryRow[]) => {
   return `INV-${nextValue}`
 }
 
+const getCurrentUserEmail = async () => {
+  try {
+    const attributes = await fetchUserAttributes()
+    return attributes.email ?? attributes.preferred_username ?? 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 const mapInventoryRow = (item: Record<string, unknown>): InventoryRow => ({
   id: getStringValue(getItemValue(item, inventoryFieldMap.id)) || '—',
   name: getStringValue(getItemValue(item, inventoryFieldMap.name)) || '—',
@@ -486,6 +496,10 @@ function App() {
   const [isSaving, setIsSaving] = useState(false)
   const [activePage, setActivePage] = useState('Inventory')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    new Set(),
+  )
   const [sortConfig, setSortConfig] = useState<{
     key: 'name' | 'status' | null
     direction: 'asc' | 'desc'
@@ -771,14 +785,6 @@ function App() {
         AI configured: {debugInfo.outputsHasData ? 'Yes' : 'No'}
       </p>
     </div>
-  )
-
-  const lowStockCount = useMemo(
-    () =>
-      inventoryRows.filter(
-        (row) => row.status === 'Low Stock' || row.status === 'Reorder',
-      ).length,
-    [inventoryRows],
   )
 
   const pendingAlertsCount = useMemo(
@@ -1103,6 +1109,21 @@ function App() {
     })
   }, [filters.locations, filters.statuses, filters.categories, inventoryRows])
 
+  const lowStockCount = useMemo(
+    () => filteredRows.filter((row) => row.status === 'Low Stock').length,
+    [filteredRows],
+  )
+
+  const reorderCount = useMemo(
+    () => filteredRows.filter((row) => row.status === 'Reorder').length,
+    [filteredRows],
+  )
+
+  const locationCount = useMemo(() => {
+    const unique = new Set(filteredRows.map((row) => row.location).filter(Boolean))
+    return unique.size
+  }, [filteredRows])
+
   const activeFilterCount = useMemo(() => {
     return (
       filters.locations.length +
@@ -1214,6 +1235,7 @@ function App() {
     const rebuyQtyValue = Number(formValues.rebuyQty) || 0
     const statusValue = computeInventoryStatus(quantityValue, rebuyQtyValue)
     const lastUpdatedValue = formatDateForStorage('')
+    const createdBy = await getCurrentUserEmail()
 
     const payload = {
       id: itemId,
@@ -1227,6 +1249,7 @@ function App() {
       unitPrice: Number(formValues.unitPrice) || 0,
       Tolerance: Number(formValues.tolerance) || 0,
       consumptionRules: consumptionRules ?? undefined,
+      createdBy,
     }
 
     try {
@@ -1327,57 +1350,179 @@ function App() {
     }
   }
 
+  const toggleSection = (section: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      if (next.has(section)) {
+        next.delete(section)
+      } else {
+        next.add(section)
+      }
+      return next
+    })
+  }
+
+  const handleSidebarToggle = () => {
+    setIsSidebarCollapsed((current) => {
+      if (!current) {
+        setCollapsedSections(new Set(navigation.map((group) => group.section)))
+      }
+      return !current
+    })
+  }
+
+  const handleSectionShortcut = (section: string) => {
+    setIsSidebarCollapsed(false)
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      next.delete(section)
+      return next
+    })
+  }
+
   return (
-    <div className="app">
-      <aside className="sidebar">
+    <div className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''}`}>
+      <aside className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
         <div className="brand">
-          <span className="brand-title">Yalla!</span>
+          <span className="brand-title">
+            {isSidebarCollapsed ? 'Y!' : 'Yalla!'}
+          </span>
         </div>
         <nav className="nav">
-          <ul className="nav-items nav-items-primary">
-            {coreItems.map((item) => {
-              const isActive = activePage === item
-              return (
-                <li key={item}>
-                  <button
-                    className={`nav-button ${isActive ? 'active' : ''}`}
-                    aria-current={isActive ? 'page' : undefined}
-                    type="button"
-                    onClick={() => setActivePage(item)}
-                  >
-                    <span>{item}</span>
-                    {item === 'Alerts' && pendingAlertsCount > 0 ? (
-                      <span className="nav-badge">{pendingAlertsCount}</span>
-                    ) : null}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          {navigation.map((group) => (
-            <div className="nav-section" key={group.section}>
-              <div className="nav-section-title">{group.section}</div>
-              <ul className="nav-items">
-                {group.items.map((item) => {
+          {!isSidebarCollapsed ? (
+            <ul className="nav-items nav-items-primary">
+              {coreItems.map((item) => {
+                const isActive = activePage === item
+                return (
+                  <li key={item}>
+                    <button
+                      className={`nav-button ${isActive ? 'active' : ''}`}
+                      aria-current={isActive ? 'page' : undefined}
+                      type="button"
+                      onClick={() => setActivePage(item)}
+                    >
+                      <span>{item}</span>
+                      {item === 'Alerts' && pendingAlertsCount > 0 ? (
+                        <span className="nav-badge">{pendingAlertsCount}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : null}
+          {isSidebarCollapsed ? (
+            <>
+              <ul className="nav-items nav-items-primary nav-items-collapsed">
+                {coreItems.map((item) => {
                   const isActive = activePage === item
                   return (
                     <li key={item}>
                       <button
-                        className={`nav-button ${isActive ? 'active' : ''}`}
+                        className={`nav-button nav-icon-button ${
+                          isActive ? 'active' : ''
+                        }`}
                         aria-current={isActive ? 'page' : undefined}
                         type="button"
                         onClick={() => setActivePage(item)}
+                        aria-label={item}
                       >
-                        {item}
+                        {item === 'Alerts' ? (
+                          <>
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              width="16"
+                              height="16"
+                            >
+                              <path
+                                d="M10 3a4 4 0 0 1 4 4v2.4l1.2 2.4H4.8L6 9.4V7a4 4 0 0 1 4-4zm-2.2 12a2.2 2.2 0 0 0 4.4 0h-4.4z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </>
+                        ) : item === 'Chatbot' ? (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            width="16"
+                            height="16"
+                          >
+                            <path
+                              d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5v4A2.5 2.5 0 0 1 13.5 12H9l-3.5 3.5V12H6.5A2.5 2.5 0 0 1 4 9.5v-4z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        ) : (
+                          <span>{item.charAt(0)}</span>
+                        )}
                       </button>
                     </li>
                   )
                 })}
               </ul>
+              <ul className="nav-items nav-section-shortcuts">
+                {navigation.map((group) => (
+                  <li key={group.section}>
+                    <button
+                      className="nav-button nav-section-shortcut"
+                      type="button"
+                      aria-label={`Open ${group.section}`}
+                      onClick={() => handleSectionShortcut(group.section)}
+                    >
+                      {group.section.charAt(0)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {navigation.map((group) => (
+            <div className="nav-section" key={group.section}>
+              <button
+                className="nav-section-title nav-section-toggle"
+                type="button"
+                onClick={() => toggleSection(group.section)}
+                aria-expanded={!collapsedSections.has(group.section)}
+              >
+                <span>{group.section}</span>
+                <span className="nav-section-caret">
+                  {collapsedSections.has(group.section) ? '▸' : '▾'}
+                </span>
+              </button>
+              {!collapsedSections.has(group.section) ? (
+                <ul className="nav-items">
+                  {group.items.map((item) => {
+                    const isActive = activePage === item
+                    return (
+                      <li key={item}>
+                        <button
+                          className={`nav-button ${isActive ? 'active' : ''}`}
+                          aria-current={isActive ? 'page' : undefined}
+                          type="button"
+                          onClick={() => setActivePage(item)}
+                        >
+                          {item}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : null}
             </div>
           ))}
         </nav>
       </aside>
+      <button
+        className={`btn-icon btn-icon-ghost sidebar-toggle ${
+          isSidebarCollapsed ? 'is-collapsed' : ''
+        }`}
+        type="button"
+        aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onClick={handleSidebarToggle}
+      >
+        {isSidebarCollapsed ? '›' : '‹'}
+      </button>
 
       <main className="main">
         {activePage === 'Inventory' ? (
@@ -1393,23 +1538,87 @@ function App() {
               </div>
               <div className="header-actions">
                 <button
-                  className="btn-secondary"
+                  className={`btn-ghost btn-filter ${
+                    isFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setFilterDraft({
+                      locations: [...filters.locations],
+                      statuses: [...filters.statuses],
+                      categories: [...filters.categories],
+                    })
+                    setIsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {activeFilterCount > 0 ? (
+                    <span className="filter-badge">{activeFilterCount}</span>
+                  ) : null}
+                </button>
+                <button
+                  className="btn-ghost"
                   type="button"
                   onClick={exportInventory}
                   disabled={isExporting}
+                  aria-label="Export"
                 >
-                  {isExporting ? 'Exporting...' : 'Export'}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
-                <button className="btn-ghost" type="button" onClick={openNewItem}>
-                  Add item
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={openNewItem}
+                  aria-label="Add item"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
+                  </svg>
                 </button>
                 <button
                   className="btn-primary"
                   onClick={fetchInventory}
                   type="button"
                   disabled={isLoading}
+                  aria-label="Refresh"
                 >
-                  {isLoading ? 'Refreshing...' : 'Refresh'}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
               </div>
             </header>
@@ -1418,21 +1627,19 @@ function App() {
 
             <section className="summary-cards">
               <div className="card card-compact">
-                <p className="card-label">Total SKUs</p>
-                <p className="card-value">{inventoryRows.length}</p>
-                <p className="card-meta">Across all tracked locations</p>
+                <p className="card-label">Locations</p>
+                <p className="card-value">{locationCount}</p>
+                <p className="card-meta">Visible locations</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Reorder</p>
+                <p className="card-value">{reorderCount}</p>
+                <p className="card-meta">Requires purchase</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">Low Stock</p>
                 <p className="card-value">{lowStockCount}</p>
-                <p className="card-meta">Needs attention this week</p>
-              </div>
-              <div className="card card-compact">
-                <p className="card-label">Last Sync</p>
-                <p className="card-value">
-                  {lastUpdated ?? 'Not synced yet'}
-                </p>
-                <p className="card-meta">Production DynamoDB</p>
+                <p className="card-meta">Needs attention</p>
               </div>
             </section>
 
@@ -1451,36 +1658,6 @@ function App() {
                     type="search"
                     aria-label="Search inventory"
                   />
-                  <button
-                    className={`btn-icon btn-icon-ghost btn-filter ${
-                      isFilterOpen ? 'is-active' : ''
-                    }`}
-                    type="button"
-                    aria-label="Filters"
-                    onClick={() => {
-                      setFilterDraft({
-                        locations: [...filters.locations],
-                        statuses: [...filters.statuses],
-                        categories: [...filters.categories],
-                      })
-                      setIsFilterOpen(true)
-                    }}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    {activeFilterCount > 0 ? (
-                      <span className="filter-badge">{activeFilterCount}</span>
-                    ) : null}
-                  </button>
                 </div>
               </div>
 

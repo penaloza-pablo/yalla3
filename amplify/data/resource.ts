@@ -133,7 +133,7 @@ const schema = a.schema({
   upsertAlert: a
     .query()
     .arguments({
-      id: a.string().required(),
+      id: a.string(),
       name: a.string().required(),
       description: a.string(),
       date: a.string(),
@@ -159,7 +159,7 @@ const schema = a.schema({
     .conversation({
       aiModel: a.ai.model("Claude 3 Haiku"),
       systemPrompt:
-        "You are a production operations assistant for vacation rentals. Always use tools to read or modify inventory and alerts. For inventory questions, use list_inventory or list_inventory_near_rebuy. For alert questions, use list_alerts. For data changes, use upsert_inventory_item, upsert_alert, or update_alert_status. When creating inventory items, generate the next ID using existing items (INV-001, INV-002, ...), set last updated to today, and compute status: if quantity <= rebuyQty then Reorder, if quantity >= floor(rebuyQty * 1.25) then OK, otherwise Low Stock. Confirm before making any change. Summarize results in clear, concise English.",
+        "You are a production operations assistant for vacation rentals. Always use tools to read or modify inventory and alerts. For inventory questions, use list_inventory or list_inventory_near_rebuy. For alert questions, use list_alerts. For data changes, use upsert_inventory_item, upsert_alert, or update_alert_status. When creating inventory items, generate the next ID using existing items (INV-001, INV-002, ...), set last updated to today, and compute status: if quantity <= rebuyQty then Reorder, if quantity >= floor(rebuyQty * 1.25) then OK, otherwise Low Stock. When creating alerts, generate the next ID using existing items (ALM-001, ALM-002, ...). Confirm before making any change. Summarize results in clear, concise English.",
       tools: [
         a.ai.dataTool({
           name: "list_inventory",

@@ -122,7 +122,7 @@ export const handler = async (event: {
         status: event.arguments?.status,
         origin: event.arguments?.origin,
         includeSnoozed: event.arguments?.includeSnoozed,
-      };
+    };
 
   const limit = typeof args.limit === 'number' ? parseLimit(String(args.limit)) : undefined;
   const filters = buildScanFilters(args);
@@ -159,10 +159,10 @@ export const handler = async (event: {
     );
 
     const payload = {
-      items,
-      count: result.Count ?? 0,
-      scannedCount: result.ScannedCount ?? 0,
-      lastEvaluatedKey: result.LastEvaluatedKey ?? null,
+        items,
+        count: result.Count ?? 0,
+        scannedCount: result.ScannedCount ?? 0,
+        lastEvaluatedKey: result.LastEvaluatedKey ?? null,
     };
 
     return isHttp ? buildHttpResponse(200, payload) : payload;

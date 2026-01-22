@@ -5,6 +5,7 @@ export const upsertInventory = defineFunction({
   entry: './handler.ts',
   environment: {
     TABLE_NAME: 'yalla-inventory',
+    ALERTS_TABLE: 'yalla-alarms',
   },
   timeoutSeconds: 20,
 });

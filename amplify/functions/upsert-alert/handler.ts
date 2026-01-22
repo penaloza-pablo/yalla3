@@ -1,5 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -83,6 +87,38 @@ const validateSnoozeUntil = (status?: AlertPayload['status'], value?: string) =>
   }
 };
 
+const getNextAlertId = async (tableName: string) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  let maxValue = 0;
+
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: 'id',
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    (result.Items ?? []).forEach((item) => {
+      const id = typeof item.id === 'string' ? item.id : '';
+      const match = id.match(/^ALM-(\d+)$/i);
+      if (!match) {
+        return;
+      }
+      const value = Number(match[1]);
+      if (Number.isFinite(value)) {
+        maxValue = Math.max(maxValue, value);
+      }
+    });
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  const nextValue = String(maxValue + 1).padStart(3, '0');
+  return `ALM-${nextValue}`;
+};
+
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   body?: string;
@@ -106,8 +142,8 @@ export const handler = async (event: {
   }
 
   const payload = isHttp ? parseBody(event.body) : event.arguments;
-  if (!payload?.id || !payload.name) {
-    const message = 'id and name are required.';
+  if (!payload?.name) {
+    const message = 'name is required.';
     if (isHttp) {
       return buildHttpResponse(400, { message });
     }
@@ -124,14 +160,15 @@ export const handler = async (event: {
     throw error;
   }
 
+  const id = payload.id ? String(payload.id).trim() : await getNextAlertId(tableName);
   const item = {
-    id: String(payload.id).trim(),
+    id,
     'Name ': payload.name.trim(),
     Description: payload.description?.trim() ?? '',
     Date: formatAlertDate(payload.date),
     Status: payload.status ?? 'Pending',
     Origin: payload.origin?.trim() ?? '',
-    'Create by': payload.createdBy?.trim() ?? '',
+    'Create by': payload.createdBy?.trim() ?? 'system',
     SnoozeUntil: payload.snoozeUntil,
   };
 

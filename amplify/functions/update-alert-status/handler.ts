@@ -121,9 +121,9 @@ export const handler = async (event: {
     );
 
     const response = {
-      id: payload.id,
-      status: payload.status,
-      snoozeUntil,
+        id: payload.id,
+        status: payload.status,
+        snoozeUntil,
     };
     return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {

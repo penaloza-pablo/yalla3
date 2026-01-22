@@ -91,7 +91,7 @@ export const handler = async (event: {
         limit: event.arguments?.limit,
         status: event.arguments?.status,
         location: event.arguments?.location,
-      };
+    };
 
   const limit = typeof args.limit === 'number' ? parseLimit(String(args.limit)) : undefined;
   const filters = buildScanFilters(args);
@@ -105,10 +105,10 @@ export const handler = async (event: {
 
     const result = await client.send(command);
     const payload = {
-      items: result.Items ?? [],
-      count: result.Count ?? 0,
-      scannedCount: result.ScannedCount ?? 0,
-      lastEvaluatedKey: result.LastEvaluatedKey ?? null,
+        items: result.Items ?? [],
+        count: result.Count ?? 0,
+        scannedCount: result.ScannedCount ?? 0,
+        lastEvaluatedKey: result.LastEvaluatedKey ?? null,
     };
 
     return isHttp ? buildHttpResponse(200, payload) : payload;
