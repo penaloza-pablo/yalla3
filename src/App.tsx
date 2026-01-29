@@ -342,6 +342,16 @@ const formatAlertDate = (value: unknown) => {
   return getStringValue(value) || '—'
 }
 
+const formatUnitPrice = (value: number) => {
+  if (!Number.isFinite(value) || value === 0) {
+    return '—'
+  }
+  return `€ ${value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  })}`
+}
+
 const formatSnoozeUntil = (dateValue: string) => {
   if (!dateValue) {
     return ''
@@ -615,9 +625,6 @@ function App() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false)
-  const [purchaseFormStep, setPurchaseFormStep] = useState<
-    'item' | 'details'
-  >('item')
   const [purchaseFormValues, setPurchaseFormValues] =
     useState<PurchaseFormState>(emptyPurchaseFormState)
   const [purchaseFormError, setPurchaseFormError] = useState<string | null>(null)
@@ -1166,7 +1173,6 @@ function App() {
       location: row.location,
       status: '',
     })
-    setPurchaseFormStep('item')
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
   }
@@ -1184,7 +1190,6 @@ function App() {
       purchaseDate: row.purchaseDateRaw,
       status: row.status || '',
     })
-    setPurchaseFormStep('details')
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
   }
@@ -1411,7 +1416,6 @@ function App() {
     }
     setIsPurchaseFormOpen(false)
     setPurchaseFormError(null)
-    setPurchaseFormStep('item')
   }
 
   const savePurchase = async () => {
@@ -2346,7 +2350,7 @@ function App() {
                                 <div>
                                   <p className="detail-label">Unit price</p>
                                   <p className="detail-value">
-                                    {row.unitPrice || '—'}
+                                    {formatUnitPrice(row.unitPrice)}
                                   </p>
                                 </div>
                                 <div>
@@ -3240,162 +3244,120 @@ function App() {
             onClick={closePurchaseForm}
           >
             <div className="modal" onClick={(event) => event.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Purchase</h3>
-                  <p className="modal-subtitle">
-                    Create or update a purchase record.
-                  </p>
-                </div>
-                <button
-                  className="btn-icon"
-                  type="button"
-                  onClick={closePurchaseForm}
-                  aria-label="Close purchase form"
-                >
-                  ✕
-                </button>
-              </div>
-
+              {(() => {
+                const isEditingPurchase = Boolean(purchaseFormValues.id)
+                return (
+                  <div className="modal-header">
+                    <div>
+                      <h3 className="modal-title">
+                        {isEditingPurchase ? 'Purchase' : 'New Purchase.'}
+                      </h3>
+                      {isEditingPurchase ? (
+                        <p className="modal-subtitle">
+                          Update the purchase record.
+                        </p>
+                      ) : (
+                        <p className="modal-subtitle">
+                          Registering a new{' '}
+                          <strong>{purchaseFormValues.itemName}</strong> purchase
+                          in <strong>{purchaseFormValues.location}</strong>.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      className="btn-icon"
+                      type="button"
+                      onClick={closePurchaseForm}
+                      aria-label="Close purchase form"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )
+              })()}
               <div className="modal-body">
-                <p className="modal-subtitle">
-                  {purchaseFormStep === 'item' ? 'Step 1 of 2' : 'Step 2 of 2'}
-                </p>
-                {purchaseFormStep === 'item' ? (
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>Item name</span>
-                      <input
-                        type="text"
-                        value={purchaseFormValues.itemName}
-                        disabled
-                        aria-readonly="true"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Item ID</span>
-                      <input
-                        type="text"
-                        value={purchaseFormValues.itemId}
-                        disabled
-                        aria-readonly="true"
-                      />
-                    </label>
-                    <label className="form-field form-field-span">
-                      <span>Location</span>
-                      <input
-                        type="text"
-                        value={purchaseFormValues.location}
-                        disabled
-                        aria-readonly="true"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="form-grid">
-                    <label className="form-field">
-                      <span>Vendor</span>
-                      <input
-                        type="text"
-                        value={purchaseFormValues.vendor}
-                        onChange={(event) =>
-                          setPurchaseFormValues((current) => ({
-                            ...current,
-                            vendor: event.target.value,
-                          }))
-                        }
-                        placeholder="Vendor name"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Units</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={purchaseFormValues.units}
-                        onChange={(event) =>
-                          setPurchaseFormValues((current) => ({
-                            ...current,
-                            units: event.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Total price</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={purchaseFormValues.totalPrice}
-                        onChange={(event) =>
-                          setPurchaseFormValues((current) => ({
-                            ...current,
-                            totalPrice: event.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Delivery date</span>
-                      <input
-                        type="date"
-                        value={purchaseFormValues.deliveryDate}
-                        onChange={(event) =>
-                          setPurchaseFormValues((current) => ({
-                            ...current,
-                            deliveryDate: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                )}
+                <div className="form-grid">
+                  <label className="form-field">
+                    <span>Vendor</span>
+                    <input
+                      type="text"
+                      value={purchaseFormValues.vendor}
+                      onChange={(event) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          vendor: event.target.value,
+                        }))
+                      }
+                      placeholder="Vendor name"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Units</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={purchaseFormValues.units}
+                      onChange={(event) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          units: event.target.value,
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Total price</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={purchaseFormValues.totalPrice}
+                      onChange={(event) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          totalPrice: event.target.value,
+                        }))
+                      }
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Delivery date</span>
+                    <input
+                      type="date"
+                      value={purchaseFormValues.deliveryDate}
+                      onChange={(event) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          deliveryDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
                 {purchaseFormError ? (
                   <div className="alert">{purchaseFormError}</div>
                 ) : null}
               </div>
 
               <div className="modal-footer">
-                {purchaseFormStep === 'item' ? (
-                  <>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={closePurchaseForm}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="btn-primary"
-                      type="button"
-                      onClick={() => setPurchaseFormStep('details')}
-                    >
-                      Next
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={() => setPurchaseFormStep('item')}
-                      disabled={isPurchaseSaving}
-                    >
-                      Back
-                    </button>
-                    <button
-                      className="btn-primary"
-                      type="button"
-                      onClick={savePurchase}
-                      disabled={isPurchaseSaving}
-                    >
-                      {isPurchaseSaving ? 'Saving...' : 'Save purchase'}
-                    </button>
-                  </>
-                )}
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={closePurchaseForm}
+                  disabled={isPurchaseSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={savePurchase}
+                  disabled={isPurchaseSaving}
+                >
+                  {isPurchaseSaving ? 'Saving...' : 'Save purchase'}
+                </button>
               </div>
             </div>
           </div>
