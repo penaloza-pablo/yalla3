@@ -11,6 +11,8 @@ import { updateAlertStatus } from './functions/update-alert-status/resource';
 import { upsertAlert } from './functions/upsert-alert/resource';
 import { getInventoryRebuy } from './functions/get-inventory-rebuy/resource';
 import { exportInventory } from './functions/export-inventory/resource';
+import { getPurchases } from './functions/get-purchases/resource';
+import { upsertPurchase } from './functions/upsert-purchase/resource';
 
 const backend = defineBackend({
   auth,
@@ -22,6 +24,8 @@ const backend = defineBackend({
   upsertAlert,
   getInventoryRebuy,
   exportInventory,
+  getPurchases,
+  upsertPurchase,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -31,6 +35,11 @@ const inventoryTable = Table.fromTableName(
   'yalla-inventory',
 );
 const alarmsTable = Table.fromTableName(dataStack, 'AlarmsTable', 'yalla-alarms');
+const purchasesTable = Table.fromTableName(
+  dataStack,
+  'PurchasesTable',
+  'yalla-purchases',
+);
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
   'InventoryExportBucket',
@@ -45,6 +54,8 @@ alarmsTable.grantReadWriteData(backend.getAlerts.resources.lambda);
 alarmsTable.grantWriteData(backend.updateAlertStatus.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
+purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
+purchasesTable.grantWriteData(backend.upsertPurchase.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
@@ -70,6 +81,12 @@ const exportInventoryUrl = backend.exportInventory.resources.lambda.addFunctionU
     authType: FunctionUrlAuthType.NONE,
   },
 );
+const getPurchasesUrl = backend.getPurchases.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertPurchaseUrl = backend.upsertPurchase.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.addOutput({
   custom: {
@@ -79,5 +96,7 @@ backend.addOutput({
     updateAlertStatusUrl: updateAlertStatusUrl.url,
     upsertAlertUrl: upsertAlertUrl.url,
     exportInventoryUrl: exportInventoryUrl.url,
+    getPurchasesUrl: getPurchasesUrl.url,
+    upsertPurchaseUrl: upsertPurchaseUrl.url,
   },
 });

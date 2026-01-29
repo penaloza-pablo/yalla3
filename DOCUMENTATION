@@ -150,6 +150,24 @@ Overview
 - Scope: AI chatbot for questions about inventory and alerts.
 - Status: Conversation route defined in Amplify Data with tool access.
 
+System prompt
+- Location: `amplify/data/resource.ts` (`chatbot.systemPrompt`)
+- Structure must be preserved for future edits: GENERAL RULES, INVENTORY RULES,
+  ALERT RULES, RESPONSE STYLE, FINAL CHECK.
+- Current prompt (summarized):
+  - GENERAL RULES: Use tools for any read/write, confirm before changes, keep
+    responses short, respond in the user's language, always write data in English,
+    and translate user-provided names/descriptions/locations to English.
+  - INVENTORY RULES: Use inventory tools, auto-generate IDs, set lastUpdated to
+    today, and compute status based on quantity vs rebuyQty.
+  - ALERT RULES: Interpret `#alarm`, use alert tools, always set Origin to Chatbot,
+    generate sequential ALM IDs, default to Pending unless requested, and prevent
+    duplicates by checking Pending alerts with same name/description/origin.
+  - RESPONSE STYLE: Minimal responses (e.g., "Alerta creada" / "Alert created"),
+    no internal logic unless asked.
+  - FINAL CHECK: Ensure confirmation, English values, dedupe check, and correct
+    tool selection before any write.
+
 UI behavior
 - Selecting Chatbot displays the AI conversation interface.
 - Quick prompts are available to validate the AI route quickly.
@@ -214,6 +232,36 @@ Files
 - `amplify/functions/update-alert-status/resource.ts`: Lambda definition.
 - `amplify/functions/update-alert-status/handler.ts`: Status update handler.
 - `src/App.tsx`: Alerts UI and actions.
+
+Purchases - UI and data flow (in progress)
+Overview
+- Scope: Purchases feature mirrors Inventory layout for `yalla-purchases`.
+- Status: Backend and UI scaffolded; awaiting deployment and endpoints.
+
+UI behavior
+- Purchases lives under Ops > Inventory and mirrors the Inventory layout.
+- Inventory rows include a purchase action to open the purchase wizard.
+- Wizard captures vendor, units, total price, and delivery date.
+- Purchases table shows Item name, Location, Status, Delivery date by default.
+- Hidden fields (expand row): Purchase date, Purchase ID, Item ID, Vendor, Units,
+  Total price.
+- Actions: Confirm delivery (Pending -> Delivered), Edit, Expand.
+
+Data flow
+- Lambda: `GetPurchases` scans `yalla-purchases`.
+- Lambda: `UpsertPurchase` writes to `yalla-purchases` with sequential IDs
+  (PURCH-001, PURCH-002...).
+- Frontend: `VITE_GET_PURCHASES_URL` / `VITE_UPSERT_PURCHASE_URL` or
+  `custom.getPurchasesUrl` / `custom.upsertPurchaseUrl` are required.
+- Fields stored: Item id, Item name, Location, Vendor, Units, Total price,
+  Delivery date, Purchase date, Status.
+
+Files
+- `amplify/functions/get-purchases/resource.ts`: Lambda definition.
+- `amplify/functions/get-purchases/handler.ts`: Purchases scan handler.
+- `amplify/functions/upsert-purchase/resource.ts`: Lambda definition.
+- `amplify/functions/upsert-purchase/handler.ts`: Purchases write handler.
+- `src/App.tsx`: Purchases UI, wizard, and actions.
 
 Files
 - `src/App.tsx`: navigation and placeholder views.

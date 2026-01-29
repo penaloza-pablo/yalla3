@@ -46,6 +46,21 @@ type AlertRow = {
   snoozeUntil?: string
 }
 
+type PurchaseRow = {
+  id: string
+  itemId: string
+  itemName: string
+  location: string
+  vendor: string
+  units: number
+  totalPrice: number
+  deliveryDate: string
+  deliveryDateRaw: string
+  purchaseDate: string
+  purchaseDateRaw: string
+  status: string
+}
+
 type InventoryFormState = {
   id: string
   name: string
@@ -65,6 +80,19 @@ type InventoryFormState = {
   roomUnit: string
 }
 
+type PurchaseFormState = {
+  id: string
+  itemId: string
+  itemName: string
+  location: string
+  vendor: string
+  units: string
+  totalPrice: string
+  deliveryDate: string
+  purchaseDate: string
+  status: string
+}
+
 type InventoryApiResponse = {
   items?: Record<string, unknown>[]
   count?: number
@@ -75,10 +103,15 @@ type AlertsApiResponse = {
   count?: number
 }
 
+type PurchasesApiResponse = {
+  items?: Record<string, unknown>[]
+  count?: number
+}
+
 const navigation = [
   {
     section: 'Ops',
-    items: ['Inventory', 'Properties', 'Cleaning Report', 'Task Scheduler'],
+    items: ['Inventory', 'Purchases', 'Properties', 'Cleaning Report', 'Task Scheduler'],
   },
   {
     section: 'Tech',
@@ -120,6 +153,19 @@ const alertFieldMap = {
   origin: ['Origin', 'origin'],
   createdBy: ['Create by', 'Created by', 'createdBy'],
   snoozeUntil: ['SnoozeUntil', 'snoozeUntil'],
+}
+
+const purchaseFieldMap = {
+  id: ['id', 'ID'],
+  itemId: ['Item id', 'Item ID', 'itemId', 'item id'],
+  itemName: ['Item name', 'Item Name', 'itemName', 'item name', 'name'],
+  location: ['Location', 'location'],
+  vendor: ['Vendor', 'vendor'],
+  units: ['Units', 'units'],
+  totalPrice: ['Total price', 'totalPrice', 'total price'],
+  deliveryDate: ['Delivery date', 'deliveryDate', 'delivery date'],
+  purchaseDate: ['Purchase date', 'purchaseDate', 'purchase date'],
+  status: ['Status', 'status'],
 }
 
 const getItemValue = (
@@ -307,6 +353,23 @@ const formatSnoozeUntil = (dateValue: string) => {
   return parsed.toISOString()
 }
 
+const formatDateForInput = (value: string) => {
+  if (!value) {
+    return ''
+  }
+  const trimmed = value.trim()
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch
+    return `${year}-${month}-${day}`
+  }
+  const parsed = new Date(trimmed)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10)
+  }
+  return ''
+}
+
 const buildRule = (amountValue: string, unitValue: string) => {
   const amount = Number(amountValue)
   const unit = unitValue.trim()
@@ -418,6 +481,32 @@ const mapAlertRow = (item: Record<string, unknown>): AlertRow => ({
   snoozeUntil: getStringValue(getItemValue(item, alertFieldMap.snoozeUntil)),
 })
 
+const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
+  const deliveryDateRaw = getStringValue(
+    getItemValue(item, purchaseFieldMap.deliveryDate),
+  )
+  const purchaseDateRaw = getStringValue(
+    getItemValue(item, purchaseFieldMap.purchaseDate),
+  )
+  return {
+    id: getStringValue(getItemValue(item, purchaseFieldMap.id)) || '—',
+    itemId: getStringValue(getItemValue(item, purchaseFieldMap.itemId)) || '—',
+    itemName:
+      getStringValue(getItemValue(item, purchaseFieldMap.itemName)) || '—',
+    location:
+      getStringValue(getItemValue(item, purchaseFieldMap.location)) || '—',
+    vendor: getStringValue(getItemValue(item, purchaseFieldMap.vendor)) || '—',
+    units: getNumberValue(getItemValue(item, purchaseFieldMap.units)),
+    totalPrice: getNumberValue(getItemValue(item, purchaseFieldMap.totalPrice)),
+    deliveryDateRaw,
+    deliveryDate: formatUpdatedDate(deliveryDateRaw),
+    purchaseDateRaw,
+    purchaseDate: formatUpdatedDate(purchaseDateRaw),
+    status:
+      getStringValue(getItemValue(item, purchaseFieldMap.status)) || 'Pending',
+  }
+}
+
 const getStatusClassName = (status: string) => {
   if (status === 'Low Stock') {
     return 'status status-warning'
@@ -426,6 +515,9 @@ const getStatusClassName = (status: string) => {
     return 'status status-danger'
   }
   if (status === 'In Stock') {
+    return 'status status-success'
+  }
+  if (status === 'Delivered') {
     return 'status status-success'
   }
   if (status === 'Pending') {
@@ -459,6 +551,19 @@ const emptyFormState: InventoryFormState = {
   roomUnit: '',
 }
 
+const emptyPurchaseFormState: PurchaseFormState = {
+  id: '',
+  itemId: '',
+  itemName: '',
+  location: '',
+  vendor: '',
+  units: '',
+  totalPrice: '',
+  deliveryDate: '',
+  purchaseDate: '',
+  status: 'Pending',
+}
+
 function App() {
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -469,6 +574,15 @@ function App() {
   const [alertsError, setAlertsError] = useState<string | null>(null)
   const [alertsLastUpdated, setAlertsLastUpdated] = useState<string | null>(null)
   const [expandedAlertIds, setExpandedAlertIds] = useState<Set<string>>(new Set())
+  const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([])
+  const [isPurchasesLoading, setIsPurchasesLoading] = useState(false)
+  const [purchasesError, setPurchasesError] = useState<string | null>(null)
+  const [purchasesLastUpdated, setPurchasesLastUpdated] = useState<
+    string | null
+  >(null)
+  const [expandedPurchaseIds, setExpandedPurchaseIds] = useState<Set<string>>(
+    new Set(),
+  )
   const [isAlertsFilterOpen, setIsAlertsFilterOpen] = useState(false)
   const [isSnoozeOpen, setIsSnoozeOpen] = useState(false)
   const [snoozeTargetId, setSnoozeTargetId] = useState<string | null>(null)
@@ -493,6 +607,14 @@ function App() {
   const [formValues, setFormValues] = useState<InventoryFormState>(emptyFormState)
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false)
+  const [purchaseFormStep, setPurchaseFormStep] = useState<
+    'item' | 'details'
+  >('item')
+  const [purchaseFormValues, setPurchaseFormValues] =
+    useState<PurchaseFormState>(emptyPurchaseFormState)
+  const [purchaseFormError, setPurchaseFormError] = useState<string | null>(null)
+  const [isPurchaseSaving, setIsPurchaseSaving] = useState(false)
   const [activePage, setActivePage] = useState('Inventory')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -791,6 +913,11 @@ function App() {
     [alertRows],
   )
 
+  const pendingPurchasesCount = useMemo(
+    () => purchaseRows.filter((row) => row.status === 'Pending').length,
+    [purchaseRows],
+  )
+
   const getEndpoint = (key: string, fallback?: string) => {
     if (fallback) {
       return fallback
@@ -889,6 +1016,55 @@ function App() {
     }
   }, [])
 
+  const fetchPurchases = useCallback(async () => {
+    const endpoint = getEndpoint(
+      'getPurchasesUrl',
+      import.meta.env.VITE_GET_PURCHASES_URL,
+    )
+    if (!endpoint) {
+      setPurchasesError(
+        'Missing purchases endpoint. Set VITE_GET_PURCHASES_URL in the environment.',
+      )
+      return
+    }
+
+    setIsPurchasesLoading(true)
+    setPurchasesError(null)
+
+    try {
+      const response = await fetch(endpoint)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Purchases request failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+      const payload = (await response.json()) as PurchasesApiResponse
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const mappedRows = items.map((entry) =>
+        mapPurchaseRow(normalizeInventoryItem(entry)),
+      )
+      setPurchaseRows(mappedRows)
+      setPurchasesLastUpdated(
+        new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      )
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load purchases. Please try again.'
+      setPurchasesError(message)
+    } finally {
+      setIsPurchasesLoading(false)
+    }
+  }, [])
+
   const exportInventory = useCallback(async () => {
     const endpoint = getEndpoint(
       'exportInventoryUrl',
@@ -956,7 +1132,10 @@ function App() {
     if (activePage === 'Alerts') {
       void fetchAlerts()
     }
-  }, [activePage, fetchAlerts, fetchInventory])
+    if (activePage === 'Purchases') {
+      void fetchPurchases()
+    }
+  }, [activePage, fetchAlerts, fetchInventory, fetchPurchases])
 
   useEffect(() => {
     void fetchAlerts()
@@ -970,6 +1149,37 @@ function App() {
     setFormStep('details')
     setFormError(null)
     setIsFormOpen(true)
+  }
+
+  const openPurchaseWizard = (row: InventoryRow) => {
+    setPurchaseFormValues({
+      ...emptyPurchaseFormState,
+      itemId: row.id,
+      itemName: row.name,
+      location: row.location,
+      status: 'Pending',
+    })
+    setPurchaseFormStep('item')
+    setPurchaseFormError(null)
+    setIsPurchaseFormOpen(true)
+  }
+
+  const openPurchaseEdit = (row: PurchaseRow) => {
+    setPurchaseFormValues({
+      id: row.id,
+      itemId: row.itemId,
+      itemName: row.itemName,
+      location: row.location,
+      vendor: row.vendor === '—' ? '' : row.vendor,
+      units: row.units ? String(row.units) : '',
+      totalPrice: row.totalPrice ? String(row.totalPrice) : '',
+      deliveryDate: formatDateForInput(row.deliveryDateRaw),
+      purchaseDate: row.purchaseDateRaw,
+      status: row.status || 'Pending',
+    })
+    setPurchaseFormStep('details')
+    setPurchaseFormError(null)
+    setIsPurchaseFormOpen(true)
   }
 
   const openEditItem = (row: InventoryRow) => {
@@ -1026,6 +1236,18 @@ function App() {
 
   const toggleAlertRow = (rowId: string) => {
     setExpandedAlertIds((current) => {
+      const next = new Set(current)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }
+
+  const togglePurchaseRow = (rowId: string) => {
+    setExpandedPurchaseIds((current) => {
       const next = new Set(current)
       if (next.has(rowId)) {
         next.delete(rowId)
@@ -1174,6 +1396,164 @@ function App() {
     setIsFormOpen(false)
     setFormError(null)
     setFormStep('details')
+  }
+
+  const closePurchaseForm = () => {
+    if (isPurchaseSaving) {
+      return
+    }
+    setIsPurchaseFormOpen(false)
+    setPurchaseFormError(null)
+    setPurchaseFormStep('item')
+  }
+
+  const savePurchase = async () => {
+    const endpoint = getEndpoint(
+      'upsertPurchaseUrl',
+      import.meta.env.VITE_UPSERT_PURCHASE_URL,
+    )
+    if (!endpoint) {
+      setPurchaseFormError(
+        'Missing purchase endpoint. Set VITE_UPSERT_PURCHASE_URL in the environment.',
+      )
+      return
+    }
+
+    if (!purchaseFormValues.itemId.trim()) {
+      setPurchaseFormError('Item ID is required.')
+      return
+    }
+    if (!purchaseFormValues.itemName.trim()) {
+      setPurchaseFormError('Item name is required.')
+      return
+    }
+    if (!purchaseFormValues.location.trim()) {
+      setPurchaseFormError('Location is required.')
+      return
+    }
+    if (!purchaseFormValues.vendor.trim()) {
+      setPurchaseFormError('Vendor is required.')
+      return
+    }
+    if (!purchaseFormValues.units.trim()) {
+      setPurchaseFormError('Units are required.')
+      return
+    }
+    if (!purchaseFormValues.totalPrice.trim()) {
+      setPurchaseFormError('Total price is required.')
+      return
+    }
+    if (!purchaseFormValues.deliveryDate.trim()) {
+      setPurchaseFormError('Delivery date is required.')
+      return
+    }
+
+    setIsPurchaseSaving(true)
+    setPurchaseFormError(null)
+
+    const purchaseDateValue =
+      purchaseFormValues.purchaseDate?.trim() || formatDateForStorage('')
+    const payload = {
+      id: purchaseFormValues.id.trim() || undefined,
+      'Item id': purchaseFormValues.itemId.trim(),
+      'Item name': purchaseFormValues.itemName.trim(),
+      Location: purchaseFormValues.location.trim(),
+      Vendor: purchaseFormValues.vendor.trim(),
+      Units: Number(purchaseFormValues.units) || 0,
+      'Total price': Number(purchaseFormValues.totalPrice) || 0,
+      'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
+      'Purchase date': formatDateForStorage(purchaseDateValue),
+      Status: purchaseFormValues.status || 'Pending',
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to save purchase.')
+      }
+      const responseBody = (await response.json()) as {
+        item?: Record<string, unknown>
+      }
+      const item = responseBody.item ? mapPurchaseRow(responseBody.item) : null
+      const updatedRow: PurchaseRow =
+        item ??
+        mapPurchaseRow({
+          ...payload,
+          id: payload.id ?? '',
+        })
+
+      setPurchaseRows((current) => {
+        const existingIndex = current.findIndex(
+          (row) => row.id === updatedRow.id,
+        )
+        if (existingIndex >= 0) {
+          const copy = [...current]
+          copy[existingIndex] = updatedRow
+          return copy
+        }
+        return [updatedRow, ...current]
+      })
+
+      setIsPurchaseFormOpen(false)
+    } catch (saveError) {
+      setPurchaseFormError('Unable to save the purchase. Please try again.')
+    } finally {
+      setIsPurchaseSaving(false)
+    }
+  }
+
+  const confirmPurchaseDelivery = async (row: PurchaseRow) => {
+    if (row.status === 'Delivered') {
+      return
+    }
+    const endpoint = getEndpoint(
+      'upsertPurchaseUrl',
+      import.meta.env.VITE_UPSERT_PURCHASE_URL,
+    )
+    if (!endpoint) {
+      setPurchasesError(
+        'Missing purchase endpoint. Set VITE_UPSERT_PURCHASE_URL in the environment.',
+      )
+      return
+    }
+
+    try {
+      const payload = {
+        id: row.id,
+        'Item id': row.itemId,
+        'Item name': row.itemName,
+        Location: row.location,
+        Vendor: row.vendor,
+        Units: row.units,
+        'Total price': row.totalPrice,
+        'Delivery date': formatDateForStorage(row.deliveryDateRaw),
+        'Purchase date': formatDateForStorage(row.purchaseDateRaw),
+        Status: 'Delivered',
+      }
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update purchase.')
+      }
+      setPurchaseRows((current) =>
+        current.map((entry) =>
+          entry.id === row.id ? { ...entry, status: 'Delivered' } : entry,
+        ),
+      )
+    } catch (updateError) {
+      setPurchasesError('Unable to update purchase status. Please try again.')
+    }
   }
 
   const saveItem = async () => {
@@ -1889,6 +2269,24 @@ function App() {
                               <button
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
+                                onClick={() => openPurchaseWizard(row)}
+                                aria-label="Create purchase"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 20 20"
+                                  width="16"
+                                  height="16"
+                                >
+                                  <path
+                                    d="M6.2 5h9.6l-1 6H7.6l-1.4-6zM5 5H3.5a.5.5 0 0 0 0 1H4l1.8 7.4a1 1 0 0 0 1 .8h7.8a1 1 0 0 0 1-.8l1.1-6.4a.5.5 0 0 0-.5-.6H6.2zm3.3 10.5a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2zm5 0a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"
+                                    fill="currentColor"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                className="btn-icon btn-icon-ghost"
+                                type="button"
                                 onClick={() => openEditItem(row)}
                                 aria-label="Edit item"
                               >
@@ -1981,6 +2379,183 @@ function App() {
                       )
                     })
                 )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        ) : activePage === 'Purchases' ? (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Ops / Inventory / Purchases</p>
+                <h1 className="page-title">Purchases</h1>
+                <p className="subtitle">
+                  Purchase data is read from the production DynamoDB table via
+                  Lambda access.
+                </p>
+              </div>
+              <div className="header-actions">
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={fetchPurchases}
+                  disabled={isPurchasesLoading}
+                >
+                  Refresh
+                </button>
+              </div>
+            </header>
+
+            {purchasesError ? <div className="alert">{purchasesError}</div> : null}
+
+            <section className="summary-cards">
+              <div className="card card-compact">
+                <p className="card-label">Total purchases</p>
+                <p className="card-value">{purchaseRows.length}</p>
+                <p className="card-meta">All vendors</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Pending deliveries</p>
+                <p className="card-value">{pendingPurchasesCount}</p>
+                <p className="card-meta">Awaiting confirmation</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Last Sync</p>
+                <p className="card-value">
+                  {purchasesLastUpdated ?? 'Not synced yet'}
+                </p>
+                <p className="card-meta">Production DynamoDB</p>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Purchases</h2>
+                  <p className="card-subtitle">
+                    Confirm delivery to mark purchases as delivered.
+                  </p>
+                </div>
+                <div className="table-actions">
+                  <input
+                    className="search-input"
+                    placeholder="Search purchases"
+                    type="search"
+                    aria-label="Search purchases"
+                  />
+                </div>
+              </div>
+
+              <div className="table-wrapper" aria-busy={isPurchasesLoading}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item name</th>
+                      <th scope="col">Location</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Delivery date</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isPurchasesLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          Loading purchases...
+                        </td>
+                      </tr>
+                    ) : purchaseRows.length === 0 ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          No purchases available yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      purchaseRows.map((row) => {
+                        const isExpanded = expandedPurchaseIds.has(row.id)
+                        return (
+                          <Fragment key={row.id}>
+                            <tr>
+                              <td>{row.itemName}</td>
+                              <td>{row.location}</td>
+                              <td>
+                                <span className={getStatusClassName(row.status)}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td>{row.deliveryDate}</td>
+                              <td>
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    aria-label="Confirm delivery"
+                                    onClick={() => confirmPurchaseDelivery(row)}
+                                    disabled={row.status === 'Delivered'}
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    aria-label="Edit purchase"
+                                    onClick={() => openPurchaseEdit(row)}
+                                  >
+                                    ✎
+                                  </button>
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => togglePurchaseRow(row.id)}
+                                    aria-expanded={isExpanded}
+                                    aria-label="Toggle details"
+                                  >
+                                    {isExpanded ? '▾' : '▸'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={5}>
+                                  <div className="detail-grid">
+                                    <div>
+                                      <p className="detail-label">Purchase ID</p>
+                                      <p className="detail-value">{row.id}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Item ID</p>
+                                      <p className="detail-value">{row.itemId}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Vendor</p>
+                                      <p className="detail-value">{row.vendor}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Units</p>
+                                      <p className="detail-value">{row.units}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Total price</p>
+                                      <p className="detail-value">
+                                        {row.totalPrice}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Purchase date</p>
+                                      <p className="detail-value">
+                                        {row.purchaseDate}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2634,6 +3209,175 @@ function App() {
                       disabled={isSaving}
                     >
                       {isSaving ? 'Saving...' : 'Save item'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isPurchaseFormOpen ? (
+          <div
+            className="modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={closePurchaseForm}
+          >
+            <div className="modal" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Purchase</h3>
+                  <p className="modal-subtitle">
+                    Create or update a purchase record.
+                  </p>
+                </div>
+                <button
+                  className="btn-icon"
+                  type="button"
+                  onClick={closePurchaseForm}
+                  aria-label="Close purchase form"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <p className="modal-subtitle">
+                  {purchaseFormStep === 'item' ? 'Step 1 of 2' : 'Step 2 of 2'}
+                </p>
+                {purchaseFormStep === 'item' ? (
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>Item name</span>
+                      <input
+                        type="text"
+                        value={purchaseFormValues.itemName}
+                        disabled
+                        aria-readonly="true"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Item ID</span>
+                      <input
+                        type="text"
+                        value={purchaseFormValues.itemId}
+                        disabled
+                        aria-readonly="true"
+                      />
+                    </label>
+                    <label className="form-field form-field-span">
+                      <span>Location</span>
+                      <input
+                        type="text"
+                        value={purchaseFormValues.location}
+                        disabled
+                        aria-readonly="true"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>Vendor</span>
+                      <input
+                        type="text"
+                        value={purchaseFormValues.vendor}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            vendor: event.target.value,
+                          }))
+                        }
+                        placeholder="Vendor name"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Units</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={purchaseFormValues.units}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            units: event.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Total price</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={purchaseFormValues.totalPrice}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            totalPrice: event.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Delivery date</span>
+                      <input
+                        type="date"
+                        value={purchaseFormValues.deliveryDate}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            deliveryDate: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
+                {purchaseFormError ? (
+                  <div className="alert">{purchaseFormError}</div>
+                ) : null}
+              </div>
+
+              <div className="modal-footer">
+                {purchaseFormStep === 'item' ? (
+                  <>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={closePurchaseForm}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn-primary"
+                      type="button"
+                      onClick={() => setPurchaseFormStep('details')}
+                    >
+                      Next
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => setPurchaseFormStep('item')}
+                      disabled={isPurchaseSaving}
+                    >
+                      Back
+                    </button>
+                    <button
+                      className="btn-primary"
+                      type="button"
+                      onClick={savePurchase}
+                      disabled={isPurchaseSaving}
+                    >
+                      {isPurchaseSaving ? 'Saving...' : 'Save purchase'}
                     </button>
                   </>
                 )}

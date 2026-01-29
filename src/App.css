@@ -788,6 +788,12 @@ th {
   font-size: 0.95rem;
 }
 
+.form-field input:disabled {
+  background: #f2f4f7;
+  color: #667085;
+  cursor: not-allowed;
+}
+
 .form-field textarea {
   resize: vertical;
 }
