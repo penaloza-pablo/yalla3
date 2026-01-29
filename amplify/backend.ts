@@ -50,12 +50,13 @@ inventoryTable.grantReadData(backend.getInventory.resources.lambda);
 inventoryTable.grantWriteData(backend.upsertInventory.resources.lambda);
 inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
 inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
+inventoryTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 alarmsTable.grantReadWriteData(backend.getAlerts.resources.lambda);
 alarmsTable.grantWriteData(backend.updateAlertStatus.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
-purchasesTable.grantWriteData(backend.upsertPurchase.resources.lambda);
+purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({

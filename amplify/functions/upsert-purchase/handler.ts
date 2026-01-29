@@ -3,6 +3,7 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   ScanCommand,
+  UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -78,6 +79,69 @@ const formatDateForStorage = (value?: string) => {
   return `${day}/${month}/${parsed.getFullYear()}`;
 };
 
+const parseDateOnly = (value?: string) => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string) => {
+  if (currentStatus?.trim().toLowerCase() === 'confirmed') {
+    return 'Confirmed';
+  }
+  const deliveryDate = parseDateOnly(deliveryDateValue);
+  if (!deliveryDate) {
+    return 'To be confirmed';
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (deliveryDate.getTime() > today.getTime()) {
+    return 'Waiting Delivery';
+  }
+  return 'To be confirmed';
+};
+
+const updateInventoryOnConfirm = async (params: {
+  inventoryTable: string;
+  itemId: string;
+  units: number;
+  totalPrice: number;
+}) => {
+  const unitPriceValue =
+    params.units > 0 ? params.totalPrice / params.units : 0;
+  await client.send(
+    new UpdateCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+      UpdateExpression:
+        'SET #quantity = if_not_exists(#quantity, :zero) + :units, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated',
+      ExpressionAttributeNames: {
+        '#quantity': 'Quantity',
+        '#unitPrice': 'unitPrice',
+        '#lastUpdated': 'Last updated',
+      },
+      ExpressionAttributeValues: {
+        ':zero': 0,
+        ':units': params.units,
+        ':unitPrice': unitPriceValue,
+        ':lastUpdated': formatDateForStorage(),
+      },
+    }),
+  );
+};
+
 const getNextPurchaseId = async (tableName: string) => {
   let lastEvaluatedKey: Record<string, unknown> | undefined;
   let maxValue = 0;
@@ -149,7 +213,7 @@ export const handler = async (event: {
   const totalPrice = payload.totalPrice ?? payload['Total price'];
   const deliveryDate = payload.deliveryDate ?? payload['Delivery date'];
   const purchaseDate = payload.purchaseDate ?? payload['Purchase date'];
-  const status = payload.status ?? payload.Status ?? 'Pending';
+  const status = payload.status ?? payload.Status;
 
   if (!itemId || !String(itemId).trim()) {
     const message = 'Item id is required.';
@@ -206,6 +270,8 @@ export const handler = async (event: {
   }
 
   const id = payload.id?.trim() || (await getNextPurchaseId(tableName));
+  const deliveryDateValue = formatDateForStorage(String(deliveryDate));
+  const statusValue = computePurchaseStatus(deliveryDateValue, status);
   const item = {
     id,
     'Item id': String(itemId).trim(),
@@ -214,9 +280,9 @@ export const handler = async (event: {
     Vendor: String(vendor).trim(),
     Units: Number(units) || 0,
     'Total price': Number(totalPrice) || 0,
-    'Delivery date': formatDateForStorage(String(deliveryDate)),
+    'Delivery date': deliveryDateValue,
     'Purchase date': formatDateForStorage(purchaseDate),
-    Status: String(status).trim() || 'Pending',
+    Status: statusValue,
   };
 
   try {
@@ -226,6 +292,19 @@ export const handler = async (event: {
         Item: item,
       }),
     );
+
+    if (statusValue === 'Confirmed') {
+      const inventoryTable = process.env.INVENTORY_TABLE;
+      if (!inventoryTable) {
+        throw new Error('INVENTORY_TABLE is not configured.');
+      }
+      await updateInventoryOnConfirm({
+        inventoryTable,
+        itemId: String(itemId).trim(),
+        units: Number(units) || 0,
+        totalPrice: Number(totalPrice) || 0,
+      });
+    }
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

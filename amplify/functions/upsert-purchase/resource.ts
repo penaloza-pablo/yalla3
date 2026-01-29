@@ -5,6 +5,7 @@ export const upsertPurchase = defineFunction({
   entry: './handler.ts',
   environment: {
     TABLE_NAME: 'yalla-purchases',
+    INVENTORY_TABLE: 'yalla-inventory',
   },
   timeoutSeconds: 20,
 });

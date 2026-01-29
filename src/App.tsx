@@ -503,7 +503,8 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
     purchaseDateRaw,
     purchaseDate: formatUpdatedDate(purchaseDateRaw),
     status:
-      getStringValue(getItemValue(item, purchaseFieldMap.status)) || 'Pending',
+      getStringValue(getItemValue(item, purchaseFieldMap.status)) ||
+      'To be confirmed',
   }
 }
 
@@ -517,7 +518,13 @@ const getStatusClassName = (status: string) => {
   if (status === 'In Stock') {
     return 'status status-success'
   }
-  if (status === 'Delivered') {
+  if (status === 'Waiting Delivery') {
+    return 'status status-neutral'
+  }
+  if (status === 'To be confirmed') {
+    return 'status status-warning'
+  }
+  if (status === 'Confirmed') {
     return 'status status-success'
   }
   if (status === 'Pending') {
@@ -561,7 +568,7 @@ const emptyPurchaseFormState: PurchaseFormState = {
   totalPrice: '',
   deliveryDate: '',
   purchaseDate: '',
-  status: 'Pending',
+  status: '',
 }
 
 function App() {
@@ -914,7 +921,7 @@ function App() {
   )
 
   const pendingPurchasesCount = useMemo(
-    () => purchaseRows.filter((row) => row.status === 'Pending').length,
+    () => purchaseRows.filter((row) => row.status !== 'Confirmed').length,
     [purchaseRows],
   )
 
@@ -1157,7 +1164,7 @@ function App() {
       itemId: row.id,
       itemName: row.name,
       location: row.location,
-      status: 'Pending',
+      status: '',
     })
     setPurchaseFormStep('item')
     setPurchaseFormError(null)
@@ -1175,7 +1182,7 @@ function App() {
       totalPrice: row.totalPrice ? String(row.totalPrice) : '',
       deliveryDate: formatDateForInput(row.deliveryDateRaw),
       purchaseDate: row.purchaseDateRaw,
-      status: row.status || 'Pending',
+      status: row.status || '',
     })
     setPurchaseFormStep('details')
     setPurchaseFormError(null)
@@ -1453,6 +1460,8 @@ function App() {
 
     const purchaseDateValue =
       purchaseFormValues.purchaseDate?.trim() || formatDateForStorage('')
+    const statusValue =
+      purchaseFormValues.status === 'Confirmed' ? 'Confirmed' : undefined
     const payload = {
       id: purchaseFormValues.id.trim() || undefined,
       'Item id': purchaseFormValues.itemId.trim(),
@@ -1463,7 +1472,7 @@ function App() {
       'Total price': Number(purchaseFormValues.totalPrice) || 0,
       'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
       'Purchase date': formatDateForStorage(purchaseDateValue),
-      Status: purchaseFormValues.status || 'Pending',
+      ...(statusValue ? { Status: statusValue } : {}),
     }
 
     try {
@@ -1509,7 +1518,13 @@ function App() {
   }
 
   const confirmPurchaseDelivery = async (row: PurchaseRow) => {
-    if (row.status === 'Delivered') {
+    if (row.status === 'Confirmed') {
+      return
+    }
+    const shouldConfirm = window.confirm(
+      'Are you sure you want to confirm this delivery?',
+    )
+    if (!shouldConfirm) {
       return
     }
     const endpoint = getEndpoint(
@@ -1534,7 +1549,7 @@ function App() {
         'Total price': row.totalPrice,
         'Delivery date': formatDateForStorage(row.deliveryDateRaw),
         'Purchase date': formatDateForStorage(row.purchaseDateRaw),
-        Status: 'Delivered',
+        Status: 'Confirmed',
       }
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -1548,7 +1563,7 @@ function App() {
       }
       setPurchaseRows((current) =>
         current.map((entry) =>
-          entry.id === row.id ? { ...entry, status: 'Delivered' } : entry,
+          entry.id === row.id ? { ...entry, status: 'Confirmed' } : entry,
         ),
       )
     } catch (updateError) {
@@ -2492,7 +2507,7 @@ function App() {
                                     type="button"
                                     aria-label="Confirm delivery"
                                     onClick={() => confirmPurchaseDelivery(row)}
-                                    disabled={row.status === 'Delivered'}
+                                    disabled={row.status === 'Confirmed'}
                                   >
                                     ✓
                                   </button>

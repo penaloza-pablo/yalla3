@@ -245,7 +245,14 @@ UI behavior
 - Purchases table shows Item name, Location, Status, Delivery date by default.
 - Hidden fields (expand row): Purchase date, Purchase ID, Item ID, Vendor, Units,
   Total price.
-- Actions: Confirm delivery (Pending -> Delivered), Edit, Expand.
+- Status rules:
+  - Delivery date in the future -> Waiting Delivery
+  - Delivery date today or in the past -> To be confirmed
+- Actions: Confirm delivery (-> Confirmed), Edit, Expand.
+- Confirm delivery updates inventory:
+  - Quantity = Quantity + Units
+  - unitPrice = Total price / Units
+  - Last updated = current date
 
 Data flow
 - Lambda: `GetPurchases` scans `yalla-purchases`.
