@@ -1,0 +1,88 @@
+2026-01-19T11:09:01.637Z [INFO]: # Build environment configured with Standard build compute type: 8GiB Memory, 4vCPUs, 128GB Disk Space
+2026-01-19T11:09:02.312Z [INFO]: # Cloning repository: git@github.com:penaloza-pablo/yalla3.git
+2026-01-19T11:09:03.244Z [INFO]: 
+2026-01-19T11:09:03.245Z [INFO]: Cloning into 'yalla3'...
+2026-01-19T11:09:03.245Z [INFO]: # Switching to commit: 938a92e37f0bb7411a4bdef59c648992d20fa8ce
+2026-01-19T11:09:03.265Z [INFO]: Note: switching to '938a92e37f0bb7411a4bdef59c648992d20fa8ce'.
+                                 You are in 'detached HEAD' state. You can look around, make experimental
+                                 changes and commit them, and you can discard any commits you make in this
+                                 state without impacting any branches by switching back to a branch.
+                                 If you want to create a new branch to retain commits you create, you may
+                                 do so (now or later) by using -c with the switch command. Example:
+                                 git switch -c <new-branch-name>
+                                 Or undo this operation with:
+                                 git switch -
+                                 Turn off this advice by setting config variable advice.detachedHead to false
+                                 HEAD is now at 938a92e feat: inventory export xlsx and form updates
+2026-01-19T11:09:03.351Z [INFO]: Successfully cleaned up Git credentials
+2026-01-19T11:09:03.351Z [INFO]: # Checking for Git submodules at: /codebuild/output/src2350607775/src/yalla3/.gitmodules
+2026-01-19T11:09:03.360Z [INFO]: # Retrieving environment cache...
+2026-01-19T11:09:03.429Z [INFO]: # Retrieved environment cache
+2026-01-19T11:09:03.430Z [INFO]: ---- Setting Up SSM Secrets ----
+2026-01-19T11:09:03.430Z [INFO]: SSM params {"Path":"/amplify/dd8kh4wy2zlme/main/","WithDecryption":true}
+2026-01-19T11:09:03.915Z [INFO]: # No package override configuration found.
+2026-01-19T11:09:03.918Z [INFO]: # Retrieving cache...
+2026-01-19T11:09:18.864Z [INFO]: # Extracting cache...
+2026-01-19T11:10:09.721Z [INFO]: # Extraction completed
+2026-01-19T11:10:09.940Z [INFO]: # Retrieved cache
+2026-01-19T11:10:14.597Z [INFO]: ## Starting Backend Build
+                                 # Starting phase: build
+                                 # Executing command: npm ci --cache .npm --prefer-offline
+2026-01-19T11:10:37.410Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-19T11:10:37.415Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-19T11:10:37.591Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-19T11:10:37.591Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-19T11:10:37.798Z [WARNING]: npm error code EUSAGE
+2026-01-19T11:10:37.798Z [WARNING]: npm error
+                                    npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+                                    npm error
+                                    npm error Missing: xlsx@0.18.5 from lock file
+                                    npm error Missing: adler-32@1.3.1 from lock file
+                                    npm error Missing: cfb@1.2.2 from lock file
+                                    npm error Missing: codepage@1.15.0 from lock file
+                                    npm error Missing: ssf@0.11.2 from lock file
+                                    npm error Missing: wmf@1.0.2 from lock file
+                                    npm error Missing: word@0.3.0 from lock file
+                                    npm error Missing: frac@1.1.2 from lock file
+                                    npm error
+                                    npm error Clean install a project
+                                    npm error
+                                    npm error Usage:
+                                    npm error npm ci
+                                    npm error
+                                    npm error Options:
+                                    npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+                                    npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+                                    npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+                                    npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+                                    npm error [--no-bin-links] [--no-fund] [--dry-run]
+                                    npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+                                    npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+                                    npm error
+                                    npm error aliases: clean-install, ic, install-clean, isntall-clean
+                                    npm error
+                                    npm error Run "npm help ci" for more info
+2026-01-19T11:10:37.799Z [WARNING]: npm error A complete log of this run can be found in: /codebuild/output/src2350607775/src/yalla3/.npm/_logs/2026-01-19T11_10_18_770Z-debug-0.log
+2026-01-19T11:10:37.807Z [ERROR]: !!! Build failed
+2026-01-19T11:10:37.807Z [ERROR]: !!! Error: Command failed with exit code 1
+2026-01-19T11:10:37.807Z [INFO]: # Starting environment caching...
+2026-01-19T11:10:37.807Z [INFO]: # Uploading environment cache artifact...
+2026-01-19T11:10:37.884Z [INFO]: # Uploaded environment cache artifact
+2026-01-19T11:10:37.884Z [INFO]: # Environment caching completed
+

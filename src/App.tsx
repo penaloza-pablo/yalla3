@@ -1152,6 +1152,16 @@ function App() {
   }, [activePage, fetchAlerts, fetchInventory, fetchPurchases])
 
   useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && activePage === 'Inventory') {
+        void fetchInventory()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [activePage, fetchInventory])
+
+  useEffect(() => {
     void fetchAlerts()
   }, [fetchAlerts])
 
@@ -1232,6 +1242,36 @@ function App() {
     setFormStep('details')
     setFormError(null)
     setIsFormOpen(true)
+  }
+
+  const deleteItem = async (row: InventoryRow) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${row.name}" (${row.id})?`,
+    )
+    if (!confirmed) return
+
+    const endpoint = getEndpoint(
+      'deleteInventoryUrl',
+      import.meta.env.VITE_DELETE_INVENTORY_URL,
+    )
+    if (!endpoint) {
+      setError(
+        'Missing delete endpoint. Set VITE_DELETE_INVENTORY_URL in the environment.',
+      )
+      return
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: row.id }),
+      })
+      if (!response.ok) throw new Error('Failed to delete item.')
+      await fetchInventory()
+    } catch (deleteError) {
+      setError('Unable to delete the item. Please try again.')
+    }
   }
 
   const toggleRow = (rowId: string) => {
@@ -1653,33 +1693,8 @@ function App() {
         throw new Error('Failed to save inventory item.')
       }
 
-      const updatedRow: InventoryRow = {
-        id: payload.id,
-        name: payload['Item name'],
-        category: payload.category ?? '',
-        location: payload.Location || '—',
-        status: payload.Status || 'Unknown',
-        quantity: payload.Quantity,
-        updatedRaw: String(payload['Last updated'] ?? ''),
-        updated: formatUpdatedDate(payload['Last updated']),
-        rebuyQty: payload.rebuyQty,
-        unitPrice: payload.unitPrice,
-        tolerance: payload.Tolerance,
-        consumptionRules: consumptionRules ?? null,
-      }
-
-      setInventoryRows((current) => {
-        const existingIndex = current.findIndex((row) => row.id === payload.id)
-        if (existingIndex >= 0) {
-          const copy = [...current]
-          copy[existingIndex] = updatedRow
-          return copy
-        }
-        return [updatedRow, ...current]
-      })
-
-
       setIsFormOpen(false)
+      await fetchInventory()
     } catch (saveError) {
       setFormError('Unable to save the item. Please try again.')
     } finally {
@@ -2310,6 +2325,24 @@ function App() {
                                 aria-label="Edit item"
                               >
                                 ✎
+                              </button>
+                              <button
+                                className="btn-icon btn-icon-ghost"
+                                type="button"
+                                onClick={() => deleteItem(row)}
+                                aria-label="Delete item"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 20 20"
+                                  width="16"
+                                  height="16"
+                                >
+                                  <path
+                                    d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
+                                    fill="currentColor"
+                                  />
+                                </svg>
                               </button>
                               <button
                                 className="btn-icon btn-icon-ghost"

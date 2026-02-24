@@ -1,0 +1,201 @@
+2026-01-22T06:56:36.992Z [INFO]: # Build environment configured with Standard build compute type: 8GiB Memory, 4vCPUs, 128GB Disk Space
+2026-01-22T06:56:37.648Z [INFO]: # Cloning repository: git@github.com:penaloza-pablo/yalla3.git
+2026-01-22T06:56:38.570Z [INFO]: 
+2026-01-22T06:56:38.571Z [INFO]: Cloning into 'yalla3'...
+2026-01-22T06:56:38.571Z [INFO]: # Switching to commit: b3376e159bc14d8b892235a49fe57b601d82a051
+2026-01-22T06:56:38.589Z [INFO]: Note: switching to 'b3376e159bc14d8b892235a49fe57b601d82a051'.
+                                 You are in 'detached HEAD' state. You can look around, make experimental
+                                 changes and commit them, and you can discard any commits you make in this
+                                 state without impacting any branches by switching back to a branch.
+                                 If you want to create a new branch to retain commits you create, you may
+                                 do so (now or later) by using -c with the switch command. Example:
+                                 git switch -c <new-branch-name>
+                                 Or undo this operation with:
+                                 git switch -
+                                 Turn off this advice by setting config variable advice.detachedHead to false
+                                 HEAD is now at b3376e1 UX changes
+2026-01-22T06:56:38.627Z [INFO]: Successfully cleaned up Git credentials
+2026-01-22T06:56:38.627Z [INFO]: # Checking for Git submodules at: /codebuild/output/src3921593902/src/yalla3/.gitmodules
+2026-01-22T06:56:38.636Z [INFO]: # Retrieving environment cache...
+2026-01-22T06:56:38.727Z [INFO]: # Retrieved environment cache
+2026-01-22T06:56:38.727Z [INFO]: ---- Setting Up SSM Secrets ----
+2026-01-22T06:56:38.727Z [INFO]: SSM params {"Path":"/amplify/dd8kh4wy2zlme/main/","WithDecryption":true}
+2026-01-22T06:56:39.067Z [INFO]: # No package override configuration found.
+2026-01-22T06:56:39.071Z [INFO]: # Retrieving cache...
+2026-01-22T06:56:54.329Z [INFO]: # Extracting cache...
+2026-01-22T06:57:46.975Z [INFO]: # Extraction completed
+2026-01-22T06:57:47.203Z [INFO]: # Retrieved cache
+2026-01-22T06:57:51.521Z [INFO]: ## Starting Backend Build
+                                 # Starting phase: build
+                                 # Executing command: npm ci --cache .npm --prefer-offline
+2026-01-22T06:58:11.665Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-22T06:58:11.671Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-22T06:58:11.844Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-22T06:58:11.845Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-22T06:59:33.133Z [WARNING]: npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-01-22T06:59:33.274Z [WARNING]: npm warn deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+2026-01-22T06:59:33.638Z [WARNING]: npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-01-22T06:59:34.055Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-22T06:59:34.142Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-22T06:59:34.164Z [WARNING]: npm warn deprecated @babel/plugin-proposal-object-rest-spread@7.20.7: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+2026-01-22T06:59:36.706Z [WARNING]: npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-01-22T06:59:58.096Z [WARNING]: npm warn deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+2026-01-22T07:00:08.026Z [INFO]: added 2307 packages, and audited 3165 packages in 2m
+2026-01-22T07:00:08.031Z [INFO]: 236 packages are looking for funding
+                                 run `npm fund` for details
+2026-01-22T07:00:08.229Z [INFO]: 32 vulnerabilities (23 low, 8 moderate, 1 high)
+                                 To address issues that do not require attention, run:
+                                 npm audit fix
+                                 To address all issues possible (including breaking changes), run:
+                                 npm audit fix --force
+                                 Some issues need review, and may require choosing
+                                 a different dependency.
+                                 Run `npm audit` for details.
+2026-01-22T07:00:08.302Z [INFO]: # Executing command: npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+2026-01-22T07:00:20.726Z [INFO]: 74 feature flags are not configured. Run 'cdk flags --unstable=flags' to learn more.
+2026-01-22T07:00:30.907Z [INFO]: ✨  Synthesis time: 0.1s
+2026-01-22T07:00:31.850Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Building data Nested Stack Template
+                                 [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Built data Nested Stack Template
+2026-01-22T07:00:31.852Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Building function Nested Stack Template
+2026-01-22T07:00:31.852Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Built function Nested Stack Template
+2026-01-22T07:00:31.857Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Building amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 Template
+2026-01-22T07:00:31.857Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Built amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 Template
+2026-01-22T07:00:31.903Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Publishing data Nested Stack Template (current_account-current_region-43e1e6d5)
+2026-01-22T07:00:31.909Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Publishing amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 Template (current_account-current_region-fc6a8c26)
+2026-01-22T07:00:31.909Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: start: Publishing function Nested Stack Template (current_account-current_region-e616f88e)
+2026-01-22T07:00:32.196Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Published amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 Template (current_account-current_region-fc6a8c26)
+2026-01-22T07:00:32.205Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Published function Nested Stack Template (current_account-current_region-e616f88e)
+2026-01-22T07:00:32.227Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: success: Published data Nested Stack Template (current_account-current_region-43e1e6d5)
+2026-01-22T07:00:32.228Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: deploying... [1/1]
+2026-01-22T07:00:32.623Z [INFO]: [1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m: creating CloudFormation changeset...
+2026-01-22T07:00:46.319Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 0/6 | 7:00:43 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m[0m [36m[1mUser Initiated[22m[39m
+2026-01-22T07:00:48.575Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 0/6 | 7:00:47 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mfunction.NestedStack/function.NestedStackResource[22m[0m (function1351588B)
+2026-01-22T07:00:48.576Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 0/6 | 7:00:47 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata-access.NestedStack/data-access.NestedStackResource[22m[0m (dataaccess4B40F110)
+2026-01-22T07:00:48.576Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 0/6 | 7:00:47 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mauth.NestedStack/auth.NestedStackResource[22m[0m (auth179371D7)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 0/6 | 7:00:48 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B[22m[0m [36m[1mUser Initiated[22m[39m
+2026-01-22T07:00:50.842Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 1/6 | 7:00:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata-access.NestedStack/data-access.NestedStackResource[22m[39m (dataaccess4B40F110)
+2026-01-22T07:00:50.846Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 2/6 | 7:00:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mauth.NestedStack/auth.NestedStackResource[22m[39m (auth179371D7)
+2026-01-22T07:00:55.357Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 2/6 | 7:00:53 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::Lambda::Function               | [0m[1mfunction/UpsertInventory-lambda[22m[0m (UpsertInventorylambdaF2FDAFC8)
+2026-01-22T07:00:55.361Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 2/6 | 7:00:53 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::Lambda::Function               | [0m[1mfunction/UpdateAlertStatus-lambda[22m[0m (UpdateAlertStatuslambdaE85655EA)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 2/6 | 7:00:53 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::Lambda::Function               | [0m[1mfunction/GetInventory-lambda[22m[0m (GetInventorylambdaE8A7AC1D)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 2/6 | 7:00:53 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::Lambda::Function               | [0m[1mfunction/GetAlerts-lambda[22m[0m (GetAlertslambda9DA2837C)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 2/6 | 7:00:53 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::Lambda::Function               | [0m[1mfunction/UpsertAlert-lambda[22m[0m (UpsertAlertlambdaADA552A7)
+2026-01-22T07:01:02.284Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 3/6 | 7:01:00 AM | [32mUPDATE_COMPLETE     [39m | AWS::Lambda::Function               | [32m[1mfunction/UpsertInventory-lambda[22m[39m (UpsertInventorylambdaF2FDAFC8)
+2026-01-22T07:01:02.290Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 4/6 | 7:01:00 AM | [32mUPDATE_COMPLETE     [39m | AWS::Lambda::Function               | [32m[1mfunction/UpdateAlertStatus-lambda[22m[39m (UpdateAlertStatuslambdaE85655EA)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 5/6 | 7:01:00 AM | [32mUPDATE_COMPLETE     [39m | AWS::Lambda::Function               | [32m[1mfunction/GetInventory-lambda[22m[39m (GetInventorylambdaE8A7AC1D)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 6/6 | 7:01:00 AM | [32mUPDATE_COMPLETE     [39m | AWS::Lambda::Function               | [32m[1mfunction/GetAlerts-lambda[22m[39m (GetAlertslambda9DA2837C)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 7/6 | 7:01:01 AM | [32mUPDATE_COMPLETE     [39m | AWS::Lambda::Function               | [32m[1mfunction/UpsertAlert-lambda[22m[39m (UpsertAlertlambdaADA552A7)
+2026-01-22T07:01:06.755Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 8/6 | 7:01:05 AM | [32mUPDATE_COMPLETE_CLEA[39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B[22m[39m
+2026-01-22T07:01:11.380Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 9/6 | 7:01:09 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mfunction.NestedStack/function.NestedStackResource[22m[39m (function1351588B)
+2026-01-22T07:01:11.384Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 9/6 | 7:01:10 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata.NestedStack/data.NestedStackResource[22m[0m (data7552DF31)
+2026-01-22T07:01:13.707Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:11 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70[22m[0m [36m[1mUser Initiated[22m[39m
+2026-01-22T07:01:18.455Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:16 AM | [0mUPDATE_IN_PROGRESS  [0m | Custom::CDKBucketDeployment         | [0m[1mdata/modelIntrospectionSchemaBucketDeployment/CustomResource-1536MiB/Default[22m[0m (modelIntrospectionSchemaBucketDeploymentCustomResource1536MiB104B97EC)
+2026-01-22T07:01:18.460Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:16 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/ChatbotConversationDirectiveLambdaStack.NestedStack/ChatbotConversationDirectiveLambdaStack.NestedStackResource[22m[0m (amplifyDataChatbotConversationDirectiveLambdaStackNestedStackChatbotConversationDirectiveLambdaStackNestedStackResource63E464D9)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:16 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource[22m[0m (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:16 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::AppSync::GraphQLSchema         | [0m[1mdata/amplifyData/GraphQLAPI/TransformerSchema[22m[0m (amplifyDataGraphQLAPITransformerSchemaFF50A789)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 9/6 | 7:01:16 AM | [0mUPDATE_IN_PROGRESS  [0m | Custom::CDKBucketDeployment         | [0m[1mdata/amplifyData/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/CustomResource-1536MiB/Default[22m[0m (amplifyDataAmplifyCodegenAssetsAmplifyCodegenAssetsDeploymentCustomResource1536MiB21775929)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 10/6 | 7:01:17 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ChatbotConversationDirectiveLambdaStack.NestedStack/ChatbotConversationDirectiveLambdaStack.NestedStackResource[22m[39m (amplifyDataChatbotConversationDirectiveLambdaStackNestedStackChatbotConversationDirectiveLambdaStackNestedStackResource63E464D9)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 11/6 | 7:01:17 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource[22m[39m (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+2026-01-22T07:01:23.263Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 12/6 | 7:01:22 AM | [32mUPDATE_COMPLETE     [39m | Custom::CDKBucketDeployment         | [32m[1mdata/modelIntrospectionSchemaBucketDeployment/CustomResource-1536MiB/Default[22m[39m (modelIntrospectionSchemaBucketDeploymentCustomResource1536MiB104B97EC)
+2026-01-22T07:01:25.674Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 13/6 | 7:01:23 AM | [32mUPDATE_COMPLETE     [39m | Custom::CDKBucketDeployment         | [32m[1mdata/amplifyData/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/CustomResource-1536MiB/Default[22m[39m (amplifyDataAmplifyCodegenAssetsAmplifyCodegenAssetsDeploymentCustomResource1536MiB21775929)
+2026-01-22T07:01:30.745Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:28 AM | [32mUPDATE_COMPLETE     [39m | AWS::AppSync::GraphQLSchema         | [32m[1mdata/amplifyData/GraphQLAPI/TransformerSchema[22m[39m (amplifyDataGraphQLAPITransformerSchemaFF50A789)
+2026-01-22T07:01:30.750Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:29 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::AppSync::FunctionConfiguration | [0m[1mdata/amplifyData/MutationChatbotDataResolverFn/MutationChatbotDataResolverFn.AppSyncFunction[22m[0m (amplifyDataMutationChatbotDataResolverFnMutationChatbotDataResolverFnAppSyncFunctionF3655AAF)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:29 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/ConversationChatbot.NestedStack/ConversationChatbot.NestedStackResource[22m[0m (amplifyDataConversationChatbotNestedStackConversationChatbotNestedStackResource39D03741)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:29 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/ConversationMessageChatbot.NestedStack/ConversationMessageChatbot.NestedStackResource[22m[0m (amplifyDataConversationMessageChatbotNestedStackConversationMessageChatbotNestedStackResource2169E0AB)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:29 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/FunctionDirectiveStack.NestedStack/FunctionDirectiveStack.NestedStackResource[22m[0m (amplifyDataFunctionDirectiveStackNestedStackFunctionDirectiveStackNestedStackResource1246A302)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 14/6 | 7:01:29 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/Todo.NestedStack/Todo.NestedStackResource[22m[0m (amplifyDataTodoNestedStackTodoNestedStackResource551CEA56)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 15/6 | 7:01:30 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConversationMessageChatbot.NestedStack/ConversationMessageChatbot.NestedStackResource[22m[39m (amplifyDataConversationMessageChatbotNestedStackConversationMessageChatbotNestedStackResource2169E0AB)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 16/6 | 7:01:30 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/Todo.NestedStack/Todo.NestedStackResource[22m[39m (amplifyDataTodoNestedStackTodoNestedStackResource551CEA56)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 17/6 | 7:01:30 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConversationChatbot.NestedStack/ConversationChatbot.NestedStackResource[22m[39m (amplifyDataConversationChatbotNestedStackConversationChatbotNestedStackResource39D03741)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 18/6 | 7:01:30 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/FunctionDirectiveStack.NestedStack/FunctionDirectiveStack.NestedStackResource[22m[39m (amplifyDataFunctionDirectiveStackNestedStackFunctionDirectiveStackNestedStackResource1246A302)
+2026-01-22T07:01:33.552Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 18/6 | 7:01:30 AM | [0mUPDATE_IN_PROGRESS  [0m | AWS::CloudFormation::Stack          | [0m[1mdata/amplifyData/ConnectionStack.NestedStack/ConnectionStack.NestedStackResource[22m[0m (amplifyDataConnectionStackNestedStackConnectionStackNestedStackResourceAB0F312B)
+2026-01-22T07:01:33.552Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 19/6 | 7:01:31 AM | [32mUPDATE_COMPLETE     [39m | AWS::AppSync::FunctionConfiguration | [32m[1mdata/amplifyData/MutationChatbotDataResolverFn/MutationChatbotDataResolverFn.AppSyncFunction[22m[39m (amplifyDataMutationChatbotDataResolverFnMutationChatbotDataResolverFnAppSyncFunctionF3655AAF)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 20/6 | 7:01:31 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConnectionStack.NestedStack/ConnectionStack.NestedStackResource[22m[39m (amplifyDataConnectionStackNestedStackConnectionStackNestedStackResourceAB0F312B)
+2026-01-22T07:01:36.296Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 21/6 | 7:01:34 AM | [32mUPDATE_COMPLETE_CLEA[39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70[22m[39m
+2026-01-22T07:01:47.168Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 22/6 | 7:01:44 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata.NestedStack/data.NestedStackResource[22m[39m (data7552DF31)
+2026-01-22T07:01:47.172Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 23/6 | 7:01:46 AM | [32mUPDATE_COMPLETE_CLEA[39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m[39m
+2026-01-22T07:01:49.907Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 22/6 | 7:01:47 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata-access.NestedStack/data-access.NestedStackResource[22m[39m (dataaccess4B40F110)
+2026-01-22T07:01:49.907Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 21/6 | 7:01:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ChatbotConversationDirectiveLambdaStack.NestedStack/ChatbotConversationDirectiveLambdaStack.NestedStackResource[22m[39m (amplifyDataChatbotConversationDirectiveLambdaStackNestedStackChatbotConversationDirectiveLambdaStackNestedStackResource63E464D9)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 20/6 | 7:01:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/FunctionDirectiveStack.NestedStack/FunctionDirectiveStack.NestedStackResource[22m[39m (amplifyDataFunctionDirectiveStackNestedStackFunctionDirectiveStackNestedStackResource1246A302)
+2026-01-22T07:01:49.907Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 19/6 | 7:01:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/Todo.NestedStack/Todo.NestedStackResource[22m[39m (amplifyDataTodoNestedStackTodoNestedStackResource551CEA56)
+2026-01-22T07:01:49.908Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 18/6 | 7:01:48 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConnectionStack.NestedStack/ConnectionStack.NestedStackResource[22m[39m (amplifyDataConnectionStackNestedStackConnectionStackNestedStackResourceAB0F312B)
+2026-01-22T07:01:49.908Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 17/6 | 7:01:49 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConversationMessageChatbot.NestedStack/ConversationMessageChatbot.NestedStackResource[22m[39m (amplifyDataConversationMessageChatbotNestedStackConversationMessageChatbotNestedStackResource2169E0AB)
+2026-01-22T07:01:49.908Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 16/6 | 7:01:49 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/ConversationChatbot.NestedStack/ConversationChatbot.NestedStackResource[22m[39m (amplifyDataConversationChatbotNestedStackConversationChatbotNestedStackResource39D03741)
+2026-01-22T07:01:52.582Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 15/6 | 7:01:49 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource[22m[39m (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+2026-01-22T07:01:52.586Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70 | 16/6 | 7:01:49 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-data7552DF31-14QLLAD5DMA70[22m[39m
+2026-01-22T07:01:59.229Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 15/6 | 7:01:57 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mdata.NestedStack/data.NestedStackResource[22m[39m (data7552DF31)
+2026-01-22T07:01:59.233Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 14/6 | 7:01:58 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mauth.NestedStack/auth.NestedStackResource[22m[39m (auth179371D7)
+                                 amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B | 15/6 | 7:01:58 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7-function1351588B-1728S5T7ZLR5B[22m[39m
+2026-01-22T07:02:09.782Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 14/6 | 7:02:08 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mfunction.NestedStack/function.NestedStackResource[22m[39m (function1351588B)
+2026-01-22T07:02:09.787Z [INFO]: amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7 | 15/6 | 7:02:08 AM | [32mUPDATE_COMPLETE     [39m | AWS::CloudFormation::Stack          | [32m[1mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[22m[39m
+                                 [32m[39m
+                                 [32m ✅  amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m
+                                 ✨  Deployment time: 97.56s
+                                 Outputs:
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mallowUnauthenticatedIdentities[39m = [4m[36mtrue[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mamplifyApiModelSchemaS3Uri[39m = [4m[36ms3://amplify-dd8kh4wy2zlme-mai-amplifydataamplifycodege-freylg3o8g1b/model-schema.graphql[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mauthRegion[39m = [4m[36meu-central-1[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mawsAppsyncAdditionalAuthenticationTypes[39m = [4m[36mAWS_IAM[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mawsAppsyncApiEndpoint[39m = [4m[36mhttps://aypv22nkv5ettjdpjoqyebfrv4.appsync-api.eu-central-1.amazonaws.com/graphql[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mawsAppsyncApiId[39m = [4m[36mloowl3fcgvb4tfznhrbbjoqmgm[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mawsAppsyncAuthenticationType[39m = [4m[36mAMAZON_COGNITO_USER_POOLS[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mawsAppsyncRegion[39m = [4m[36meu-central-1[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mcustomOutputs[39m = [4m[36m{"custom":{"getInventoryUrl":"https://qgqbcbxpoq5znogqjvpm6d3cda0inwrx.lambda-url.eu-central-1.on.aws/","upsertInventoryUrl":"https://ayifywvjnfqvxsfqiatb7dh3dq0ehmao.lambda-url.eu-central-1.on.aws/","getAlertsUrl":"https://x3wycemapjasa3jtbacn7gwvhm0vyban.lambda-url.eu-central-1.on.aws/","updateAlertStatusUrl":"https://gk6vvr4y65wxpva5pql2mmjoma0pfiah.lambda-url.eu-central-1.on.aws/","upsertAlertUrl":"https://wexw7ximsyok7oevrxjkuph6cu0afmvd.lambda-url.eu-central-1.on.aws/","exportInventoryUrl":"https://q36rebm5ss2avmic3wmmezoate0ulbci.lambda-url.eu-central-1.on.aws/"},"version":"1.1"}[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mdefinedConversationHandlers[39m = [4m[36m["amplify-dd8kh4wy2zlme-mai-ChatbotDefaultConversati-qm9rQMi3tiD9"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mdefinedFunctions[39m = [4m[36m["amplify-dd8kh4wy2zlme-mai-GetInventorylambdaE8A7AC-nGtwV8KikOV5","amplify-dd8kh4wy2zlme-mai-GetInventoryRebuylambdaC-3sLvF4apfcyl","amplify-dd8kh4wy2zlme-mai-UpsertInventorylambdaF2F-1ruI1AjU4fZ5","amplify-dd8kh4wy2zlme-main-GetAlertslambda9DA2837C-Mq8gFuHxbxVP","amplify-dd8kh4wy2zlme-mai-UpsertAlertlambdaADA552A-zK260ajHpk6w","amplify-dd8kh4wy2zlme-mai-UpdateAlertStatuslambdaE-YtIyePfry5IV","amplify-dd8kh4wy2zlme-mai-ExportInventorylambda923-pzlhamKaZpC1"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mdeploymentType[39m = [4m[36mbranch[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mgroups[39m = [4m[36m[][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36midentityPoolId[39m = [4m[36meu-central-1:18798197-c50b-4d13-b725-584468705607[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mmfaConfiguration[39m = [4m[36mOFF[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mmfaTypes[39m = [4m[36m[][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthClientId[39m = [4m[36m7fsdivicrcm2fdngnt5dau74hj[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthCognitoDomain[39m =
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthRedirectSignIn[39m = [4m[36mhttps://example.com[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthRedirectSignOut[39m =
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthResponseType[39m = [4m[36mcode[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36moauthScope[39m = [4m[36m["profile","phone","email","openid","aws.cognito.signin.user.admin"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mpasswordPolicyMinLength[39m = [4m[36m8[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mpasswordPolicyRequirements[39m = [4m[36m["REQUIRES_NUMBERS","REQUIRES_LOWERCASE","REQUIRES_UPPERCASE","REQUIRES_SYMBOLS"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mpasswordlessOptions[39m =
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mregion[39m = [4m[36meu-central-1[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36msignupAttributes[39m = [4m[36m["email"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36msocialProviders[39m =
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36muserPoolId[39m = [4m[36meu-central-1_SDUzwl7WZ[39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36musernameAttributes[39m = [4m[36m["email"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mverificationMechanisms[39m = [4m[36m["email"][39m[24m
+                                 [36mamplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7[39m.[36mwebClientId[39m = [4m[36m7fsdivicrcm2fdngnt5dau74hj[39m[24m
+                                 Stack ARN:
+                                 arn:aws:cloudformation:eu-central-1:471112597523:stack/amplify-dd8kh4wy2zlme-main-branch-5ef8dd8bd7/95cdf960-f46a-11f0-ba2a-0699405877c1
+                                 ✨  Total time: 97.66s
+2026-01-22T07:02:10.937Z [INFO]: File written: amplify_outputs.json
+2026-01-22T07:02:11.311Z [INFO]: # Completed phase: build
+                                 ## Completed Backend Build
+2026-01-22T07:02:11.314Z [INFO]: ## Starting Frontend Build
+                                 # Starting phase: build
+2026-01-22T07:02:11.315Z [INFO]: # Executing command: npm run build
+2026-01-22T07:02:11.416Z [INFO]: > amplify-vite-react-template@0.0.0 build
+                                 > tsc && vite build
+2026-01-22T07:02:20.711Z [INFO]: src/App.tsx(467,10): error TS6133: 'lastUpdated' is declared but its value is never read.
+2026-01-22T07:02:20.793Z [ERROR]: !!! Build failed
+2026-01-22T07:02:20.793Z [ERROR]: !!! Error: Command failed with exit code 2
+2026-01-22T07:02:20.793Z [INFO]: # Starting environment caching...
+2026-01-22T07:02:20.793Z [INFO]: # Uploading environment cache artifact...
+2026-01-22T07:02:20.885Z [INFO]: # Uploaded environment cache artifact
+2026-01-22T07:02:20.885Z [INFO]: # Environment caching completed
+

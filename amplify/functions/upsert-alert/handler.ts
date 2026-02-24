@@ -87,6 +87,55 @@ const validateSnoozeUntil = (status?: AlertPayload['status'], value?: string) =>
   }
 };
 
+const findDuplicateAlert = async (
+  tableName: string,
+  name: string,
+  description: string,
+  origin: string,
+) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: tableName,
+        ConsistentRead: true,
+        ProjectionExpression:
+          'id, #name, Description, #status, #origin, #createdBy, #date, SnoozeUntil',
+        FilterExpression: '#status = :status AND #origin = :origin',
+        ExpressionAttributeNames: {
+          '#status': 'Status',
+          '#origin': 'Origin',
+          '#name': 'Name ',
+          '#createdBy': 'Create by',
+          '#date': 'Date',
+        },
+        ExpressionAttributeValues: {
+          ':status': 'Pending',
+          ':origin': origin,
+        },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+
+    const match = (result.Items ?? []).find((item) => {
+      const itemName = typeof item['Name '] === 'string' ? item['Name '].trim() : '';
+      const itemDescription =
+        typeof item.Description === 'string' ? item.Description.trim() : '';
+      return itemName === name && itemDescription === description;
+    });
+
+    if (match) {
+      return match;
+    }
+
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return null;
+};
+
 const getNextAlertId = async (tableName: string) => {
   let lastEvaluatedKey: Record<string, unknown> | undefined;
   let maxValue = 0;
@@ -160,14 +209,24 @@ export const handler = async (event: {
     throw error;
   }
 
+  const name = payload.name.trim();
+  const description = payload.description?.trim() ?? '';
+  const origin = 'Chatbot';
+
+  const existing = await findDuplicateAlert(tableName, name, description, origin);
+  if (existing) {
+    const response = { item: existing };
+    return isHttp ? buildHttpResponse(200, response) : response;
+  }
+
   const id = payload.id ? String(payload.id).trim() : await getNextAlertId(tableName);
   const item = {
     id,
-    'Name ': payload.name.trim(),
-    Description: payload.description?.trim() ?? '',
+    'Name ': name,
+    Description: description,
     Date: formatAlertDate(payload.date),
     Status: payload.status ?? 'Pending',
-    Origin: payload.origin?.trim() ?? '',
+    Origin: origin,
     'Create by': payload.createdBy?.trim() ?? 'system',
     SnoozeUntil: payload.snoozeUntil,
   };

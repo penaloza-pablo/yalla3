@@ -97,18 +97,31 @@ export const handler = async (event: {
   const filters = buildScanFilters(args);
 
   try {
-    const command = new ScanCommand({
-      TableName: tableName,
-      Limit: limit,
-      ...filters,
-    });
+    const items: Record<string, unknown>[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    let scannedCount = 0;
 
-    const result = await client.send(command);
+    do {
+      const command = new ScanCommand({
+        TableName: tableName,
+        Limit: limit ?? 500,
+        ExclusiveStartKey: lastEvaluatedKey,
+        ...filters,
+      });
+
+      const result = await client.send(command);
+      const resultItems = result.Items ?? [];
+      items.push(...resultItems);
+      scannedCount += result.ScannedCount ?? 0;
+      lastEvaluatedKey = result.LastEvaluatedKey as
+        | Record<string, unknown>
+        | undefined;
+    } while (lastEvaluatedKey);
+
     const payload = {
-        items: result.Items ?? [],
-        count: result.Count ?? 0,
-        scannedCount: result.ScannedCount ?? 0,
-        lastEvaluatedKey: result.LastEvaluatedKey ?? null,
+      items,
+      count: items.length,
+      scannedCount,
     };
 
     return isHttp ? buildHttpResponse(200, payload) : payload;

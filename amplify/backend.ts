@@ -6,6 +6,7 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { getInventory } from './functions/get-inventory/resource';
 import { upsertInventory } from './functions/upsert-inventory/resource';
+import { deleteInventory } from './functions/delete-inventory/resource';
 import { getAlerts } from './functions/get-alerts/resource';
 import { updateAlertStatus } from './functions/update-alert-status/resource';
 import { upsertAlert } from './functions/upsert-alert/resource';
@@ -19,6 +20,7 @@ const backend = defineBackend({
   data,
   getInventory,
   upsertInventory,
+  deleteInventory,
   getAlerts,
   updateAlertStatus,
   upsertAlert,
@@ -48,6 +50,7 @@ const inventoryBucket = Bucket.fromBucketName(
 
 inventoryTable.grantReadData(backend.getInventory.resources.lambda);
 inventoryTable.grantWriteData(backend.upsertInventory.resources.lambda);
+inventoryTable.grantWriteData(backend.deleteInventory.resources.lambda);
 inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
 inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
@@ -67,6 +70,9 @@ const upsertInventoryUrl = backend.upsertInventory.resources.lambda.addFunctionU
     authType: FunctionUrlAuthType.NONE,
   },
 );
+const deleteInventoryUrl = backend.deleteInventory.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 const getAlertsUrl = backend.getAlerts.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -93,6 +99,7 @@ backend.addOutput({
   custom: {
     getInventoryUrl: getInventoryUrl.url,
     upsertInventoryUrl: upsertInventoryUrl.url,
+    deleteInventoryUrl: deleteInventoryUrl.url,
     getAlertsUrl: getAlertsUrl.url,
     updateAlertStatusUrl: updateAlertStatusUrl.url,
     upsertAlertUrl: upsertAlertUrl.url,

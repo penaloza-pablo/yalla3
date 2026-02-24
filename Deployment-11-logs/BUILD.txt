@@ -1,0 +1,94 @@
+2026-01-19T11:16:15.630Z [INFO]: # Build environment configured with Standard build compute type: 8GiB Memory, 4vCPUs, 128GB Disk Space
+2026-01-19T11:16:16.299Z [INFO]: # Cloning repository: git@github.com:penaloza-pablo/yalla3.git
+2026-01-19T11:16:17.041Z [INFO]: 
+2026-01-19T11:16:17.042Z [INFO]: Cloning into 'yalla3'...
+2026-01-19T11:16:17.042Z [INFO]: # Switching to commit: 18e4b445c6f2e42ef6b52b3c6c4e2b3fec36009c
+2026-01-19T11:16:17.063Z [INFO]: Note: switching to '18e4b445c6f2e42ef6b52b3c6c4e2b3fec36009c'.
+                                 You are in 'detached HEAD' state. You can look around, make experimental
+                                 changes and commit them, and you can discard any commits you make in this
+                                 state without impacting any branches by switching back to a branch.
+                                 If you want to create a new branch to retain commits you create, you may
+                                 do so (now or later) by using -c with the switch command. Example:
+                                 git switch -c <new-branch-name>
+                                 Or undo this operation with:
+                                 git switch -
+                                 Turn off this advice by setting config variable advice.detachedHead to false
+                                 HEAD is now at 18e4b44 chore: remove xlsx from root deps
+2026-01-19T11:16:17.140Z [INFO]: Successfully cleaned up Git credentials
+2026-01-19T11:16:17.140Z [INFO]: # Checking for Git submodules at: /codebuild/output/src2143470650/src/yalla3/.gitmodules
+2026-01-19T11:16:17.150Z [INFO]: # Retrieving environment cache...
+2026-01-19T11:16:17.218Z [INFO]: # Retrieved environment cache
+2026-01-19T11:16:17.218Z [INFO]: ---- Setting Up SSM Secrets ----
+2026-01-19T11:16:17.218Z [INFO]: SSM params {"Path":"/amplify/dd8kh4wy2zlme/main/","WithDecryption":true}
+2026-01-19T11:16:17.615Z [INFO]: # No package override configuration found.
+2026-01-19T11:16:17.619Z [INFO]: # Retrieving cache...
+2026-01-19T11:16:35.844Z [INFO]: # Extracting cache...
+2026-01-19T11:17:29.287Z [INFO]: # Extraction completed
+2026-01-19T11:17:29.524Z [INFO]: # Retrieved cache
+2026-01-19T11:17:34.699Z [INFO]: ## Starting Backend Build
+                                 # Starting phase: build
+                                 # Executing command: npm ci --cache .npm --prefer-offline
+2026-01-19T11:17:56.244Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-19T11:17:56.249Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-19T11:17:56.434Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-19T11:17:56.435Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-19T11:19:19.917Z [WARNING]: npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-01-19T11:19:20.058Z [WARNING]: npm warn deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+2026-01-19T11:19:20.393Z [WARNING]: npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-01-19T11:19:20.768Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-19T11:19:20.855Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-19T11:19:20.878Z [WARNING]: npm warn deprecated @babel/plugin-proposal-object-rest-spread@7.20.7: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+2026-01-19T11:19:23.771Z [WARNING]: npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-01-19T11:19:40.755Z [WARNING]: npm warn deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+2026-01-19T11:19:52.255Z [INFO]: added 2299 packages, and audited 3157 packages in 2m
+2026-01-19T11:19:52.261Z [INFO]: 236 packages are looking for funding
+                                 run `npm fund` for details
+2026-01-19T11:19:52.374Z [INFO]: 35 low severity vulnerabilities
+                                 To address all issues, run:
+                                 npm audit fix
+                                 Run `npm audit` for details.
+2026-01-19T11:19:52.446Z [INFO]: # Executing command: npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+2026-01-19T11:20:13.287Z [INFO]: 
+2026-01-19T11:20:13.293Z [INFO]: SyntaxError: TypeScript validation check failed.
+                                 Resolution: Fix the syntax and type errors in your backend definition.
+                                 Cause: amplify/functions/export-inventory/handler.ts(4,23): error TS2307: Cannot find module 'xlsx' or its corresponding type declarations.
+2026-01-19T11:20:13.294Z [WARNING]: ampx pipeline-deploy
+                                    Command to deploy backends in a custom CI/CD pipeline. This command is not inten
+                                    ded to be used locally.
+                                    Options:
+                                    --debug            Print debug logs to the console  [boolean] [default: false]
+                                    --help             Show help                                         [boolean]
+                                    --branch           Name of the git branch being deployed   [string] [required]
+                                    --app-id           The app id of the target Amplify app    [string] [required]
+                                    --outputs-out-dir  A path to directory where amplify_outputs is written. If no
+                                    t provided defaults to current process working directory.
+                                    [string]
+                                    --outputs-version  Version of the configuration. Version 0 represents classic
+                                    amplify-cli config file amplify-configuration and 1 represe
+                                    nts newer config file amplify_outputs
+                                    [string] [choices: "0", "1", "1.1", "1.2", "1.3", "1.4"] [default: "1.4"]
+                                    --outputs-format   amplify_outputs file format
+                                    [string] [choices: "mjs", "json", "json-mobile", "ts", "dart"]
+2026-01-19T11:20:13.411Z [ERROR]: !!! Build failed
+2026-01-19T11:20:13.411Z [ERROR]: !!! Error: Command failed with exit code 1
+2026-01-19T11:20:13.411Z [INFO]: # Starting environment caching...
+2026-01-19T11:20:13.411Z [INFO]: # Uploading environment cache artifact...
+2026-01-19T11:20:13.491Z [INFO]: # Uploaded environment cache artifact
+2026-01-19T11:20:13.491Z [INFO]: # Environment caching completed
+

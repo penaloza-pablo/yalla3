@@ -64,3 +64,6 @@ Navigation schema
 Documentation
 - Every new functionality must be documented in `DOCUMENTATION`.
 - Keep `DOCUMENTATION` updated so the overall system behavior is clear.
+- When editing the chatbot system prompt in `amplify/data/resource.ts`, preserve
+  the existing structured format (GENERAL RULES, INVENTORY RULES, ALERT RULES,
+  RESPONSE STYLE, FINAL CHECK) and keep `DOCUMENTATION` in sync.

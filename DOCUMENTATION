@@ -48,7 +48,8 @@ Overview
   details to deploy and wire to the frontend.
 
 Data flow
-- Lambda: `GetInventory` performs a DynamoDB Scan on `yalla-inventory`.
+- Lambda: `GetInventory` performs a paginated DynamoDB Scan on `yalla-inventory`
+  and returns all items (no partial results).
 - Frontend: `VITE_GET_INVENTORY_URL` or `custom.getInventoryUrl` must point to
   the Lambda endpoint.
 - Refresh: the Inventory Refresh button triggers a new fetch.
@@ -96,7 +97,11 @@ Data flow
 - Lambda: `UpsertInventory` performs DynamoDB PutItem on `yalla-inventory`.
 - Frontend: `VITE_UPSERT_INVENTORY_URL` or `custom.upsertInventoryUrl` must point
   to the Lambda endpoint.
-- Actions: "Add item" opens the form, "Edit" updates an existing item.
+- Lambda: `DeleteInventory` performs DynamoDB DeleteItem on `yalla-inventory`.
+- Frontend: `VITE_DELETE_INVENTORY_URL` or `custom.deleteInventoryUrl` required
+  for delete action.
+- Actions: "Add item" opens the form, "Edit" updates an existing item, "Delete"
+  removes an item (with confirmation).
 
 Endpoint
 - Current Lambda URL:
