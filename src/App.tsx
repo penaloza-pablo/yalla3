@@ -1240,27 +1240,18 @@ function App() {
   }, [])
 
   const refreshPropertiesDiff = useCallback(async () => {
-    const externalEndpoint = getEndpoint(
-      'externalPropertiesProxyUrl',
-      import.meta.env.VITE_EXTERNAL_PROPERTIES_PROXY_URL,
-    )
-    if (!externalEndpoint) {
-      setPropertiesError(
-        'Missing external properties proxy endpoint. Set VITE_EXTERNAL_PROPERTIES_PROXY_URL in the environment.',
-      )
-      return
-    }
-
     setIsPropertiesLoading(true)
     setPropertiesError(null)
     setPropertiesSyncMessage(null)
 
     try {
-      const response = await fetch(externalEndpoint)
+      const response = await fetch(
+        'https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/',
+      )
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
-          `External properties proxy request failed (${response.status}). ${errorText}`.trim(),
+          `External properties request failed (${response.status}). ${errorText}`.trim(),
         )
       }
 

@@ -285,7 +285,7 @@ Overview
 UI behavior
 - Properties page shows current `yalla-properties` rows in a table.
 - Refresh calls the external source:
-  through an internal proxy Lambda to avoid browser CORS restrictions.
+  - https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/
 - If differences are found, a modal lists each change one by one with a checkbox.
 - Users can select specific changes and apply them.
 - Add actions create/update rows in DynamoDB; remove actions delete rows by `id`.
@@ -298,9 +298,6 @@ Data flow
   - `VITE_GET_PROPERTIES_URL` or `custom.getPropertiesUrl`
   - `VITE_UPSERT_PROPERTY_URL` or `custom.upsertPropertyUrl`
   - `VITE_DELETE_PROPERTY_URL` or `custom.deletePropertyUrl`
-  - `VITE_EXTERNAL_PROPERTIES_PROXY_URL` or `custom.externalPropertiesProxyUrl`
-- Proxy Lambda source URL:
-  - https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/
 
 Files
 - `amplify/functions/get-properties/resource.ts`: Lambda definition.
@@ -309,8 +306,6 @@ Files
 - `amplify/functions/upsert-property/handler.ts`: Property upsert handler.
 - `amplify/functions/delete-property/resource.ts`: Lambda definition.
 - `amplify/functions/delete-property/handler.ts`: Property delete handler.
-- `amplify/functions/get-external-properties/resource.ts`: Proxy Lambda definition.
-- `amplify/functions/get-external-properties/handler.ts`: External source proxy with CORS.
 - `amplify/backend.ts`: table grants and function URLs.
 - `src/App.tsx`: Properties UI, refresh diff modal, and sync actions.
 - `src/App.css`: styles for properties sync notice and diff modal.

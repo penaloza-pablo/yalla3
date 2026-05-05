@@ -17,7 +17,6 @@ import { upsertPurchase } from './functions/upsert-purchase/resource';
 import { getProperties } from './functions/get-properties/resource';
 import { upsertProperty } from './functions/upsert-property/resource';
 import { deleteProperty } from './functions/delete-property/resource';
-import { getExternalProperties } from './functions/get-external-properties/resource';
 
 const backend = defineBackend({
   auth,
@@ -35,7 +34,6 @@ const backend = defineBackend({
   getProperties,
   upsertProperty,
   deleteProperty,
-  getExternalProperties,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -119,10 +117,6 @@ const upsertPropertyUrl = backend.upsertProperty.resources.lambda.addFunctionUrl
 const deletePropertyUrl = backend.deleteProperty.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
-const externalPropertiesProxyUrl =
-  backend.getExternalProperties.resources.lambda.addFunctionUrl({
-    authType: FunctionUrlAuthType.NONE,
-  });
 
 backend.addOutput({
   custom: {
@@ -138,6 +132,5 @@ backend.addOutput({
     getPropertiesUrl: getPropertiesUrl.url,
     upsertPropertyUrl: upsertPropertyUrl.url,
     deletePropertyUrl: deletePropertyUrl.url,
-    externalPropertiesProxyUrl: externalPropertiesProxyUrl.url,
   },
 });
