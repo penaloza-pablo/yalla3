@@ -580,20 +580,33 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
   }
 }
 
-const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => ({
-  id: getStringValue(getItemValue(item, propertyFieldMap.id)) || '—',
-  title: getStringValue(getItemValue(item, propertyFieldMap.title)) || '—',
-  nickname: getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
-  active: getBooleanValue(getItemValue(item, propertyFieldMap.active)),
-  type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
-  roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
-  accommodates: getNumberValue(getItemValue(item, propertyFieldMap.accommodates)),
-  bedrooms: getNumberValue(getItemValue(item, propertyFieldMap.bedrooms)),
-  bathrooms: getNumberValue(getItemValue(item, propertyFieldMap.bathrooms)),
-  city: getStringValue(getItemValue(item, propertyFieldMap.city)) || '—',
-  neighborhood:
-    getStringValue(getItemValue(item, propertyFieldMap.neighborhood)) || '—',
-})
+const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
+  const addressValue = getItemValue(item, ['address'])
+  const address =
+    addressValue && typeof addressValue === 'object'
+      ? (addressValue as Record<string, unknown>)
+      : null
+  const cityValue = address?.city ?? getItemValue(item, propertyFieldMap.city)
+  const neighborhoodValue =
+    address?.neighborhood ?? getItemValue(item, propertyFieldMap.neighborhood)
+
+  return {
+    id: getStringValue(getItemValue(item, propertyFieldMap.id)) || '—',
+    title: getStringValue(getItemValue(item, propertyFieldMap.title)) || '—',
+    nickname:
+      getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
+    active: getBooleanValue(getItemValue(item, propertyFieldMap.active)),
+    type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
+    roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
+    accommodates: getNumberValue(
+      getItemValue(item, propertyFieldMap.accommodates),
+    ),
+    bedrooms: getNumberValue(getItemValue(item, propertyFieldMap.bedrooms)),
+    bathrooms: getNumberValue(getItemValue(item, propertyFieldMap.bathrooms)),
+    city: getStringValue(cityValue) || '—',
+    neighborhood: getStringValue(neighborhoodValue) || '—',
+  }
+}
 
 const parseExternalPropertiesResponse = async (response: Response) => {
   const payload = (await response.json()) as
@@ -705,6 +718,32 @@ function App() {
     string | null
   >(null)
   const [isApplyingPropertyChanges, setIsApplyingPropertyChanges] = useState(false)
+  const [isPropertiesFilterOpen, setIsPropertiesFilterOpen] = useState(false)
+  const [propertiesFilters, setPropertiesFilters] = useState<{
+    statuses: string[]
+    types: string[]
+    roomTypes: string[]
+    neighborhoods: string[]
+  }>({
+    statuses: [],
+    types: [],
+    roomTypes: [],
+    neighborhoods: [],
+  })
+  const [propertiesFilterDraft, setPropertiesFilterDraft] = useState<{
+    statuses: string[]
+    types: string[]
+    roomTypes: string[]
+    neighborhoods: string[]
+  }>({
+    statuses: [],
+    types: [],
+    roomTypes: [],
+    neighborhoods: [],
+  })
+  const [propertiesSortDirection, setPropertiesSortDirection] = useState<
+    'asc' | 'desc'
+  >('asc')
   const [purchasesLastUpdated, setPurchasesLastUpdated] = useState<
     string | null
   >(null)
@@ -1727,6 +1766,79 @@ function App() {
   }, [inventoryRows])
 
   const statusOptions = ['OK', 'In Stock', 'Low Stock', 'Reorder']
+
+  const propertiesFilteredRows = useMemo(() => {
+    return propertyRows.filter((row) => {
+      const statusValue = row.active ? 'Active' : 'Inactive'
+      const statusMatch =
+        propertiesFilters.statuses.length === 0 ||
+        propertiesFilters.statuses.includes(statusValue)
+      const roomTypeMatch =
+        propertiesFilters.roomTypes.length === 0 ||
+        propertiesFilters.roomTypes.includes(row.roomType)
+      const typeMatch =
+        propertiesFilters.types.length === 0 ||
+        propertiesFilters.types.includes(row.type)
+      const neighborhoodMatch =
+        propertiesFilters.neighborhoods.length === 0 ||
+        propertiesFilters.neighborhoods.includes(row.neighborhood)
+      return statusMatch && typeMatch && roomTypeMatch && neighborhoodMatch
+    })
+  }, [
+    propertyRows,
+    propertiesFilters.neighborhoods,
+    propertiesFilters.roomTypes,
+    propertiesFilters.statuses,
+    propertiesFilters.types,
+  ])
+
+  const propertiesActiveFilterCount = useMemo(() => {
+    return (
+      propertiesFilters.statuses.length +
+      propertiesFilters.types.length +
+      propertiesFilters.roomTypes.length +
+      propertiesFilters.neighborhoods.length
+    )
+  }, [
+    propertiesFilters.neighborhoods.length,
+    propertiesFilters.roomTypes.length,
+    propertiesFilters.statuses.length,
+    propertiesFilters.types.length,
+  ])
+
+  const propertiesStatusOptions = ['Active', 'Inactive']
+
+  const propertiesTypeOptions = useMemo(() => {
+    const unique = new Set(propertyRows.map((row) => row.type).filter(Boolean))
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [propertyRows])
+
+  const activePropertiesCount = useMemo(() => {
+    return propertyRows.filter((row) => row.active && row.type !== 'MTL').length
+  }, [propertyRows])
+
+  const filteredPropertiesCount = useMemo(() => {
+    return propertiesFilteredRows.filter((row) => row.type !== 'MTL').length
+  }, [propertiesFilteredRows])
+
+  const sortedPropertiesRows = useMemo(() => {
+    const direction = propertiesSortDirection === 'asc' ? 1 : -1
+    return [...propertiesFilteredRows].sort(
+      (a, b) => a.nickname.localeCompare(b.nickname) * direction,
+    )
+  }, [propertiesFilteredRows, propertiesSortDirection])
+
+  const propertiesRoomTypeOptions = useMemo(() => {
+    const unique = new Set(propertyRows.map((row) => row.roomType).filter(Boolean))
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [propertyRows])
+
+  const propertiesNeighborhoodOptions = useMemo(() => {
+    const unique = new Set(
+      propertyRows.map((row) => row.neighborhood).filter(Boolean),
+    )
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [propertyRows])
 
   const goToRestockStep = () => {
     setFormError(null)
@@ -2942,12 +3054,43 @@ function App() {
               </div>
               <div className="header-actions">
                 <button
+                  className={`btn-ghost btn-filter ${
+                    isPropertiesFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setPropertiesFilterDraft({
+                      statuses: [...propertiesFilters.statuses],
+                      types: [...propertiesFilters.types],
+                      roomTypes: [...propertiesFilters.roomTypes],
+                      neighborhoods: [...propertiesFilters.neighborhoods],
+                    })
+                    setIsPropertiesFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {propertiesActiveFilterCount > 0 ? (
+                    <span className="filter-badge">{propertiesActiveFilterCount}</span>
+                  ) : null}
+                </button>
+                <button
                   className="btn-primary"
                   type="button"
                   onClick={() => void refreshPropertiesDiff()}
                   disabled={isPropertiesLoading}
                 >
-                  {isPropertiesLoading ? 'Refreshing...' : 'Refresh'}
+                  {isPropertiesLoading ? 'Updating...' : 'Update from Guesty'}
                 </button>
               </div>
             </header>
@@ -2959,23 +3102,21 @@ function App() {
 
             <section className="summary-cards">
               <div className="card card-compact">
-                <p className="card-label">Total properties</p>
-                <p className="card-value">{propertyRows.length}</p>
-                <p className="card-meta">Loaded from DynamoDB</p>
+                <p className="card-label">Active properties</p>
+                <p className="card-value">{activePropertiesCount}</p>
+                <p className="card-meta">MTL parent properties are excluded</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Active properties</p>
-                <p className="card-value">
-                  {propertyRows.filter((row) => row.active).length}
-                </p>
-                <p className="card-meta">Currently active</p>
+                <p className="card-label">Filtered properties</p>
+                <p className="card-value">{filteredPropertiesCount}</p>
+                <p className="card-meta">Visible in current filters</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">Last Sync</p>
                 <p className="card-value">
                   {propertiesLastUpdated ?? 'Not synced yet'}
                 </p>
-                <p className="card-meta">Production DynamoDB</p>
+                <p className="card-meta">Fetched from Guesty PMS</p>
               </div>
             </section>
 
@@ -2989,37 +3130,256 @@ function App() {
                 </div>
               </div>
 
+              {isPropertiesFilterOpen ? (
+                <div className="modal-overlay" role="dialog" aria-modal="true">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <div>
+                        <h3 className="modal-title">Filters</h3>
+                        <p className="modal-subtitle">
+                          Select one or more values to filter the properties.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={() => setIsPropertiesFilterOpen(false)}
+                        aria-label="Close filters"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="modal-body">
+                      <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">Status</p>
+                          <div className="filter-options">
+                            {propertiesStatusOptions.map((option) => {
+                              const isChecked =
+                                propertiesFilterDraft.statuses.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setPropertiesFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            statuses: [...current.statuses, option],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          statuses: current.statuses.filter(
+                                            (value) => value !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Type</p>
+                          <div className="filter-options">
+                            {propertiesTypeOptions.map((option) => {
+                              const isChecked =
+                                propertiesFilterDraft.types.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setPropertiesFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            types: [...current.types, option],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          types: current.types.filter(
+                                            (value) => value !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">RoomType</p>
+                          <div className="filter-options">
+                            {propertiesRoomTypeOptions.map((option) => {
+                              const isChecked =
+                                propertiesFilterDraft.roomTypes.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setPropertiesFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            roomTypes: [...current.roomTypes, option],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          roomTypes: current.roomTypes.filter(
+                                            (value) => value !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Neighborhood</p>
+                          <div className="filter-options">
+                            {propertiesNeighborhoodOptions.map((option) => {
+                              const isChecked =
+                                propertiesFilterDraft.neighborhoods.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setPropertiesFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            neighborhoods: [
+                                              ...current.neighborhoods,
+                                              option,
+                                            ],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          neighborhoods:
+                                            current.neighborhoods.filter(
+                                              (value) => value !== option,
+                                            ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="modal-footer">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() =>
+                          setPropertiesFilterDraft({
+                            statuses: [],
+                            types: [],
+                            roomTypes: [],
+                            neighborhoods: [],
+                          })
+                        }
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => {
+                          setPropertiesFilters({
+                            statuses: [...propertiesFilterDraft.statuses],
+                            types: [...propertiesFilterDraft.types],
+                            roomTypes: [...propertiesFilterDraft.roomTypes],
+                            neighborhoods: [
+                              ...propertiesFilterDraft.neighborhoods,
+                            ],
+                          })
+                          setIsPropertiesFilterOpen(false)
+                        }}
+                      >
+                        Apply filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="table-wrapper" aria-busy={isPropertiesLoading}>
                 <table>
                   <thead>
                     <tr>
-                      <th scope="col">Nickname</th>
+                      <th scope="col">
+                        <button
+                          className={`btn-sort is-active`}
+                          type="button"
+                          onClick={() =>
+                            setPropertiesSortDirection((current) =>
+                              current === 'asc' ? 'desc' : 'asc',
+                            )
+                          }
+                        >
+                          Nickname
+                          <span className="sort-indicator">
+                            {propertiesSortDirection === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </button>
+                      </th>
                       <th scope="col">Title</th>
-                      <th scope="col">City</th>
                       <th scope="col">Type</th>
+                      <th scope="col">RoomType</th>
+                      <th scope="col">Neighborhood</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isPropertiesLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           Loading properties...
                         </td>
                       </tr>
-                    ) : propertyRows.length === 0 ? (
+                    ) : propertiesFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           No properties available yet.
                         </td>
                       </tr>
                     ) : (
-                      propertyRows.map((row) => (
+                      sortedPropertiesRows.map((row) => (
                         <tr key={row.id}>
                           <td>{row.nickname}</td>
                           <td>{row.title}</td>
-                          <td>{row.city}</td>
                           <td>{row.type}</td>
+                          <td>{row.roomType}</td>
+                          <td>{row.neighborhood}</td>
                           <td>
                             <span
                               className={`status ${
