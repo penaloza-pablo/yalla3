@@ -13,6 +13,7 @@ VITE_UPSERT_PURCHASE_URL=https://fmq6os3ead4ayfg2voqlw7boka0kofwf.lambda-url.eu-
 VITE_GET_PROPERTIES_URL=https://cbs7wsef6nqhqyxgu3zszt6yvu0lesml.lambda-url.eu-central-1.on.aws/
 VITE_UPSERT_PROPERTY_URL=https://njmwxmszj3utxrysebf7o6rfmi0bcecm.lambda-url.eu-central-1.on.aws/
 VITE_DELETE_PROPERTY_URL=https://w6bc7itpfg4kttw44wilwnn4dq0kugzy.lambda-url.eu-central-1.on.aws/
+VITE_EXTERNAL_PROPERTIES_PROXY_URL=https://rifyhzjyp6xzb7gan443njew4q0lxdeb.lambda-url.eu-central-1.on.aws/
 EOF
 
 echo ".env.local created."
