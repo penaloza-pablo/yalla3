@@ -14,6 +14,9 @@ import { getInventoryRebuy } from './functions/get-inventory-rebuy/resource';
 import { exportInventory } from './functions/export-inventory/resource';
 import { getPurchases } from './functions/get-purchases/resource';
 import { upsertPurchase } from './functions/upsert-purchase/resource';
+import { getProperties } from './functions/get-properties/resource';
+import { upsertProperty } from './functions/upsert-property/resource';
+import { deleteProperty } from './functions/delete-property/resource';
 
 const backend = defineBackend({
   auth,
@@ -28,6 +31,9 @@ const backend = defineBackend({
   exportInventory,
   getPurchases,
   upsertPurchase,
+  getProperties,
+  upsertProperty,
+  deleteProperty,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -41,6 +47,11 @@ const purchasesTable = Table.fromTableName(
   dataStack,
   'PurchasesTable',
   'yalla-purchases',
+);
+const propertiesTable = Table.fromTableName(
+  dataStack,
+  'PropertiesTable',
+  'yalla-properties',
 );
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
@@ -60,6 +71,9 @@ alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
 purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
+propertiesTable.grantReadData(backend.getProperties.resources.lambda);
+propertiesTable.grantWriteData(backend.upsertProperty.resources.lambda);
+propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
@@ -94,6 +108,15 @@ const getPurchasesUrl = backend.getPurchases.resources.lambda.addFunctionUrl({
 const upsertPurchaseUrl = backend.upsertPurchase.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getPropertiesUrl = backend.getProperties.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertPropertyUrl = backend.upsertProperty.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const deletePropertyUrl = backend.deleteProperty.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.addOutput({
   custom: {
@@ -106,5 +129,8 @@ backend.addOutput({
     exportInventoryUrl: exportInventoryUrl.url,
     getPurchasesUrl: getPurchasesUrl.url,
     upsertPurchaseUrl: upsertPurchaseUrl.url,
+    getPropertiesUrl: getPropertiesUrl.url,
+    upsertPropertyUrl: upsertPropertyUrl.url,
+    deletePropertyUrl: deletePropertyUrl.url,
   },
 });

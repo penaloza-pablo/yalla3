@@ -108,6 +108,38 @@ type PurchasesApiResponse = {
   count?: number
 }
 
+type PropertyRow = {
+  id: string
+  title: string
+  nickname: string
+  active: boolean
+  type: string
+  roomType: string
+  accommodates: number
+  bedrooms: number
+  bathrooms: number
+  city: string
+  neighborhood: string
+}
+
+type PropertiesApiResponse = {
+  items?: Record<string, unknown>[]
+  count?: number
+}
+
+type ExternalPropertiesPayload = {
+  totalReturned?: number
+  includeInactive?: boolean
+  includeUnlisted?: boolean
+  properties?: Record<string, unknown>[]
+}
+
+type PropertyDiff = {
+  id: string
+  action: 'add' | 'remove'
+  row: PropertyRow
+}
+
 const navigation = [
   {
     section: 'Ops',
@@ -166,6 +198,20 @@ const purchaseFieldMap = {
   deliveryDate: ['Delivery date', 'deliveryDate', 'delivery date'],
   purchaseDate: ['Purchase date', 'purchaseDate', 'purchase date'],
   status: ['Status', 'status'],
+}
+
+const propertyFieldMap = {
+  id: ['id', 'ID'],
+  title: ['title', 'Title'],
+  nickname: ['nickname', 'Nickname'],
+  active: ['active', 'Active'],
+  type: ['type', 'Type'],
+  roomType: ['roomType', 'Room Type', 'room type'],
+  accommodates: ['accommodates', 'Accommodates'],
+  bedrooms: ['bedrooms', 'Bedrooms'],
+  bathrooms: ['bathrooms', 'Bathrooms'],
+  city: ['city', 'City'],
+  neighborhood: ['neighborhood', 'Neighborhood'],
 }
 
 const getItemValue = (
@@ -240,6 +286,22 @@ const getNumberValue = (value: unknown) => {
   }
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+const getBooleanValue = (value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') {
+      return true
+    }
+    if (normalized === 'false') {
+      return false
+    }
+  }
+  return false
 }
 
 const formatDateForStorage = (value: string) => {
@@ -518,6 +580,40 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
   }
 }
 
+const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => ({
+  id: getStringValue(getItemValue(item, propertyFieldMap.id)) || '—',
+  title: getStringValue(getItemValue(item, propertyFieldMap.title)) || '—',
+  nickname: getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
+  active: getBooleanValue(getItemValue(item, propertyFieldMap.active)),
+  type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
+  roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
+  accommodates: getNumberValue(getItemValue(item, propertyFieldMap.accommodates)),
+  bedrooms: getNumberValue(getItemValue(item, propertyFieldMap.bedrooms)),
+  bathrooms: getNumberValue(getItemValue(item, propertyFieldMap.bathrooms)),
+  city: getStringValue(getItemValue(item, propertyFieldMap.city)) || '—',
+  neighborhood:
+    getStringValue(getItemValue(item, propertyFieldMap.neighborhood)) || '—',
+})
+
+const parseExternalPropertiesResponse = async (response: Response) => {
+  const payload = (await response.json()) as
+    | ExternalPropertiesPayload
+    | { body?: string }
+    | undefined
+  const bodyValue =
+    payload && typeof payload === 'object' && 'body' in payload
+      ? payload.body
+      : null
+  if (typeof bodyValue === 'string') {
+    try {
+      return JSON.parse(bodyValue) as ExternalPropertiesPayload
+    } catch {
+      return { properties: [] }
+    }
+  }
+  return (payload as ExternalPropertiesPayload) ?? { properties: [] }
+}
+
 const getStatusClassName = (status: string) => {
   if (status === 'Low Stock') {
     return 'status status-warning'
@@ -594,6 +690,21 @@ function App() {
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([])
   const [isPurchasesLoading, setIsPurchasesLoading] = useState(false)
   const [purchasesError, setPurchasesError] = useState<string | null>(null)
+  const [propertyRows, setPropertyRows] = useState<PropertyRow[]>([])
+  const [isPropertiesLoading, setIsPropertiesLoading] = useState(false)
+  const [propertiesError, setPropertiesError] = useState<string | null>(null)
+  const [propertiesLastUpdated, setPropertiesLastUpdated] = useState<
+    string | null
+  >(null)
+  const [propertyDiffs, setPropertyDiffs] = useState<PropertyDiff[]>([])
+  const [selectedPropertyDiffIds, setSelectedPropertyDiffIds] = useState<
+    Set<string>
+  >(new Set())
+  const [isPropertiesDiffOpen, setIsPropertiesDiffOpen] = useState(false)
+  const [propertiesSyncMessage, setPropertiesSyncMessage] = useState<
+    string | null
+  >(null)
+  const [isApplyingPropertyChanges, setIsApplyingPropertyChanges] = useState(false)
   const [purchasesLastUpdated, setPurchasesLastUpdated] = useState<
     string | null
   >(null)
@@ -1079,6 +1190,208 @@ function App() {
     }
   }, [])
 
+  const fetchProperties = useCallback(async () => {
+    const endpoint = getEndpoint(
+      'getPropertiesUrl',
+      import.meta.env.VITE_GET_PROPERTIES_URL,
+    )
+    if (!endpoint) {
+      setPropertiesError(
+        'Missing properties endpoint. Set VITE_GET_PROPERTIES_URL in the environment.',
+      )
+      return
+    }
+
+    setIsPropertiesLoading(true)
+    setPropertiesError(null)
+
+    try {
+      const response = await fetch(endpoint)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Properties request failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+      const payload = (await response.json()) as PropertiesApiResponse
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const mappedRows = items.map((entry) =>
+        mapPropertyRow(normalizeInventoryItem(entry)),
+      )
+      setPropertyRows(mappedRows)
+      setPropertiesLastUpdated(
+        new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      )
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load properties. Please try again.'
+      setPropertiesError(message)
+    } finally {
+      setIsPropertiesLoading(false)
+    }
+  }, [])
+
+  const refreshPropertiesDiff = useCallback(async () => {
+    setIsPropertiesLoading(true)
+    setPropertiesError(null)
+    setPropertiesSyncMessage(null)
+
+    try {
+      const response = await fetch(
+        'https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/',
+      )
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `External properties request failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+
+      const externalPayload = await parseExternalPropertiesResponse(response)
+      const externalItems = Array.isArray(externalPayload.properties)
+        ? externalPayload.properties
+        : []
+      const externalRows = externalItems.map((item) =>
+        mapPropertyRow(normalizeInventoryItem(item)),
+      )
+
+      const currentById = new Map(propertyRows.map((row) => [row.id, row]))
+      const externalById = new Map(externalRows.map((row) => [row.id, row]))
+      const nextDiffs: PropertyDiff[] = []
+
+      externalRows.forEach((row) => {
+        if (!currentById.has(row.id)) {
+          nextDiffs.push({
+            id: `add:${row.id}`,
+            action: 'add',
+            row,
+          })
+        }
+      })
+
+      propertyRows.forEach((row) => {
+        if (!externalById.has(row.id)) {
+          nextDiffs.push({
+            id: `remove:${row.id}`,
+            action: 'remove',
+            row,
+          })
+        }
+      })
+
+      if (nextDiffs.length === 0) {
+        setPropertyDiffs([])
+        setSelectedPropertyDiffIds(new Set())
+        setIsPropertiesDiffOpen(false)
+        setPropertiesSyncMessage('No changes found against external source.')
+        return
+      }
+
+      setPropertyDiffs(nextDiffs)
+      setSelectedPropertyDiffIds(new Set(nextDiffs.map((diff) => diff.id)))
+      setIsPropertiesDiffOpen(true)
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to refresh properties. Please try again.'
+      setPropertiesError(message)
+    } finally {
+      setIsPropertiesLoading(false)
+    }
+  }, [propertyRows])
+
+  const applyPropertyDiffSelection = async () => {
+    const upsertEndpoint = getEndpoint(
+      'upsertPropertyUrl',
+      import.meta.env.VITE_UPSERT_PROPERTY_URL,
+    )
+    const deleteEndpoint = getEndpoint(
+      'deletePropertyUrl',
+      import.meta.env.VITE_DELETE_PROPERTY_URL,
+    )
+    if (!upsertEndpoint || !deleteEndpoint) {
+      setPropertiesError(
+        'Missing properties write endpoints. Set VITE_UPSERT_PROPERTY_URL and VITE_DELETE_PROPERTY_URL in the environment.',
+      )
+      return
+    }
+
+    const selectedDiffs = propertyDiffs.filter((diff) =>
+      selectedPropertyDiffIds.has(diff.id),
+    )
+    if (selectedDiffs.length === 0) {
+      setPropertiesSyncMessage('No changes selected.')
+      setIsPropertiesDiffOpen(false)
+      return
+    }
+
+    setIsApplyingPropertyChanges(true)
+    setPropertiesError(null)
+
+    try {
+      for (const diff of selectedDiffs) {
+        if (diff.action === 'add') {
+          const payload = {
+            id: diff.row.id,
+            title: diff.row.title,
+            nickname: diff.row.nickname,
+            active: diff.row.active,
+            type: diff.row.type,
+            roomType: diff.row.roomType,
+            accommodates: diff.row.accommodates,
+            bedrooms: diff.row.bedrooms,
+            bathrooms: diff.row.bathrooms,
+            city: diff.row.city,
+            neighborhood: diff.row.neighborhood,
+          }
+          const response = await fetch(upsertEndpoint, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!response.ok) {
+            throw new Error(`Failed to add property ${diff.row.id}.`)
+          }
+          continue
+        }
+
+        const response = await fetch(deleteEndpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: diff.row.id }),
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to delete property ${diff.row.id}.`)
+        }
+      }
+
+      setIsPropertiesDiffOpen(false)
+      setPropertyDiffs([])
+      setSelectedPropertyDiffIds(new Set())
+      setPropertiesSyncMessage(
+        `Applied ${selectedDiffs.length} selected change${selectedDiffs.length === 1 ? '' : 's'}.`,
+      )
+      await fetchProperties()
+    } catch (applyError) {
+      const message =
+        applyError instanceof Error
+          ? applyError.message
+          : 'Unable to apply selected changes.'
+      setPropertiesError(message)
+    } finally {
+      setIsApplyingPropertyChanges(false)
+    }
+  }
+
   const exportInventory = useCallback(async () => {
     const endpoint = getEndpoint(
       'exportInventoryUrl',
@@ -1149,7 +1462,10 @@ function App() {
     if (activePage === 'Purchases') {
       void fetchPurchases()
     }
-  }, [activePage, fetchAlerts, fetchInventory, fetchPurchases])
+    if (activePage === 'Properties') {
+      void fetchProperties()
+    }
+  }, [activePage, fetchAlerts, fetchInventory, fetchProperties, fetchPurchases])
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -2613,6 +2929,114 @@ function App() {
               </div>
             </section>
           </>
+        ) : activePage === 'Properties' ? (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Ops / Properties</p>
+                <h1 className="page-title">Properties</h1>
+                <p className="subtitle">
+                  Property data is read from the production DynamoDB table via
+                  Lambda access.
+                </p>
+              </div>
+              <div className="header-actions">
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void refreshPropertiesDiff()}
+                  disabled={isPropertiesLoading}
+                >
+                  {isPropertiesLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+            </header>
+
+            {propertiesError ? <div className="alert">{propertiesError}</div> : null}
+            {propertiesSyncMessage ? (
+              <div className="properties-note">{propertiesSyncMessage}</div>
+            ) : null}
+
+            <section className="summary-cards">
+              <div className="card card-compact">
+                <p className="card-label">Total properties</p>
+                <p className="card-value">{propertyRows.length}</p>
+                <p className="card-meta">Loaded from DynamoDB</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Active properties</p>
+                <p className="card-value">
+                  {propertyRows.filter((row) => row.active).length}
+                </p>
+                <p className="card-meta">Currently active</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Last Sync</p>
+                <p className="card-value">
+                  {propertiesLastUpdated ?? 'Not synced yet'}
+                </p>
+                <p className="card-meta">Production DynamoDB</p>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Properties</h2>
+                  <p className="card-subtitle">
+                    Use Refresh to compare with the external source.
+                  </p>
+                </div>
+              </div>
+
+              <div className="table-wrapper" aria-busy={isPropertiesLoading}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Nickname</th>
+                      <th scope="col">Title</th>
+                      <th scope="col">City</th>
+                      <th scope="col">Type</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isPropertiesLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          Loading properties...
+                        </td>
+                      </tr>
+                    ) : propertyRows.length === 0 ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          No properties available yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      propertyRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.nickname}</td>
+                          <td>{row.title}</td>
+                          <td>{row.city}</td>
+                          <td>{row.type}</td>
+                          <td>
+                            <span
+                              className={`status ${
+                                row.active ? 'status-success' : 'status-neutral'
+                              }`}
+                            >
+                              {row.active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
         ) : activePage === 'Alerts' ? (
           <>
             <header className="page-header">
@@ -2942,6 +3366,83 @@ function App() {
             </p>
           </section>
         )}
+
+        {isPropertiesDiffOpen ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal properties-diff-modal">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Property changes detected</h3>
+                  <p className="modal-subtitle">
+                    Select each change to apply in DynamoDB table yalla-properties.
+                  </p>
+                </div>
+                <button
+                  className="btn-icon"
+                  type="button"
+                  onClick={() => setIsPropertiesDiffOpen(false)}
+                  aria-label="Close property changes"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="properties-diff-list">
+                  {propertyDiffs.map((diff) => {
+                    const isChecked = selectedPropertyDiffIds.has(diff.id)
+                    return (
+                      <label className="properties-diff-item" key={diff.id}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(event) => {
+                            setSelectedPropertyDiffIds((current) => {
+                              const next = new Set(current)
+                              if (event.target.checked) {
+                                next.add(diff.id)
+                              } else {
+                                next.delete(diff.id)
+                              }
+                              return next
+                            })
+                          }}
+                        />
+                        <div className="properties-diff-content">
+                          <p className="properties-diff-title">
+                            {diff.action === 'add' ? 'Add' : 'Remove'}{' '}
+                            {diff.row.nickname} ({diff.row.id})
+                          </p>
+                          <p className="properties-diff-meta">
+                            {diff.row.title} - {diff.row.city} -{' '}
+                            {diff.row.active ? 'Active' : 'Inactive'}
+                          </p>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setIsPropertiesDiffOpen(false)}
+                  disabled={isApplyingPropertyChanges}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void applyPropertyDiffSelection()}
+                  disabled={isApplyingPropertyChanges}
+                >
+                  {isApplyingPropertyChanges ? 'Applying...' : 'Apply selected'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {isFormOpen ? (
           <div

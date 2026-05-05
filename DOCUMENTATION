@@ -275,6 +275,41 @@ Files
 - `amplify/functions/upsert-purchase/handler.ts`: Purchases write handler.
 - `src/App.tsx`: Purchases UI, wizard, and actions.
 
+Properties - Refresh and sync (in progress)
+Overview
+- Scope: Ops > Properties compares DynamoDB `yalla-properties` against an external
+  Lambda source and lets users apply selected add/remove changes.
+- Status: Frontend and backend scaffolding implemented; requires deployment to
+  generate live function URLs.
+
+UI behavior
+- Properties page shows current `yalla-properties` rows in a table.
+- Refresh calls the external source:
+  - https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/
+- If differences are found, a modal lists each change one by one with a checkbox.
+- Users can select specific changes and apply them.
+- Add actions create/update rows in DynamoDB; remove actions delete rows by `id`.
+
+Data flow
+- Lambda: `GetProperties` scans `yalla-properties`.
+- Lambda: `UpsertProperty` writes a property item to `yalla-properties`.
+- Lambda: `DeleteProperty` deletes a property item from `yalla-properties` by `id`.
+- Frontend endpoint resolution:
+  - `VITE_GET_PROPERTIES_URL` or `custom.getPropertiesUrl`
+  - `VITE_UPSERT_PROPERTY_URL` or `custom.upsertPropertyUrl`
+  - `VITE_DELETE_PROPERTY_URL` or `custom.deletePropertyUrl`
+
+Files
+- `amplify/functions/get-properties/resource.ts`: Lambda definition.
+- `amplify/functions/get-properties/handler.ts`: Properties scan handler.
+- `amplify/functions/upsert-property/resource.ts`: Lambda definition.
+- `amplify/functions/upsert-property/handler.ts`: Property upsert handler.
+- `amplify/functions/delete-property/resource.ts`: Lambda definition.
+- `amplify/functions/delete-property/handler.ts`: Property delete handler.
+- `amplify/backend.ts`: table grants and function URLs.
+- `src/App.tsx`: Properties UI, refresh diff modal, and sync actions.
+- `src/App.css`: styles for properties sync notice and diff modal.
+
 Files
 - `src/App.tsx`: navigation and placeholder views.
 
