@@ -310,6 +310,93 @@ Files
 - `src/App.tsx`: Properties UI, refresh diff modal, and sync actions.
 - `src/App.css`: styles for properties sync notice and diff modal.
 
+Bookings - Paginated list and check-in filters (in progress)
+Overview
+- Scope: Ops > Bookings mirrors the Properties visual style and reads booking data
+  from `yalla-bookings`.
+- Status: Backend and frontend implemented with server-side cursor pagination and
+  check-in date filtering.
+
+UI behavior
+- Bookings appears under Ops as a dedicated functionality.
+- The page includes summary cards, table, filter modal, and pagination controls.
+- Filters include:
+  - Multi-select status
+  - Check-in date range (from/to)
+- Pagination supports `Previous` / `Next` and configurable page size (25/50/100).
+
+Data flow
+- Lambda: `GetBookings` scans `yalla-bookings` using cursor pagination.
+- Lambda query parameters:
+  - `limit`: page size
+  - `cursor`: base64 cursor from previous response
+  - `checkInFrom`: inclusive lower bound date for check-in
+  - `checkInTo`: inclusive upper bound date for check-in
+- Frontend endpoint resolution:
+  - `VITE_GET_BOOKINGS_URL` or `custom.getBookingsUrl`
+- The UI applies status filter client-side on the current page and check-in range
+  server-side.
+
+Files
+- `amplify/functions/get-bookings/resource.ts`: Lambda definition.
+- `amplify/functions/get-bookings/handler.ts`: Bookings scan with cursor/date filters.
+- `amplify/backend.ts`: function registration, table access grant, and output URL.
+- `src/App.tsx`: Bookings page, filters, and pagination controls.
+
+Reviews - Listing table (in progress)
+Overview
+- Scope: Ops > Reviews lists all records from `yalla-reviews` with the requested
+  review fields.
+- Status: Backend and frontend implemented; requires deployment to generate live
+  function URLs.
+
+UI behavior
+- Reviews appears as a dedicated Ops functionality.
+- The table displays:
+  - `GuestName`
+  - `ListingNickname`
+  - `Rating`
+  - `CreatedAt`
+  - `Status`
+- Includes summary cards and a manual refresh action.
+- Expanded row has two areas:
+  - Informative section: `PrivateReview`, `PublicReview`, `Categories` dropdown
+    (accuracy/check-in/cleanliness/communication/location/value), guest payment
+    metrics and night-rate difference (%).
+  - Workflow section: `WorkflowStep`.
+- Reviews table sorting:
+  - Sort by `CreatedAt` ascending/descending from the table header.
+  - Default order is descending (newest first).
+- Filters:
+  - Rating min/max.
+  - Created-at date range.
+  - Single-property selection (`ListingNickname`).
+  - Presets:
+    - `Rating < 5, last 7 days`
+    - `Rating < 5, last 30 days`
+- Refresh action flow:
+  - Calls the reviews sync Lambda URL
+    (`https://r3faghrqj3o4x7b4noa53f4gee0pmnpf.lambda-url.eu-central-1.on.aws/`).
+  - Waits a short delay to allow sync persistence.
+  - Reloads reviews data and sync-state.
+
+Data flow
+- Lambda: `GetReviews` scans `yalla-reviews` and returns all rows.
+- Lambda: `GetReviewsSyncState` reads `id=reviews` from `yalla-reviewsync-state`
+  and returns `lastSyncAt`/`updatedAt`.
+- Frontend endpoint resolution:
+  - `VITE_GET_REVIEWS_URL` or `custom.getReviewsUrl`
+  - `VITE_GET_REVIEWS_SYNC_STATE_URL` or `custom.getReviewsSyncStateUrl`
+- Reviews "Last sync" card uses the sync-state record timestamp, not UI load time.
+
+Files
+- `amplify/functions/get-reviews/resource.ts`: Lambda definition.
+- `amplify/functions/get-reviews/handler.ts`: Reviews scan handler.
+- `amplify/functions/get-reviews-sync-state/resource.ts`: Sync state Lambda definition.
+- `amplify/functions/get-reviews-sync-state/handler.ts`: Sync state read handler.
+- `amplify/backend.ts`: function registration, table grant, and function URL output.
+- `src/App.tsx`: Reviews view and table rendering.
+
 Files
 - `src/App.tsx`: navigation and placeholder views.
 

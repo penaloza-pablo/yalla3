@@ -17,6 +17,9 @@ import { upsertPurchase } from './functions/upsert-purchase/resource';
 import { getProperties } from './functions/get-properties/resource';
 import { upsertProperty } from './functions/upsert-property/resource';
 import { deleteProperty } from './functions/delete-property/resource';
+import { getBookings } from './functions/get-bookings/resource';
+import { getReviews } from './functions/get-reviews/resource';
+import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
 
 const backend = defineBackend({
   auth,
@@ -34,6 +37,9 @@ const backend = defineBackend({
   getProperties,
   upsertProperty,
   deleteProperty,
+  getBookings,
+  getReviews,
+  getReviewsSyncState,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -52,6 +58,17 @@ const propertiesTable = Table.fromTableName(
   dataStack,
   'PropertiesTable',
   'yalla-properties',
+);
+const bookingsTable = Table.fromTableName(
+  dataStack,
+  'BookingsTable',
+  'yalla-bookings',
+);
+const reviewsTable = Table.fromTableName(dataStack, 'ReviewsTable', 'yalla-reviews');
+const reviewSyncStateTable = Table.fromTableName(
+  dataStack,
+  'ReviewSyncStateTable',
+  'yalla-reviewsync-state',
 );
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
@@ -74,6 +91,9 @@ purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
+bookingsTable.grantReadData(backend.getBookings.resources.lambda);
+reviewsTable.grantReadData(backend.getReviews.resources.lambda);
+reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
@@ -117,6 +137,16 @@ const upsertPropertyUrl = backend.upsertProperty.resources.lambda.addFunctionUrl
 const deletePropertyUrl = backend.deleteProperty.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getBookingsUrl = backend.getBookings.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getReviewsUrl = backend.getReviews.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getReviewsSyncStateUrl =
+  backend.getReviewsSyncState.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -132,5 +162,8 @@ backend.addOutput({
     getPropertiesUrl: getPropertiesUrl.url,
     upsertPropertyUrl: upsertPropertyUrl.url,
     deletePropertyUrl: deletePropertyUrl.url,
+    getBookingsUrl: getBookingsUrl.url,
+    getReviewsUrl: getReviewsUrl.url,
+    getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
   },
 });

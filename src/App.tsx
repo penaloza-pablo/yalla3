@@ -127,6 +127,61 @@ type PropertiesApiResponse = {
   count?: number
 }
 
+type BookingsApiResponse = {
+  items?: Record<string, unknown>[]
+  count?: number
+  scannedCount?: number
+  nextCursor?: string | null
+  pageSize?: number
+}
+
+type ReviewsApiResponse = {
+  items?: Record<string, unknown>[]
+  count?: number
+}
+
+type ReviewSyncStateApiResponse = {
+  item?: Record<string, unknown> | null
+  lastSyncAt?: string | null
+  updatedAt?: string | null
+}
+
+type BookingRow = {
+  id: string
+  guestName: string
+  property: string
+  checkInRaw: string
+  checkIn: string
+  checkOutRaw: string
+  checkOut: string
+  status: string
+  source: string
+}
+
+type ReviewRow = {
+  reviewId: string
+  guestName: string
+  listingNickname: string
+  rating: number
+  createdAtRaw: string
+  createdAt: string
+  categoryRatings: {
+    accuracy: number
+    checkIn: number
+    cleanliness: number
+    communication: number
+    location: number
+    value: number
+  }
+  guestPaidTotal: number
+  guestPaidDay: number
+  propertyGuestPaidDayAverage: number
+  privateReview: string
+  publicReview: string
+  workflowStep: string
+  status: string
+}
+
 type ExternalPropertiesPayload = {
   totalReturned?: number
   includeInactive?: boolean
@@ -143,7 +198,15 @@ type PropertyDiff = {
 const navigation = [
   {
     section: 'Ops',
-    items: ['Inventory', 'Purchases', 'Properties', 'Cleaning Report', 'Task Scheduler'],
+    items: [
+      'Inventory',
+      'Purchases',
+      'Properties',
+      'Bookings',
+      'Reviews',
+      'Cleaning Report',
+      'Task Scheduler',
+    ],
   },
   {
     section: 'Tech',
@@ -161,6 +224,8 @@ const navigation = [
 
 const coreItems = ['Chatbot', 'Alerts']
 const OTHER_OPTION = '__other__'
+const REVIEWS_SYNC_TRIGGER_URL =
+  'https://r3faghrqj3o4x7b4noa53f4gee0pmnpf.lambda-url.eu-central-1.on.aws/'
 
 const inventoryFieldMap = {
   id: ['id', 'ID'],
@@ -212,6 +277,90 @@ const propertyFieldMap = {
   bathrooms: ['bathrooms', 'Bathrooms'],
   city: ['city', 'City'],
   neighborhood: ['neighborhood', 'Neighborhood'],
+}
+
+const bookingFieldMap = {
+  id: [
+    'id',
+    'ID',
+    'bookingId',
+    'BookingID',
+    'reservationId',
+    'ReservationID',
+    'confirmationCode',
+    'ConfirmationCode',
+  ],
+  guestName: [
+    'guestName',
+    'GuestName',
+    'Guest Name',
+    'guest',
+    'Guest',
+    'guestFullName',
+    'primaryGuestName',
+  ],
+  property: [
+    'property',
+    'Property',
+    'propertyName',
+    'PropertyName',
+    'listingName',
+    'ListingName',
+    'listingNickname',
+    'ListingNickname',
+    'unitName',
+    'nickname',
+  ],
+  checkIn: [
+    'checkIn',
+    'checkin',
+    'check_in',
+    'CheckIn',
+    'Check-in',
+    'Check in',
+    'checkInDate',
+    'CheckInDate',
+    'arrivalDate',
+    'ArrivalDate',
+  ],
+  checkOut: [
+    'checkOut',
+    'checkout',
+    'check_out',
+    'CheckOut',
+    'Check-out',
+    'Check out',
+    'checkOutDate',
+    'CheckOutDate',
+    'departureDate',
+    'DepartureDate',
+  ],
+  status: ['status', 'Status', 'reservationStatus', 'bookingStatus'],
+  source: ['source', 'Source', 'channel', 'Channel', 'pms', 'PMS'],
+}
+
+const reviewFieldMap = {
+  reviewId: ['ReviewID', 'reviewId', 'id', 'ID'],
+  guestName: ['GuestName', 'guestName', 'Guest', 'guest'],
+  listingNickname: ['ListingNickname', 'listingNickname', 'listingNickname'],
+  rating: ['Rating', 'rating'],
+  createdAt: ['CreatedAt', 'createdAt', 'Created At', 'created at'],
+  categoryAccuracy: ['category_ratings_accuracy'],
+  categoryCheckIn: ['category_ratings_checkin'],
+  categoryCleanliness: ['category_ratings_cleanliness'],
+  categoryCommunication: ['category_ratings_communication'],
+  categoryLocation: ['category_ratings_location'],
+  categoryValue: ['category_ratings_value'],
+  guestPaidTotal: ['GuestPaidTotal', 'guestPaidTotal'],
+  guestPaidDay: ['GuestPaidDay', 'guestPaidDay'],
+  propertyGuestPaidDayAverage: [
+    'PropertyGuestPaidDayAverage',
+    'propertyGuestPaidDayAverage',
+  ],
+  privateReview: ['PrivateReview', 'privateReview'],
+  publicReview: ['PublicReview', 'publicReview'],
+  workflowStep: ['WorkflowStep', 'workflowStep'],
+  status: ['Status', 'status'],
 }
 
 const getItemValue = (
@@ -608,6 +757,74 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
   }
 }
 
+const parseDateValue = (value: string) => {
+  if (!value) {
+    return null
+  }
+  const trimmed = value.trim()
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch
+    const parsed = new Date(`${year}-${month}-${day}T00:00:00Z`)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
+  const checkInRaw = getStringValue(getItemValue(item, bookingFieldMap.checkIn))
+  const checkOutRaw = getStringValue(getItemValue(item, bookingFieldMap.checkOut))
+
+  return {
+    id: getStringValue(getItemValue(item, bookingFieldMap.id)) || '—',
+    guestName: getStringValue(getItemValue(item, bookingFieldMap.guestName)) || '—',
+    property: getStringValue(getItemValue(item, bookingFieldMap.property)) || '—',
+    checkInRaw,
+    checkIn: formatUpdatedDate(checkInRaw),
+    checkOutRaw,
+    checkOut: formatUpdatedDate(checkOutRaw),
+    status: getStringValue(getItemValue(item, bookingFieldMap.status)) || 'Unknown',
+    source: getStringValue(getItemValue(item, bookingFieldMap.source)) || '—',
+  }
+}
+
+const mapReviewRow = (item: Record<string, unknown>): ReviewRow => {
+  const createdAtRaw = getStringValue(getItemValue(item, reviewFieldMap.createdAt))
+  return {
+    reviewId: getStringValue(getItemValue(item, reviewFieldMap.reviewId)) || '—',
+    guestName: getStringValue(getItemValue(item, reviewFieldMap.guestName)) || '—',
+    listingNickname:
+      getStringValue(getItemValue(item, reviewFieldMap.listingNickname)) || '—',
+    rating: getNumberValue(getItemValue(item, reviewFieldMap.rating)),
+    createdAtRaw,
+    createdAt: formatAlertDate(createdAtRaw),
+    categoryRatings: {
+      accuracy: getNumberValue(getItemValue(item, reviewFieldMap.categoryAccuracy)),
+      checkIn: getNumberValue(getItemValue(item, reviewFieldMap.categoryCheckIn)),
+      cleanliness: getNumberValue(
+        getItemValue(item, reviewFieldMap.categoryCleanliness),
+      ),
+      communication: getNumberValue(
+        getItemValue(item, reviewFieldMap.categoryCommunication),
+      ),
+      location: getNumberValue(getItemValue(item, reviewFieldMap.categoryLocation)),
+      value: getNumberValue(getItemValue(item, reviewFieldMap.categoryValue)),
+    },
+    guestPaidTotal: getNumberValue(getItemValue(item, reviewFieldMap.guestPaidTotal)),
+    guestPaidDay: getNumberValue(getItemValue(item, reviewFieldMap.guestPaidDay)),
+    propertyGuestPaidDayAverage: getNumberValue(
+      getItemValue(item, reviewFieldMap.propertyGuestPaidDayAverage),
+    ),
+    privateReview:
+      getStringValue(getItemValue(item, reviewFieldMap.privateReview)) || '—',
+    publicReview:
+      getStringValue(getItemValue(item, reviewFieldMap.publicReview)) || '—',
+    workflowStep: getStringValue(getItemValue(item, reviewFieldMap.workflowStep)) || '—',
+    status: getStringValue(getItemValue(item, reviewFieldMap.status)) || '—',
+  }
+}
+
 const parseExternalPropertiesResponse = async (response: Response) => {
   const payload = (await response.json()) as
     | ExternalPropertiesPayload
@@ -744,6 +961,79 @@ function App() {
   const [propertiesSortDirection, setPropertiesSortDirection] = useState<
     'asc' | 'desc'
   >('asc')
+  const [bookingRows, setBookingRows] = useState<BookingRow[]>([])
+  const [isBookingsLoading, setIsBookingsLoading] = useState(false)
+  const [bookingsError, setBookingsError] = useState<string | null>(null)
+  const [bookingsLastUpdated, setBookingsLastUpdated] = useState<string | null>(null)
+  const [isBookingsFilterOpen, setIsBookingsFilterOpen] = useState(false)
+  const [bookingsFilters, setBookingsFilters] = useState<{
+    statuses: string[]
+    checkInFrom: string
+    checkInTo: string
+  }>({
+    statuses: [],
+    checkInFrom: '',
+    checkInTo: '',
+  })
+  const [bookingsFilterDraft, setBookingsFilterDraft] = useState<{
+    statuses: string[]
+    checkInFrom: string
+    checkInTo: string
+  }>({
+    statuses: [],
+    checkInFrom: '',
+    checkInTo: '',
+  })
+  const [bookingsSortDirection, setBookingsSortDirection] = useState<'asc' | 'desc'>(
+    'asc',
+  )
+  const [bookingsPageSize, setBookingsPageSize] = useState(50)
+  const [bookingsCurrentCursor, setBookingsCurrentCursor] = useState<string | null>(
+    null,
+  )
+  const [bookingsCursorHistory, setBookingsCursorHistory] = useState<
+    Array<string | null>
+  >([])
+  const [bookingsNextCursor, setBookingsNextCursor] = useState<string | null>(null)
+  const [reviewRows, setReviewRows] = useState<ReviewRow[]>([])
+  const [isReviewsLoading, setIsReviewsLoading] = useState(false)
+  const [isReviewsSyncing, setIsReviewsSyncing] = useState(false)
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
+  const [reviewsLastSyncAt, setReviewsLastSyncAt] = useState<string | null>(null)
+  const [isReviewsFilterOpen, setIsReviewsFilterOpen] = useState(false)
+  const [reviewsFilters, setReviewsFilters] = useState<{
+    minRating: string
+    maxRating: string
+    createdFrom: string
+    createdTo: string
+    listingNickname: string
+  }>({
+    minRating: '',
+    maxRating: '',
+    createdFrom: '',
+    createdTo: '',
+    listingNickname: '',
+  })
+  const [reviewsFilterDraft, setReviewsFilterDraft] = useState<{
+    minRating: string
+    maxRating: string
+    createdFrom: string
+    createdTo: string
+    listingNickname: string
+  }>({
+    minRating: '',
+    maxRating: '',
+    createdFrom: '',
+    createdTo: '',
+    listingNickname: '',
+  })
+  const [reviewsCreatedPreset, setReviewsCreatedPreset] = useState<
+    'none' | 'last7' | 'last30'
+  >('none')
+  const [reviewsSortDirection, setReviewsSortDirection] = useState<'asc' | 'desc'>(
+    'desc',
+  )
+  const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(new Set())
   const [purchasesLastUpdated, setPurchasesLastUpdated] = useState<
     string | null
   >(null)
@@ -1278,6 +1568,170 @@ function App() {
     }
   }, [])
 
+  const fetchBookings = useCallback(
+    async (cursor: string | null) => {
+      const endpoint = getEndpoint(
+        'getBookingsUrl',
+        import.meta.env.VITE_GET_BOOKINGS_URL,
+      )
+      if (!endpoint) {
+        setBookingsError(
+          'Missing bookings endpoint. Set VITE_GET_BOOKINGS_URL in the environment.',
+        )
+        return
+      }
+
+      setIsBookingsLoading(true)
+      setBookingsError(null)
+
+      try {
+        const query = new URLSearchParams()
+        query.set('limit', String(bookingsPageSize))
+        if (cursor) {
+          query.set('cursor', cursor)
+        }
+        if (bookingsFilters.checkInFrom) {
+          query.set('checkInFrom', bookingsFilters.checkInFrom)
+        }
+        if (bookingsFilters.checkInTo) {
+          query.set('checkInTo', bookingsFilters.checkInTo)
+        }
+
+        const response = await fetch(`${endpoint}?${query.toString()}`)
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(
+            `Bookings request failed (${response.status}). ${errorText}`.trim(),
+          )
+        }
+
+        const payload = (await response.json()) as BookingsApiResponse
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const mappedRows = items
+          .map((entry) => mapBookingRow(normalizeInventoryItem(entry)))
+          .filter((row) => {
+            if (bookingsFilters.statuses.length === 0) {
+              return true
+            }
+            return bookingsFilters.statuses.includes(row.status)
+          })
+        setBookingRows(mappedRows)
+        setBookingsNextCursor(payload.nextCursor ?? null)
+        setBookingsLastUpdated(
+          new Date().toLocaleString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        )
+      } catch (requestError) {
+        const message =
+          requestError instanceof Error
+            ? requestError.message
+            : 'Unable to load bookings. Please try again.'
+        setBookingsError(message)
+      } finally {
+        setIsBookingsLoading(false)
+      }
+    },
+    [bookingsFilters, bookingsPageSize],
+  )
+
+  const fetchReviews = useCallback(async () => {
+    const reviewsEndpoint = getEndpoint(
+      'getReviewsUrl',
+      import.meta.env.VITE_GET_REVIEWS_URL,
+    )
+    const syncStateEndpoint = getEndpoint(
+      'getReviewsSyncStateUrl',
+      import.meta.env.VITE_GET_REVIEWS_SYNC_STATE_URL,
+    )
+    if (!reviewsEndpoint) {
+      setReviewsError(
+        'Missing reviews endpoint. Set VITE_GET_REVIEWS_URL in the environment.',
+      )
+      return
+    }
+    if (!syncStateEndpoint) {
+      setReviewsError(
+        'Missing reviews sync endpoint. Set VITE_GET_REVIEWS_SYNC_STATE_URL in the environment.',
+      )
+      return
+    }
+
+    setIsReviewsLoading(true)
+    setReviewsError(null)
+
+    try {
+      const [reviewsResponse, syncStateResponse] = await Promise.all([
+        fetch(reviewsEndpoint),
+        fetch(syncStateEndpoint),
+      ])
+
+      if (!reviewsResponse.ok) {
+        const errorText = await reviewsResponse.text()
+        throw new Error(
+          `Reviews request failed (${reviewsResponse.status}). ${errorText}`.trim(),
+        )
+      }
+      if (!syncStateResponse.ok) {
+        const errorText = await syncStateResponse.text()
+        throw new Error(
+          `Reviews sync state request failed (${syncStateResponse.status}). ${errorText}`.trim(),
+        )
+      }
+
+      const payload = (await reviewsResponse.json()) as ReviewsApiResponse
+      const syncStatePayload =
+        (await syncStateResponse.json()) as ReviewSyncStateApiResponse
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const mappedRows = items.map((entry) =>
+        mapReviewRow(normalizeInventoryItem(entry)),
+      )
+      setReviewRows(mappedRows)
+      setReviewsLastSyncAt(formatAlertDate(syncStatePayload.lastSyncAt ?? ''))
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load reviews. Please try again.'
+      setReviewsError(message)
+    } finally {
+      setIsReviewsLoading(false)
+    }
+  }, [])
+
+  const refreshReviews = useCallback(async () => {
+    setIsReviewsSyncing(true)
+    setReviewsError(null)
+
+    try {
+      const response = await fetch(REVIEWS_SYNC_TRIGGER_URL)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Reviews sync trigger failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 4000)
+      })
+
+      await fetchReviews()
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to trigger reviews sync. Please try again.'
+      setReviewsError(message)
+    } finally {
+      setIsReviewsSyncing(false)
+    }
+  }, [fetchReviews])
+
   const refreshPropertiesDiff = useCallback(async () => {
     setIsPropertiesLoading(true)
     setPropertiesError(null)
@@ -1504,7 +1958,22 @@ function App() {
     if (activePage === 'Properties') {
       void fetchProperties()
     }
-  }, [activePage, fetchAlerts, fetchInventory, fetchProperties, fetchPurchases])
+    if (activePage === 'Bookings') {
+      void fetchBookings(bookingsCurrentCursor)
+    }
+    if (activePage === 'Reviews') {
+      void fetchReviews()
+    }
+  }, [
+    activePage,
+    bookingsCurrentCursor,
+    fetchAlerts,
+    fetchBookings,
+    fetchInventory,
+    fetchProperties,
+    fetchPurchases,
+    fetchReviews,
+  ])
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -1839,6 +2308,134 @@ function App() {
     )
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
   }, [propertyRows])
+
+  const bookingsStatusOptions = useMemo(() => {
+    const unique = new Set(bookingRows.map((row) => row.status).filter(Boolean))
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [bookingRows])
+
+  const bookingsActiveFilterCount = useMemo(() => {
+    return (
+      bookingsFilters.statuses.length +
+      (bookingsFilters.checkInFrom ? 1 : 0) +
+      (bookingsFilters.checkInTo ? 1 : 0)
+    )
+  }, [
+    bookingsFilters.checkInFrom,
+    bookingsFilters.checkInTo,
+    bookingsFilters.statuses.length,
+  ])
+
+  const sortedBookingsRows = useMemo(() => {
+    const direction = bookingsSortDirection === 'asc' ? 1 : -1
+    return [...bookingRows].sort((a, b) => {
+      const left = parseDateValue(a.checkInRaw)?.getTime() ?? 0
+      const right = parseDateValue(b.checkInRaw)?.getTime() ?? 0
+      return (left - right) * direction
+    })
+  }, [bookingRows, bookingsSortDirection])
+
+  const reviewsFilteredRows = useMemo(() => {
+    const minRating =
+      reviewsFilters.minRating.trim() === ''
+        ? null
+        : Number(reviewsFilters.minRating)
+    const maxRatingInput =
+      reviewsFilters.maxRating.trim() === ''
+        ? null
+        : Number(reviewsFilters.maxRating)
+    const maxRating =
+      reviewsCreatedPreset === 'none'
+        ? maxRatingInput
+        : maxRatingInput !== null && Number.isFinite(maxRatingInput)
+          ? Math.min(maxRatingInput, 4.99)
+          : 4.99
+    const createdFrom =
+      reviewsCreatedPreset === 'none'
+        ? reviewsFilters.createdFrom
+          ? parseDateValue(reviewsFilters.createdFrom)
+          : null
+        : (() => {
+            const now = new Date()
+            const from = new Date(now)
+            from.setDate(from.getDate() - (reviewsCreatedPreset === 'last7' ? 7 : 30))
+            return from
+          })()
+    const createdTo =
+      reviewsCreatedPreset === 'none'
+        ? reviewsFilters.createdTo
+          ? parseDateValue(reviewsFilters.createdTo)
+          : null
+        : new Date()
+
+    return reviewRows.filter((row) => {
+      if (
+        reviewsFilters.listingNickname &&
+        row.listingNickname !== reviewsFilters.listingNickname
+      ) {
+        return false
+      }
+      if (minRating !== null && Number.isFinite(minRating) && row.rating < minRating) {
+        return false
+      }
+      if (maxRating !== null && Number.isFinite(maxRating) && row.rating > maxRating) {
+        return false
+      }
+
+      const createdAt = parseDateValue(row.createdAtRaw)
+      if (createdFrom && (!createdAt || createdAt < createdFrom)) {
+        return false
+      }
+      if (createdTo && (!createdAt || createdAt > createdTo)) {
+        return false
+      }
+      return true
+    })
+  }, [
+    reviewRows,
+    reviewsFilters.createdFrom,
+    reviewsFilters.createdTo,
+    reviewsFilters.listingNickname,
+    reviewsFilters.maxRating,
+    reviewsFilters.minRating,
+    reviewsCreatedPreset,
+  ])
+
+  const sortedReviewsRows = useMemo(() => {
+    const direction = reviewsSortDirection === 'asc' ? 1 : -1
+    return [...reviewsFilteredRows].sort((a, b) => {
+      const left = parseDateValue(a.createdAtRaw)?.getTime() ?? 0
+      const right = parseDateValue(b.createdAtRaw)?.getTime() ?? 0
+      return (left - right) * direction
+    })
+  }, [reviewsFilteredRows, reviewsSortDirection])
+
+  const reviewsPropertyOptions = useMemo(() => {
+    const unique = new Set(reviewRows.map((row) => row.listingNickname).filter(Boolean))
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [reviewRows])
+
+  const reviewsActiveFilterCount = useMemo(() => {
+    return (
+      (reviewsFilters.minRating ? 1 : 0) +
+      (reviewsFilters.maxRating ? 1 : 0) +
+      (reviewsCreatedPreset === 'none' && reviewsFilters.createdFrom ? 1 : 0) +
+      (reviewsCreatedPreset === 'none' && reviewsFilters.createdTo ? 1 : 0) +
+      (reviewsFilters.listingNickname ? 1 : 0) +
+      (reviewsCreatedPreset !== 'none' ? 1 : 0)
+    )
+  }, [
+    reviewsFilters.createdFrom,
+    reviewsFilters.createdTo,
+    reviewsFilters.listingNickname,
+    reviewsFilters.maxRating,
+    reviewsFilters.minRating,
+    reviewsCreatedPreset,
+  ])
+
+  const reviewsPendingUnderFiveCount = useMemo(() => {
+    return reviewRows.filter((row) => row.status.toLowerCase() === 'pending' && row.rating < 5).length
+  }, [reviewRows])
 
   const goToRestockStep = () => {
     setFormError(null)
@@ -3391,6 +3988,795 @@ function App() {
                           </td>
                         </tr>
                       ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        ) : activePage === 'Bookings' ? (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Ops / Bookings</p>
+                <h1 className="page-title">Bookings</h1>
+                <p className="subtitle">
+                  Booking data is read from the production DynamoDB table via Lambda
+                  access.
+                </p>
+              </div>
+              <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-filter ${
+                    isBookingsFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setBookingsFilterDraft({
+                      statuses: [...bookingsFilters.statuses],
+                      checkInFrom: bookingsFilters.checkInFrom,
+                      checkInTo: bookingsFilters.checkInTo,
+                    })
+                    setIsBookingsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {bookingsActiveFilterCount > 0 ? (
+                    <span className="filter-badge">{bookingsActiveFilterCount}</span>
+                  ) : null}
+                </button>
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={() => void fetchBookings(bookingsCurrentCursor)}
+                  disabled={isBookingsLoading}
+                >
+                  Refresh
+                </button>
+              </div>
+            </header>
+
+            {bookingsError ? <div className="alert">{bookingsError}</div> : null}
+
+            <section className="summary-cards">
+              <div className="card card-compact">
+                <p className="card-label">Visible bookings</p>
+                <p className="card-value">{sortedBookingsRows.length}</p>
+                <p className="card-meta">Rows in the current page</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Page size</p>
+                <p className="card-value">{bookingsPageSize}</p>
+                <p className="card-meta">Server-side pagination size</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Last refresh</p>
+                <p className="card-value">{bookingsLastUpdated ?? 'Not refreshed yet'}</p>
+                <p className="card-meta">Fetched from DynamoDB</p>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Bookings</h2>
+                  <p className="card-subtitle">
+                    Use cursor pagination and check-in filters for large booking
+                    datasets.
+                  </p>
+                </div>
+                <div className="table-actions">
+                  <label className="form-field">
+                    <span>Rows per page</span>
+                    <select
+                      className="select-input"
+                      value={bookingsPageSize}
+                      onChange={(event) => {
+                        const value = Number(event.target.value)
+                        setBookingsPageSize(value)
+                        setBookingsCurrentCursor(null)
+                        setBookingsCursorHistory([])
+                        setBookingsNextCursor(null)
+                      }}
+                    >
+                      {[25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {isBookingsFilterOpen ? (
+                <div className="modal-overlay" role="dialog" aria-modal="true">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <div>
+                        <h3 className="modal-title">Filters</h3>
+                        <p className="modal-subtitle">
+                          Filter bookings by status and check-in date range.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={() => setIsBookingsFilterOpen(false)}
+                        aria-label="Close filters"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="modal-body">
+                      <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">Status</p>
+                          <div className="filter-options">
+                            {bookingsStatusOptions.map((option) => {
+                              const isChecked =
+                                bookingsFilterDraft.statuses.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setBookingsFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            statuses: [...current.statuses, option],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          statuses: current.statuses.filter(
+                                            (value) => value !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Check-in range</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>From</span>
+                              <input
+                                type="date"
+                                value={bookingsFilterDraft.checkInFrom}
+                                onChange={(event) =>
+                                  setBookingsFilterDraft((current) => ({
+                                    ...current,
+                                    checkInFrom: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="form-field">
+                              <span>To</span>
+                              <input
+                                type="date"
+                                value={bookingsFilterDraft.checkInTo}
+                                onChange={(event) =>
+                                  setBookingsFilterDraft((current) => ({
+                                    ...current,
+                                    checkInTo: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="modal-footer">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() =>
+                          setBookingsFilterDraft({
+                            statuses: [],
+                            checkInFrom: '',
+                            checkInTo: '',
+                          })
+                        }
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => {
+                          setBookingsFilters({
+                            statuses: [...bookingsFilterDraft.statuses],
+                            checkInFrom: bookingsFilterDraft.checkInFrom,
+                            checkInTo: bookingsFilterDraft.checkInTo,
+                          })
+                          setBookingsCurrentCursor(null)
+                          setBookingsCursorHistory([])
+                          setBookingsNextCursor(null)
+                          setIsBookingsFilterOpen(false)
+                        }}
+                      >
+                        Apply filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="table-wrapper" aria-busy={isBookingsLoading}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Booking</th>
+                      <th scope="col">Guest</th>
+                      <th scope="col">Property</th>
+                      <th scope="col">
+                        <button
+                          className="btn-sort is-active"
+                          type="button"
+                          onClick={() =>
+                            setBookingsSortDirection((current) =>
+                              current === 'asc' ? 'desc' : 'asc',
+                            )
+                          }
+                        >
+                          Check-in
+                          <span className="sort-indicator">
+                            {bookingsSortDirection === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col">Check-out</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isBookingsLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={7}>
+                          Loading bookings...
+                        </td>
+                      </tr>
+                    ) : sortedBookingsRows.length === 0 ? (
+                      <tr>
+                        <td className="table-empty" colSpan={7}>
+                          No bookings found for this page and filter combination.
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedBookingsRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.id}</td>
+                          <td>{row.guestName}</td>
+                          <td>{row.property}</td>
+                          <td>{row.checkIn}</td>
+                          <td>{row.checkOut}</td>
+                          <td>
+                            <span className="status status-neutral">{row.status}</span>
+                          </td>
+                          <td>{row.source}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="table-actions">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    const history = [...bookingsCursorHistory]
+                    const previousCursor = history.pop() ?? null
+                    setBookingsCursorHistory(history)
+                    setBookingsCurrentCursor(previousCursor)
+                  }}
+                  disabled={isBookingsLoading || bookingsCursorHistory.length === 0}
+                >
+                  Previous
+                </button>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    if (!bookingsNextCursor) {
+                      return
+                    }
+                    setBookingsCursorHistory((current) => [
+                      ...current,
+                      bookingsCurrentCursor,
+                    ])
+                    setBookingsCurrentCursor(bookingsNextCursor)
+                  }}
+                  disabled={isBookingsLoading || !bookingsNextCursor}
+                >
+                  Next
+                </button>
+              </div>
+            </section>
+          </>
+        ) : activePage === 'Reviews' ? (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Ops / Reviews</p>
+                <h1 className="page-title">Reviews</h1>
+                <p className="subtitle">
+                  Refresh triggers a sync run and then reloads data and sync-state.
+                </p>
+              </div>
+              <div className="header-actions">
+                <button
+                  className={`btn-icon btn-icon-ghost btn-filter ${
+                    reviewsCreatedPreset === 'last7' ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Show last 7 days"
+                  title="Rating < 5, last 7 days"
+                  onClick={() =>
+                    setReviewsCreatedPreset((current) =>
+                      current === 'last7' ? 'none' : 'last7',
+                    )
+                  }
+                >
+                  7d
+                </button>
+                <button
+                  className={`btn-icon btn-icon-ghost btn-filter ${
+                    reviewsCreatedPreset === 'last30' ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Show last 30 days"
+                  title="Rating < 5, last 30 days"
+                  onClick={() =>
+                    setReviewsCreatedPreset((current) =>
+                      current === 'last30' ? 'none' : 'last30',
+                    )
+                  }
+                >
+                  30d
+                </button>
+                <button
+                  className={`btn-ghost btn-filter ${
+                    isReviewsFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setReviewsFilterDraft({
+                      minRating: reviewsFilters.minRating,
+                      maxRating: reviewsFilters.maxRating,
+                      createdFrom: reviewsFilters.createdFrom,
+                      createdTo: reviewsFilters.createdTo,
+                      listingNickname: reviewsFilters.listingNickname,
+                    })
+                    setIsReviewsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {reviewsActiveFilterCount > 0 ? (
+                    <span className="filter-badge">{reviewsActiveFilterCount}</span>
+                  ) : null}
+                </button>
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={() => void refreshReviews()}
+                  disabled={isReviewsLoading || isReviewsSyncing}
+                >
+                  {isReviewsSyncing ? 'Syncing...' : 'Refresh'}
+                </button>
+              </div>
+            </header>
+
+            {reviewsError ? <div className="alert">{reviewsError}</div> : null}
+
+            <section className="summary-cards">
+              <div className="card card-compact">
+                <p className="card-label">Total reviews</p>
+                <p className="card-value">{sortedReviewsRows.length}</p>
+                <p className="card-meta">Total shown with current filters</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Pending reviews under 5</p>
+                <p className="card-value">{reviewsPendingUnderFiveCount}</p>
+                <p className="card-meta">Status Pending and rating below 5</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Last sync</p>
+                <p className="card-value">
+                  {reviewsLastSyncAt ?? 'No sync recorded yet'}
+                </p>
+                <p className="card-meta">
+                  Last successful reviews sync from sync-state table
+                </p>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Reviews</h2>
+                  <p className="card-subtitle">
+                    Click details to reveal private and public review content.
+                  </p>
+                </div>
+              </div>
+
+              {isReviewsFilterOpen ? (
+                <div className="modal-overlay" role="dialog" aria-modal="true">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <div>
+                        <h3 className="modal-title">Filters</h3>
+                        <p className="modal-subtitle">
+                          Filter by property, rating range, and created-at date.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={() => setIsReviewsFilterOpen(false)}
+                        aria-label="Close filters"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="modal-body">
+                      <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">Property</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>ListingNickname</span>
+                              <select
+                                value={reviewsFilterDraft.listingNickname}
+                                onChange={(event) =>
+                                  setReviewsFilterDraft((current) => ({
+                                    ...current,
+                                    listingNickname: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">All properties</option>
+                                {reviewsPropertyOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Rating</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>Min rating</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="5"
+                                step="0.1"
+                                value={reviewsFilterDraft.minRating}
+                                onChange={(event) =>
+                                  setReviewsFilterDraft((current) => ({
+                                    ...current,
+                                    minRating: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="form-field">
+                              <span>Max rating</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="5"
+                                step="0.1"
+                                value={reviewsFilterDraft.maxRating}
+                                onChange={(event) =>
+                                  setReviewsFilterDraft((current) => ({
+                                    ...current,
+                                    maxRating: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Created at</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>From</span>
+                              <input
+                                type="date"
+                                value={reviewsFilterDraft.createdFrom}
+                                onChange={(event) =>
+                                  setReviewsFilterDraft((current) => ({
+                                    ...current,
+                                    createdFrom: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="form-field">
+                              <span>To</span>
+                              <input
+                                type="date"
+                                value={reviewsFilterDraft.createdTo}
+                                onChange={(event) =>
+                                  setReviewsFilterDraft((current) => ({
+                                    ...current,
+                                    createdTo: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="modal-footer">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() =>
+                          setReviewsFilterDraft({
+                            minRating: '',
+                            maxRating: '',
+                            createdFrom: '',
+                            createdTo: '',
+                            listingNickname: '',
+                          })
+                        }
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => {
+                          setReviewsFilters({
+                            minRating: reviewsFilterDraft.minRating,
+                            maxRating: reviewsFilterDraft.maxRating,
+                            createdFrom: reviewsFilterDraft.createdFrom,
+                            createdTo: reviewsFilterDraft.createdTo,
+                            listingNickname: reviewsFilterDraft.listingNickname,
+                          })
+                          setReviewsCreatedPreset('none')
+                          setIsReviewsFilterOpen(false)
+                        }}
+                      >
+                        Apply filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="table-wrapper" aria-busy={isReviewsLoading}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Guest</th>
+                      <th scope="col">Listing</th>
+                      <th scope="col">Rating</th>
+                      <th scope="col">
+                        <button
+                          className="btn-sort is-active"
+                          type="button"
+                          onClick={() =>
+                            setReviewsSortDirection((current) =>
+                              current === 'asc' ? 'desc' : 'asc',
+                            )
+                          }
+                        >
+                          Created at
+                          <span className="sort-indicator">
+                            {reviewsSortDirection === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isReviewsLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          Loading reviews...
+                        </td>
+                      </tr>
+                    ) : sortedReviewsRows.length === 0 ? (
+                      <tr>
+                        <td className="table-empty" colSpan={6}>
+                          No reviews available yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedReviewsRows.map((row, index) => {
+                        const rowId = `${row.reviewId}-${index}`
+                        const isExpanded = expandedReviewIds.has(rowId)
+                        const bookingNightRate = row.guestPaidDay
+                        const propertyNightRate = row.propertyGuestPaidDayAverage
+                        const rateDiffPct =
+                          bookingNightRate > 0
+                            ? ((propertyNightRate - bookingNightRate) /
+                                bookingNightRate) *
+                              100
+                            : null
+                        return (
+                          <Fragment key={rowId}>
+                            <tr>
+                              <td>{row.guestName}</td>
+                              <td>{row.listingNickname}</td>
+                              <td>{row.rating || '—'}</td>
+                              <td>{row.createdAt}</td>
+                              <td>
+                                <span className="status status-neutral">{row.status}</span>
+                              </td>
+                              <td>
+                                <button
+                                  className="btn-link"
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedReviewIds((current) => {
+                                      const next = new Set(current)
+                                      if (next.has(rowId)) {
+                                        next.delete(rowId)
+                                      } else {
+                                        next.add(rowId)
+                                      }
+                                      return next
+                                    })
+                                  }
+                                >
+                                  {isExpanded ? 'Hide' : 'View'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={6}>
+                                  <div className="detail-grid">
+                                    <div className="detail-span">
+                                      <p className="detail-label">Informative section</p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <p className="detail-label">Private Note</p>
+                                      <p className="detail-value">{row.privateReview}</p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <p className="detail-label">Public Review</p>
+                                      <p className="detail-value">{row.publicReview}</p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <details>
+                                        <summary className="btn-link">Categories</summary>
+                                        <div className="rules-grid">
+                                          <div className="rule-card">
+                                            <p className="rule-title">Accuracy</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.accuracy || '—'}
+                                            </p>
+                                          </div>
+                                          <div className="rule-card">
+                                            <p className="rule-title">Check-in</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.checkIn || '—'}
+                                            </p>
+                                          </div>
+                                          <div className="rule-card">
+                                            <p className="rule-title">Cleanliness</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.cleanliness || '—'}
+                                            </p>
+                                          </div>
+                                          <div className="rule-card">
+                                            <p className="rule-title">Communication</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.communication || '—'}
+                                            </p>
+                                          </div>
+                                          <div className="rule-card">
+                                            <p className="rule-title">Location</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.location || '—'}
+                                            </p>
+                                          </div>
+                                          <div className="rule-card">
+                                            <p className="rule-title">Value</p>
+                                            <p className="rule-value">
+                                              {row.categoryRatings.value || '—'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </details>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Total Guest Payment</p>
+                                      <p className="detail-value">
+                                        {row.guestPaidTotal ? `${row.guestPaidTotal} €` : '—'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Booking night rate</p>
+                                      <p className="detail-value">
+                                        {row.guestPaidDay ? `${row.guestPaidDay} €` : '—'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Property night rate</p>
+                                      <p className="detail-value">
+                                        {row.propertyGuestPaidDayAverage
+                                          ? `${row.propertyGuestPaidDayAverage} €`
+                                          : '—'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        Night rate difference (%)
+                                      </p>
+                                      <p className="detail-value">
+                                        {rateDiffPct === null
+                                          ? '—'
+                                          : `${rateDiffPct.toFixed(2)}%`}
+                                      </p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <p className="detail-label">Workflow section</p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <p className="detail-label">WorkflowStep</p>
+                                      <p className="detail-value">{row.workflowStep}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
