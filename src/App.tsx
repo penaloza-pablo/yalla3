@@ -7,6 +7,10 @@ import type {
   ConversationMessageContent,
 } from '@aws-amplify/ui-react-ai'
 import { useAIConversation } from './client'
+import {
+  ReviewWorkflowPanel,
+  type ReviewWorkflowPersistPayload,
+} from './ReviewWorkflowPanel'
 import './App.css'
 
 type ConsumptionRule = {
@@ -174,11 +178,17 @@ type ReviewRow = {
     value: number
   }
   guestPaidTotal: number
+  guestPaidTotalWithoutCleaning: number
   guestPaidDay: number
   propertyGuestPaidDayAverage: number
   privateReview: string
   publicReview: string
   workflowStep: string
+  workflowStepIndex: number
+  removalStrategy: string
+  compensation: number
+  reviewDeleted: string
+  lowRatingReason: string
   status: string
 }
 
@@ -352,6 +362,10 @@ const reviewFieldMap = {
   categoryLocation: ['category_ratings_location'],
   categoryValue: ['category_ratings_value'],
   guestPaidTotal: ['GuestPaidTotal', 'guestPaidTotal'],
+  guestPaidTotalWithoutCleaning: [
+    'GuestPaidTotalWithoutCleaning',
+    'guestPaidTotalWithoutCleaning',
+  ],
   guestPaidDay: ['GuestPaidDay', 'guestPaidDay'],
   propertyGuestPaidDayAverage: [
     'PropertyGuestPaidDayAverage',
@@ -360,6 +374,11 @@ const reviewFieldMap = {
   privateReview: ['PrivateReview', 'privateReview'],
   publicReview: ['PublicReview', 'publicReview'],
   workflowStep: ['WorkflowStep', 'workflowStep'],
+  workflowStepIndex: ['WorkflowStepIndex', 'workflowStepIndex'],
+  removalStrategy: ['RemovalStrategy', 'removalStrategy'],
+  compensation: ['Compensation', 'compensation'],
+  reviewDeleted: ['ReviewDeleted', 'reviewDeleted'],
+  lowRatingReason: ['LowRatingReason', 'lowRatingReason'],
   status: ['Status', 'status'],
 }
 
@@ -812,6 +831,9 @@ const mapReviewRow = (item: Record<string, unknown>): ReviewRow => {
       value: getNumberValue(getItemValue(item, reviewFieldMap.categoryValue)),
     },
     guestPaidTotal: getNumberValue(getItemValue(item, reviewFieldMap.guestPaidTotal)),
+    guestPaidTotalWithoutCleaning: getNumberValue(
+      getItemValue(item, reviewFieldMap.guestPaidTotalWithoutCleaning),
+    ),
     guestPaidDay: getNumberValue(getItemValue(item, reviewFieldMap.guestPaidDay)),
     propertyGuestPaidDayAverage: getNumberValue(
       getItemValue(item, reviewFieldMap.propertyGuestPaidDayAverage),
@@ -821,8 +843,48 @@ const mapReviewRow = (item: Record<string, unknown>): ReviewRow => {
     publicReview:
       getStringValue(getItemValue(item, reviewFieldMap.publicReview)) || '—',
     workflowStep: getStringValue(getItemValue(item, reviewFieldMap.workflowStep)) || '—',
+    workflowStepIndex: getNumberValue(
+      getItemValue(item, reviewFieldMap.workflowStepIndex),
+    ),
+    removalStrategy: getStringValue(
+      getItemValue(item, reviewFieldMap.removalStrategy),
+    ),
+    compensation: getNumberValue(getItemValue(item, reviewFieldMap.compensation)),
+    reviewDeleted: getStringValue(getItemValue(item, reviewFieldMap.reviewDeleted)),
+    lowRatingReason: getStringValue(
+      getItemValue(item, reviewFieldMap.lowRatingReason),
+    ),
     status: getStringValue(getItemValue(item, reviewFieldMap.status)) || '—',
   }
+}
+
+const mergeWorkflowPayloadIntoReviewRow = (
+  row: ReviewRow,
+  payload: ReviewWorkflowPersistPayload,
+): ReviewRow => {
+  const next = { ...row }
+  if (payload.Status !== undefined) {
+    next.status = payload.Status
+  }
+  if (payload.WorkflowStep !== undefined) {
+    next.workflowStep = payload.WorkflowStep
+  }
+  if (payload.WorkflowStepIndex !== undefined) {
+    next.workflowStepIndex = payload.WorkflowStepIndex
+  }
+  if (payload.RemovalStrategy !== undefined) {
+    next.removalStrategy = payload.RemovalStrategy
+  }
+  if (payload.Compensation !== undefined) {
+    next.compensation = payload.Compensation
+  }
+  if (payload.ReviewDeleted !== undefined) {
+    next.reviewDeleted = payload.ReviewDeleted
+  }
+  if (payload.LowRatingReason !== undefined) {
+    next.lowRatingReason = payload.LowRatingReason
+  }
+  return next
 }
 
 const parseExternalPropertiesResponse = async (response: Response) => {
@@ -1000,6 +1062,9 @@ function App() {
   const [isReviewsSyncing, setIsReviewsSyncing] = useState(false)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [reviewsLastSyncAt, setReviewsLastSyncAt] = useState<string | null>(null)
+  const [reviewWorkflowSavingId, setReviewWorkflowSavingId] = useState<
+    string | null
+  >(null)
   const [isReviewsFilterOpen, setIsReviewsFilterOpen] = useState(false)
   const [reviewsFilters, setReviewsFilters] = useState<{
     minRating: string
@@ -1731,6 +1796,52 @@ function App() {
       setIsReviewsSyncing(false)
     }
   }, [fetchReviews])
+
+  const persistReviewWorkflow = useCallback(
+    async (reviewId: string, payload: ReviewWorkflowPersistPayload) => {
+      const endpoint = getEndpoint(
+        'updateReviewWorkflowUrl',
+        import.meta.env.VITE_UPDATE_REVIEW_WORKFLOW_URL,
+      )
+      if (!endpoint) {
+        setReviewsError(
+          'Missing update review workflow endpoint. Set VITE_UPDATE_REVIEW_WORKFLOW_URL.',
+        )
+        return
+      }
+      setReviewWorkflowSavingId(reviewId)
+      setReviewsError(null)
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reviewId, ...payload }),
+        })
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(
+            `Review workflow update failed (${response.status}). ${errorText}`.trim(),
+          )
+        }
+        setReviewRows((rows) =>
+          rows.map((r) =>
+            r.reviewId === reviewId
+              ? mergeWorkflowPayloadIntoReviewRow(r, payload)
+              : r,
+          ),
+        )
+      } catch (requestError) {
+        const message =
+          requestError instanceof Error
+            ? requestError.message
+            : 'Unable to save workflow.'
+        setReviewsError(message)
+      } finally {
+        setReviewWorkflowSavingId(null)
+      }
+    },
+    [],
+  )
 
   const refreshPropertiesDiff = useCallback(async () => {
     setIsPropertiesLoading(true)
@@ -4640,11 +4751,23 @@ function App() {
                         const bookingNightRate = row.guestPaidDay
                         const propertyNightRate = row.propertyGuestPaidDayAverage
                         const rateDiffPct =
-                          bookingNightRate > 0
-                            ? ((propertyNightRate - bookingNightRate) /
-                                bookingNightRate) *
+                          bookingNightRate > 0 && propertyNightRate > 0
+                            ? ((bookingNightRate - propertyNightRate) /
+                                propertyNightRate) *
                               100
                             : null
+                        const rateDiffClassName =
+                          rateDiffPct === null
+                            ? ''
+                            : rateDiffPct < 0
+                              ? 'reviews-rate-diff is-below-average'
+                              : rateDiffPct > 0
+                                ? 'reviews-rate-diff is-above-average'
+                                : 'reviews-rate-diff is-neutral-diff'
+                        const rateDiffLabel =
+                          rateDiffPct === null
+                            ? '—'
+                            : `${rateDiffPct > 0 ? '+' : ''}${rateDiffPct.toFixed(2)}%`
                         return (
                           <Fragment key={rowId}>
                             <tr>
@@ -4692,7 +4815,9 @@ function App() {
                                     </div>
                                     <div className="detail-span">
                                       <details>
-                                        <summary className="btn-link">Categories</summary>
+                                        <summary className="btn-link">
+                                          Review breakdown
+                                        </summary>
                                         <div className="rules-grid">
                                           <div className="rule-card">
                                             <p className="rule-title">Accuracy</p>
@@ -4733,42 +4858,61 @@ function App() {
                                         </div>
                                       </details>
                                     </div>
-                                    <div>
-                                      <p className="detail-label">Total Guest Payment</p>
-                                      <p className="detail-value">
-                                        {row.guestPaidTotal ? `${row.guestPaidTotal} €` : '—'}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">Booking night rate</p>
-                                      <p className="detail-value">
-                                        {row.guestPaidDay ? `${row.guestPaidDay} €` : '—'}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">Property night rate</p>
-                                      <p className="detail-value">
-                                        {row.propertyGuestPaidDayAverage
-                                          ? `${row.propertyGuestPaidDayAverage} €`
-                                          : '—'}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        Night rate difference (%)
-                                      </p>
-                                      <p className="detail-value">
-                                        {rateDiffPct === null
-                                          ? '—'
-                                          : `${rateDiffPct.toFixed(2)}%`}
-                                      </p>
-                                    </div>
                                     <div className="detail-span">
+                                      <details>
+                                        <summary className="btn-link">Value</summary>
+                                        <div className="review-value-details">
+                                          <div>
+                                            <p className="detail-label">Total Guest Payment</p>
+                                            <p className="detail-value">
+                                              {row.guestPaidTotal
+                                                ? `${row.guestPaidTotal} €`
+                                                : '—'}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="detail-label">
+                                              Guest paid total (without cleaning)
+                                            </p>
+                                            <p className="detail-value">
+                                              {row.guestPaidTotalWithoutCleaning
+                                                ? `${row.guestPaidTotalWithoutCleaning} €`
+                                                : '—'}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="detail-label">
+                                              Night rate difference (%)
+                                            </p>
+                                            <p
+                                              className={`detail-value ${rateDiffClassName}`}
+                                            >
+                                              {rateDiffLabel}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </details>
+                                    </div>
+                                    <div className="detail-span review-workflow-slot">
                                       <p className="detail-label">Workflow section</p>
-                                    </div>
-                                    <div className="detail-span">
-                                      <p className="detail-label">WorkflowStep</p>
-                                      <p className="detail-value">{row.workflowStep}</p>
+                                      <ReviewWorkflowPanel
+                                        row={{
+                                          reviewId: row.reviewId,
+                                          rating: row.rating,
+                                          guestPaidDay: row.guestPaidDay,
+                                          status: row.status,
+                                          workflowStep: row.workflowStep,
+                                          workflowStepIndex: row.workflowStepIndex,
+                                          removalStrategy: row.removalStrategy,
+                                          compensation: row.compensation,
+                                          reviewDeleted: row.reviewDeleted,
+                                          lowRatingReason: row.lowRatingReason,
+                                        }}
+                                        isSaving={reviewWorkflowSavingId === row.reviewId}
+                                        onPersist={(payload) =>
+                                          persistReviewWorkflow(row.reviewId, payload)
+                                        }
+                                      />
                                     </div>
                                   </div>
                                 </td>

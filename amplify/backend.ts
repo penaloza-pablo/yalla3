@@ -20,6 +20,7 @@ import { deleteProperty } from './functions/delete-property/resource';
 import { getBookings } from './functions/get-bookings/resource';
 import { getReviews } from './functions/get-reviews/resource';
 import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
+import { updateReviewWorkflow } from './functions/update-review-workflow/resource';
 
 const backend = defineBackend({
   auth,
@@ -40,6 +41,7 @@ const backend = defineBackend({
   getBookings,
   getReviews,
   getReviewsSyncState,
+  updateReviewWorkflow,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -93,6 +95,7 @@ propertiesTable.grantWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
 bookingsTable.grantReadData(backend.getBookings.resources.lambda);
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
+reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
 reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
@@ -147,6 +150,10 @@ const getReviewsSyncStateUrl =
   backend.getReviewsSyncState.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const updateReviewWorkflowUrl =
+  backend.updateReviewWorkflow.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -165,5 +172,6 @@ backend.addOutput({
     getBookingsUrl: getBookingsUrl.url,
     getReviewsUrl: getReviewsUrl.url,
     getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
+    updateReviewWorkflowUrl: updateReviewWorkflowUrl.url,
   },
 });
