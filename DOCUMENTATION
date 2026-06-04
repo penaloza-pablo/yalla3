@@ -397,6 +397,79 @@ Files
 - `amplify/backend.ts`: function registration, table grant, and function URL output.
 - `src/App.tsx`: Reviews view and table rendering.
 
+Daily Operations - Visits and tasks
+Overview
+- Scope: Ops > Daily Operations (replaces Task Scheduler placeholder).
+- Status: Backend Lambdas and frontend dashboard implemented; requires Amplify
+  deploy to generate function URLs.
+
+Visit statuses
+- SCHEDULED: visit has a scheduled date that is today or in the future (Europe/Madrid).
+- OVERDUE: scheduled date is in the past and visit is not terminal.
+- COMPLETED / CANCELLED: terminal states (shown together in the Done Kanban column).
+- OVERDUE is persisted and recalculated on get/upsert when not terminal.
+- Visits cannot be created without a scheduled date.
+
+Task statuses
+- UNASSIGNED: no visitId (pool list).
+- DISMISS: user dismissed without completing; no visitId; shown in the same pool list.
+- PENDING / BLOCKED / COMPLETED: tasks linked to a visit.
+- When a visit is cancelled, PENDING/BLOCKED tasks are released to UNASSIGNED.
+
+UI behavior
+- Dashboard tab: Kanban with Scheduled | Overdue | Completed & Cancelled.
+- Filters: date range (from/to, default today Madrid), quick presets Today and
+  Tomorrow, team, status, property, assigned user.
+- Visit cards show time, property, visit type, team, assignee, priority, task count,
+  hour-bank flag.
+- Visit detail modal: edit, complete (requires actual duration hours), cancel,
+  tasks list, create task, dismiss task.
+- Tasks tab: UNASSIGNED + DISMISS pool; assign to visit, edit, complete, dismiss.
+- Assign-to-visit requires matching propertyId and teamId; visit must not be terminal.
+
+Data flow
+- DynamoDB tables (existing, not created by Amplify):
+  - yalla-visits, yalla-tasks (read/write)
+  - yalla-properties, yalla-teams, yalla-users, yalla-visit_types (read-only)
+- GSIs used:
+  - Visits: scheduledDate-scheduledStartTime-index, propertyId-scheduledDate-index
+  - Tasks: visitId-createdAt-index, status-createdAt-index
+  - Users: teamId-name-index (when filtering users by team)
+- IDs: VISIT-001, TASK-001 sequential format.
+- closedBy: Cognito user email on complete actions.
+
+Lambda runtime
+- All `defineFunction` handlers use `runtime: 22` (Node.js 22.x on AWS Lambda).
+- After changing runtime, redeploy with `npx ampx sandbox` or your pipeline deploy.
+
+Lambdas and endpoints
+- GetVisits: query by scheduledDate (single day), scheduledDateFrom +
+  scheduledDateTo (max 31 days, one Query per day on GSI), id, or propertyId;
+  enriches with taskCountCompleted and taskCountTotal for the visit card badge
+  (e.g. 3/5).
+- UpsertVisit: create/update visit; cancels release tasks to UNASSIGNED.
+- GetTasks: by visitId, id, pool=unassigned, or status.
+- UpsertTask: create/update; actions dismiss and assign.
+- GetTeams / GetUsers / GetVisitTypes: reference data (active rows).
+
+Frontend endpoint resolution
+- VITE_GET_VISITS_URL / custom.getVisitsUrl
+- VITE_UPSERT_VISIT_URL / custom.upsertVisitUrl
+- VITE_GET_TASKS_URL / custom.getTasksUrl
+- VITE_UPSERT_TASK_URL / custom.upsertTaskUrl
+- VITE_GET_TEAMS_URL / custom.getTeamsUrl
+- VITE_GET_USERS_URL / custom.getUsersUrl
+- VITE_GET_VISIT_TYPES_URL / custom.getVisitTypesUrl
+- Reuses VITE_GET_PROPERTIES_URL for property selectors.
+
+Files
+- `amplify/backend.ts`: table grants (fromTableName), function URLs, outputs.
+- `amplify/functions/get-visits/`, `upsert-visit/`, `get-tasks/`, `upsert-task/`
+- `amplify/functions/get-teams/`, `get-users/`, `get-visit-types/`
+- `amplify/functions/shared/`: HTTP helpers and visit/task utilities.
+- `src/operations/DailyOperationsView.tsx`: operations UI.
+- `src/App.tsx`: navigation entry Daily Operations.
+
 Files
 - `src/App.tsx`: navigation and placeholder views.
 

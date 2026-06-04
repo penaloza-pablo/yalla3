@@ -1,6 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
 export const upsertPurchase = defineFunction({
+  runtime: 22,
   name: 'UpsertPurchase',
   entry: './handler.ts',
   environment: {

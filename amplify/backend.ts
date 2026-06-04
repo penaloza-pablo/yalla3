@@ -21,6 +21,13 @@ import { getBookings } from './functions/get-bookings/resource';
 import { getReviews } from './functions/get-reviews/resource';
 import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
 import { updateReviewWorkflow } from './functions/update-review-workflow/resource';
+import { getVisits } from './functions/get-visits/resource';
+import { upsertVisit } from './functions/upsert-visit/resource';
+import { getTasks } from './functions/get-tasks/resource';
+import { upsertTask } from './functions/upsert-task/resource';
+import { getTeams } from './functions/get-teams/resource';
+import { getUsers } from './functions/get-users/resource';
+import { getVisitTypes } from './functions/get-visit-types/resource';
 
 const backend = defineBackend({
   auth,
@@ -42,6 +49,13 @@ const backend = defineBackend({
   getReviews,
   getReviewsSyncState,
   updateReviewWorkflow,
+  getVisits,
+  upsertVisit,
+  getTasks,
+  upsertTask,
+  getTeams,
+  getUsers,
+  getVisitTypes,
 });
 
 const dataStack = backend.createStack('data-access');
@@ -72,6 +86,15 @@ const reviewSyncStateTable = Table.fromTableName(
   'ReviewSyncStateTable',
   'yalla-reviewsync-state',
 );
+const visitsTable = Table.fromTableName(dataStack, 'VisitsTable', 'yalla-visits');
+const tasksTable = Table.fromTableName(dataStack, 'TasksTable', 'yalla-tasks');
+const teamsTable = Table.fromTableName(dataStack, 'TeamsTable', 'yalla-teams');
+const usersTable = Table.fromTableName(dataStack, 'UsersTable', 'yalla-users');
+const visitTypesTable = Table.fromTableName(
+  dataStack,
+  'VisitTypesTable',
+  'yalla-visit_types',
+);
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
   'InventoryExportBucket',
@@ -97,6 +120,16 @@ bookingsTable.grantReadData(backend.getBookings.resources.lambda);
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
 reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
 reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
+visitsTable.grantReadWriteData(backend.getVisits.resources.lambda);
+visitsTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
+visitsTable.grantReadData(backend.upsertTask.resources.lambda);
+tasksTable.grantReadWriteData(backend.getVisits.resources.lambda);
+tasksTable.grantReadWriteData(backend.getTasks.resources.lambda);
+tasksTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
+tasksTable.grantReadWriteData(backend.upsertTask.resources.lambda);
+teamsTable.grantReadData(backend.getTeams.resources.lambda);
+usersTable.grantReadData(backend.getUsers.resources.lambda);
+visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
@@ -154,6 +187,27 @@ const updateReviewWorkflowUrl =
   backend.updateReviewWorkflow.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getVisitsUrl = backend.getVisits.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertVisitUrl = backend.upsertVisit.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getTasksUrl = backend.getTasks.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertTaskUrl = backend.upsertTask.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getTeamsUrl = backend.getTeams.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getUsersUrl = backend.getUsers.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getVisitTypesUrl = backend.getVisitTypes.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.addOutput({
   custom: {
@@ -173,5 +227,12 @@ backend.addOutput({
     getReviewsUrl: getReviewsUrl.url,
     getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
     updateReviewWorkflowUrl: updateReviewWorkflowUrl.url,
+    getVisitsUrl: getVisitsUrl.url,
+    upsertVisitUrl: upsertVisitUrl.url,
+    getTasksUrl: getTasksUrl.url,
+    upsertTaskUrl: upsertTaskUrl.url,
+    getTeamsUrl: getTeamsUrl.url,
+    getUsersUrl: getUsersUrl.url,
+    getVisitTypesUrl: getVisitTypesUrl.url,
   },
 });

@@ -1,11 +1,11 @@
 import { defineFunction } from '@aws-amplify/backend';
 
-export const getPurchases = defineFunction({
+export const getUsers = defineFunction({
   runtime: 22,
-  name: 'GetPurchases',
+  name: 'GetUsers',
   entry: './handler.ts',
   environment: {
-    TABLE_NAME: 'yalla-purchases',
+    TABLE_NAME: 'yalla-users',
   },
   timeoutSeconds: 20,
 });

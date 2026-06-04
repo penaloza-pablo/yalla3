@@ -1490,3 +1490,204 @@ th {
   gap: 12px;
   padding: 16px 8px;
 }
+
+.operations-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.operations-kanban {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.operations-column {
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 320px;
+}
+
+.operations-column h3 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.operations-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.operations-visit-card {
+  text-align: left;
+  width: 100%;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.operations-visit-card:hover {
+  border-color: #84caff;
+  background: #f0f9ff;
+}
+
+.operations-card-time {
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.operations-card-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.operations-card-meta {
+  margin: 0;
+  color: #667085;
+  font-size: 0.85rem;
+}
+
+.operations-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.operations-card-tags .tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #344054;
+}
+
+.operations-card-tags .tag.warning {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.tag-task-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-task-progress-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.tag-task-progress.is-complete {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.tag-task-progress.is-complete .tag-task-progress-icon {
+  background: #12b76a;
+  border-color: #12b76a;
+  color: #ffffff;
+}
+
+.operations-detail-modal {
+  max-width: 720px;
+}
+
+.operations-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.operations-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.operations-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.operations-task-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+}
+
+.operations-date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.operations-card-date {
+  font-weight: 600;
+  color: #344054;
+}
+
+.filters-card .filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.filters-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.notice.success {
+  color: #027a48;
+  margin-top: 8px;
+}
+
+.notice.error {
+  color: #b42318;
+  margin-top: 8px;
+}
+
+.form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+@media (max-width: 960px) {
+  .operations-kanban {
+    grid-template-columns: 1fr;
+  }
+}

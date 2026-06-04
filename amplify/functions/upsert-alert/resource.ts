@@ -1,6 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
 export const upsertAlert = defineFunction({
+  runtime: 22,
   name: 'UpsertAlert',
   entry: './handler.ts',
   environment: {

@@ -1,6 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
 export const exportInventory = defineFunction({
+  runtime: 22,
   name: 'ExportInventory',
   entry: './handler.ts',
   environment: {

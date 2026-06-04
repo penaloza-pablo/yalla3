@@ -11,6 +11,7 @@ import {
   ReviewWorkflowPanel,
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
+import { DailyOperationsView } from './operations/DailyOperationsView'
 import './App.css'
 
 type ConsumptionRule = {
@@ -215,7 +216,7 @@ const navigation = [
       'Bookings',
       'Reviews',
       'Cleaning Report',
-      'Task Scheduler',
+      'Daily Operations',
     ],
   },
   {
@@ -2074,6 +2075,9 @@ function App() {
     }
     if (activePage === 'Reviews') {
       void fetchReviews()
+    }
+    if (activePage === 'Daily Operations') {
+      void fetchProperties()
     }
   }, [
     activePage,
@@ -5246,6 +5250,19 @@ function App() {
               </div>
             </section>
           </>
+        ) : activePage === 'Daily Operations' ? (
+          <DailyOperationsView
+            getEndpoint={getEndpoint}
+            getCurrentUserEmail={getCurrentUserEmail}
+            propertyOptions={propertyRows
+              .filter((row) => row.active)
+              .map((row) => ({
+                id: row.id,
+                nickname: row.nickname,
+                title: row.title,
+                listingNickname: row.nickname,
+              }))}
+          />
         ) : activePage === 'Chatbot' ? (
           <ChatbotView />
         ) : (

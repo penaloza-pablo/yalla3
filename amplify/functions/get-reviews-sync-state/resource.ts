@@ -1,6 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
 export const getReviewsSyncState = defineFunction({
+  runtime: 22,
   name: 'GetReviewsSyncState',
   entry: './handler.ts',
   environment: {
