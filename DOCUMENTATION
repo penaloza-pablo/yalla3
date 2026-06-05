@@ -442,6 +442,10 @@ Lambda runtime
 - All `defineFunction` handlers use `runtime: 22` (Node.js 22.x on AWS Lambda).
 - After changing runtime, redeploy with `npx ampx sandbox` or your pipeline deploy.
 
+DynamoDB IAM (imported tables)
+- Tables referenced with `Table.fromTableName` need explicit `dynamodb:Query` on
+  `table/index/*` for GSI access. See `grantDynamoIndexQuery` in `amplify/backend.ts`.
+
 Lambdas and endpoints
 - GetVisits: query by scheduledDate (single day), scheduledDateFrom +
   scheduledDateTo (max 31 days, one Query per day on GSI), id, or propertyId;

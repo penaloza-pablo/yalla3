@@ -1,7 +1,9 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { FunctionUrlAuthType, type IFunction } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import type { Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { getInventory } from './functions/get-inventory/resource';
@@ -59,6 +61,22 @@ const backend = defineBackend({
 });
 
 const dataStack = backend.createStack('data-access');
+
+/** Imported tables via fromTableName do not include GSI ARNs in grant* helpers. */
+const grantDynamoIndexQuery = (
+  stack: Stack,
+  lambda: IFunction,
+  tableName: string,
+) => {
+  const tableArn = `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${tableName}`;
+  lambda.addToRolePolicy(
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['dynamodb:Query'],
+      resources: [`${tableArn}/index/*`],
+    }),
+  );
+};
 const inventoryTable = Table.fromTableName(
   dataStack,
   'InventoryTable',
@@ -131,6 +149,29 @@ teamsTable.grantReadData(backend.getTeams.resources.lambda);
 usersTable.grantReadData(backend.getUsers.resources.lambda);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
+
+grantDynamoIndexQuery(
+  dataStack,
+  backend.getVisits.resources.lambda,
+  'yalla-visits',
+);
+grantDynamoIndexQuery(
+  dataStack,
+  backend.getVisits.resources.lambda,
+  'yalla-tasks',
+);
+grantDynamoIndexQuery(
+  dataStack,
+  backend.upsertVisit.resources.lambda,
+  'yalla-tasks',
+);
+grantDynamoIndexQuery(dataStack, backend.getTasks.resources.lambda, 'yalla-tasks');
+grantDynamoIndexQuery(
+  dataStack,
+  backend.upsertTask.resources.lambda,
+  'yalla-tasks',
+);
+grantDynamoIndexQuery(dataStack, backend.getUsers.resources.lambda, 'yalla-users');
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
