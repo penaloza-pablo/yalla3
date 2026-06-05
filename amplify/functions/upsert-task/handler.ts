@@ -38,8 +38,9 @@ const VALID_TASK_STATUSES = new Set([
   'PENDING',
   'BLOCKED',
   'COMPLETED',
+  'CANCELLED',
 ]);
-const TERMINAL_TASK_STATUSES = new Set(['COMPLETED']);
+const TERMINAL_TASK_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
 
 const normalizePriority = (value?: string) => {
   const normalized = normalizeStatus(value);

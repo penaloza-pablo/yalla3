@@ -6,6 +6,7 @@ export type TaskStatus =
   | 'PENDING'
   | 'BLOCKED'
   | 'COMPLETED'
+  | 'CANCELLED'
 
 export type VisitRecord = {
   id: string
@@ -23,6 +24,7 @@ export type VisitRecord = {
   estimatedDurationMinutes?: number
   actualDurationHours?: number
   appliesToHourBank: boolean
+  specialHours?: boolean
   taskCountTotal?: number
   taskCountCompleted?: number
 }
@@ -38,6 +40,7 @@ export type TaskRecord = {
   status: TaskStatus
   priority: string
   dueDate?: string
+  createdAt?: string
 }
 
 export type TeamRecord = { id: string; name: string; description?: string }
@@ -60,4 +63,36 @@ export type PropertyOption = {
   nickname: string
   title: string
   listingNickname: string
+}
+
+export type VisitTemplateTask = {
+  title: string
+  description: string
+  priority: string
+  urgent?: boolean
+  sortOrder: number
+}
+
+export type VisitTemplateRecord = {
+  id: string
+  name: string
+  propertyId: string
+  visitTypeId: string
+  teamId: string
+  title: string
+  assignedUserId: string
+  description: string
+  scheduledStartTime: string
+  scheduledEndTime: string
+  estimatedDurationMinutes?: number
+  appliesToHourBank: boolean
+  active: boolean
+  tasks: VisitTemplateTask[]
+}
+
+export type VisitDraftTask = {
+  title: string
+  description: string
+  priority: string
+  urgent: boolean
 }

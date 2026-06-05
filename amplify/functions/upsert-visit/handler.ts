@@ -11,9 +11,11 @@ import {
   docClient,
   getNextSequentialId,
   putItem,
+  cancelVisitTasksOnVisitCancel,
   releaseVisitTasksOnCancel,
   resolveVisitStatus,
   TERMINAL_VISIT_STATUSES,
+  visitHasOpenTasks,
 } from '../shared/visit-task-utils';
 
 type VisitPayload = {
@@ -32,9 +34,11 @@ type VisitPayload = {
   estimatedDurationMinutes?: number;
   actualDurationHours?: number;
   appliesToHourBank?: boolean;
+  specialHours?: boolean;
   startedAt?: string;
   closedAt?: string;
   closedBy?: string;
+  cancelTaskAction?: 'release' | 'cancel';
   createdAt?: string;
   updatedAt?: string;
 };
@@ -136,6 +140,16 @@ export const handler = async (event: {
         message: 'actualDurationHours is required when completing a visit.',
       });
     }
+    const visitIdForTasks = payload.id?.trim();
+    if (tasksTable && visitIdForTasks) {
+      const hasOpenTasks = await visitHasOpenTasks(tasksTable, visitIdForTasks);
+      if (hasOpenTasks) {
+        return buildHttpResponse(400, {
+          message:
+            'All visit tasks must be completed or dismissed before completing the visit.',
+        });
+      }
+    }
   }
 
   const timestamp = nowIso();
@@ -203,6 +217,11 @@ export const handler = async (event: {
       (typeof existing?.appliesToHourBank === 'boolean'
         ? existing.appliesToHourBank
         : false),
+    specialHours:
+      payload.specialHours ??
+      (typeof existing?.specialHours === 'boolean'
+        ? existing.specialHours
+        : false),
     startedAt:
       payload.startedAt ??
       (typeof existing?.startedAt === 'string' ? existing.startedAt : undefined),
@@ -228,11 +247,17 @@ export const handler = async (event: {
     await putItem(visitsTable, item);
 
     let releasedTasks: Record<string, unknown>[] = [];
+    let cancelledTasks: Record<string, unknown>[] = [];
     if (status === 'CANCELLED' && tasksTable && typeof item.id === 'string') {
-      releasedTasks = await releaseVisitTasksOnCancel(tasksTable, item.id);
+      const cancelTaskAction = payload.cancelTaskAction?.trim().toLowerCase();
+      if (cancelTaskAction === 'cancel') {
+        cancelledTasks = await cancelVisitTasksOnVisitCancel(tasksTable, item.id);
+      } else {
+        releasedTasks = await releaseVisitTasksOnCancel(tasksTable, item.id);
+      }
     }
 
-    return buildHttpResponse(200, { item, releasedTasks });
+    return buildHttpResponse(200, { item, releasedTasks, cancelledTasks });
   } catch (error) {
     return buildHttpResponse(500, {
       message: 'Failed to save visit.',

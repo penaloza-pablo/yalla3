@@ -1574,6 +1574,43 @@ th {
   color: #b54708;
 }
 
+.operations-task-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.operations-task-title {
+  font-weight: 600;
+  color: #101828;
+}
+
+.btn-icon-ghost.is-task-complete {
+  background: #ecfdf3;
+  border-color: #12b76a;
+  color: #027a48;
+}
+
+.btn-icon-ghost.is-task-dismiss-active {
+  background: #fef3f2;
+  border-color: #f04438;
+  color: #b42318;
+}
+
+.btn-icon-ghost:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.tag-urgent {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #fecdca;
+}
+
 .tag-task-progress {
   display: inline-flex;
   align-items: center;
@@ -1686,8 +1723,124 @@ th {
   gap: 8px !important;
 }
 
+.checkbox-row.compact {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.modal-wide {
+  max-width: 920px;
+}
+
+.modal-scrollable {
+  max-height: min(92vh, 100%);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.modal-scrollable .modal-header {
+  flex-shrink: 0;
+}
+
+.modal-scrollable .modal-body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.modal-scrollable .modal-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #e4e7ec;
+  padding: 16px 0 4px;
+  margin-top: 0;
+}
+
+.template-tasks-editor h4 {
+  margin: 0 0 12px;
+}
+
+.template-task-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.visit-draft-tasks {
+  border-top: 1px solid #e4e7ec;
+  padding-top: 12px;
+}
+
+.visit-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.visit-tasks-header h4 {
+  margin: 0 0 4px;
+}
+
+.visit-draft-tasks ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.muted-row td {
+  color: #98a2b3;
+}
+
+.operations-card-tags .tag.muted,
+.operations-task-list .tag.muted {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.cancel-visit-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cancel-visit-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+}
+
+.cancel-visit-option input {
+  margin-top: 3px;
+}
+
+.cancel-visit-delete-confirm {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  background: #fef3f2;
+}
+
 @media (max-width: 960px) {
   .operations-kanban {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .modal-scrollable {
+    max-height: calc(100vh - 24px);
+  }
+
+  .template-task-row {
     grid-template-columns: 1fr;
   }
 }

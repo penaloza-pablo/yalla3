@@ -167,6 +167,66 @@ export const releaseVisitTasksOnCancel = async (
   return released;
 };
 
+export const cancelVisitTasksOnVisitCancel = async (
+  tasksTable: string,
+  visitId: string,
+) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  const cancelled: Record<string, unknown>[] = [];
+
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tasksTable,
+        IndexName: 'visitId-createdAt-index',
+        KeyConditionExpression: '#visitId = :visitId',
+        ExpressionAttributeNames: { '#visitId': 'visitId' },
+        ExpressionAttributeValues: { ':visitId': visitId },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    for (const task of result.Items ?? []) {
+      const taskId = typeof task.id === 'string' ? task.id : '';
+      if (!taskId) {
+        continue;
+      }
+      const status = normalizeStatus(
+        typeof task.status === 'string' ? task.status : '',
+      );
+      if (status !== 'PENDING' && status !== 'BLOCKED') {
+        continue;
+      }
+      const updatedAt = nowIso();
+      await docClient.send(
+        new UpdateCommand({
+          TableName: tasksTable,
+          Key: { id: taskId },
+          UpdateExpression:
+            'SET #status = :status, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':status': 'CANCELLED',
+            ':updatedAt': updatedAt,
+          },
+        }),
+      );
+      cancelled.push({
+        ...task,
+        status: 'CANCELLED',
+        updatedAt,
+      });
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return cancelled;
+};
+
 /** Task totals for a visit (same set as the visit detail task list). */
 export const getTaskCountsForVisit = async (
   tasksTable: string,
@@ -202,6 +262,40 @@ export const getTaskCountsForVisit = async (
   } while (lastEvaluatedKey);
 
   return { total, completed };
+};
+
+export const visitHasOpenTasks = async (tasksTable: string, visitId: string) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tasksTable,
+        IndexName: 'visitId-createdAt-index',
+        KeyConditionExpression: '#visitId = :visitId',
+        ExpressionAttributeNames: { '#visitId': 'visitId' },
+        ExpressionAttributeValues: { ':visitId': visitId },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    for (const task of result.Items ?? []) {
+      const status = normalizeStatus(
+        typeof task.status === 'string' ? task.status : '',
+      );
+      if (
+        status !== 'COMPLETED' &&
+        status !== 'DISMISS' &&
+        status !== 'CANCELLED'
+      ) {
+        return true;
+      }
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return false;
 };
 
 export const putItem = async (tableName: string, item: Record<string, unknown>) =>

@@ -1,4 +1,9 @@
-import type { TaskRecord, VisitRecord } from './types'
+import type {
+  TaskRecord,
+  VisitRecord,
+  VisitTemplateRecord,
+  VisitTypeRecord,
+} from './types'
 
 type ListResponse<T> = { items?: T[]; item?: T; count?: number; message?: string }
 
@@ -56,3 +61,40 @@ export const getReferenceList = (endpoint: string, teamId?: string) => {
     : endpoint
   return fetchJson<ListResponse<Record<string, unknown>>>(url)
 }
+
+export const getVisitTemplates = (
+  endpoint: string,
+  options?: { propertyId?: string; id?: string; includeInactive?: boolean },
+) => {
+  const params = new URLSearchParams()
+  if (options?.propertyId) {
+    params.set('propertyId', options.propertyId)
+  }
+  if (options?.id) {
+    params.set('id', options.id)
+  }
+  if (options?.includeInactive) {
+    params.set('includeInactive', 'true')
+  }
+  const query = params.toString()
+  return fetchJson<ListResponse<VisitTemplateRecord>>(
+    query ? `${endpoint}?${query}` : endpoint,
+  )
+}
+
+export const saveVisitTemplate = (
+  endpoint: string,
+  payload: Record<string, unknown>,
+) =>
+  fetchJson<ListResponse<VisitTemplateRecord>>(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const saveVisitType = (endpoint: string, payload: Record<string, unknown>) =>
+  fetchJson<ListResponse<VisitTypeRecord>>(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })

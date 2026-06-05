@@ -5,11 +5,20 @@ import {
   getTasksByVisit,
   getUnassignedPool,
   getVisitById,
+  getVisitTemplates,
   getVisitsByDateRange,
   saveTask,
   saveVisit,
 } from './api'
+import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { sortVisitTypes } from './visitTypeHelpers'
+import { VisitTemplatesPanel } from './VisitTemplatesPanel'
 import {
+  mapVisitTemplate,
+  templateTasksToDrafts,
+} from './visitTemplateHelpers'
+import {
+  formatTaskCreatedDate,
   getTodayMadrid,
   getTomorrowMadrid,
   normalizeDateRange,
@@ -19,8 +28,10 @@ import type {
   TaskRecord,
   TeamRecord,
   UserRecord,
+  VisitDraftTask,
   VisitRecord,
   VisitStatus,
+  VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
 
@@ -127,6 +138,7 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       ? item.actualDurationHours
       : undefined,
   appliesToHourBank: Boolean(item.appliesToHourBank),
+  specialHours: Boolean(item.specialHours),
   taskCountTotal:
     typeof item.taskCountTotal === 'number'
       ? item.taskCountTotal
@@ -149,6 +161,7 @@ const mapTask = (item: Record<string, unknown>): TaskRecord => ({
   status: String(item.status ?? 'UNASSIGNED').toUpperCase() as TaskRecord['status'],
   priority: String(item.priority ?? 'MEDIUM').toUpperCase(),
   dueDate: typeof item.dueDate === 'string' ? item.dueDate : undefined,
+  createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
 })
 
 export function DailyOperationsView({
@@ -156,7 +169,9 @@ export function DailyOperationsView({
   getCurrentUserEmail,
   propertyOptions: propertyOptionsProp,
 }: Props) {
-  const [opsTab, setOpsTab] = useState<'dashboard' | 'pool'>('dashboard')
+  const [opsTab, setOpsTab] = useState<'dashboard' | 'pool' | 'templates'>(
+    'dashboard',
+  )
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayMadrid())
   const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
   const [filterTeamId, setFilterTeamId] = useState('')
@@ -182,10 +197,49 @@ export function DailyOperationsView({
   const [assignVisitId, setAssignVisitId] = useState('')
   const [visitForm, setVisitForm] = useState(emptyVisitForm())
   const [taskForm, setTaskForm] = useState(emptyTaskForm())
+  const [propertyTemplates, setPropertyTemplates] = useState<VisitTemplateRecord[]>(
+    [],
+  )
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [draftVisitTasks, setDraftVisitTasks] = useState<VisitDraftTask[]>([])
 
+  const [isCompleteVisitOpen, setIsCompleteVisitOpen] = useState(false)
+  const [completeVisitForm, setCompleteVisitForm] = useState({
+    hours: '1',
+    poolOfHours: false,
+    specialHours: false,
+  })
+  const [dismissingTaskId, setDismissingTaskId] = useState<string | null>(null)
+  const [isCancelVisitOpen, setIsCancelVisitOpen] = useState(false)
+  const [cancelVisitForm, setCancelVisitForm] = useState({
+    taskAction: 'release' as 'release' | 'cancel',
+    cancelConfirmed: false,
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+
+  const isCreatingVisit = !visitForm.id
+  const isCreatingTask = !taskForm.id
+
+  const visitHasOpenTasks = useMemo(
+    () =>
+      visitTasks.some(
+        (task) =>
+          task.status !== 'COMPLETED' &&
+          task.status !== 'DISMISS' &&
+          task.status !== 'CANCELLED',
+      ),
+    [visitTasks],
+  )
+
+  const visitTasksToRelease = useMemo(
+    () =>
+      visitTasks.filter(
+        (task) => task.status === 'PENDING' || task.status === 'BLOCKED',
+      ),
+    [visitTasks],
+  )
 
   const endpoints = useMemo(
     () => ({
@@ -209,6 +263,14 @@ export function DailyOperationsView({
         'getPropertiesUrl',
         import.meta.env.VITE_GET_PROPERTIES_URL,
       ),
+      visitTemplates: getEndpoint(
+        'getVisitTemplatesUrl',
+        import.meta.env.VITE_GET_VISIT_TEMPLATES_URL,
+      ),
+      upsertVisitTemplate: getEndpoint(
+        'upsertVisitTemplateUrl',
+        import.meta.env.VITE_UPSERT_VISIT_TEMPLATE_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -221,16 +283,20 @@ export function DailyOperationsView({
     () => new Map(users.map((user) => [user.id, user.name])),
     [users],
   )
+  const sortedPropertyOptions = useMemo(
+    () => sortPropertyOptions(propertyOptions),
+    [propertyOptions],
+  )
+
   const propertyById = useMemo(
     () =>
       new Map(
-        propertyOptions.map((property) => [
-          property.id,
-          property.listingNickname || property.nickname || property.title,
-        ]),
+        propertyOptions.map((property) => [property.id, getPropertyLabel(property)]),
       ),
     [propertyOptions],
   )
+  const sortedVisitTypes = useMemo(() => sortVisitTypes(visitTypes), [visitTypes])
+
   const visitTypeById = useMemo(
     () => new Map(visitTypes.map((type) => [type.id, type.name])),
     [visitTypes],
@@ -394,7 +460,29 @@ export function DailyOperationsView({
 
   const openCreateVisit = () => {
     setVisitForm(emptyVisitForm())
+    setSelectedTemplateId('')
+    setDraftVisitTasks([])
+    setPropertyTemplates([])
     setIsVisitFormOpen(true)
+  }
+
+  const applyVisitTemplate = (template: VisitTemplateRecord) => {
+    setVisitForm((current) => ({
+      ...current,
+      propertyId: template.propertyId,
+      visitTypeId: template.visitTypeId,
+      teamId: template.teamId,
+      assignedUserId: template.assignedUserId,
+      scheduledStartTime: template.scheduledStartTime,
+      scheduledEndTime: template.scheduledEndTime,
+      title: template.title,
+      description: template.description,
+      estimatedDurationMinutes: template.estimatedDurationMinutes
+        ? String(template.estimatedDurationMinutes)
+        : '',
+      priority: 'MEDIUM',
+    }))
+    setDraftVisitTasks(templateTasksToDrafts(template))
   }
 
   const openEditVisit = (visit: VisitRecord) => {
@@ -460,22 +548,124 @@ export function DailyOperationsView({
       scheduledDate: visitForm.scheduledDate,
       scheduledStartTime: visitForm.scheduledStartTime,
       scheduledEndTime: visitForm.scheduledEndTime,
-      priority: visitForm.priority,
+      priority: visitForm.priority || 'MEDIUM',
       title,
       description: visitForm.description,
-      appliesToHourBank: visitForm.appliesToHourBank,
+      appliesToHourBank: isCreatingVisit
+        ? (visitType?.appliesToHourBank ?? false)
+        : visitForm.appliesToHourBank,
     }
     if (visitForm.estimatedDurationMinutes) {
       payload.estimatedDurationMinutes = Number(visitForm.estimatedDurationMinutes)
     }
 
+    const pendingDraftTasks = [...draftVisitTasks]
+
     try {
-      await saveVisit(endpoints.upsertVisit, payload)
+      const response = await saveVisit(endpoints.upsertVisit, payload)
+      const savedItem = response.item as Record<string, unknown> | undefined
+      const mapped = savedItem ? mapVisit(savedItem) : null
+
+      if (isCreatingVisit && mapped && pendingDraftTasks.length > 0 && endpoints.upsertTask) {
+        for (const draft of pendingDraftTasks) {
+          if (!draft.title.trim()) {
+            continue
+          }
+          await saveTask(endpoints.upsertTask, {
+            visitId: mapped.id,
+            propertyId: mapped.propertyId,
+            teamId: mapped.teamId,
+            assignedUserId: mapped.assignedUserId || undefined,
+            title: draft.title.trim(),
+            description: draft.description,
+            priority: draft.urgent ? 'URGENT' : 'MEDIUM',
+            dueDate: mapped.scheduledDate,
+          })
+        }
+      }
+
       setIsVisitFormOpen(false)
-      setMessage('Visit saved.')
+      setSelectedTemplateId('')
+      setDraftVisitTasks([])
+      setMessage(
+        isCreatingVisit && pendingDraftTasks.some((task) => task.title.trim())
+          ? 'Visit and tasks saved.'
+          : 'Visit saved.',
+      )
       await loadVisits()
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save visit.')
+    }
+  }
+
+  const openCompleteVisitModal = () => {
+    if (visitHasOpenTasks) {
+      setError(
+        'Complete or dismiss all tasks before completing the visit.',
+      )
+      return
+    }
+    setError(null)
+    setCompleteVisitForm({
+      hours: '1',
+      poolOfHours: selectedVisit?.appliesToHourBank ?? false,
+      specialHours: selectedVisit?.specialHours ?? false,
+    })
+    setIsCompleteVisitOpen(true)
+  }
+
+  const submitCompleteVisit = async () => {
+    if (!selectedVisit) return
+    const hours = Number(completeVisitForm.hours)
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setError('Enter a valid number of hours.')
+      return
+    }
+    if (visitHasOpenTasks) {
+      setError(
+        'Complete or dismiss all tasks before completing the visit.',
+      )
+      return
+    }
+    await updateVisitStatus(selectedVisit, 'COMPLETED', {
+      actualDurationHours: hours,
+      appliesToHourBank: completeVisitForm.poolOfHours,
+      specialHours: completeVisitForm.specialHours,
+    })
+    setIsCompleteVisitOpen(false)
+  }
+
+  const openCancelVisitModal = () => {
+    setError(null)
+    setCancelVisitForm({ taskAction: 'release', cancelConfirmed: false })
+    setIsCancelVisitOpen(true)
+  }
+
+  const submitCancelVisit = async () => {
+    if (!selectedVisit) return
+    if (cancelVisitForm.taskAction === 'cancel' && !cancelVisitForm.cancelConfirmed) {
+      setError('Confirm that you want to mark open tasks as cancelled.')
+      return
+    }
+    const cancelTaskAction =
+      visitTasks.length > 0 ? cancelVisitForm.taskAction : undefined
+    const successMessage =
+      cancelTaskAction === 'cancel'
+        ? visitTasksToRelease.length > 0
+          ? 'Visit cancelled. Open tasks were marked as CANCELLED.'
+          : 'Visit cancelled.'
+        : visitTasksToRelease.length > 0
+          ? 'Visit cancelled. Tasks moved to Tasks not on a visit.'
+          : 'Visit cancelled.'
+    await updateVisitStatus(
+      selectedVisit,
+      'CANCELLED',
+      cancelTaskAction ? { cancelTaskAction } : undefined,
+      successMessage,
+    )
+    setIsCancelVisitOpen(false)
+    if (cancelTaskAction === 'release') {
+      await loadPool()
     }
   }
 
@@ -483,6 +673,7 @@ export function DailyOperationsView({
     visit: VisitRecord,
     status: VisitRecord['status'],
     extra?: Record<string, unknown>,
+    successMessage?: string,
   ) => {
     if (!endpoints.upsertVisit) return
     const closedBy = await getCurrentUserEmail()
@@ -493,7 +684,7 @@ export function DailyOperationsView({
         closedBy,
         ...extra,
       })
-      setMessage(`Visit marked as ${status}.`)
+      setMessage(successMessage ?? `Visit marked as ${status}.`)
       await loadVisits()
       if (selectedVisitId === visit.id && endpoints.visits) {
         const refreshed = await getVisitById(endpoints.visits, visit.id)
@@ -514,6 +705,9 @@ export function DailyOperationsView({
 
   const submitTask = async () => {
     if (!endpoints.upsertTask) return
+    const visitDueDate =
+      selectedVisit?.scheduledDate ||
+      visits.find((visit) => visit.id === taskForm.visitId)?.scheduledDate
     const payload: Record<string, unknown> = {
       id: taskForm.id || undefined,
       propertyId: taskForm.propertyId,
@@ -521,8 +715,10 @@ export function DailyOperationsView({
       assignedUserId: taskForm.assignedUserId || undefined,
       title: taskForm.title,
       description: taskForm.description,
-      priority: taskForm.priority,
-      dueDate: taskForm.dueDate || undefined,
+      priority: taskForm.priority || 'MEDIUM',
+      dueDate: taskForm.visitId
+        ? visitDueDate || taskForm.dueDate || undefined
+        : taskForm.dueDate || undefined,
       visitId: taskForm.visitId || undefined,
     }
     try {
@@ -559,6 +755,15 @@ export function DailyOperationsView({
     if (selectedVisitId) await loadVisitTasks(selectedVisitId)
   }
 
+  const handleDismissTask = async (task: TaskRecord) => {
+    setDismissingTaskId(task.id)
+    try {
+      await dismissTask(task)
+    } finally {
+      setDismissingTaskId(null)
+    }
+  }
+
   const assignTaskToVisit = async () => {
     if (!endpoints.upsertTask || !assignTaskId || !assignVisitId) return
     await saveTask(endpoints.upsertTask, {
@@ -574,6 +779,33 @@ export function DailyOperationsView({
   }
 
   const [assignVisitOptions, setAssignVisitOptions] = useState<VisitRecord[]>([])
+
+  useEffect(() => {
+    if (
+      !isVisitFormOpen ||
+      !isCreatingVisit ||
+      !visitForm.propertyId ||
+      !endpoints.visitTemplates
+    ) {
+      setPropertyTemplates([])
+      return
+    }
+    void getVisitTemplates(endpoints.visitTemplates, {
+      propertyId: visitForm.propertyId,
+    })
+      .then((payload) => {
+        const items = (payload.items ?? []).map((entry) =>
+          mapVisitTemplate(entry as unknown as Record<string, unknown>),
+        )
+        setPropertyTemplates(items.filter((template) => template.active))
+      })
+      .catch(() => setPropertyTemplates([]))
+  }, [
+    endpoints.visitTemplates,
+    isCreatingVisit,
+    isVisitFormOpen,
+    visitForm.propertyId,
+  ])
 
   useEffect(() => {
     if (!isAssignVisitOpen || !assignTaskId || !endpoints.visits) {
@@ -641,6 +873,13 @@ export function DailyOperationsView({
             onClick={() => setOpsTab('pool')}
           >
             Tasks not on a visit
+          </button>
+          <button
+            type="button"
+            className={opsTab === 'templates' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setOpsTab('templates')}
+          >
+            Templates
           </button>
         </div>
 
@@ -730,9 +969,9 @@ export function DailyOperationsView({
                   onChange={(event) => setFilterPropertyId(event.target.value)}
                 >
                   <option value="">All properties</option>
-                  {propertyOptions.map((property) => (
+                  {sortedPropertyOptions.map((property) => (
                     <option key={property.id} value={property.id}>
-                      {property.listingNickname || property.nickname}
+                      {getPropertyLabel(property)}
                     </option>
                   ))}
                 </select>
@@ -793,7 +1032,6 @@ export function DailyOperationsView({
                           'Unassigned'}
                       </p>
                       <p className="operations-card-tags">
-                        <span className="tag">{visit.priority}</span>
                         <span className="tag">{visit.status}</span>
                         {(() => {
                           const taskTotal = visit.taskCountTotal ?? 0
@@ -827,7 +1065,7 @@ export function DailyOperationsView({
             ))}
           </section>
         </>
-      ) : (
+      ) : opsTab === 'pool' ? (
         <section className="card">
           <div className="page-header">
             <h2 className="section-title">Tasks not on a visit</h2>
@@ -851,13 +1089,14 @@ export function DailyOperationsView({
                   <th>Property</th>
                   <th>Team</th>
                   <th>Priority</th>
+                  <th>Created</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {poolTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>No unassigned or dismissed tasks.</td>
+                    <td colSpan={7}>No unassigned or dismissed tasks.</td>
                   </tr>
                 ) : (
                   poolTasks.map((task) => (
@@ -867,6 +1106,7 @@ export function DailyOperationsView({
                       <td>{propertyById.get(task.propertyId) ?? task.propertyId}</td>
                       <td>{teamById.get(task.teamId) ?? task.teamId}</td>
                       <td>{task.priority}</td>
+                      <td>{formatTaskCreatedDate(task.createdAt)}</td>
                       <td className="table-actions">
                         <button
                           type="button"
@@ -923,11 +1163,28 @@ export function DailyOperationsView({
             </table>
           </div>
         </section>
+      ) : (
+        <VisitTemplatesPanel
+          getVisitTemplatesEndpoint={endpoints.visitTemplates}
+          upsertVisitTemplateEndpoint={endpoints.upsertVisitTemplate}
+          propertyOptions={propertyOptions}
+          teams={teams}
+          users={users}
+          visitTypes={visitTypes}
+          onMessage={(value) => {
+            setError(null)
+            setMessage(value)
+          }}
+          onError={(value) => {
+            setMessage(null)
+            setError(value)
+          }}
+        />
       )}
 
       {selectedVisit && opsTab === 'dashboard' ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal operations-detail-modal">
+          <div className="modal operations-detail-modal modal-scrollable">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{selectedVisit.title}</h3>
@@ -967,8 +1224,7 @@ export function DailyOperationsView({
                   '—'}
               </p>
               <p>
-                <strong>Status:</strong> {selectedVisit.status} ·{' '}
-                <strong>Priority:</strong> {selectedVisit.priority}
+                <strong>Status:</strong> {selectedVisit.status}
               </p>
               {selectedVisit.description ? (
                 <p>
@@ -990,25 +1246,20 @@ export function DailyOperationsView({
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => {
-                        const hours = window.prompt(
-                          'Actual duration (hours)',
-                          '1',
-                        )
-                        if (hours === null) return
-                        void updateVisitStatus(selectedVisit, 'COMPLETED', {
-                          actualDurationHours: Number(hours),
-                        })
-                      }}
+                      disabled={visitHasOpenTasks}
+                      title={
+                        visitHasOpenTasks
+                          ? 'Complete or dismiss all tasks first'
+                          : undefined
+                      }
+                      onClick={openCompleteVisitModal}
                     >
                       Complete visit
                     </button>
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() =>
-                        void updateVisitStatus(selectedVisit, 'CANCELLED')
-                      }
+                      onClick={openCancelVisitModal}
                     >
                       Cancel visit
                     </button>
@@ -1017,68 +1268,81 @@ export function DailyOperationsView({
               </div>
 
               <h4 className="section-title">Tasks</h4>
-              <div className="header-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setTaskForm({
-                      ...emptyTaskForm(),
-                      visitId: selectedVisit.id,
-                      propertyId: selectedVisit.propertyId,
-                      teamId: selectedVisit.teamId,
-                      assignedUserId: selectedVisit.assignedUserId,
-                    })
-                    setIsTaskFormOpen(true)
-                  }}
-                >
-                  Create task
-                </button>
-              </div>
+              {selectedVisit.status !== 'COMPLETED' &&
+              selectedVisit.status !== 'CANCELLED' ? (
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setTaskForm({
+                        ...emptyTaskForm(),
+                        visitId: selectedVisit.id,
+                        propertyId: selectedVisit.propertyId,
+                        teamId: selectedVisit.teamId,
+                        assignedUserId: selectedVisit.assignedUserId,
+                        dueDate: selectedVisit.scheduledDate,
+                      })
+                      setIsTaskFormOpen(true)
+                    }}
+                  >
+                    Create task
+                  </button>
+                </div>
+              ) : null}
               <ul className="operations-task-list">
-                {visitTasks.map((task) => (
-                  <li key={task.id}>
-                    <span>
-                      {task.title} · {task.status} · {task.priority}
-                      {selectedVisit.status === 'OVERDUE' &&
-                      (task.status === 'PENDING' || task.status === 'BLOCKED') ? (
-                        <span className="tag warning">Overdue visit</span>
-                      ) : null}
-                    </span>
-                    <span className="table-actions">
-                      {task.status !== 'COMPLETED' ? (
-                        <>
+                {visitTasks.map((task) => {
+                  const isCompleted = task.status === 'COMPLETED'
+                  const isCancelled = task.status === 'CANCELLED'
+                  const canActOnTask =
+                    task.status === 'PENDING' || task.status === 'BLOCKED'
+                  const isDismissing = dismissingTaskId === task.id
+
+                  return (
+                    <li key={task.id}>
+                      <div className="operations-task-content">
+                        <span className="operations-task-title">{task.title}</span>
+                        {task.priority === 'URGENT' ? (
+                          <span className="status status-danger">Urgent</span>
+                        ) : null}
+                        {isCancelled ? (
+                          <span className="status status-neutral">
+                            Cancelled with visit
+                          </span>
+                        ) : null}
+                        {selectedVisit.status === 'OVERDUE' && canActOnTask ? (
+                          <span className="status status-warning">Overdue visit</span>
+                        ) : null}
+                      </div>
+                      <div className="action-buttons">
+                        <button
+                          type="button"
+                          className={`btn-icon btn-icon-ghost${
+                            isCompleted ? ' is-task-complete' : ''
+                          }`}
+                          aria-label="Complete task"
+                          disabled={isCompleted || isCancelled || !canActOnTask}
+                          onClick={() => void completeTask(task)}
+                        >
+                          ✓
+                        </button>
+                        {canActOnTask ? (
                           <button
                             type="button"
-                            className="btn-link"
-                            onClick={() => void completeTask(task)}
+                            className={`btn-icon btn-icon-ghost${
+                              isDismissing ? ' is-task-dismiss-active' : ''
+                            }`}
+                            aria-label="Dismiss task"
+                            disabled={isDismissing}
+                            onClick={() => void handleDismissTask(task)}
                           >
-                            Complete
+                            ✕
                           </button>
-                          <button
-                            type="button"
-                            className="btn-link"
-                            onClick={() =>
-                              void saveTask(endpoints.upsertTask!, {
-                                id: task.id,
-                                status: 'BLOCKED',
-                              }).then(() => loadVisitTasks(selectedVisit.id))
-                            }
-                          >
-                            Block
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-link"
-                            onClick={() => void dismissTask(task)}
-                          >
-                            Dismiss
-                          </button>
-                        </>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
+                        ) : null}
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           </div>
@@ -1087,7 +1351,9 @@ export function DailyOperationsView({
 
       {isVisitFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal">
+          <div
+            className={`modal${isCreatingVisit ? ' modal-wide modal-scrollable' : ''}`}
+          >
             <div className="modal-header">
               <h3 className="modal-title">
                 {visitForm.id ? 'Edit visit' : 'Create visit'}
@@ -1105,18 +1371,50 @@ export function DailyOperationsView({
                 Property
                 <select
                   value={visitForm.propertyId}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({ ...c, propertyId: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    setSelectedTemplateId('')
+                    setDraftVisitTasks([])
+                    setVisitForm((c) => ({
+                      ...c,
+                      propertyId: event.target.value,
+                    }))
+                  }}
                 >
                   <option value="">Select property</option>
-                  {propertyOptions.map((p) => (
+                  {sortedPropertyOptions.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.listingNickname || p.nickname}
+                      {getPropertyLabel(p)}
                     </option>
                   ))}
                 </select>
               </label>
+              {isCreatingVisit && visitForm.propertyId ? (
+                <label>
+                  Use template
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(event) => {
+                      const templateId = event.target.value
+                      setSelectedTemplateId(templateId)
+                      const template = propertyTemplates.find(
+                        (entry) => entry.id === templateId,
+                      )
+                      if (template) {
+                        applyVisitTemplate(template)
+                      } else {
+                        setDraftVisitTasks([])
+                      }
+                    }}
+                  >
+                    <option value="">No template</option>
+                    {propertyTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label>
                 Visit type
                 <select
@@ -1124,7 +1422,7 @@ export function DailyOperationsView({
                   onChange={(event) => handleVisitTypeChange(event.target.value)}
                 >
                   <option value="">Select type</option>
-                  {visitTypes.map((type) => (
+                  {sortedVisitTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name}
                     </option>
@@ -1211,21 +1509,6 @@ export function DailyOperationsView({
                 />
               </label>
               <label>
-                Priority
-                <select
-                  value={visitForm.priority}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({ ...c, priority: event.target.value }))
-                  }
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
                 Title
                 <input
                   value={visitForm.title}
@@ -1256,19 +1539,112 @@ export function DailyOperationsView({
                   }
                 />
               </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={visitForm.appliesToHourBank}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({
-                      ...c,
-                      appliesToHourBank: event.target.checked,
-                    }))
-                  }
-                />
-                Applies to hour bank
-              </label>
+              {!isCreatingVisit ? (
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={visitForm.appliesToHourBank}
+                    onChange={(event) =>
+                      setVisitForm((c) => ({
+                        ...c,
+                        appliesToHourBank: event.target.checked,
+                      }))
+                    }
+                  />
+                  Applies to hour bank
+                </label>
+              ) : null}
+              {isCreatingVisit ? (
+                <div className="full-width visit-draft-tasks">
+                  <div className="visit-tasks-header">
+                    <div>
+                      <h4>Tasks</h4>
+                      <p className="subtitle">
+                        Optional. Tasks are created when you save the visit.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() =>
+                        setDraftVisitTasks((current) => [
+                          {
+                            title: '',
+                            description: '',
+                            priority: 'MEDIUM',
+                            urgent: false,
+                          },
+                          ...current,
+                        ])
+                      }
+                    >
+                      Add task
+                    </button>
+                  </div>
+                  {draftVisitTasks.length === 0 ? (
+                    <p className="subtitle">No tasks added yet.</p>
+                  ) : null}
+                  {draftVisitTasks.map((task, index) => (
+                    <div key={`draft-${index}`} className="template-task-row">
+                      <input
+                        placeholder="Task title"
+                        value={task.title}
+                        onChange={(event) =>
+                          setDraftVisitTasks((current) =>
+                            current.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, title: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        placeholder="Description"
+                        value={task.description}
+                        onChange={(event) =>
+                          setDraftVisitTasks((current) =>
+                            current.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, description: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <label className="checkbox-row compact">
+                        <input
+                          type="checkbox"
+                          checked={task.urgent}
+                          onChange={(event) =>
+                            setDraftVisitTasks((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, urgent: event.target.checked }
+                                  : entry,
+                              ),
+                            )
+                          }
+                        />
+                        Urgent
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-link"
+                        onClick={() =>
+                          setDraftVisitTasks((current) =>
+                            current.filter(
+                              (_, entryIndex) => entryIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="modal-footer">
               <button
@@ -1311,9 +1687,9 @@ export function DailyOperationsView({
                       }
                     >
                       <option value="">Select property</option>
-                      {propertyOptions.map((p) => (
+                      {sortedPropertyOptions.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.listingNickname || p.nickname}
+                          {getPropertyLabel(p)}
                         </option>
                       ))}
                     </select>
@@ -1354,31 +1730,49 @@ export function DailyOperationsView({
                   }
                 />
               </label>
-              <label>
-                Priority
-                <select
-                  value={taskForm.priority}
-                  onChange={(event) =>
-                    setTaskForm((c) => ({ ...c, priority: event.target.value }))
-                  }
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Due date
-                <input
-                  type="date"
-                  value={taskForm.dueDate}
-                  onChange={(event) =>
-                    setTaskForm((c) => ({ ...c, dueDate: event.target.value }))
-                  }
-                />
-              </label>
+              {isCreatingTask ? (
+                <label className="checkbox-row full-width">
+                  <input
+                    type="checkbox"
+                    checked={taskForm.priority === 'URGENT'}
+                    onChange={(event) =>
+                      setTaskForm((c) => ({
+                        ...c,
+                        priority: event.target.checked ? 'URGENT' : 'MEDIUM',
+                      }))
+                    }
+                  />
+                  Urgent
+                </label>
+              ) : (
+                <label>
+                  Priority
+                  <select
+                    value={taskForm.priority}
+                    onChange={(event) =>
+                      setTaskForm((c) => ({ ...c, priority: event.target.value }))
+                    }
+                  >
+                    {PRIORITIES.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priority}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!taskForm.visitId ? (
+                <label>
+                  Due date
+                  <input
+                    type="date"
+                    value={taskForm.dueDate}
+                    onChange={(event) =>
+                      setTaskForm((c) => ({ ...c, dueDate: event.target.value }))
+                    }
+                  />
+                </label>
+              ) : null}
             </div>
             <div className="modal-footer">
               <button
@@ -1387,6 +1781,183 @@ export function DailyOperationsView({
                 onClick={() => void submitTask()}
               >
                 Save task
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCancelVisitOpen && selectedVisit ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <h3 className="modal-title">Cancel visit</h3>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsCancelVisitOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                This visit has {visitTasks.length} task
+                {visitTasks.length === 1 ? '' : 's'}. What should happen to them?
+              </p>
+              {visitTasks.length > 0 ? (
+                <div className="cancel-visit-options">
+                  <label className="cancel-visit-option">
+                    <input
+                      type="radio"
+                      name="cancelTaskAction"
+                      checked={cancelVisitForm.taskAction === 'release'}
+                      onChange={() =>
+                        setCancelVisitForm({
+                          taskAction: 'release',
+                          cancelConfirmed: false,
+                        })
+                      }
+                    />
+                    <span>
+                      Move {visitTasksToRelease.length} open task
+                      {visitTasksToRelease.length === 1 ? '' : 's'} to{' '}
+                      <strong>Tasks not on a visit</strong>
+                      {visitTasks.length !== visitTasksToRelease.length
+                        ? ' (completed and cancelled tasks stay on this visit)'
+                        : ''}
+                    </span>
+                  </label>
+                  <label className="cancel-visit-option">
+                    <input
+                      type="radio"
+                      name="cancelTaskAction"
+                      checked={cancelVisitForm.taskAction === 'cancel'}
+                      onChange={() =>
+                        setCancelVisitForm((current) => ({
+                          ...current,
+                          taskAction: 'cancel',
+                        }))
+                      }
+                    />
+                    <span>
+                      Mark {visitTasksToRelease.length} open task
+                      {visitTasksToRelease.length === 1 ? '' : 's'} as{' '}
+                      <strong>CANCELLED</strong> and keep them on this visit
+                      {visitTasks.length !== visitTasksToRelease.length
+                        ? ' (completed tasks stay unchanged)'
+                        : ''}
+                    </span>
+                  </label>
+                  {cancelVisitForm.taskAction === 'cancel' ? (
+                    <label className="checkbox-row cancel-visit-delete-confirm">
+                      <input
+                        type="checkbox"
+                        checked={cancelVisitForm.cancelConfirmed}
+                        onChange={(event) =>
+                          setCancelVisitForm((current) => ({
+                            ...current,
+                            cancelConfirmed: event.target.checked,
+                          }))
+                        }
+                      />
+                      I understand open tasks will be marked as CANCELLED and
+                      remain visible on this cancelled visit.
+                    </label>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="subtitle">This visit has no tasks to move or cancel.</p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setIsCancelVisitOpen(false)}
+              >
+                Keep visit
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={
+                  visitTasks.length > 0 &&
+                  cancelVisitForm.taskAction === 'cancel' &&
+                  !cancelVisitForm.cancelConfirmed
+                }
+                onClick={() => void submitCancelVisit()}
+              >
+                Cancel visit
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCompleteVisitOpen && selectedVisit ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <h3 className="modal-title">Complete visit</h3>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsCompleteVisitOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body form-grid">
+              <label>
+                Hours
+                <input
+                  type="number"
+                  min="0.25"
+                  step="0.25"
+                  value={completeVisitForm.hours}
+                  onChange={(event) =>
+                    setCompleteVisitForm((current) => ({
+                      ...current,
+                      hours: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="checkbox-row full-width">
+                <input
+                  type="checkbox"
+                  checked={completeVisitForm.poolOfHours}
+                  onChange={(event) =>
+                    setCompleteVisitForm((current) => ({
+                      ...current,
+                      poolOfHours: event.target.checked,
+                    }))
+                  }
+                />
+                Pool of hours
+              </label>
+              <label className="checkbox-row full-width">
+                <input
+                  type="checkbox"
+                  checked={completeVisitForm.specialHours}
+                  onChange={(event) =>
+                    setCompleteVisitForm((current) => ({
+                      ...current,
+                      specialHours: event.target.checked,
+                    }))
+                  }
+                />
+                Special hours
+              </label>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void submitCompleteVisit()}
+              >
+                Complete visit
               </button>
             </div>
           </div>

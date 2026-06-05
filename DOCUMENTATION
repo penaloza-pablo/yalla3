@@ -414,7 +414,11 @@ Task statuses
 - UNASSIGNED: no visitId (pool list).
 - DISMISS: user dismissed without completing; no visitId; shown in the same pool list.
 - PENDING / BLOCKED / COMPLETED: tasks linked to a visit.
-- When a visit is cancelled, PENDING/BLOCKED tasks are released to UNASSIGNED.
+- CANCELLED: open tasks kept on a cancelled visit when the user cancels the visit
+  with cancelTaskAction=cancel; visible in the visit detail for audit.
+- When a visit is cancelled, the user chooses what happens to open tasks
+  (PENDING/BLOCKED): release to Tasks not on a visit (UNASSIGNED), or mark as
+  CANCELLED and keep them on the visit (requires explicit confirmation).
 
 UI behavior
 - Dashboard tab: Kanban with Scheduled | Overdue | Completed & Cancelled.
@@ -425,36 +429,50 @@ UI behavior
 - Visit detail modal: edit, complete (requires actual duration hours), cancel,
   tasks list, create task, dismiss task.
 - Tasks tab: UNASSIGNED + DISMISS pool; assign to visit, edit, complete, dismiss.
+- Templates tab: CRUD visit templates per property (name, visit defaults, task list).
+  Edit supports adding/removing tasks. Duplicate copies a template as a new draft
+  (choose another property before saving). Deactivate via active=false instead of
+  hard delete. Template modal scrolls for long task lists (mobile-friendly).
+- Create visit: optional "Use template" after selecting property; pre-fills visit
+  fields and draft tasks; user must still pick scheduledDate; Save creates visit
+  then UpsertTask for each draft.
 - Assign-to-visit requires matching propertyId and teamId; visit must not be terminal.
 
 Data flow
 - DynamoDB tables (existing, not created by Amplify):
-  - yalla-visits, yalla-tasks (read/write)
+  - yalla-visits, yalla-tasks, yalla-visit-templates (read/write)
   - yalla-properties, yalla-teams, yalla-users, yalla-visit_types (read-only)
 - GSIs used:
   - Visits: scheduledDate-scheduledStartTime-index, propertyId-scheduledDate-index
   - Tasks: visitId-createdAt-index, status-createdAt-index
+  - Visit templates: propertyId-createdAt-index
   - Users: teamId-name-index (when filtering users by team)
-- IDs: VISIT-001, TASK-001 sequential format.
+- IDs: VISIT-001, TASK-001, TPL-001 sequential format.
 - closedBy: Cognito user email on complete actions.
 
 Lambda runtime
 - All `defineFunction` handlers use `runtime: 22` (Node.js 22.x on AWS Lambda).
 - After changing runtime, redeploy with `npx ampx sandbox` or your pipeline deploy.
 
-DynamoDB IAM (imported tables)
-- Tables referenced with `Table.fromTableName` need explicit `dynamodb:Query` on
-  `table/index/*` for GSI access. See `grantDynamoIndexQuery` in `amplify/backend.ts`.
-
 Lambdas and endpoints
 - GetVisits: query by scheduledDate (single day), scheduledDateFrom +
   scheduledDateTo (max 31 days, one Query per day on GSI), id, or propertyId;
   enriches with taskCountCompleted and taskCountTotal for the visit card badge
   (e.g. 3/5).
-- UpsertVisit: create/update visit; cancels release tasks to UNASSIGNED.
+- UpsertVisit: create/update visit; on cancel accepts cancelTaskAction=release
+  (default) or cancel (mark open tasks CANCELLED on the visit).
 - GetTasks: by visitId, id, pool=unassigned, or status.
 - UpsertTask: create/update; actions dismiss and assign.
 - GetTeams / GetUsers / GetVisitTypes: reference data (active rows).
+- GetVisitTemplates: query by propertyId, get by id, or list all (active by default).
+- UpsertVisitTemplate: create/update template; set active=false to deactivate.
+- UpsertVisitType: create/update rows in yalla-visit_types (IDs VT-001, VT-002, …).
+
+Visit type Fixings (one-time after deploy)
+- POST to UpsertVisitType URL:
+  `{"name":"Fixings","description":"Maintenance fixings visit","active":true}`
+- Or insert manually in DynamoDB table yalla-visit_types with the same fields.
+- Reload Daily Operations to see Fixings in visit type selectors.
 
 Frontend endpoint resolution
 - VITE_GET_VISITS_URL / custom.getVisitsUrl
@@ -464,14 +482,19 @@ Frontend endpoint resolution
 - VITE_GET_TEAMS_URL / custom.getTeamsUrl
 - VITE_GET_USERS_URL / custom.getUsersUrl
 - VITE_GET_VISIT_TYPES_URL / custom.getVisitTypesUrl
+- VITE_GET_VISIT_TEMPLATES_URL / custom.getVisitTemplatesUrl
+- VITE_UPSERT_VISIT_TEMPLATE_URL / custom.upsertVisitTemplateUrl
+- VITE_UPSERT_VISIT_TYPE_URL / custom.upsertVisitTypeUrl
 - Reuses VITE_GET_PROPERTIES_URL for property selectors.
 
 Files
 - `amplify/backend.ts`: table grants (fromTableName), function URLs, outputs.
 - `amplify/functions/get-visits/`, `upsert-visit/`, `get-tasks/`, `upsert-task/`
+- `amplify/functions/get-visit-templates/`, `upsert-visit-template/`, `upsert-visit-type/`
 - `amplify/functions/get-teams/`, `get-users/`, `get-visit-types/`
 - `amplify/functions/shared/`: HTTP helpers and visit/task utilities.
 - `src/operations/DailyOperationsView.tsx`: operations UI.
+- `src/operations/VisitTemplatesPanel.tsx`: templates CRUD tab.
 - `src/App.tsx`: navigation entry Daily Operations.
 
 Files

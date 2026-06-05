@@ -56,3 +56,19 @@ export const normalizeDateRange = (from: string, to: string) => {
 }
 
 export const getTomorrowMadrid = () => addDaysToDateString(getTodayMadrid(), 1)
+
+export const formatTaskCreatedDate = (value?: string) => {
+  if (!value?.trim()) {
+    return '—'
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return value
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: BUSINESS_TIMEZONE,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed)
+}

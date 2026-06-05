@@ -1,9 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { FunctionUrlAuthType, type IFunction } from 'aws-cdk-lib/aws-lambda';
+import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
-import type { Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { getInventory } from './functions/get-inventory/resource';
@@ -30,6 +28,9 @@ import { upsertTask } from './functions/upsert-task/resource';
 import { getTeams } from './functions/get-teams/resource';
 import { getUsers } from './functions/get-users/resource';
 import { getVisitTypes } from './functions/get-visit-types/resource';
+import { getVisitTemplates } from './functions/get-visit-templates/resource';
+import { upsertVisitTemplate } from './functions/upsert-visit-template/resource';
+import { upsertVisitType } from './functions/upsert-visit-type/resource';
 
 const backend = defineBackend({
   auth,
@@ -58,25 +59,12 @@ const backend = defineBackend({
   getTeams,
   getUsers,
   getVisitTypes,
+  getVisitTemplates,
+  upsertVisitTemplate,
+  upsertVisitType,
 });
 
 const dataStack = backend.createStack('data-access');
-
-/** Imported tables via fromTableName do not include GSI ARNs in grant* helpers. */
-const grantDynamoIndexQuery = (
-  stack: Stack,
-  lambda: IFunction,
-  tableName: string,
-) => {
-  const tableArn = `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${tableName}`;
-  lambda.addToRolePolicy(
-    new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: ['dynamodb:Query'],
-      resources: [`${tableArn}/index/*`],
-    }),
-  );
-};
 const inventoryTable = Table.fromTableName(
   dataStack,
   'InventoryTable',
@@ -113,6 +101,11 @@ const visitTypesTable = Table.fromTableName(
   'VisitTypesTable',
   'yalla-visit_types',
 );
+const visitTemplatesTable = Table.fromTableName(
+  dataStack,
+  'VisitTemplatesTable',
+  'yalla-visit-templates',
+);
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
   'InventoryExportBucket',
@@ -148,30 +141,12 @@ tasksTable.grantReadWriteData(backend.upsertTask.resources.lambda);
 teamsTable.grantReadData(backend.getTeams.resources.lambda);
 usersTable.grantReadData(backend.getUsers.resources.lambda);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
+visitTypesTable.grantReadWriteData(backend.upsertVisitType.resources.lambda);
+visitTemplatesTable.grantReadWriteData(backend.getVisitTemplates.resources.lambda);
+visitTemplatesTable.grantReadWriteData(
+  backend.upsertVisitTemplate.resources.lambda,
+);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
-
-grantDynamoIndexQuery(
-  dataStack,
-  backend.getVisits.resources.lambda,
-  'yalla-visits',
-);
-grantDynamoIndexQuery(
-  dataStack,
-  backend.getVisits.resources.lambda,
-  'yalla-tasks',
-);
-grantDynamoIndexQuery(
-  dataStack,
-  backend.upsertVisit.resources.lambda,
-  'yalla-tasks',
-);
-grantDynamoIndexQuery(dataStack, backend.getTasks.resources.lambda, 'yalla-tasks');
-grantDynamoIndexQuery(
-  dataStack,
-  backend.upsertTask.resources.lambda,
-  'yalla-tasks',
-);
-grantDynamoIndexQuery(dataStack, backend.getUsers.resources.lambda, 'yalla-users');
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
@@ -249,6 +224,17 @@ const getUsersUrl = backend.getUsers.resources.lambda.addFunctionUrl({
 const getVisitTypesUrl = backend.getVisitTypes.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getVisitTemplatesUrl =
+  backend.getVisitTemplates.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertVisitTemplateUrl =
+  backend.upsertVisitTemplate.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.addOutput({
   custom: {
@@ -275,5 +261,8 @@ backend.addOutput({
     getTeamsUrl: getTeamsUrl.url,
     getUsersUrl: getUsersUrl.url,
     getVisitTypesUrl: getVisitTypesUrl.url,
+    getVisitTemplatesUrl: getVisitTemplatesUrl.url,
+    upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,
+    upsertVisitTypeUrl: upsertVisitTypeUrl.url,
   },
 });
