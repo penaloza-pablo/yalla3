@@ -305,3 +305,113 @@ export const putItem = async (tableName: string, item: Record<string, unknown>) 
       Item: item,
     }),
   );
+
+const TASK_STATUSES_SYNC_DUE_DATE = new Set(['PENDING', 'BLOCKED', 'CANCELLED']);
+
+export const syncVisitTaskDueDates = async (
+  tasksTable: string,
+  visitId: string,
+  dueDate: string,
+) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  let updated = 0;
+  const trimmedDueDate = dueDate.trim();
+
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tasksTable,
+        IndexName: 'visitId-createdAt-index',
+        KeyConditionExpression: '#visitId = :visitId',
+        ExpressionAttributeNames: { '#visitId': 'visitId' },
+        ExpressionAttributeValues: { ':visitId': visitId },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    for (const task of result.Items ?? []) {
+      const taskId = typeof task.id === 'string' ? task.id : '';
+      if (!taskId) {
+        continue;
+      }
+      const status = normalizeStatus(
+        typeof task.status === 'string' ? task.status : '',
+      );
+      if (!TASK_STATUSES_SYNC_DUE_DATE.has(status)) {
+        continue;
+      }
+      const updatedAt = nowIso();
+      await docClient.send(
+        new UpdateCommand({
+          TableName: tasksTable,
+          Key: { id: taskId },
+          UpdateExpression: 'SET #dueDate = :dueDate, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#dueDate': 'dueDate',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':dueDate': trimmedDueDate,
+            ':updatedAt': updatedAt,
+          },
+        }),
+      );
+      updated += 1;
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return updated;
+};
+
+export type BulkVisitTaskInput = {
+  title?: string;
+  description?: string;
+  priority?: string;
+};
+
+export const createVisitTasksBulk = async (
+  tasksTable: string,
+  visit: Record<string, unknown>,
+  tasks: BulkVisitTaskInput[],
+) => {
+  const visitId = typeof visit.id === 'string' ? visit.id : '';
+  const propertyId =
+    typeof visit.propertyId === 'string' ? visit.propertyId : '';
+  const teamId = typeof visit.teamId === 'string' ? visit.teamId : '';
+  const assignedUserId =
+    typeof visit.assignedUserId === 'string' ? visit.assignedUserId : '';
+  const dueDate =
+    typeof visit.scheduledDate === 'string' ? visit.scheduledDate : '';
+  const timestamp = nowIso();
+  const created: Record<string, unknown>[] = [];
+
+  for (const draft of tasks) {
+    const title = draft.title?.trim();
+    if (!title) {
+      continue;
+    }
+    const priority = normalizeStatus(draft.priority);
+    const item: Record<string, unknown> = {
+      id: await getNextSequentialId(tasksTable, 'TASK'),
+      propertyId,
+      visitId,
+      teamId,
+      assignedUserId: assignedUserId || undefined,
+      title,
+      description: draft.description?.trim() ?? '',
+      status: 'PENDING',
+      priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority)
+        ? priority
+        : 'MEDIUM',
+      dueDate: dueDate || undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    await putItem(tasksTable, item);
+    created.push(item);
+  }
+
+  return created;
+};

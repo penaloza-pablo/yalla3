@@ -10,7 +10,18 @@ import {
   saveTask,
   saveVisit,
 } from './api'
-import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { OperationsAgendaView } from './OperationsAgendaView'
+import { OperationsDayView } from './OperationsDayView'
+import { OperationsKanbanView } from './OperationsKanbanView'
+import {
+  getAgendaDateRange,
+  isTerminalVisit,
+} from './operationsViewHelpers'
+import {
+  getPropertyLabel,
+  sortPropertiesWithOtherLast,
+  sortPropertyOptions,
+} from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { VisitTemplatesPanel } from './VisitTemplatesPanel'
 import {
@@ -172,6 +183,10 @@ export function DailyOperationsView({
   const [opsTab, setOpsTab] = useState<'dashboard' | 'pool' | 'templates'>(
     'dashboard',
   )
+  const [dashboardViewMode, setDashboardViewMode] = useState<
+    'kanban' | 'agenda' | 'day'
+  >('kanban')
+  const [dayViewDate, setDayViewDate] = useState(getTodayMadrid())
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayMadrid())
   const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
   const [filterTeamId, setFilterTeamId] = useState('')
@@ -216,6 +231,8 @@ export function DailyOperationsView({
     cancelConfirmed: false,
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [syncingVisitIds, setSyncingVisitIds] = useState<Set<string>>(new Set())
+  const [isSavingVisitWithTasks, setIsSavingVisitWithTasks] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -287,6 +304,26 @@ export function DailyOperationsView({
     () => sortPropertyOptions(propertyOptions),
     [propertyOptions],
   )
+
+  const agendaProperties = useMemo(
+    () => sortPropertiesWithOtherLast(propertyOptions),
+    [propertyOptions],
+  )
+
+  const visitQueryRange = useMemo(() => {
+    if (dashboardViewMode === 'agenda') {
+      return getAgendaDateRange(getTodayMadrid())
+    }
+    if (dashboardViewMode === 'day') {
+      return { from: dayViewDate, to: dayViewDate, dates: [dayViewDate] }
+    }
+    const normalized = normalizeDateRange(filterDateFrom, filterDateTo)
+    return {
+      from: normalized.from,
+      to: normalized.to,
+      dates: normalized.dates,
+    }
+  }, [dashboardViewMode, dayViewDate, filterDateFrom, filterDateTo])
 
   const propertyById = useMemo(
     () =>
@@ -386,7 +423,7 @@ export function DailyOperationsView({
       setError('Missing get visits endpoint (VITE_GET_VISITS_URL).')
       return
     }
-    const { from, to } = normalizeDateRange(filterDateFrom, filterDateTo)
+    const { from, to } = visitQueryRange
     setIsLoading(true)
     setError(null)
     try {
@@ -399,7 +436,7 @@ export function DailyOperationsView({
     } finally {
       setIsLoading(false)
     }
-  }, [endpoints.visits, filterDateFrom, filterDateTo])
+  }, [endpoints.visits, visitQueryRange])
 
   const applyTodayRange = () => {
     const today = getTodayMadrid()
@@ -448,7 +485,7 @@ export function DailyOperationsView({
     } else {
       void loadPool()
     }
-  }, [opsTab, loadVisits, loadPool])
+  }, [opsTab, loadVisits, loadPool, dashboardViewMode, dayViewDate])
 
   useEffect(() => {
     if (selectedVisitId) {
@@ -464,6 +501,23 @@ export function DailyOperationsView({
     setDraftVisitTasks([])
     setPropertyTemplates([])
     setIsVisitFormOpen(true)
+  }
+
+  const openCreateVisitAtCell = (propertyId: string, scheduledDate: string) => {
+    setVisitForm({
+      ...emptyVisitForm(),
+      propertyId,
+      scheduledDate,
+    })
+    setSelectedTemplateId('')
+    setDraftVisitTasks([])
+    setPropertyTemplates([])
+    setIsVisitFormOpen(true)
+  }
+
+  const goToDayView = (date: string) => {
+    setDayViewDate(date)
+    setDashboardViewMode('day')
   }
 
   const applyVisitTemplate = (template: VisitTemplateRecord) => {
@@ -560,41 +614,174 @@ export function DailyOperationsView({
     }
 
     const pendingDraftTasks = [...draftVisitTasks]
+    const tasksToCreate = pendingDraftTasks
+      .filter((draft) => draft.title.trim())
+      .map((draft) => ({
+        title: draft.title.trim(),
+        description: draft.description,
+        priority: draft.urgent ? 'URGENT' : 'MEDIUM',
+      }))
+
+    if (isCreatingVisit && tasksToCreate.length > 0) {
+      payload.tasks = tasksToCreate
+    }
+
+    const hasBulkTasks = isCreatingVisit && tasksToCreate.length > 0
 
     try {
+      if (hasBulkTasks) {
+        setIsSavingVisitWithTasks(true)
+      }
       const response = await saveVisit(endpoints.upsertVisit, payload)
       const savedItem = response.item as Record<string, unknown> | undefined
       const mapped = savedItem ? mapVisit(savedItem) : null
+      const createdTasks = Array.isArray(
+        (response as { createdTasks?: unknown[] }).createdTasks,
+      )
+        ? (response as { createdTasks: unknown[] }).createdTasks.length
+        : 0
 
-      if (isCreatingVisit && mapped && pendingDraftTasks.length > 0 && endpoints.upsertTask) {
-        for (const draft of pendingDraftTasks) {
-          if (!draft.title.trim()) {
-            continue
-          }
-          await saveTask(endpoints.upsertTask, {
-            visitId: mapped.id,
-            propertyId: mapped.propertyId,
-            teamId: mapped.teamId,
-            assignedUserId: mapped.assignedUserId || undefined,
-            title: draft.title.trim(),
-            description: draft.description,
-            priority: draft.urgent ? 'URGENT' : 'MEDIUM',
-            dueDate: mapped.scheduledDate,
-          })
-        }
+      if (mapped && isCreatingVisit) {
+        setVisits((current) => {
+          const withoutDuplicate = current.filter((visit) => visit.id !== mapped.id)
+          return [...withoutDuplicate, mapped]
+        })
       }
 
       setIsVisitFormOpen(false)
       setSelectedTemplateId('')
       setDraftVisitTasks([])
       setMessage(
-        isCreatingVisit && pendingDraftTasks.some((task) => task.title.trim())
-          ? 'Visit and tasks saved.'
+        hasBulkTasks
+          ? `Visit saved with ${createdTasks || tasksToCreate.length} tasks.`
           : 'Visit saved.',
       )
-      await loadVisits()
+      if (!mapped || !isCreatingVisit) {
+        await loadVisits()
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save visit.')
+    } finally {
+      setIsSavingVisitWithTasks(false)
+    }
+  }
+
+  const markVisitSyncing = (visitId: string, syncing: boolean) => {
+    setSyncingVisitIds((current) => {
+      const next = new Set(current)
+      if (syncing) {
+        next.add(visitId)
+      } else {
+        next.delete(visitId)
+      }
+      return next
+    })
+  }
+
+  const handleVisitReschedule = async (visitId: string, newDate: string) => {
+    if (!endpoints.upsertVisit) {
+      return
+    }
+    const visit = visits.find((entry) => entry.id === visitId)
+    if (!visit || visit.scheduledDate === newDate || isTerminalVisit(visit)) {
+      return
+    }
+
+    const previous = { ...visit }
+    setVisits((current) =>
+      current.map((entry) =>
+        entry.id === visitId ? { ...entry, scheduledDate: newDate } : entry,
+      ),
+    )
+    markVisitSyncing(visitId, true)
+    setError(null)
+
+    try {
+      const response = await saveVisit(endpoints.upsertVisit, {
+        id: visitId,
+        scheduledDate: newDate,
+        syncTaskDueDates: true,
+      })
+      const savedItem = response.item as Record<string, unknown> | undefined
+      const mapped = savedItem ? mapVisit(savedItem) : null
+      if (mapped) {
+        setVisits((current) =>
+          current.map((entry) => (entry.id === visitId ? mapped : entry)),
+        )
+      }
+      const tasksUpdated =
+        typeof (response as { tasksUpdated?: number }).tasksUpdated === 'number'
+          ? (response as { tasksUpdated: number }).tasksUpdated
+          : 0
+      if (tasksUpdated > 0) {
+        setMessage(`Visit rescheduled. ${tasksUpdated} task due dates updated.`)
+      }
+    } catch (rescheduleError) {
+      setVisits((current) =>
+        current.map((entry) => (entry.id === visitId ? previous : entry)),
+      )
+      setError(
+        rescheduleError instanceof Error
+          ? rescheduleError.message
+          : 'Unable to reschedule visit.',
+      )
+    } finally {
+      markVisitSyncing(visitId, false)
+    }
+  }
+
+  const handleVisitTimeChange = async (
+    visitId: string,
+    scheduledStartTime: string,
+    scheduledEndTime: string,
+  ) => {
+    if (!endpoints.upsertVisit) {
+      return
+    }
+    const visit = visits.find((entry) => entry.id === visitId)
+    if (
+      !visit ||
+      (visit.scheduledStartTime === scheduledStartTime &&
+        visit.scheduledEndTime === scheduledEndTime)
+    ) {
+      return
+    }
+
+    const previous = { ...visit }
+    setVisits((current) =>
+      current.map((entry) =>
+        entry.id === visitId
+          ? { ...entry, scheduledStartTime, scheduledEndTime }
+          : entry,
+      ),
+    )
+    markVisitSyncing(visitId, true)
+    setError(null)
+
+    try {
+      const response = await saveVisit(endpoints.upsertVisit, {
+        id: visitId,
+        scheduledStartTime,
+        scheduledEndTime,
+      })
+      const savedItem = response.item as Record<string, unknown> | undefined
+      const mapped = savedItem ? mapVisit(savedItem) : null
+      if (mapped) {
+        setVisits((current) =>
+          current.map((entry) => (entry.id === visitId ? mapped : entry)),
+        )
+      }
+    } catch (timeChangeError) {
+      setVisits((current) =>
+        current.map((entry) => (entry.id === visitId ? previous : entry)),
+      )
+      setError(
+        timeChangeError instanceof Error
+          ? timeChangeError.message
+          : 'Unable to update visit time.',
+      )
+    } finally {
+      markVisitSyncing(visitId, false)
     }
   }
 
@@ -890,51 +1077,104 @@ export function DailyOperationsView({
       {opsTab === 'dashboard' ? (
         <>
           <section className="card filters-card">
-            <div className="operations-date-presets">
+            <div className="operations-dashboard-views">
               <button
                 type="button"
                 className={
-                  filterDateFrom === getTodayMadrid() &&
-                  filterDateTo === getTodayMadrid()
-                    ? 'btn-primary'
-                    : 'btn-secondary'
+                  dashboardViewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'
                 }
-                onClick={applyTodayRange}
+                onClick={() => setDashboardViewMode('kanban')}
               >
-                Today
+                Kanban
               </button>
               <button
                 type="button"
                 className={
-                  filterDateFrom === getTomorrowMadrid() &&
-                  filterDateTo === getTomorrowMadrid()
-                    ? 'btn-primary'
-                    : 'btn-secondary'
+                  dashboardViewMode === 'agenda' ? 'btn-primary' : 'btn-secondary'
                 }
-                onClick={applyTomorrowRange}
+                onClick={() => setDashboardViewMode('agenda')}
               >
-                Tomorrow
+                Agenda
+              </button>
+              <button
+                type="button"
+                className={
+                  dashboardViewMode === 'day' ? 'btn-primary' : 'btn-secondary'
+                }
+                onClick={() => setDashboardViewMode('day')}
+              >
+                Day
               </button>
             </div>
+
+            {dashboardViewMode === 'kanban' ? (
+              <div className="operations-date-presets">
+                <button
+                  type="button"
+                  className={
+                    filterDateFrom === getTodayMadrid() &&
+                    filterDateTo === getTodayMadrid()
+                      ? 'btn-primary'
+                      : 'btn-secondary'
+                  }
+                  onClick={applyTodayRange}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className={
+                    filterDateFrom === getTomorrowMadrid() &&
+                    filterDateTo === getTomorrowMadrid()
+                      ? 'btn-primary'
+                      : 'btn-secondary'
+                  }
+                  onClick={applyTomorrowRange}
+                >
+                  Tomorrow
+                </button>
+              </div>
+            ) : dashboardViewMode === 'agenda' ? (
+              <p className="subtitle operations-view-hint">
+                Showing the next 7 days from today. Click a day header to open the
+                day timeline.
+              </p>
+            ) : (
+              <div className="filters-grid operations-day-date-filter">
+                <label>
+                  Day
+                  <input
+                    type="date"
+                    value={dayViewDate}
+                    onChange={(event) => setDayViewDate(event.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+
             <div className="filters-grid">
-              <label>
-                From
-                <input
-                  type="date"
-                  value={filterDateFrom}
-                  max={filterDateTo}
-                  onChange={(event) => setFilterDateFrom(event.target.value)}
-                />
-              </label>
-              <label>
-                To
-                <input
-                  type="date"
-                  value={filterDateTo}
-                  min={filterDateFrom}
-                  onChange={(event) => setFilterDateTo(event.target.value)}
-                />
-              </label>
+              {dashboardViewMode === 'kanban' ? (
+                <>
+                  <label>
+                    From
+                    <input
+                      type="date"
+                      value={filterDateFrom}
+                      max={filterDateTo}
+                      onChange={(event) => setFilterDateFrom(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    To
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      min={filterDateFrom}
+                      onChange={(event) => setFilterDateTo(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
               <label>
                 Team
                 <select
@@ -995,75 +1235,42 @@ export function DailyOperationsView({
 
           {isLoading ? <p className="subtitle">Loading visits…</p> : null}
 
-          <section className="operations-kanban">
-            {VISIT_COLUMNS.map((column) => (
-              <div className="operations-column" key={column.key}>
-                <h3>{column.label}</h3>
-                <div className="operations-column-body">
-                  {(visitsByColumn.get(column.key) ?? []).map((visit) => (
-                    <button
-                      key={visit.id}
-                      type="button"
-                      className="operations-visit-card"
-                      onClick={() => setSelectedVisitId(visit.id)}
-                    >
-                      <p className="operations-card-time">
-                        {isMultiDayRange ? (
-                          <span className="operations-card-date">
-                            {visit.scheduledDate} ·{' '}
-                          </span>
-                        ) : null}
-                        {visit.scheduledStartTime || '—'}
-                        {visit.scheduledEndTime
-                          ? ` – ${visit.scheduledEndTime}`
-                          : ''}
-                      </p>
-                      <p className="operations-card-title">{visit.title}</p>
-                      <p className="operations-card-meta">
-                        {propertyById.get(visit.propertyId) ?? visit.propertyId}
-                      </p>
-                      <p className="operations-card-meta">
-                        {visitTypeById.get(visit.visitTypeId) ?? visit.visitTypeId}
-                      </p>
-                      <p className="operations-card-meta">
-                        {teamById.get(visit.teamId) ?? visit.teamId} ·{' '}
-                        {userById.get(visit.assignedUserId) ||
-                          visit.assignedUserId ||
-                          'Unassigned'}
-                      </p>
-                      <p className="operations-card-tags">
-                        <span className="tag">{visit.status}</span>
-                        {(() => {
-                          const taskTotal = visit.taskCountTotal ?? 0
-                          const taskCompleted = visit.taskCountCompleted ?? 0
-                          const allComplete =
-                            taskTotal > 0 && taskCompleted === taskTotal
-                          return (
-                            <span
-                              className={`tag tag-task-progress${
-                                allComplete ? ' is-complete' : ''
-                              }`}
-                              title="Tasks completed"
-                            >
-                              <span className="tag-task-progress-icon" aria-hidden>
-                                ✓
-                              </span>
-                              {taskTotal > 0
-                                ? `${taskCompleted}/${taskTotal}`
-                                : '0 tasks'}
-                            </span>
-                          )
-                        })()}
-                        {visit.appliesToHourBank ? (
-                          <span className="tag">Hour bank</span>
-                        ) : null}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </section>
+          {dashboardViewMode === 'kanban' ? (
+            <OperationsKanbanView
+              columns={VISIT_COLUMNS}
+              visitsByColumn={visitsByColumn}
+              isMultiDayRange={isMultiDayRange}
+              propertyById={propertyById}
+              visitTypeById={visitTypeById}
+              teamById={teamById}
+              userById={userById}
+              onSelectVisit={setSelectedVisitId}
+            />
+          ) : dashboardViewMode === 'agenda' ? (
+            <OperationsAgendaView
+              dates={visitQueryRange.dates}
+              properties={agendaProperties}
+              visits={filteredVisits}
+              teamById={teamById}
+              syncingVisitIds={syncingVisitIds}
+              onVisitClick={setSelectedVisitId}
+              onDayHeaderClick={goToDayView}
+              onEmptyCellClick={openCreateVisitAtCell}
+              onVisitReschedule={handleVisitReschedule}
+            />
+          ) : (
+            <OperationsDayView
+              dayViewDate={dayViewDate}
+              properties={agendaProperties}
+              visits={filteredVisits.filter(
+                (visit) => visit.scheduledDate === dayViewDate,
+              )}
+              teamById={teamById}
+              syncingVisitIds={syncingVisitIds}
+              onVisitClick={setSelectedVisitId}
+              onVisitTimeChange={handleVisitTimeChange}
+            />
+          )}
         </>
       ) : opsTab === 'pool' ? (
         <section className="card">
@@ -1647,12 +1854,19 @@ export function DailyOperationsView({
               ) : null}
             </div>
             <div className="modal-footer">
+              {isSavingVisitWithTasks ? (
+                <p className="subtitle operations-saving-tasks-notice">
+                  <span className="operations-sync-spinner" aria-hidden="true" />
+                  Saving visit and tasks…
+                </p>
+              ) : null}
               <button
                 type="button"
                 className="btn-primary"
+                disabled={isSavingVisitWithTasks}
                 onClick={() => void submitVisit()}
               >
-                Save visit
+                {isSavingVisitWithTasks ? 'Saving…' : 'Save visit'}
               </button>
             </div>
           </div>

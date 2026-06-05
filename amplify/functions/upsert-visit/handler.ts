@@ -12,8 +12,10 @@ import {
   getNextSequentialId,
   putItem,
   cancelVisitTasksOnVisitCancel,
+  createVisitTasksBulk,
   releaseVisitTasksOnCancel,
   resolveVisitStatus,
+  syncVisitTaskDueDates,
   TERMINAL_VISIT_STATUSES,
   visitHasOpenTasks,
 } from '../shared/visit-task-utils';
@@ -39,6 +41,12 @@ type VisitPayload = {
   closedAt?: string;
   closedBy?: string;
   cancelTaskAction?: 'release' | 'cancel';
+  syncTaskDueDates?: boolean;
+  tasks?: Array<{
+    title?: string;
+    description?: string;
+    priority?: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -248,6 +256,9 @@ export const handler = async (event: {
 
     let releasedTasks: Record<string, unknown>[] = [];
     let cancelledTasks: Record<string, unknown>[] = [];
+    let tasksUpdated = 0;
+    let createdTasks: Record<string, unknown>[] = [];
+
     if (status === 'CANCELLED' && tasksTable && typeof item.id === 'string') {
       const cancelTaskAction = payload.cancelTaskAction?.trim().toLowerCase();
       if (cancelTaskAction === 'cancel') {
@@ -257,7 +268,43 @@ export const handler = async (event: {
       }
     }
 
-    return buildHttpResponse(200, { item, releasedTasks, cancelledTasks });
+    if (tasksTable && typeof item.id === 'string') {
+      const previousScheduledDate =
+        typeof existing?.scheduledDate === 'string'
+          ? existing.scheduledDate
+          : '';
+      const dateChanged =
+        isUpdate &&
+        Boolean(previousScheduledDate) &&
+        previousScheduledDate !== mergedScheduledDate;
+      if (
+        payload.syncTaskDueDates &&
+        dateChanged &&
+        !TERMINAL_VISIT_STATUSES.has(status)
+      ) {
+        tasksUpdated = await syncVisitTaskDueDates(
+          tasksTable,
+          item.id,
+          mergedScheduledDate,
+        );
+      }
+
+      if (!isUpdate && Array.isArray(payload.tasks) && payload.tasks.length > 0) {
+        createdTasks = await createVisitTasksBulk(
+          tasksTable,
+          item,
+          payload.tasks,
+        );
+      }
+    }
+
+    return buildHttpResponse(200, {
+      item,
+      releasedTasks,
+      cancelledTasks,
+      tasksUpdated,
+      createdTasks,
+    });
   } catch (error) {
     return buildHttpResponse(500, {
       message: 'Failed to save visit.',

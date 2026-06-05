@@ -1826,6 +1826,417 @@ th {
   background: #fef3f2;
 }
 
+.operations-dashboard-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.operations-view-hint {
+  margin: 0 0 12px;
+}
+
+.operations-day-date-filter {
+  margin-bottom: 12px;
+}
+
+.operations-agenda-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.operations-agenda-scroll {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.operations-agenda-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+}
+
+.operations-agenda-table th,
+.operations-agenda-table td {
+  border: 1px solid #e4e7ec;
+  vertical-align: top;
+  padding: 8px;
+}
+
+.operations-agenda-property-header,
+.operations-agenda-property-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #ffffff;
+  min-width: 160px;
+  max-width: 200px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.operations-agenda-day-header {
+  min-width: 120px;
+  text-align: center;
+}
+
+.operations-agenda-day-button {
+  border: 0;
+  background: transparent;
+  color: #175cd3;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.operations-agenda-cell {
+  min-height: 72px;
+  min-width: 120px;
+  padding: 6px !important;
+}
+
+.operations-agenda-empty-cell {
+  width: 100%;
+  min-height: 60px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+  background: #fcfcfd;
+  cursor: pointer;
+}
+
+.operations-agenda-empty-cell:hover {
+  background: #f0f9ff;
+  border-color: #84caff;
+}
+
+.operations-agenda-cell-visits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.operations-agenda-visit-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--team-color-border, #d0d5dd);
+  border-left: 4px solid var(--team-color, #98a2b3);
+  background: var(--team-color-soft, #f9fafb);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.operations-agenda-visit-chip.is-draggable {
+  cursor: grab;
+}
+
+.operations-agenda-visit-chip.is-draggable:active {
+  cursor: grabbing;
+}
+
+.operations-agenda-visit-chip.is-syncing {
+  opacity: 0.85;
+}
+
+.operations-agenda-cell.is-drop-target {
+  background: #f0f9ff;
+  outline: 2px dashed #84caff;
+  outline-offset: -2px;
+}
+
+.operations-agenda-visit-chip.is-terminal {
+  opacity: 0.72;
+}
+
+.operations-agenda-visit-chip.is-completed {
+  border-style: solid;
+  box-shadow: inset 0 0 0 1px rgba(18, 183, 106, 0.25);
+}
+
+.operations-agenda-visit-chip.is-cancelled {
+  border-style: dashed;
+}
+
+.operations-agenda-visit-time {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #344054;
+}
+
+.operations-agenda-visit-title {
+  font-size: 0.82rem;
+  color: #101828;
+  line-height: 1.3;
+}
+
+.operations-agenda-terminal-mark {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #667085;
+}
+
+.operations-day-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.operations-day-header {
+  margin-bottom: 4px;
+}
+
+.operations-day-property {
+  border-top: 1px solid #e4e7ec;
+  padding-top: 16px;
+}
+
+.operations-day-property-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.operations-day-timeline {
+  position: relative;
+  overflow-x: auto;
+}
+
+.operations-day-hours {
+  position: relative;
+  height: 28px;
+  min-width: 720px;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.operations-day-hour {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: #667085;
+  white-space: nowrap;
+}
+
+.operations-day-track-wrap {
+  position: relative;
+}
+
+.operations-day-track-wrap.has-early::before,
+.operations-day-track-wrap.has-late::after {
+  content: '';
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.operations-day-track-wrap.has-early::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(23, 92, 211, 0.14), transparent);
+}
+
+.operations-day-track-wrap.has-late::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(23, 92, 211, 0.14), transparent);
+}
+
+.operations-day-overflow-indicator {
+  position: absolute;
+  top: 4px;
+  z-index: 2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eff8ff;
+  color: #175cd3;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.operations-day-overflow-indicator--start {
+  left: 4px;
+}
+
+.operations-day-overflow-indicator--end {
+  right: 4px;
+}
+
+.operations-day-track {
+  position: relative;
+  min-width: 720px;
+  margin-top: 8px;
+}
+
+.operations-day-visit-block {
+  position: absolute;
+  min-height: 52px;
+  border: 1px solid var(--team-color-border, #d0d5dd);
+  background: var(--team-color-soft, #f9fafb);
+  border-radius: 8px;
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+}
+
+.operations-day-visit-block.is-dragging {
+  z-index: 3;
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.18);
+}
+
+.operations-day-visit-block.is-syncing {
+  opacity: 0.82;
+}
+
+.operations-day-visit-block.extends-before {
+  border-left-style: dashed;
+}
+
+.operations-day-visit-block.extends-after {
+  border-right-style: dashed;
+}
+
+.operations-day-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 2;
+  cursor: ew-resize;
+}
+
+.operations-day-resize-handle--start {
+  left: 0;
+}
+
+.operations-day-resize-handle--end {
+  right: 0;
+}
+
+.operations-day-block-body {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: grab;
+  padding: 6px 10px;
+  overflow: hidden;
+}
+
+.operations-day-block-body:active {
+  cursor: grabbing;
+}
+
+.operations-day-block-body--button {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.operations-day-visit-block.has-same-team-overlap {
+  box-shadow:
+    0 0 0 2px #f04438,
+    0 4px 10px rgba(16, 24, 40, 0.12);
+}
+
+.operations-day-visit-block.is-terminal {
+  opacity: 0.78;
+}
+
+.operations-day-visit-block.is-completed {
+  border-color: #12b76a;
+}
+
+.operations-day-visit-block.is-cancelled {
+  border-style: dashed;
+}
+
+.operations-day-visit-time {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.operations-day-visit-title {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.operations-day-visit-team {
+  display: block;
+  font-size: 0.72rem;
+  color: #667085;
+}
+
+.operations-day-overlap-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fef3f2;
+  color: #b42318;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.operations-day-terminal-mark {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.operations-sync-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d0d5dd;
+  border-top-color: #175cd3;
+  border-radius: 50%;
+  animation: operations-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.operations-agenda-visit-chip .operations-sync-spinner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.operations-sync-spinner--block {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+}
+
+.operations-saving-tasks-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+@keyframes operations-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 960px) {
   .operations-kanban {
     grid-template-columns: 1fr;
