@@ -1876,7 +1876,48 @@ th {
   text-align: left;
 }
 
+.operations-range-nav {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #344054;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.operations-range-nav:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #98a2b3;
+}
+
+.operations-range-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.operations-agenda-dates-header {
+  padding: 6px 8px !important;
+}
+
+.operations-agenda-dates-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.operations-agenda-day-labels {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
 .operations-agenda-day-header {
+  flex: 1;
   min-width: 120px;
   text-align: center;
 }
@@ -1917,6 +1958,74 @@ th {
   gap: 6px;
 }
 
+.operations-agenda-cell-visits--stacked {
+  position: relative;
+  display: block;
+}
+
+.operations-agenda-cell-visits--stacked .operations-agenda-visit-chip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+.operations-agenda-row-child .operations-agenda-property-cell,
+.operations-agenda-cell.is-child {
+  background: #f9fafb;
+}
+
+.operations-agenda-property-cell.is-child {
+  padding-left: 28px;
+  font-weight: 500;
+}
+
+.operations-agenda-property-cell.is-mtl-header {
+  font-weight: 700;
+}
+
+.operations-mtl-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #344054;
+  font-size: 0.82rem;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.operations-mtl-toggle:hover {
+  background: #f0f9ff;
+  border-color: #84caff;
+}
+
+.operations-agenda-visit-room {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475467;
+}
+
+.operations-agenda-overlap-badge {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3f2;
+  color: #b42318;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.operations-agenda-visit-chip.has-overlap {
+  box-shadow: 0 0 0 1px rgba(240, 68, 56, 0.35);
+}
+
 .operations-agenda-visit-chip {
   position: relative;
   display: flex;
@@ -1931,6 +2040,69 @@ th {
   border-radius: 8px;
   padding: 6px 8px;
   cursor: pointer;
+}
+
+.operations-agenda-visit-chip--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.operations-agenda-visit-chip--compact .operations-agenda-visit-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #101828;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.operations-agenda-visit-chip.is-overlap-group {
+  border-left-width: 4px;
+  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.08);
+}
+
+.operations-agenda-overlap-count,
+.operations-day-overlap-count {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #344054;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.operations-agenda-overlap-expanded {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+}
+
+.operations-agenda-collapse-group,
+.operations-day-collapse-group {
+  display: block;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #175cd3;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.operations-day-collapse-group {
+  position: absolute;
+  left: 0;
 }
 
 .operations-agenda-visit-chip.is-draggable {
@@ -1985,33 +2157,82 @@ th {
 .operations-day-card {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .operations-day-header {
   margin-bottom: 4px;
+  padding: 0 16px;
 }
 
-.operations-day-property {
-  border-top: 1px solid #e4e7ec;
-  padding-top: 16px;
+.operations-day-scroll {
+  overflow: auto;
+  max-width: 100%;
 }
 
-.operations-day-property-title {
-  margin: 0 0 10px;
-  font-size: 1rem;
+.operations-day-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
 }
 
-.operations-day-timeline {
-  position: relative;
-  overflow-x: auto;
+.operations-day-table th,
+.operations-day-table td {
+  border: 1px solid #e4e7ec;
+  vertical-align: middle;
+  padding: 8px;
+}
+
+.operations-day-property-header,
+.operations-day-property-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #ffffff;
+  min-width: 160px;
+  max-width: 220px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.operations-day-property-cell.is-child {
+  padding-left: 28px;
+  font-weight: 500;
+  background: #f9fafb;
+}
+
+.operations-day-property-cell.is-mtl-header {
+  font-weight: 700;
+}
+
+.operations-day-row-child .operations-day-timeline-cell {
+  background: #f9fafb;
+}
+
+.operations-day-timeline-header {
+  padding: 0 !important;
+  vertical-align: bottom;
+}
+
+.operations-day-timeline-cell {
+  padding: 6px !important;
+  min-width: 720px;
+}
+
+.operations-day-hours-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 760px;
 }
 
 .operations-day-hours {
   position: relative;
+  flex: 1;
   height: 28px;
   min-width: 720px;
-  border-bottom: 1px solid #e4e7ec;
 }
 
 .operations-day-hour {
@@ -2030,7 +2251,7 @@ th {
 .operations-day-track-wrap.has-late::after {
   content: '';
   position: absolute;
-  top: 28px;
+  top: 0;
   bottom: 0;
   width: 28px;
   pointer-events: none;
@@ -2071,18 +2292,104 @@ th {
 .operations-day-track {
   position: relative;
   min-width: 720px;
-  margin-top: 8px;
+}
+
+.operations-day-track.has-time-conflicts {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(240, 68, 56, 0.06) 8px,
+    rgba(240, 68, 56, 0.06) 16px
+  );
+}
+
+.operations-day-visit-block.has-time-overlap {
+  box-shadow:
+    0 0 0 2px #f04438,
+    0 4px 12px rgba(240, 68, 56, 0.28);
+}
+
+.operations-day-time-overlap-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #d92d20;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(217, 45, 32, 0.35);
 }
 
 .operations-day-visit-block {
   position: absolute;
   min-height: 52px;
-  border: 1px solid var(--team-color-border, #d0d5dd);
-  background: var(--team-color-soft, #f9fafb);
+  border: 1px solid var(--team-color-border, rgba(255, 255, 255, 0.45));
   border-radius: 8px;
   padding: 0;
   text-align: left;
   overflow: hidden;
+}
+
+.operations-day-visit-block--compact {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+}
+
+.operations-day-visit-block--compact .operations-day-block-body,
+.operations-day-visit-block--compact.operations-day-visit-block--compact
+  > button.operations-day-block-body--button {
+  position: static;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 10px;
+}
+
+.operations-day-visit-summary {
+  display: block;
+  width: 100%;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.operations-day-visit-block.is-overlap-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.operations-day-overlap-expanded {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+}
+
+.operations-day-visit-block.has-team-solid {
+  background: var(--team-color, #98a2b3);
+  color: #ffffff;
+}
+
+.operations-day-visit-block.has-team-gradient {
+  color: #ffffff;
 }
 
 .operations-day-visit-block.is-dragging {
@@ -2168,17 +2475,29 @@ th {
   font-weight: 700;
 }
 
+.operations-day-visit-room {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .operations-day-visit-title {
   display: block;
   font-size: 0.82rem;
   font-weight: 600;
   line-height: 1.25;
+  color: #ffffff;
 }
 
 .operations-day-visit-team {
   display: block;
   font-size: 0.72rem;
-  color: #667085;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.operations-day-visit-block .operations-day-visit-time {
+  color: #ffffff;
 }
 
 .operations-day-overlap-badge {
@@ -2186,7 +2505,7 @@ th {
   margin-top: 4px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: #fef3f2;
+  background: rgba(255, 255, 255, 0.92);
   color: #b42318;
   font-size: 0.68rem;
   font-weight: 700;
@@ -2222,6 +2541,11 @@ th {
   top: 6px;
   right: 6px;
   z-index: 3;
+}
+
+.operations-day-visit-block .operations-sync-spinner {
+  border-color: rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
 }
 
 .operations-saving-tasks-notice {

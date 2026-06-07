@@ -13,15 +13,14 @@ import {
 import { OperationsAgendaView } from './OperationsAgendaView'
 import { OperationsDayView } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
+import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
+  AGENDA_DAY_COUNT,
+  formatAgendaDayLabel,
   getAgendaDateRange,
   isTerminalVisit,
 } from './operationsViewHelpers'
-import {
-  getPropertyLabel,
-  sortPropertiesWithOtherLast,
-  sortPropertyOptions,
-} from './propertyHelpers'
+import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { VisitTemplatesPanel } from './VisitTemplatesPanel'
 import {
@@ -29,6 +28,7 @@ import {
   templateTasksToDrafts,
 } from './visitTemplateHelpers'
 import {
+  addDaysToDateString,
   formatTaskCreatedDate,
   getTodayMadrid,
   getTomorrowMadrid,
@@ -92,14 +92,25 @@ const emptyTaskForm = () => ({
   dueDate: '',
 })
 
-const mapProperty = (item: Record<string, unknown>): PropertyOption => ({
-  id: String(item.id ?? ''),
-  nickname: String(item.nickname ?? item.Nickname ?? item.title ?? item.id ?? ''),
-  title: String(item.title ?? ''),
-  listingNickname: String(
-    item.ListingNickname ?? item.listingNickname ?? item.nickname ?? '',
-  ),
-})
+const mapProperty = (item: Record<string, unknown>): PropertyOption => {
+  const mtlPrincipalId = String(
+    item.MTL_PRINCIPALID ??
+      item.mtlPrincipalId ??
+      item.MTL_PRINCIPAL_ID ??
+      '',
+  ).trim()
+
+  return {
+    id: String(item.id ?? ''),
+    nickname: String(item.nickname ?? item.Nickname ?? item.title ?? item.id ?? ''),
+    title: String(item.title ?? ''),
+    listingNickname: String(
+      item.ListingNickname ?? item.listingNickname ?? item.nickname ?? '',
+    ),
+    type: String(item.type ?? item.Type ?? '').trim() || undefined,
+    mtlPrincipalId: mtlPrincipalId || undefined,
+  }
+}
 
 const mapTeam = (item: Record<string, unknown>): TeamRecord => ({
   id: String(item.id ?? ''),
@@ -187,6 +198,7 @@ export function DailyOperationsView({
     'kanban' | 'agenda' | 'day'
   >('kanban')
   const [dayViewDate, setDayViewDate] = useState(getTodayMadrid())
+  const [agendaAnchorDate, setAgendaAnchorDate] = useState(getTodayMadrid())
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayMadrid())
   const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
   const [filterTeamId, setFilterTeamId] = useState('')
@@ -305,14 +317,14 @@ export function DailyOperationsView({
     [propertyOptions],
   )
 
-  const agendaProperties = useMemo(
-    () => sortPropertiesWithOtherLast(propertyOptions),
+  const mtlDisplayRows = useMemo(
+    () => buildMtlDisplayRows(propertyOptions),
     [propertyOptions],
   )
 
   const visitQueryRange = useMemo(() => {
     if (dashboardViewMode === 'agenda') {
-      return getAgendaDateRange(getTodayMadrid())
+      return getAgendaDateRange(agendaAnchorDate)
     }
     if (dashboardViewMode === 'day') {
       return { from: dayViewDate, to: dayViewDate, dates: [dayViewDate] }
@@ -323,7 +335,7 @@ export function DailyOperationsView({
       to: normalized.to,
       dates: normalized.dates,
     }
-  }, [dashboardViewMode, dayViewDate, filterDateFrom, filterDateTo])
+  }, [dashboardViewMode, dayViewDate, agendaAnchorDate, filterDateFrom, filterDateTo])
 
   const propertyById = useMemo(
     () =>
@@ -518,6 +530,10 @@ export function DailyOperationsView({
   const goToDayView = (date: string) => {
     setDayViewDate(date)
     setDashboardViewMode('day')
+  }
+
+  const shiftAgendaDates = (deltaDays: number) => {
+    setAgendaAnchorDate((current) => addDaysToDateString(current, deltaDays))
   }
 
   const applyVisitTemplate = (template: VisitTemplateRecord) => {
@@ -1136,8 +1152,9 @@ export function DailyOperationsView({
               </div>
             ) : dashboardViewMode === 'agenda' ? (
               <p className="subtitle operations-view-hint">
-                Showing the next 7 days from today. Click a day header to open the
-                day timeline.
+                Showing {formatAgendaDayLabel(visitQueryRange.from)} –{' '}
+                {formatAgendaDayLabel(visitQueryRange.to)}. Click a day header to
+                open the day timeline.
               </p>
             ) : (
               <div className="filters-grid operations-day-date-filter">
@@ -1249,22 +1266,26 @@ export function DailyOperationsView({
           ) : dashboardViewMode === 'agenda' ? (
             <OperationsAgendaView
               dates={visitQueryRange.dates}
-              properties={agendaProperties}
+              displayRows={mtlDisplayRows}
               visits={filteredVisits}
+              propertyById={propertyById}
               teamById={teamById}
               syncingVisitIds={syncingVisitIds}
+              shiftDays={AGENDA_DAY_COUNT}
               onVisitClick={setSelectedVisitId}
               onDayHeaderClick={goToDayView}
               onEmptyCellClick={openCreateVisitAtCell}
               onVisitReschedule={handleVisitReschedule}
+              onShiftDates={shiftAgendaDates}
             />
           ) : (
             <OperationsDayView
               dayViewDate={dayViewDate}
-              properties={agendaProperties}
+              displayRows={mtlDisplayRows}
               visits={filteredVisits.filter(
                 (visit) => visit.scheduledDate === dayViewDate,
               )}
+              propertyById={propertyById}
               teamById={teamById}
               syncingVisitIds={syncingVisitIds}
               onVisitClick={setSelectedVisitId}

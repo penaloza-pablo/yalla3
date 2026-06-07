@@ -138,20 +138,58 @@ export const buildVisitLayoutSlots = (visits: VisitRecord[]): VisitLayoutSlot[] 
   return slots
 }
 
-export const DAY_VIEW_START_MINUTES = 9 * 60
-export const DAY_VIEW_END_MINUTES = 19 * 60
-export const DAY_VIEW_SPAN_MINUTES =
-  DAY_VIEW_END_MINUTES - DAY_VIEW_START_MINUTES
+export const DAY_VIEW_DEFAULT_START_MINUTES = 9 * 60
+export const DAY_VIEW_START_MINUTES = DAY_VIEW_DEFAULT_START_MINUTES
+export const DAY_VIEW_WINDOW_SPAN_MINUTES = 10 * 60
+export const DAY_VIEW_END_MINUTES =
+  DAY_VIEW_DEFAULT_START_MINUTES + DAY_VIEW_WINDOW_SPAN_MINUTES
+export const DAY_VIEW_SPAN_MINUTES = DAY_VIEW_WINDOW_SPAN_MINUTES
+export const DAY_VIEW_PAN_STEP_MINUTES = 2 * 60
+export const DAY_VIEW_MIN_WINDOW_START = 6 * 60
+export const DAY_VIEW_MAX_WINDOW_END = 22 * 60
 export const DAY_SNAP_MINUTES = 30
 export const DAY_MIN_DURATION_MINUTES = 30
+
+export type DayTimelineWindow = {
+  startMinutes: number
+  endMinutes: number
+  spanMinutes: number
+}
+
+export const getDayTimelineWindow = (
+  startMinutes = DAY_VIEW_DEFAULT_START_MINUTES,
+): DayTimelineWindow => ({
+  startMinutes,
+  endMinutes: startMinutes + DAY_VIEW_WINDOW_SPAN_MINUTES,
+  spanMinutes: DAY_VIEW_WINDOW_SPAN_MINUTES,
+})
+
+export const clampDayWindowStart = (startMinutes: number) =>
+  Math.max(
+    DAY_VIEW_MIN_WINDOW_START,
+    Math.min(
+      startMinutes,
+      DAY_VIEW_MAX_WINDOW_END - DAY_VIEW_WINDOW_SPAN_MINUTES,
+    ),
+  )
+
+export const shiftDayWindowStart = (
+  currentStart: number,
+  deltaMinutes: number,
+) => clampDayWindowStart(currentStart + deltaMinutes)
+
+export const canShiftDayWindowEarlier = (startMinutes: number) =>
+  startMinutes > DAY_VIEW_MIN_WINDOW_START
+
+export const canShiftDayWindowLater = (startMinutes: number) =>
+  startMinutes + DAY_VIEW_WINDOW_SPAN_MINUTES < DAY_VIEW_MAX_WINDOW_END
 
 export const snapToDayGrid = (minutes: number) =>
   Math.round(minutes / DAY_SNAP_MINUTES) * DAY_SNAP_MINUTES
 
-export const getDayTimelineBounds = () => ({
-  startMinutes: DAY_VIEW_START_MINUTES,
-  endMinutes: DAY_VIEW_END_MINUTES,
-})
+export const getDayTimelineBounds = (
+  startMinutes = DAY_VIEW_DEFAULT_START_MINUTES,
+) => getDayTimelineWindow(startMinutes)
 
 export type ClippedVisitRange = {
   visualStart: number
@@ -163,26 +201,30 @@ export type ClippedVisitRange = {
 export const clipVisitToDayWindow = (
   start: number,
   end: number,
+  window: DayTimelineWindow = getDayTimelineWindow(),
 ): ClippedVisitRange => ({
-  visualStart: Math.max(start, DAY_VIEW_START_MINUTES),
-  visualEnd: Math.min(end, DAY_VIEW_END_MINUTES),
-  extendsBefore: start < DAY_VIEW_START_MINUTES,
-  extendsAfter: end > DAY_VIEW_END_MINUTES,
+  visualStart: Math.max(start, window.startMinutes),
+  visualEnd: Math.min(end, window.endMinutes),
+  extendsBefore: start < window.startMinutes,
+  extendsAfter: end > window.endMinutes,
 })
 
-export const getDayWindowOverflow = (visits: VisitRecord[]) => {
+export const getDayWindowOverflow = (
+  visits: VisitRecord[],
+  window: DayTimelineWindow = getDayTimelineWindow(),
+) => {
   let hasEarly = false
   let hasLate = false
-  let earliestBefore = DAY_VIEW_START_MINUTES
-  let latestAfter = DAY_VIEW_END_MINUTES
+  let earliestBefore = window.startMinutes
+  let latestAfter = window.endMinutes
 
   visits.forEach((visit) => {
     const { start, end } = getVisitTimeRange(visit)
-    if (start < DAY_VIEW_START_MINUTES) {
+    if (start < window.startMinutes) {
       hasEarly = true
       earliestBefore = Math.min(earliestBefore, start)
     }
-    if (end > DAY_VIEW_END_MINUTES) {
+    if (end > window.endMinutes) {
       hasLate = true
       latestAfter = Math.max(latestAfter, end)
     }
@@ -191,11 +233,16 @@ export const getDayWindowOverflow = (visits: VisitRecord[]) => {
   return { hasEarly, hasLate, earliestBefore, latestAfter }
 }
 
-export const minutesToPositionPercent = (minutes: number) =>
-  ((minutes - DAY_VIEW_START_MINUTES) / DAY_VIEW_SPAN_MINUTES) * 100
+export const minutesToPositionPercent = (
+  minutes: number,
+  window: DayTimelineWindow = getDayTimelineWindow(),
+) =>
+  ((minutes - window.startMinutes) / window.spanMinutes) * 100
 
-export const positionPercentToMinutes = (percent: number) =>
-  DAY_VIEW_START_MINUTES + (percent / 100) * DAY_VIEW_SPAN_MINUTES
+export const positionPercentToMinutes = (
+  percent: number,
+  window: DayTimelineWindow = getDayTimelineWindow(),
+) => window.startMinutes + (percent / 100) * window.spanMinutes
 
 export const formatAgendaDayLabel = (date: string) => {
   const parsed = new Date(`${date}T12:00:00`)

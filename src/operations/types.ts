@@ -63,6 +63,8 @@ export type PropertyOption = {
   nickname: string
   title: string
   listingNickname: string
+  type?: string
+  mtlPrincipalId?: string
 }
 
 export type VisitTemplateTask = {
