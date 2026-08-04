@@ -481,9 +481,25 @@ const formatDateForStorage = (value: string) => {
     return `${day}/${month}/${now.getFullYear()}`
   }
 
-  const parsed = new Date(value)
+  const trimmed = value.trim()
+
+  // Already stored as DD/MM/YYYY — keep as-is to avoid MM/DD reinterpretation.
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch
+    return `${day}/${month}/${year}`
+  }
+
+  // HTML date inputs use YYYY-MM-DD; parse components to avoid timezone shifts.
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${day}/${month}/${year}`
+  }
+
+  const parsed = new Date(trimmed)
   if (Number.isNaN(parsed.getTime())) {
-    return value
+    return trimmed
   }
 
   const day = String(parsed.getDate()).padStart(2, '0')
@@ -983,6 +999,29 @@ function App() {
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([])
   const [isPurchasesLoading, setIsPurchasesLoading] = useState(false)
   const [purchasesError, setPurchasesError] = useState<string | null>(null)
+  const [isPurchasesFilterOpen, setIsPurchasesFilterOpen] = useState(false)
+  const [purchasesFilters, setPurchasesFilters] = useState<{
+    locations: string[]
+    statuses: string[]
+    deliveryDateFrom: string
+    deliveryDateTo: string
+  }>({
+    locations: [],
+    statuses: ['To be confirmed'],
+    deliveryDateFrom: '',
+    deliveryDateTo: '',
+  })
+  const [purchasesFilterDraft, setPurchasesFilterDraft] = useState<{
+    locations: string[]
+    statuses: string[]
+    deliveryDateFrom: string
+    deliveryDateTo: string
+  }>({
+    locations: [],
+    statuses: ['To be confirmed'],
+    deliveryDateFrom: '',
+    deliveryDateTo: '',
+  })
   const [propertyRows, setPropertyRows] = useState<PropertyRow[]>([])
   const [isPropertiesLoading, setIsPropertiesLoading] = useState(false)
   const [propertiesError, setPropertiesError] = useState<string | null>(null)
@@ -1433,10 +1472,89 @@ function App() {
     [alertRows],
   )
 
+  const purchaseStatusOptions = [
+    'To be confirmed',
+    'Waiting Delivery',
+    'Confirmed',
+  ]
+
+  const purchaseLocationOptions = useMemo(() => {
+    const unique = new Set(
+      purchaseRows.map((row) => row.location).filter(Boolean),
+    )
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [purchaseRows])
+
+  const purchasesFilteredRows = useMemo(() => {
+    const fromDate = purchasesFilters.deliveryDateFrom
+      ? parseDateValue(purchasesFilters.deliveryDateFrom)
+      : null
+    const toDate = purchasesFilters.deliveryDateTo
+      ? parseDateValue(purchasesFilters.deliveryDateTo)
+      : null
+
+    return purchaseRows
+      .filter((row) => {
+        const locationMatch =
+          purchasesFilters.locations.length === 0 ||
+          purchasesFilters.locations.includes(row.location)
+        const statusMatch =
+          purchasesFilters.statuses.length === 0 ||
+          purchasesFilters.statuses.includes(row.status)
+
+        if (!locationMatch || !statusMatch) {
+          return false
+        }
+
+        if (!fromDate && !toDate) {
+          return true
+        }
+
+        const deliveryDate = parseDateValue(row.deliveryDateRaw)
+        if (!deliveryDate) {
+          return false
+        }
+
+        if (fromDate && deliveryDate.getTime() < fromDate.getTime()) {
+          return false
+        }
+        if (toDate && deliveryDate.getTime() > toDate.getTime()) {
+          return false
+        }
+        return true
+      })
+      .sort((a, b) => {
+        const left = parseDateValue(a.deliveryDateRaw)?.getTime() ?? 0
+        const right = parseDateValue(b.deliveryDateRaw)?.getTime() ?? 0
+        return right - left
+      })
+  }, [
+    purchaseRows,
+    purchasesFilters.deliveryDateFrom,
+    purchasesFilters.deliveryDateTo,
+    purchasesFilters.locations,
+    purchasesFilters.statuses,
+  ])
+
   const pendingPurchasesCount = useMemo(
-    () => purchaseRows.filter((row) => row.status !== 'Confirmed').length,
-    [purchaseRows],
+    () =>
+      purchasesFilteredRows.filter((row) => row.status !== 'Confirmed').length,
+    [purchasesFilteredRows],
   )
+
+  const purchasesActiveFilterCount = useMemo(() => {
+    return (
+      purchasesFilters.locations.length +
+      purchasesFilters.statuses.length +
+      (purchasesFilters.deliveryDateFrom ? 1 : 0) +
+      (purchasesFilters.deliveryDateTo ? 1 : 0)
+    )
+  }, [
+    purchasesFilters.deliveryDateFrom,
+    purchasesFilters.deliveryDateTo,
+    purchasesFilters.locations.length,
+    purchasesFilters.statuses.length,
+  ])
 
   const getEndpoint = (key: string, fallback?: string) => {
     if (fallback) {
@@ -2642,8 +2760,6 @@ function App() {
     setIsPurchaseSaving(true)
     setPurchaseFormError(null)
 
-    const purchaseDateValue =
-      purchaseFormValues.purchaseDate?.trim() || formatDateForStorage('')
     const statusValue =
       purchaseFormValues.status === 'Confirmed' ? 'Confirmed' : undefined
     const payload = {
@@ -2655,7 +2771,9 @@ function App() {
       Units: Number(purchaseFormValues.units) || 0,
       'Total price': Number(purchaseFormValues.totalPrice) || 0,
       'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
-      'Purchase date': formatDateForStorage(purchaseDateValue),
+      'Purchase date': formatDateForStorage(
+        purchaseFormValues.purchaseDate?.trim() || '',
+      ),
       ...(statusValue ? { Status: statusValue } : {}),
     }
 
@@ -3589,12 +3707,56 @@ function App() {
               </div>
               <div className="header-actions">
                 <button
-                  className="btn-ghost"
+                  className={`btn-ghost btn-filter ${
+                    isPurchasesFilterOpen ? 'is-active' : ''
+                  }`}
                   type="button"
-                  onClick={fetchPurchases}
-                  disabled={isPurchasesLoading}
+                  aria-label="Filters"
+                  onClick={() => {
+                    setPurchasesFilterDraft({
+                      locations: [...purchasesFilters.locations],
+                      statuses: [...purchasesFilters.statuses],
+                      deliveryDateFrom: purchasesFilters.deliveryDateFrom,
+                      deliveryDateTo: purchasesFilters.deliveryDateTo,
+                    })
+                    setIsPurchasesFilterOpen(true)
+                  }}
                 >
-                  Refresh
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {purchasesActiveFilterCount > 0 ? (
+                    <span className="filter-badge">
+                      {purchasesActiveFilterCount}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={fetchPurchases}
+                  type="button"
+                  disabled={isPurchasesLoading}
+                  aria-label="Refresh"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
               </div>
             </header>
@@ -3604,8 +3766,8 @@ function App() {
             <section className="summary-cards">
               <div className="card card-compact">
                 <p className="card-label">Total purchases</p>
-                <p className="card-value">{purchaseRows.length}</p>
-                <p className="card-meta">All vendors</p>
+                <p className="card-value">{purchasesFilteredRows.length}</p>
+                <p className="card-meta">Visible purchases</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">Pending deliveries</p>
@@ -3639,6 +3801,178 @@ function App() {
                 </div>
               </div>
 
+              {isPurchasesFilterOpen ? (
+                <div className="modal-overlay" role="dialog" aria-modal="true">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <div>
+                        <h3 className="modal-title">Filters</h3>
+                        <p className="modal-subtitle">
+                          Select one or more values to filter the purchases.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={() => setIsPurchasesFilterOpen(false)}
+                        aria-label="Close filters"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="modal-body">
+                      <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">Location</p>
+                          <div className="filter-options">
+                            {purchaseLocationOptions.length === 0 ? (
+                              <p className="modal-subtitle">
+                                No locations available yet.
+                              </p>
+                            ) : (
+                              purchaseLocationOptions.map((option) => {
+                                const isChecked =
+                                  purchasesFilterDraft.locations.includes(option)
+                                return (
+                                  <label className="filter-option" key={option}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(event) => {
+                                        setPurchasesFilterDraft((current) => {
+                                          if (event.target.checked) {
+                                            return {
+                                              ...current,
+                                              locations: [
+                                                ...current.locations,
+                                                option,
+                                              ],
+                                            }
+                                          }
+                                          return {
+                                            ...current,
+                                            locations: current.locations.filter(
+                                              (value) => value !== option,
+                                            ),
+                                          }
+                                        })
+                                      }}
+                                    />
+                                    <span>{option}</span>
+                                  </label>
+                                )
+                              })
+                            )}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Status</p>
+                          <div className="filter-options">
+                            {purchaseStatusOptions.map((option) => {
+                              const isChecked =
+                                purchasesFilterDraft.statuses.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setPurchasesFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            statuses: [
+                                              ...current.statuses,
+                                              option,
+                                            ],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          statuses: current.statuses.filter(
+                                            (value) => value !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <p className="filter-title">Delivery date range</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>From</span>
+                              <input
+                                type="date"
+                                value={purchasesFilterDraft.deliveryDateFrom}
+                                onChange={(event) =>
+                                  setPurchasesFilterDraft((current) => ({
+                                    ...current,
+                                    deliveryDateFrom: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="form-field">
+                              <span>To</span>
+                              <input
+                                type="date"
+                                value={purchasesFilterDraft.deliveryDateTo}
+                                onChange={(event) =>
+                                  setPurchasesFilterDraft((current) => ({
+                                    ...current,
+                                    deliveryDateTo: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="modal-footer">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() =>
+                          setPurchasesFilterDraft({
+                            locations: [],
+                            statuses: [],
+                            deliveryDateFrom: '',
+                            deliveryDateTo: '',
+                          })
+                        }
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => {
+                          setPurchasesFilters({
+                            locations: [...purchasesFilterDraft.locations],
+                            statuses: [...purchasesFilterDraft.statuses],
+                            deliveryDateFrom:
+                              purchasesFilterDraft.deliveryDateFrom,
+                            deliveryDateTo: purchasesFilterDraft.deliveryDateTo,
+                          })
+                          setIsPurchasesFilterOpen(false)
+                        }}
+                      >
+                        Apply filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="table-wrapper" aria-busy={isPurchasesLoading}>
                 <table>
                   <thead>
@@ -3657,14 +3991,14 @@ function App() {
                           Loading purchases...
                         </td>
                       </tr>
-                    ) : purchaseRows.length === 0 ? (
+                    ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
                           No purchases available yet.
                         </td>
                       </tr>
                     ) : (
-                      purchaseRows.map((row) => {
+                      purchasesFilteredRows.map((row) => {
                         const isExpanded = expandedPurchaseIds.has(row.id)
                         return (
                           <Fragment key={row.id}>

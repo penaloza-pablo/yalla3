@@ -69,9 +69,25 @@ const formatDateForStorage = (value?: string) => {
     return `${day}/${month}/${now.getFullYear()}`;
   }
 
-  const parsed = new Date(value);
+  const trimmed = value.trim();
+
+  // Already stored as DD/MM/YYYY — keep as-is to avoid MM/DD reinterpretation.
+  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    return `${day}/${month}/${year}`;
+  }
+
+  // HTML date inputs use YYYY-MM-DD; parse components to avoid timezone shifts.
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}/${month}/${year}`;
+  }
+
+  const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return trimmed;
   }
 
   const day = String(parsed.getDate()).padStart(2, '0');

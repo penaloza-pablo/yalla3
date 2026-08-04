@@ -248,8 +248,14 @@ UI behavior
 - Inventory rows include a purchase action to open the purchase wizard.
 - Wizard captures vendor, units, total price, and delivery date.
 - Purchases table shows Item name, Location, Status, Delivery date by default.
+- Table is always sorted by Delivery date, newest to oldest.
 - Hidden fields (expand row): Purchase date, Purchase ID, Item ID, Vendor, Units,
   Total price.
+- Filters (client-side, same UX as Inventory):
+  - Location (multi-select; empty = all)
+  - Status (multi-select): To be confirmed, Waiting Delivery, Confirmed
+  - Delivery date range (From / To)
+  - Default filter: Location = all, Status = To be confirmed
 - Status rules:
   - Delivery date in the future -> Waiting Delivery
   - Delivery date today or in the past -> To be confirmed
@@ -267,13 +273,14 @@ Data flow
   `custom.getPurchasesUrl` / `custom.upsertPurchaseUrl` are required.
 - Fields stored: Item id, Item name, Location, Vendor, Units, Total price,
   Delivery date, Purchase date, Status.
+- Delivery date and Purchase date are stored as DD/MM/YYYY (never MM/DD).
 
 Files
 - `amplify/functions/get-purchases/resource.ts`: Lambda definition.
 - `amplify/functions/get-purchases/handler.ts`: Purchases scan handler.
 - `amplify/functions/upsert-purchase/resource.ts`: Lambda definition.
 - `amplify/functions/upsert-purchase/handler.ts`: Purchases write handler.
-- `src/App.tsx`: Purchases UI, wizard, and actions.
+- `src/App.tsx`: Purchases UI, wizard, filters, and actions.
 
 Properties - Refresh and sync (in progress)
 Overview
