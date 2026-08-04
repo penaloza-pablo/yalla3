@@ -289,6 +289,7 @@ export function OperationsAgendaView({
                   return (
                     <td
                       key={`${row.key}-${date}`}
+                      data-day-label={formatAgendaDayLabel(date)}
                       className={`operations-agenda-cell${
                         isDropTarget ? ' is-drop-target' : ''
                       }${row.isChildRow ? ' is-child' : ''}`}

@@ -1177,6 +1177,9 @@ function App() {
   const [activePage, setActivePage] = useState('Inventory')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
   )
@@ -3024,6 +3027,22 @@ function App() {
     })
   }
 
+  const navigateToPage = (page: string) => {
+    setActivePage(page)
+    setIsMobileNavOpen(false)
+    setIsSummaryInfoOpen(false)
+    setIsMobileSearchOpen(false)
+  }
+
+  const openMobileNav = () => {
+    setIsSidebarCollapsed(false)
+    setIsMobileNavOpen(true)
+  }
+
+  const closeMobileNav = () => {
+    setIsMobileNavOpen(false)
+  }
+
   const handleSectionShortcut = (section: string) => {
     setIsSidebarCollapsed(false)
     setCollapsedSections((current) => {
@@ -3033,13 +3052,98 @@ function App() {
     })
   }
 
+  useEffect(() => {
+    if (!isMobileNavOpen) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileNavOpen(false)
+      }
+    }
+    document.body.classList.add('mobile-nav-open')
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('mobile-nav-open')
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isMobileNavOpen])
+
   return (
-    <div className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''}`}>
-      <aside className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
+    <div
+      className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
+        isMobileNavOpen ? 'mobile-nav-is-open' : ''
+      }`}
+    >
+      <header className="mobile-topbar">
+        <button
+          className="btn-icon btn-icon-ghost mobile-menu-button"
+          type="button"
+          aria-label={isMobileNavOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={isMobileNavOpen}
+          onClick={() => (isMobileNavOpen ? closeMobileNav() : openMobileNav())}
+        >
+          {isMobileNavOpen ? (
+            <svg aria-hidden="true" viewBox="0 0 20 20" width="20" height="20">
+              <path
+                d="M5 5l10 10M15 5L5 15"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          ) : (
+            <svg aria-hidden="true" viewBox="0 0 20 20" width="20" height="20">
+              <path
+                d="M3 5h14M3 10h14M3 15h14"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </button>
+        <div className="mobile-topbar-brand">
+          <span className="mobile-topbar-title">Yalla!</span>
+          <span className="mobile-topbar-page">{activePage}</span>
+        </div>
+        {pendingAlertsCount > 0 ? (
+          <button
+            className="mobile-topbar-alert"
+            type="button"
+            aria-label={`${pendingAlertsCount} pending alerts`}
+            onClick={() => navigateToPage('Alerts')}
+          >
+            {pendingAlertsCount}
+          </button>
+        ) : (
+          <span className="mobile-topbar-spacer" aria-hidden="true" />
+        )}
+      </header>
+
+      <div
+        className={`mobile-nav-backdrop ${isMobileNavOpen ? 'is-visible' : ''}`}
+        onClick={closeMobileNav}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''} ${
+          isMobileNavOpen ? 'is-mobile-open' : ''
+        }`}
+      >
         <div className="brand">
           <span className="brand-title">
             {isSidebarCollapsed ? 'Y!' : 'Yalla!'}
           </span>
+          <button
+            className="btn-icon btn-icon-ghost mobile-nav-close"
+            type="button"
+            aria-label="Close menu"
+            onClick={closeMobileNav}
+          >
+            ✕
+          </button>
         </div>
         <nav className="nav">
           {!isSidebarCollapsed ? (
@@ -3052,7 +3156,7 @@ function App() {
                       className={`nav-button ${isActive ? 'active' : ''}`}
                       aria-current={isActive ? 'page' : undefined}
                       type="button"
-                      onClick={() => setActivePage(item)}
+                      onClick={() => navigateToPage(item)}
                     >
                       <span>{item}</span>
                       {item === 'Alerts' && pendingAlertsCount > 0 ? (
@@ -3077,7 +3181,7 @@ function App() {
                         }`}
                         aria-current={isActive ? 'page' : undefined}
                         type="button"
-                        onClick={() => setActivePage(item)}
+                        onClick={() => navigateToPage(item)}
                         aria-label={item}
                       >
                         {item === 'Alerts' ? (
@@ -3153,7 +3257,7 @@ function App() {
                           className={`nav-button ${isActive ? 'active' : ''}`}
                           aria-current={isActive ? 'page' : undefined}
                           type="button"
-                          onClick={() => setActivePage(item)}
+                          onClick={() => navigateToPage(item)}
                         >
                           {item}
                         </button>
@@ -3181,15 +3285,70 @@ function App() {
         {activePage === 'Inventory' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Ops / Inventory</p>
-                <h1 className="page-title">Inventory</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Inventory</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Inventory data is read from the production DynamoDB table via
                   Lambda access.
                 </p>
               </div>
-              <div className="header-actions">
+              <div
+                className={`page-action-bar ${
+                  isMobileSearchOpen ? 'is-search-open' : ''
+                }`}
+              >
+                <input
+                  className="search-input"
+                  placeholder="Search inventory"
+                  type="search"
+                  aria-label="Search inventory"
+                />
+                <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() =>
+                    setIsMobileSearchOpen((current) => !current)
+                  }
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
                 <button
                   className={`btn-ghost btn-filter ${
                     isFilterOpen ? 'is-active' : ''
@@ -3273,12 +3432,15 @@ function App() {
                     />
                   </svg>
                 </button>
+                </div>
               </div>
             </header>
 
             {error ? <div className="alert">{error}</div> : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Locations</p>
                 <p className="card-value">{locationCount}</p>
@@ -3303,14 +3465,6 @@ function App() {
                   <p className="card-subtitle">
                     Live data from production will appear here.
                   </p>
-                </div>
-                <div className="table-actions">
-                  <input
-                    className="search-input"
-                    placeholder="Search inventory"
-                    type="search"
-                    aria-label="Search inventory"
-                  />
                 </div>
               </div>
 
@@ -3485,7 +3639,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isLoading}>
-                <table>
+                <table className="data-table data-table-inventory">
                   <thead>
                     <tr>
                       <th scope="col">
@@ -3697,15 +3851,70 @@ function App() {
         ) : activePage === 'Purchases' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Ops / Inventory / Purchases</p>
-                <h1 className="page-title">Purchases</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Purchases</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Purchase data is read from the production DynamoDB table via
                   Lambda access.
                 </p>
               </div>
-              <div className="header-actions">
+              <div
+                className={`page-action-bar ${
+                  isMobileSearchOpen ? 'is-search-open' : ''
+                }`}
+              >
+                <input
+                  className="search-input"
+                  placeholder="Search purchases"
+                  type="search"
+                  aria-label="Search purchases"
+                />
+                <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() =>
+                    setIsMobileSearchOpen((current) => !current)
+                  }
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
                 <button
                   className={`btn-ghost btn-filter ${
                     isPurchasesFilterOpen ? 'is-active' : ''
@@ -3758,12 +3967,15 @@ function App() {
                     />
                   </svg>
                 </button>
+                </div>
               </div>
             </header>
 
             {purchasesError ? <div className="alert">{purchasesError}</div> : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Total purchases</p>
                 <p className="card-value">{purchasesFilteredRows.length}</p>
@@ -3790,14 +4002,6 @@ function App() {
                   <p className="card-subtitle">
                     Confirm delivery to mark purchases as delivered.
                   </p>
-                </div>
-                <div className="table-actions">
-                  <input
-                    className="search-input"
-                    placeholder="Search purchases"
-                    type="search"
-                    aria-label="Search purchases"
-                  />
                 </div>
               </div>
 
@@ -3974,7 +4178,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isPurchasesLoading}>
-                <table>
+                <table className="data-table data-table-purchases">
                   <thead>
                     <tr>
                       <th scope="col">Item name</th>
@@ -4090,15 +4294,31 @@ function App() {
         ) : activePage === 'Properties' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Ops / Properties</p>
-                <h1 className="page-title">Properties</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Properties</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Property data is read from the production DynamoDB table via
                   Lambda access.
                 </p>
               </div>
-              <div className="header-actions">
+              <div className="page-action-bar">
+                <div className="header-actions">
                 <button
                   className={`btn-ghost btn-filter ${
                     isPropertiesFilterOpen ? 'is-active' : ''
@@ -4138,6 +4358,7 @@ function App() {
                 >
                   {isPropertiesLoading ? 'Updating...' : 'Update from Guesty'}
                 </button>
+                </div>
               </div>
             </header>
 
@@ -4146,7 +4367,9 @@ function App() {
               <div className="properties-note">{propertiesSyncMessage}</div>
             ) : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Active properties</p>
                 <p className="card-value">{activePropertiesCount}</p>
@@ -4379,7 +4602,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isPropertiesLoading}>
-                <table>
+                <table className="data-table data-table-properties">
                   <thead>
                     <tr>
                       <th scope="col">
@@ -4446,15 +4669,31 @@ function App() {
         ) : activePage === 'Bookings' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Ops / Bookings</p>
-                <h1 className="page-title">Bookings</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Bookings</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Booking data is read from the production DynamoDB table via Lambda
                   access.
                 </p>
               </div>
-              <div className="header-actions">
+              <div className="page-action-bar">
+                <div className="header-actions">
                 <button
                   className={`btn-ghost btn-filter ${
                     isBookingsFilterOpen ? 'is-active' : ''
@@ -4493,12 +4732,15 @@ function App() {
                 >
                   Refresh
                 </button>
+                </div>
               </div>
             </header>
 
             {bookingsError ? <div className="alert">{bookingsError}</div> : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Visible bookings</p>
                 <p className="card-value">{sortedBookingsRows.length}</p>
@@ -4676,7 +4918,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isBookingsLoading}>
-                <table>
+                <table className="data-table data-table-bookings">
                   <thead>
                     <tr>
                       <th scope="col">Booking</th>
@@ -4772,14 +5014,30 @@ function App() {
         ) : activePage === 'Reviews' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Ops / Reviews</p>
-                <h1 className="page-title">Reviews</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Reviews</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Refresh triggers a sync run and then reloads data and sync-state.
                 </p>
               </div>
-              <div className="header-actions">
+              <div className="page-action-bar">
+                <div className="header-actions">
                 <button
                   className={`btn-icon btn-icon-ghost btn-filter ${
                     reviewsCreatedPreset === 'last7' ? 'is-active' : ''
@@ -4850,12 +5108,15 @@ function App() {
                 >
                   {isReviewsSyncing ? 'Syncing...' : 'Refresh'}
                 </button>
+                </div>
               </div>
             </header>
 
             {reviewsError ? <div className="alert">{reviewsError}</div> : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Total reviews</p>
                 <p className="card-value">{sortedReviewsRows.length}</p>
@@ -5043,7 +5304,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isReviewsLoading}>
-                <table>
+                <table className="data-table data-table-reviews">
                   <thead>
                     <tr>
                       <th scope="col">Guest</th>
@@ -5268,24 +5529,115 @@ function App() {
         ) : activePage === 'Alerts' ? (
           <>
             <header className="page-header">
-              <div>
+              <div className="page-header-leading">
                 <p className="eyebrow">Alerts</p>
-                <h1 className="page-title">Alerts</h1>
+                <div className="page-title-row">
+                  <h1 className="page-title">Alerts</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
                 <p className="subtitle">
                   Alerts are read from the production DynamoDB table via Lambda
                   access.
                 </p>
               </div>
-              <div className="header-actions">
+              <div
+                className={`page-action-bar ${
+                  isMobileSearchOpen ? 'is-search-open' : ''
+                }`}
+              >
+                <input
+                  className="search-input"
+                  placeholder="Search alerts"
+                  type="search"
+                  aria-label="Search alerts"
+                />
+                <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() =>
+                    setIsMobileSearchOpen((current) => !current)
+                  }
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  className={`btn-ghost btn-filter ${
+                    isAlertsFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setAlertsFilterDraft({
+                      statuses: [...alertsFilters.statuses],
+                      origins: [...alertsFilters.origins],
+                    })
+                    setIsAlertsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {alertsFilters.statuses.length + alertsFilters.origins.length >
+                  0 ? (
+                    <span className="filter-badge">
+                      {alertsFilters.statuses.length +
+                        alertsFilters.origins.length}
+                    </span>
+                  ) : null}
+                </button>
                 <button className="btn-ghost" type="button" onClick={fetchAlerts}>
                   Refresh
                 </button>
+                </div>
               </div>
             </header>
 
             {alertsError ? <div className="alert">{alertsError}</div> : null}
 
-            <section className="summary-cards">
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
               <div className="card card-compact">
                 <p className="card-label">Total alerts</p>
                 <p className="card-value">{alertRows.length}</p>
@@ -5312,47 +5664,6 @@ function App() {
                   <p className="card-subtitle">
                     Pending alerts are shown by default.
                   </p>
-                </div>
-                <div className="table-actions">
-                  <input
-                    className="search-input"
-                    placeholder="Search alerts"
-                    type="search"
-                    aria-label="Search alerts"
-                  />
-                  <button
-                    className={`btn-icon btn-icon-ghost btn-filter ${
-                      isAlertsFilterOpen ? 'is-active' : ''
-                    }`}
-                    type="button"
-                    aria-label="Filters"
-                    onClick={() => {
-                      setAlertsFilterDraft({
-                        statuses: [...alertsFilters.statuses],
-                        origins: [...alertsFilters.origins],
-                      })
-                      setIsAlertsFilterOpen(true)
-                    }}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    {alertsFilters.statuses.length + alertsFilters.origins.length >
-                    0 ? (
-                      <span className="filter-badge">
-                        {alertsFilters.statuses.length +
-                          alertsFilters.origins.length}
-                      </span>
-                    ) : null}
-                  </button>
                 </div>
               </div>
 
@@ -5484,7 +5795,7 @@ function App() {
               ) : null}
 
               <div className="table-wrapper" aria-busy={isAlertsLoading}>
-                <table>
+                <table className="data-table data-table-alerts">
                   <thead>
                     <tr>
                       <th scope="col">Name</th>

@@ -1018,6 +1018,7 @@ export function DailyOperationsView({
     if (!task?.propertyId) {
       return
     }
+    const today = getTodayMadrid()
     void fetchJson<{ items?: Record<string, unknown>[] }>(
       `${endpoints.visits}?propertyId=${encodeURIComponent(task.propertyId)}`,
     )
@@ -1028,7 +1029,13 @@ export function DailyOperationsView({
             (visit) =>
               visit.teamId === task.teamId &&
               visit.status !== 'COMPLETED' &&
-              visit.status !== 'CANCELLED',
+              visit.status !== 'CANCELLED' &&
+              visit.scheduledDate >= today,
+          )
+          .sort(
+            (a, b) =>
+              a.scheduledDate.localeCompare(b.scheduledDate) ||
+              a.scheduledStartTime.localeCompare(b.scheduledStartTime),
           )
         setAssignVisitOptions(options)
       })
@@ -1039,26 +1046,49 @@ export function DailyOperationsView({
     <>
       <section className="card">
         <div className="page-header">
-          <div>
-            <h1 className="page-title">Daily Operations Dashboard</h1>
+          <div className="page-header-leading">
+            <h1 className="page-title">Daily Operations</h1>
             <p className="subtitle">
               Schedule visits, track overdue work, and manage tasks.
             </p>
           </div>
-          <div className="header-actions">
-            <button className="btn-secondary" type="button" onClick={openCreateVisit}>
-              Create visit
-            </button>
-            <button
-              className="btn-primary"
-              type="button"
-              onClick={() => {
-                setOpsTab('dashboard')
-                void loadVisits()
-              }}
-            >
-              Refresh
-            </button>
+          <div className="page-action-bar">
+            <div className="header-actions">
+              {opsTab === 'pool' ? (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    setTaskForm({ ...emptyTaskForm(), propertyId: '', visitId: '' })
+                    setIsTaskFormOpen(true)
+                  }}
+                >
+                  Create task
+                </button>
+              ) : opsTab === 'dashboard' ? (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={openCreateVisit}
+                >
+                  Create visit
+                </button>
+              ) : null}
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  if (opsTab === 'pool') {
+                    void loadPool()
+                  } else {
+                    setOpsTab('dashboard')
+                    void loadVisits()
+                  }
+                }}
+              >
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1075,7 +1105,7 @@ export function DailyOperationsView({
             className={opsTab === 'pool' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setOpsTab('pool')}
           >
-            Tasks not on a visit
+            Unassigned
           </button>
           <button
             type="button"
@@ -1297,16 +1327,6 @@ export function DailyOperationsView({
         <section className="card">
           <div className="page-header">
             <h2 className="section-title">Tasks not on a visit</h2>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => {
-                setTaskForm({ ...emptyTaskForm(), propertyId: '', visitId: '' })
-                setIsTaskFormOpen(true)
-              }}
-            >
-              Create task
-            </button>
           </div>
           <div className="table-wrapper">
             <table>
@@ -2228,8 +2248,8 @@ export function DailyOperationsView({
                 </select>
               </label>
               <p className="modal-subtitle">
-                Only visits with matching property and team are listed. Load visits
-                from the dashboard date or create visits first.
+                Only open visits for today or future dates with matching property
+                and team are listed.
               </p>
             </div>
             <div className="modal-footer">

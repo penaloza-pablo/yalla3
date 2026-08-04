@@ -17,12 +17,20 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background-color: #f5f7fb;
   color: inherit;
+}
+
+body.mobile-nav-open {
+  overflow: hidden;
 }
 
 #root {
@@ -35,6 +43,15 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font-family: inherit;
+  font-size: inherit;
+}
+
+button,
+a,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
 }
