@@ -66,6 +66,22 @@ type PurchaseRow = {
   status: string
 }
 
+type SubtractionRow = {
+  id: string
+  itemId: string
+  itemName: string
+  inventoryLocation: string
+  propertyId: string
+  location: string
+  units: number
+  cost: number
+  billable: boolean
+  note: string
+  date: string
+  dateRaw: string
+  status: string
+}
+
 type InventoryFormState = {
   id: string
   name: string
@@ -98,6 +114,18 @@ type PurchaseFormState = {
   status: string
 }
 
+type SubtractionFormState = {
+  itemId: string
+  itemName: string
+  inventoryLocation: string
+  propertyId: string
+  location: string
+  units: string
+  cost: string
+  billable: boolean
+  note: string
+}
+
 type InventoryApiResponse = {
   items?: Record<string, unknown>[]
   count?: number
@@ -109,6 +137,11 @@ type AlertsApiResponse = {
 }
 
 type PurchasesApiResponse = {
+  items?: Record<string, unknown>[]
+  count?: number
+}
+
+type SubtractionsApiResponse = {
   items?: Record<string, unknown>[]
   count?: number
 }
@@ -212,6 +245,7 @@ const navigation = [
     items: [
       'Inventory',
       'Purchases',
+      'Subtractions',
       'Properties',
       'Bookings',
       'Reviews',
@@ -273,6 +307,25 @@ const purchaseFieldMap = {
   totalPrice: ['Total price', 'totalPrice', 'total price'],
   deliveryDate: ['Delivery date', 'deliveryDate', 'delivery date'],
   purchaseDate: ['Purchase date', 'purchaseDate', 'purchase date'],
+  status: ['Status', 'status'],
+}
+
+const subtractionFieldMap = {
+  id: ['id', 'ID'],
+  itemId: ['Item id', 'Item ID', 'itemId', 'item id'],
+  itemName: ['Item name', 'Item Name', 'itemName', 'item name', 'name'],
+  inventoryLocation: [
+    'Inventory location',
+    'inventoryLocation',
+    'inventory location',
+  ],
+  propertyId: ['Property id', 'Property ID', 'propertyId', 'property id'],
+  location: ['Location', 'location'],
+  units: ['Units', 'units'],
+  cost: ['Cost', 'cost'],
+  billable: ['Billable', 'billable'],
+  note: ['Note', 'note'],
+  date: ['Date', 'date', 'Substraction date', 'Subtraction date'],
   status: ['Status', 'status'],
 }
 
@@ -765,6 +818,33 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
   }
 }
 
+const mapSubtractionRow = (item: Record<string, unknown>): SubtractionRow => {
+  const dateRaw = getStringValue(getItemValue(item, subtractionFieldMap.date))
+  return {
+    id: getStringValue(getItemValue(item, subtractionFieldMap.id)) || '—',
+    itemId: getStringValue(getItemValue(item, subtractionFieldMap.itemId)) || '—',
+    itemName:
+      getStringValue(getItemValue(item, subtractionFieldMap.itemName)) || '—',
+    inventoryLocation:
+      getStringValue(
+        getItemValue(item, subtractionFieldMap.inventoryLocation),
+      ) || '—',
+    propertyId:
+      getStringValue(getItemValue(item, subtractionFieldMap.propertyId)) || '—',
+    location:
+      getStringValue(getItemValue(item, subtractionFieldMap.location)) || '—',
+    units: getNumberValue(getItemValue(item, subtractionFieldMap.units)),
+    cost: getNumberValue(getItemValue(item, subtractionFieldMap.cost)),
+    billable: getBooleanValue(getItemValue(item, subtractionFieldMap.billable)),
+    note: getStringValue(getItemValue(item, subtractionFieldMap.note)),
+    dateRaw,
+    date: formatUpdatedDate(dateRaw),
+    status:
+      getStringValue(getItemValue(item, subtractionFieldMap.status)) ||
+      'Pending Billing',
+  }
+}
+
 const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
   const addressValue = getItemValue(item, ['address'])
   const address =
@@ -942,6 +1022,18 @@ const getStatusClassName = (status: string) => {
   if (status === 'Confirmed') {
     return 'status status-success'
   }
+  if (status === 'Pending Billing') {
+    return 'status status-warning'
+  }
+  if (status === 'Billed') {
+    return 'status status-success'
+  }
+  if (status === 'Not Billable') {
+    return 'status status-neutral'
+  }
+  if (status === 'Reversed') {
+    return 'status status-danger'
+  }
   if (status === 'Pending') {
     return 'status status-warning'
   }
@@ -986,6 +1078,18 @@ const emptyPurchaseFormState: PurchaseFormState = {
   status: '',
 }
 
+const emptySubtractionFormState: SubtractionFormState = {
+  itemId: '',
+  itemName: '',
+  inventoryLocation: '',
+  propertyId: '',
+  location: '',
+  units: '1',
+  cost: '',
+  billable: true,
+  note: '',
+}
+
 function App() {
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -1022,6 +1126,38 @@ function App() {
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
+  const [subtractionRows, setSubtractionRows] = useState<SubtractionRow[]>([])
+  const [isSubtractionsLoading, setIsSubtractionsLoading] = useState(false)
+  const [subtractionsError, setSubtractionsError] = useState<string | null>(null)
+  const [isSubtractionsFilterOpen, setIsSubtractionsFilterOpen] = useState(false)
+  const [subtractionsFilters, setSubtractionsFilters] = useState<{
+    locations: string[]
+    statuses: string[]
+    dateFrom: string
+    dateTo: string
+  }>({
+    locations: [],
+    statuses: ['Pending Billing'],
+    dateFrom: '',
+    dateTo: '',
+  })
+  const [subtractionsFilterDraft, setSubtractionsFilterDraft] = useState<{
+    locations: string[]
+    statuses: string[]
+    dateFrom: string
+    dateTo: string
+  }>({
+    locations: [],
+    statuses: ['Pending Billing'],
+    dateFrom: '',
+    dateTo: '',
+  })
+  const [subtractionsLastUpdated, setSubtractionsLastUpdated] = useState<
+    string | null
+  >(null)
+  const [expandedSubtractionIds, setExpandedSubtractionIds] = useState<
+    Set<string>
+  >(new Set())
   const [propertyRows, setPropertyRows] = useState<PropertyRow[]>([])
   const [isPropertiesLoading, setIsPropertiesLoading] = useState(false)
   const [propertiesError, setPropertiesError] = useState<string | null>(null)
@@ -1174,6 +1310,13 @@ function App() {
     useState<PurchaseFormState>(emptyPurchaseFormState)
   const [purchaseFormError, setPurchaseFormError] = useState<string | null>(null)
   const [isPurchaseSaving, setIsPurchaseSaving] = useState(false)
+  const [isSubtractionFormOpen, setIsSubtractionFormOpen] = useState(false)
+  const [subtractionFormValues, setSubtractionFormValues] =
+    useState<SubtractionFormState>(emptySubtractionFormState)
+  const [subtractionFormError, setSubtractionFormError] = useState<string | null>(
+    null,
+  )
+  const [isSubtractionSaving, setIsSubtractionSaving] = useState(false)
   const [activePage, setActivePage] = useState('Inventory')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -1559,6 +1702,99 @@ function App() {
     purchasesFilters.statuses.length,
   ])
 
+  const subtractionStatusOptions = [
+    'Pending Billing',
+    'Billed',
+    'Not Billable',
+    'Reversed',
+  ]
+
+  const subtractionLocationOptions = useMemo(() => {
+    const unique = new Set(
+      subtractionRows.map((row) => row.location).filter(Boolean),
+    )
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [subtractionRows])
+
+  const activePropertyOptions = useMemo(() => {
+    return propertyRows
+      .filter((row) => row.active)
+      .slice()
+      .sort((a, b) => a.nickname.localeCompare(b.nickname))
+  }, [propertyRows])
+
+  const subtractionsFilteredRows = useMemo(() => {
+    const fromDate = subtractionsFilters.dateFrom
+      ? parseDateValue(subtractionsFilters.dateFrom)
+      : null
+    const toDate = subtractionsFilters.dateTo
+      ? parseDateValue(subtractionsFilters.dateTo)
+      : null
+
+    return subtractionRows
+      .filter((row) => {
+        const locationMatch =
+          subtractionsFilters.locations.length === 0 ||
+          subtractionsFilters.locations.includes(row.location)
+        const statusMatch =
+          subtractionsFilters.statuses.length === 0 ||
+          subtractionsFilters.statuses.includes(row.status)
+
+        if (!locationMatch || !statusMatch) {
+          return false
+        }
+
+        if (!fromDate && !toDate) {
+          return true
+        }
+
+        const rowDate = parseDateValue(row.dateRaw)
+        if (!rowDate) {
+          return false
+        }
+
+        if (fromDate && rowDate.getTime() < fromDate.getTime()) {
+          return false
+        }
+        if (toDate && rowDate.getTime() > toDate.getTime()) {
+          return false
+        }
+        return true
+      })
+      .sort((a, b) => {
+        const left = parseDateValue(a.dateRaw)?.getTime() ?? 0
+        const right = parseDateValue(b.dateRaw)?.getTime() ?? 0
+        return right - left
+      })
+  }, [
+    subtractionRows,
+    subtractionsFilters.dateFrom,
+    subtractionsFilters.dateTo,
+    subtractionsFilters.locations,
+    subtractionsFilters.statuses,
+  ])
+
+  const pendingSubtractionsCount = useMemo(
+    () =>
+      subtractionsFilteredRows.filter((row) => row.status === 'Pending Billing')
+        .length,
+    [subtractionsFilteredRows],
+  )
+
+  const subtractionsActiveFilterCount = useMemo(() => {
+    return (
+      subtractionsFilters.locations.length +
+      subtractionsFilters.statuses.length +
+      (subtractionsFilters.dateFrom ? 1 : 0) +
+      (subtractionsFilters.dateTo ? 1 : 0)
+    )
+  }, [
+    subtractionsFilters.dateFrom,
+    subtractionsFilters.dateTo,
+    subtractionsFilters.locations.length,
+    subtractionsFilters.statuses.length,
+  ])
+
   const getEndpoint = (key: string, fallback?: string) => {
     if (fallback) {
       return fallback
@@ -1703,6 +1939,55 @@ function App() {
       setPurchasesError(message)
     } finally {
       setIsPurchasesLoading(false)
+    }
+  }, [])
+
+  const fetchSubtractions = useCallback(async () => {
+    const endpoint = getEndpoint(
+      'getSubtractionsUrl',
+      import.meta.env.VITE_GET_SUBTRACTIONS_URL,
+    )
+    if (!endpoint) {
+      setSubtractionsError(
+        'Missing subtractions endpoint. Set VITE_GET_SUBTRACTIONS_URL in the environment.',
+      )
+      return
+    }
+
+    setIsSubtractionsLoading(true)
+    setSubtractionsError(null)
+
+    try {
+      const response = await fetch(endpoint)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Subtractions request failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+      const payload = (await response.json()) as SubtractionsApiResponse
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const mappedRows = items.map((entry) =>
+        mapSubtractionRow(normalizeInventoryItem(entry)),
+      )
+      setSubtractionRows(mappedRows)
+      setSubtractionsLastUpdated(
+        new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      )
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load subtractions. Please try again.'
+      setSubtractionsError(message)
+    } finally {
+      setIsSubtractionsLoading(false)
     }
   }, [])
 
@@ -2188,6 +2473,9 @@ function App() {
     if (activePage === 'Purchases') {
       void fetchPurchases()
     }
+    if (activePage === 'Subtractions') {
+      void fetchSubtractions()
+    }
     if (activePage === 'Properties') {
       void fetchProperties()
     }
@@ -2209,6 +2497,7 @@ function App() {
     fetchProperties,
     fetchPurchases,
     fetchReviews,
+    fetchSubtractions,
   ])
 
   useEffect(() => {
@@ -2245,6 +2534,24 @@ function App() {
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
+  }
+
+  const openSubtractionWizard = (row: InventoryRow) => {
+    if (propertyRows.length === 0) {
+      void fetchProperties()
+    }
+    setSubtractionFormValues({
+      ...emptySubtractionFormState,
+      itemId: row.id,
+      itemName: row.name,
+      inventoryLocation: row.location,
+      units: '1',
+      cost: row.unitPrice ? String(row.unitPrice) : '0',
+      billable: true,
+      note: '',
+    })
+    setSubtractionFormError(null)
+    setIsSubtractionFormOpen(true)
   }
 
   const openPurchaseEdit = (row: PurchaseRow) => {
@@ -2360,6 +2667,18 @@ function App() {
 
   const togglePurchaseRow = (rowId: string) => {
     setExpandedPurchaseIds((current) => {
+      const next = new Set(current)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }
+
+  const toggleSubtractionRow = (rowId: string) => {
+    setExpandedSubtractionIds((current) => {
       const next = new Set(current)
       if (next.has(rowId)) {
         next.delete(rowId)
@@ -2719,6 +3038,14 @@ function App() {
     setPurchaseFormError(null)
   }
 
+  const closeSubtractionForm = () => {
+    if (isSubtractionSaving) {
+      return
+    }
+    setIsSubtractionFormOpen(false)
+    setSubtractionFormError(null)
+  }
+
   const savePurchase = async () => {
     const endpoint = getEndpoint(
       'upsertPurchaseUrl',
@@ -2873,6 +3200,257 @@ function App() {
       )
     } catch (updateError) {
       setPurchasesError('Unable to update purchase status. Please try again.')
+    }
+  }
+
+  const saveSubtraction = async () => {
+    const endpoint = getEndpoint(
+      'upsertSubtractionUrl',
+      import.meta.env.VITE_UPSERT_SUBTRACTION_URL,
+    )
+    if (!endpoint) {
+      setSubtractionFormError(
+        'Missing subtraction endpoint. Set VITE_UPSERT_SUBTRACTION_URL in the environment.',
+      )
+      return
+    }
+
+    if (!subtractionFormValues.itemId.trim()) {
+      setSubtractionFormError('Item ID is required.')
+      return
+    }
+    if (!subtractionFormValues.itemName.trim()) {
+      setSubtractionFormError('Item name is required.')
+      return
+    }
+    if (!subtractionFormValues.propertyId.trim()) {
+      setSubtractionFormError('Receiving property is required.')
+      return
+    }
+    if (!subtractionFormValues.location.trim()) {
+      setSubtractionFormError('Receiving property is required.')
+      return
+    }
+    if (!subtractionFormValues.units.trim()) {
+      setSubtractionFormError('Units are required.')
+      return
+    }
+    const unitsValue = Number(subtractionFormValues.units)
+    if (!Number.isFinite(unitsValue) || unitsValue <= 0) {
+      setSubtractionFormError('Units must be greater than zero.')
+      return
+    }
+    if (!subtractionFormValues.cost.trim()) {
+      setSubtractionFormError('Cost is required.')
+      return
+    }
+    const costValue = Number(subtractionFormValues.cost)
+    if (!Number.isFinite(costValue) || costValue < 0) {
+      setSubtractionFormError('Cost must be a valid number.')
+      return
+    }
+
+    const inventoryItem = inventoryRows.find(
+      (row) => row.id === subtractionFormValues.itemId,
+    )
+    if (inventoryItem && unitsValue > inventoryItem.quantity) {
+      setSubtractionFormError(
+        `Only ${inventoryItem.quantity} unit(s) available in inventory.`,
+      )
+      return
+    }
+
+    setIsSubtractionSaving(true)
+    setSubtractionFormError(null)
+
+    const payload = {
+      'Item id': subtractionFormValues.itemId.trim(),
+      'Item name': subtractionFormValues.itemName.trim(),
+      'Inventory location': subtractionFormValues.inventoryLocation.trim(),
+      'Property id': subtractionFormValues.propertyId.trim(),
+      Location: subtractionFormValues.location.trim(),
+      Units: unitsValue,
+      Cost: costValue,
+      Billable: subtractionFormValues.billable,
+      Note: subtractionFormValues.note.trim(),
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        let message = 'Failed to save subtraction.'
+        try {
+          const errorBody = JSON.parse(errorText) as { message?: string }
+          if (errorBody.message) {
+            message = errorBody.message
+          }
+        } catch {
+          // Keep default message.
+        }
+        throw new Error(message)
+      }
+      const responseBody = (await response.json()) as {
+        item?: Record<string, unknown>
+      }
+      const item = responseBody.item
+        ? mapSubtractionRow(responseBody.item)
+        : null
+      const updatedRow: SubtractionRow =
+        item ??
+        mapSubtractionRow({
+          ...payload,
+          id: '',
+          Date: formatDateForStorage(''),
+          Status: subtractionFormValues.billable
+            ? 'Pending Billing'
+            : 'Not Billable',
+        })
+
+      setSubtractionRows((current) => [updatedRow, ...current])
+      setInventoryRows((current) =>
+        current.map((row) => {
+          if (row.id !== subtractionFormValues.itemId) {
+            return row
+          }
+          const nextQuantity = Math.max(0, row.quantity - unitsValue)
+          return {
+            ...row,
+            quantity: nextQuantity,
+            status: computeInventoryStatus(nextQuantity, row.rebuyQty),
+          }
+        }),
+      )
+      setIsSubtractionFormOpen(false)
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : 'Unable to save the subtraction. Please try again.'
+      setSubtractionFormError(message)
+    } finally {
+      setIsSubtractionSaving(false)
+    }
+  }
+
+  const markSubtractionBilled = async (row: SubtractionRow) => {
+    if (row.status !== 'Pending Billing') {
+      return
+    }
+    const shouldConfirm = window.confirm(
+      'Mark this subtraction as billed?',
+    )
+    if (!shouldConfirm) {
+      return
+    }
+    const endpoint = getEndpoint(
+      'upsertSubtractionUrl',
+      import.meta.env.VITE_UPSERT_SUBTRACTION_URL,
+    )
+    if (!endpoint) {
+      setSubtractionsError(
+        'Missing subtraction endpoint. Set VITE_UPSERT_SUBTRACTION_URL in the environment.',
+      )
+      return
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: row.id,
+          action: 'mark_billed',
+        }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update subtraction.')
+      }
+      const responseBody = (await response.json()) as {
+        item?: Record<string, unknown>
+      }
+      const updated = responseBody.item
+        ? mapSubtractionRow(responseBody.item)
+        : { ...row, status: 'Billed' }
+      setSubtractionRows((current) =>
+        current.map((entry) => (entry.id === row.id ? updated : entry)),
+      )
+    } catch (updateError) {
+      setSubtractionsError(
+        'Unable to mark subtraction as billed. Please try again.',
+      )
+    }
+  }
+
+  const reverseSubtraction = async (row: SubtractionRow) => {
+    if (row.status === 'Reversed') {
+      return
+    }
+    const shouldConfirm = window.confirm(
+      'Reverse this subtraction and restore inventory quantity?',
+    )
+    if (!shouldConfirm) {
+      return
+    }
+    const endpoint = getEndpoint(
+      'upsertSubtractionUrl',
+      import.meta.env.VITE_UPSERT_SUBTRACTION_URL,
+    )
+    if (!endpoint) {
+      setSubtractionsError(
+        'Missing subtraction endpoint. Set VITE_UPSERT_SUBTRACTION_URL in the environment.',
+      )
+      return
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: row.id,
+          action: 'reverse',
+        }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to reverse subtraction.')
+      }
+      const responseBody = (await response.json()) as {
+        item?: Record<string, unknown>
+      }
+      const updated = responseBody.item
+        ? mapSubtractionRow(responseBody.item)
+        : { ...row, status: 'Reversed' }
+      setSubtractionRows((current) =>
+        current.map((entry) => (entry.id === row.id ? updated : entry)),
+      )
+      setInventoryRows((current) =>
+        current.map((entry) => {
+          if (entry.id !== row.itemId) {
+            return entry
+          }
+          const nextQuantity = entry.quantity + row.units
+          return {
+            ...entry,
+            quantity: nextQuantity,
+            status: computeInventoryStatus(nextQuantity, entry.rebuyQty),
+          }
+        }),
+      )
+    } catch (updateError) {
+      setSubtractionsError(
+        'Unable to reverse subtraction. Please try again.',
+      )
     }
   }
 
@@ -3733,6 +4311,25 @@ function App() {
                               <button
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
+                                onClick={() => openSubtractionWizard(row)}
+                                aria-label="Create subtraction"
+                                title="Subtract"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 20 20"
+                                  width="16"
+                                  height="16"
+                                >
+                                  <path
+                                    d="M4 9.25h12v1.5H4z"
+                                    fill="currentColor"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                className="btn-icon btn-icon-ghost"
+                                type="button"
                                 onClick={() => openEditItem(row)}
                                 aria-label="Edit item"
                               >
@@ -4276,6 +4873,481 @@ function App() {
                                       <p className="detail-label">Purchase date</p>
                                       <p className="detail-value">
                                         {row.purchaseDate}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        ) : activePage === 'Subtractions' ? (
+          <>
+            <header className="page-header">
+              <div className="page-header-leading">
+                <p className="eyebrow">Ops / Inventory / Subtractions</p>
+                <div className="page-title-row">
+                  <h1 className="page-title">Subtractions</h1>
+                  <button
+                    type="button"
+                    className={`btn-page-info ${
+                      isSummaryInfoOpen ? 'is-active' : ''
+                    }`}
+                    aria-label={
+                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                    }
+                    aria-expanded={isSummaryInfoOpen}
+                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
+                  >
+                    i
+                  </button>
+                </div>
+                <p className="subtitle">
+                  Manual inventory removals are stored in the production DynamoDB
+                  table via Lambda access.
+                </p>
+              </div>
+              <div
+                className={`page-action-bar ${
+                  isMobileSearchOpen ? 'is-search-open' : ''
+                }`}
+              >
+                <input
+                  className="search-input"
+                  placeholder="Search subtractions"
+                  type="search"
+                  aria-label="Search subtractions"
+                />
+                <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() =>
+                    setIsMobileSearchOpen((current) => !current)
+                  }
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  className={`btn-ghost btn-filter ${
+                    isSubtractionsFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label="Filters"
+                  onClick={() => {
+                    setSubtractionsFilterDraft({
+                      locations: [...subtractionsFilters.locations],
+                      statuses: [...subtractionsFilters.statuses],
+                      dateFrom: subtractionsFilters.dateFrom,
+                      dateTo: subtractionsFilters.dateTo,
+                    })
+                    setIsSubtractionsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {subtractionsActiveFilterCount > 0 ? (
+                    <span className="filter-badge">
+                      {subtractionsActiveFilterCount}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={fetchSubtractions}
+                  type="button"
+                  disabled={isSubtractionsLoading}
+                  aria-label="Refresh"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+                </div>
+              </div>
+            </header>
+
+            {subtractionsError ? (
+              <div className="alert">{subtractionsError}</div>
+            ) : null}
+
+            <section
+              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+            >
+              <div className="card card-compact">
+                <p className="card-label">Total subtractions</p>
+                <p className="card-value">{subtractionsFilteredRows.length}</p>
+                <p className="card-meta">Visible subtractions</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Pending billing</p>
+                <p className="card-value">{pendingSubtractionsCount}</p>
+                <p className="card-meta">Awaiting billing</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">Last Sync</p>
+                <p className="card-value">
+                  {subtractionsLastUpdated ?? 'Not synced yet'}
+                </p>
+                <p className="card-meta">Production DynamoDB</p>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Subtractions</h2>
+                  <p className="card-subtitle">
+                    Track manual inventory removals and billing status.
+                  </p>
+                </div>
+              </div>
+
+              {isSubtractionsFilterOpen ? (
+                <div className="modal-overlay" role="dialog" aria-modal="true">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <div>
+                        <h3 className="modal-title">Filters</h3>
+                        <p className="modal-subtitle">
+                          Select one or more values to filter the subtractions.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={() => setIsSubtractionsFilterOpen(false)}
+                        aria-label="Close filters"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="modal-body">
+                      <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">Location</p>
+                          <div className="filter-options">
+                            {subtractionLocationOptions.length === 0 ? (
+                              <p className="modal-subtitle">
+                                No locations available yet.
+                              </p>
+                            ) : (
+                              subtractionLocationOptions.map((option) => {
+                                const isChecked =
+                                  subtractionsFilterDraft.locations.includes(
+                                    option,
+                                  )
+                                return (
+                                  <label className="filter-option" key={option}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(event) => {
+                                        setSubtractionsFilterDraft((current) => {
+                                          if (event.target.checked) {
+                                            return {
+                                              ...current,
+                                              locations: [
+                                                ...current.locations,
+                                                option,
+                                              ],
+                                            }
+                                          }
+                                          return {
+                                            ...current,
+                                            locations: current.locations.filter(
+                                              (entry) => entry !== option,
+                                            ),
+                                          }
+                                        })
+                                      }}
+                                    />
+                                    <span>{option}</span>
+                                  </label>
+                                )
+                              })
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="filter-group">
+                          <p className="filter-title">Status</p>
+                          <div className="filter-options">
+                            {subtractionStatusOptions.map((option) => {
+                              const isChecked =
+                                subtractionsFilterDraft.statuses.includes(option)
+                              return (
+                                <label className="filter-option" key={option}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setSubtractionsFilterDraft((current) => {
+                                        if (event.target.checked) {
+                                          return {
+                                            ...current,
+                                            statuses: [
+                                              ...current.statuses,
+                                              option,
+                                            ],
+                                          }
+                                        }
+                                        return {
+                                          ...current,
+                                          statuses: current.statuses.filter(
+                                            (entry) => entry !== option,
+                                          ),
+                                        }
+                                      })
+                                    }}
+                                  />
+                                  <span>{option}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="filter-group">
+                          <p className="filter-title">Date range</p>
+                          <div className="form-grid">
+                            <label className="form-field">
+                              <span>From</span>
+                              <input
+                                type="date"
+                                value={subtractionsFilterDraft.dateFrom}
+                                onChange={(event) =>
+                                  setSubtractionsFilterDraft((current) => ({
+                                    ...current,
+                                    dateFrom: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="form-field">
+                              <span>To</span>
+                              <input
+                                type="date"
+                                value={subtractionsFilterDraft.dateTo}
+                                onChange={(event) =>
+                                  setSubtractionsFilterDraft((current) => ({
+                                    ...current,
+                                    dateTo: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="modal-footer">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          setSubtractionsFilterDraft({
+                            locations: [],
+                            statuses: [],
+                            dateFrom: '',
+                            dateTo: '',
+                          })
+                        }}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => {
+                          setSubtractionsFilters({
+                            locations: [...subtractionsFilterDraft.locations],
+                            statuses: [...subtractionsFilterDraft.statuses],
+                            dateFrom: subtractionsFilterDraft.dateFrom,
+                            dateTo: subtractionsFilterDraft.dateTo,
+                          })
+                          setIsSubtractionsFilterOpen(false)
+                        }}
+                      >
+                        Apply filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="table-wrapper" aria-busy={isSubtractionsLoading}>
+                <table className="data-table data-table-subtractions">
+                  <thead>
+                    <tr>
+                      <th scope="col">Item name</th>
+                      <th scope="col">Location</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isSubtractionsLoading ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          Loading subtractions...
+                        </td>
+                      </tr>
+                    ) : subtractionsFilteredRows.length === 0 ? (
+                      <tr>
+                        <td className="table-empty" colSpan={5}>
+                          No subtractions available yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      subtractionsFilteredRows.map((row) => {
+                        const isExpanded = expandedSubtractionIds.has(row.id)
+                        return (
+                          <Fragment key={row.id}>
+                            <tr>
+                              <td>{row.itemName}</td>
+                              <td>{row.location}</td>
+                              <td>
+                                <span className={getStatusClassName(row.status)}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td>{row.date}</td>
+                              <td>
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    aria-label="Mark billed"
+                                    title="Mark billed"
+                                    onClick={() => markSubtractionBilled(row)}
+                                    disabled={row.status !== 'Pending Billing'}
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    aria-label="Reverse subtraction"
+                                    title="Reverse"
+                                    onClick={() => reverseSubtraction(row)}
+                                    disabled={row.status === 'Reversed'}
+                                  >
+                                    ↺
+                                  </button>
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => toggleSubtractionRow(row.id)}
+                                    aria-expanded={isExpanded}
+                                    aria-label="Toggle details"
+                                  >
+                                    {isExpanded ? '▾' : '▸'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={5}>
+                                  <div className="detail-grid">
+                                    <div>
+                                      <p className="detail-label">
+                                        Subtraction ID
+                                      </p>
+                                      <p className="detail-value">{row.id}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Item ID</p>
+                                      <p className="detail-value">{row.itemId}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        Inventory location
+                                      </p>
+                                      <p className="detail-value">
+                                        {row.inventoryLocation}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Property ID</p>
+                                      <p className="detail-value">
+                                        {row.propertyId}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Units</p>
+                                      <p className="detail-value">{row.units}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Cost</p>
+                                      <p className="detail-value">
+                                        {formatUnitPrice(row.cost)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Total</p>
+                                      <p className="detail-value">
+                                        {formatUnitPrice(row.units * row.cost)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">Billable</p>
+                                      <p className="detail-value">
+                                        {row.billable ? 'Yes' : 'No'}
+                                      </p>
+                                    </div>
+                                    <div className="detail-span">
+                                      <p className="detail-label">Note</p>
+                                      <p className="detail-value">
+                                        {row.note || '—'}
                                       </p>
                                     </div>
                                   </div>
@@ -6443,6 +7515,147 @@ function App() {
                   disabled={isPurchaseSaving}
                 >
                   {isPurchaseSaving ? 'Saving...' : 'Save purchase'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isSubtractionFormOpen ? (
+          <div
+            className="modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={closeSubtractionForm}
+          >
+            <div className="modal" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">New subtraction</h3>
+                  <p className="modal-subtitle">
+                    Registering a manual removal of{' '}
+                    <strong>{subtractionFormValues.itemName}</strong> from{' '}
+                    <strong>
+                      {subtractionFormValues.inventoryLocation || 'inventory'}
+                    </strong>
+                    .
+                  </p>
+                </div>
+                <button
+                  className="btn-icon"
+                  type="button"
+                  onClick={closeSubtractionForm}
+                  aria-label="Close subtraction form"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <label className="form-field">
+                    <span>Units</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={subtractionFormValues.units}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          units: event.target.value,
+                        }))
+                      }
+                      placeholder="1"
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Receiving property</span>
+                    <select
+                      value={subtractionFormValues.propertyId}
+                      onChange={(event) => {
+                        const selectedId = event.target.value
+                        const selectedProperty = activePropertyOptions.find(
+                          (property) => property.id === selectedId,
+                        )
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          propertyId: selectedId,
+                          location: selectedProperty?.nickname ?? '',
+                        }))
+                      }}
+                    >
+                      <option value="">Select property</option>
+                      {activePropertyOptions.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {property.nickname}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Cost</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={subtractionFormValues.cost}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          cost: event.target.value,
+                        }))
+                      }
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label className="form-field form-field-checkbox">
+                    <span>Should be billed?</span>
+                    <input
+                      type="checkbox"
+                      checked={subtractionFormValues.billable}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          billable: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="form-field form-field-span">
+                    <span>Note (optional)</span>
+                    <textarea
+                      value={subtractionFormValues.note}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          note: event.target.value,
+                        }))
+                      }
+                      placeholder="Add a note"
+                      rows={3}
+                    />
+                  </label>
+                </div>
+                {subtractionFormError ? (
+                  <div className="alert">{subtractionFormError}</div>
+                ) : null}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={closeSubtractionForm}
+                  disabled={isSubtractionSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={saveSubtraction}
+                  disabled={isSubtractionSaving}
+                >
+                  {isSubtractionSaving ? 'Saving...' : 'Save subtraction'}
                 </button>
               </div>
             </div>

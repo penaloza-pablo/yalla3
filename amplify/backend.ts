@@ -14,6 +14,8 @@ import { getInventoryRebuy } from './functions/get-inventory-rebuy/resource';
 import { exportInventory } from './functions/export-inventory/resource';
 import { getPurchases } from './functions/get-purchases/resource';
 import { upsertPurchase } from './functions/upsert-purchase/resource';
+import { getSubtractions } from './functions/get-subtractions/resource';
+import { upsertSubtraction } from './functions/upsert-subtraction/resource';
 import { getProperties } from './functions/get-properties/resource';
 import { upsertProperty } from './functions/upsert-property/resource';
 import { deleteProperty } from './functions/delete-property/resource';
@@ -45,6 +47,8 @@ const backend = defineBackend({
   exportInventory,
   getPurchases,
   upsertPurchase,
+  getSubtractions,
+  upsertSubtraction,
   getProperties,
   upsertProperty,
   deleteProperty,
@@ -75,6 +79,11 @@ const purchasesTable = Table.fromTableName(
   dataStack,
   'PurchasesTable',
   'yalla-purchases',
+);
+const substractionsTable = Table.fromTableName(
+  dataStack,
+  'SubstractionsTable',
+  'yalla-substractions',
 );
 const propertiesTable = Table.fromTableName(
   dataStack,
@@ -124,6 +133,9 @@ alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
 purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
+substractionsTable.grantReadData(backend.getSubtractions.resources.lambda);
+substractionsTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
+inventoryTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
@@ -180,6 +192,13 @@ const getPurchasesUrl = backend.getPurchases.resources.lambda.addFunctionUrl({
 const upsertPurchaseUrl = backend.upsertPurchase.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getSubtractionsUrl = backend.getSubtractions.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertSubtractionUrl =
+  backend.upsertSubtraction.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getPropertiesUrl = backend.getProperties.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -247,6 +266,8 @@ backend.addOutput({
     exportInventoryUrl: exportInventoryUrl.url,
     getPurchasesUrl: getPurchasesUrl.url,
     upsertPurchaseUrl: upsertPurchaseUrl.url,
+    getSubtractionsUrl: getSubtractionsUrl.url,
+    upsertSubtractionUrl: upsertSubtractionUrl.url,
     getPropertiesUrl: getPropertiesUrl.url,
     upsertPropertyUrl: upsertPropertyUrl.url,
     deletePropertyUrl: deletePropertyUrl.url,

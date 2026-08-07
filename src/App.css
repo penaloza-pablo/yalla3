@@ -901,6 +901,22 @@ th {
   resize: vertical;
 }
 
+.form-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-field-checkbox input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  accent-color: #344054;
+}
+
 .form-field-span {
   grid-column: span 2;
 }
@@ -3020,6 +3036,12 @@ th {
   .data-table-purchases td:nth-child(4)::before { content: 'Delivery'; }
   .data-table-purchases td:nth-child(5)::before { content: 'Actions'; }
 
+  .data-table-subtractions td:nth-child(1)::before { content: 'Item'; }
+  .data-table-subtractions td:nth-child(2)::before { content: 'Location'; }
+  .data-table-subtractions td:nth-child(3)::before { content: 'Status'; }
+  .data-table-subtractions td:nth-child(4)::before { content: 'Date'; }
+  .data-table-subtractions td:nth-child(5)::before { content: 'Actions'; }
+
   .data-table-properties td:nth-child(1)::before { content: 'Nickname'; }
   .data-table-properties td:nth-child(2)::before { content: 'Title'; }
   .data-table-properties td:nth-child(3)::before { content: 'Type'; }
@@ -3101,6 +3123,7 @@ th {
   /* Actions row spans full width */
   .data-table-inventory td:nth-child(5),
   .data-table-purchases td:nth-child(5),
+  .data-table-subtractions td:nth-child(5),
   .data-table-reviews td:nth-child(6),
   .data-table-alerts td:nth-child(5) {
     grid-column: 1 / -1;
@@ -3116,6 +3139,7 @@ th {
 
   .data-table-inventory td:nth-child(5)::before,
   .data-table-purchases td:nth-child(5)::before,
+  .data-table-subtractions td:nth-child(5)::before,
   .data-table-reviews td:nth-child(6)::before,
   .data-table-alerts td:nth-child(5)::before {
     display: none;

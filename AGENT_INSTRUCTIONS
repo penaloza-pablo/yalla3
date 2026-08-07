@@ -45,6 +45,8 @@ Navigation schema
   - YALLA
     - Ops
       - Inventory
+      - Purchases
+      - Subtractions
       - Properties
       - Cleaning Report
       - Task Scheduler

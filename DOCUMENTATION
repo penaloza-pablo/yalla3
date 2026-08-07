@@ -282,6 +282,55 @@ Files
 - `amplify/functions/upsert-purchase/handler.ts`: Purchases write handler.
 - `src/App.tsx`: Purchases UI, wizard, filters, and actions.
 
+Subtractions - UI and data flow (in progress)
+Overview
+- Scope: Ops > Subtractions tracks manual inventory removals in
+  `yalla-substractions`.
+- Status: Backend and UI scaffolded; awaiting deployment and endpoints.
+
+UI behavior
+- Subtractions lives under Ops next to Purchases.
+- Inventory rows include a Subtract action to open the subtraction wizard.
+- Wizard captures units (default 1), receiving property (from
+  `yalla-properties`), cost (default inventory unit price), billable checkbox
+  (default checked), and optional note.
+- Subtractions table shows Item name, Location (receiving property), Status,
+  Date by default.
+- Table is always sorted by Date, newest to oldest.
+- Hidden fields (expand row): Subtraction ID, Item ID, Inventory location,
+  Property ID, Units, Cost, Total, Billable, Note.
+- Filters (client-side, same UX as Purchases):
+  - Location (multi-select; empty = all; receiving property nickname)
+  - Status (multi-select): Pending Billing, Billed, Not Billable, Reversed
+  - Date range (From / To)
+  - Default filter: Location = all, Status = Pending Billing
+- Status rules:
+  - Billable checked on create -> Pending Billing
+  - Billable unchecked on create -> Not Billable
+  - Mark billed (Pending Billing only) -> Billed
+  - Reverse (any non-Reversed) -> Reversed and restore inventory quantity
+- Create deducts inventory Quantity immediately (rejects insufficient stock).
+- Reverse restores inventory Quantity and recalculates inventory Status.
+
+Data flow
+- Lambda: `GetSubtractions` scans `yalla-substractions`.
+- Lambda: `UpsertSubtraction` writes to `yalla-substractions` with sequential IDs
+  (SUBTR-001, SUBTR-002...) and updates `yalla-inventory`.
+- Actions on existing rows use `action`: `mark_billed` or `reverse`.
+- Frontend: `VITE_GET_SUBTRACTIONS_URL` / `VITE_UPSERT_SUBTRACTION_URL` or
+  `custom.getSubtractionsUrl` / `custom.upsertSubtractionUrl` are required.
+- Fields stored: Item id, Item name, Inventory location, Property id, Location,
+  Units, Cost, Billable, Note, Date, Status.
+- Date is stored as DD/MM/YYYY (never MM/DD).
+
+Files
+- `amplify/functions/get-subtractions/resource.ts`: Lambda definition.
+- `amplify/functions/get-subtractions/handler.ts`: Subtractions scan handler.
+- `amplify/functions/upsert-subtraction/resource.ts`: Lambda definition.
+- `amplify/functions/upsert-subtraction/handler.ts`: Subtractions write handler.
+- `src/App.tsx`: Subtractions UI, wizard, filters, and actions.
+- `src/App.css`: Mobile card labels for subtractions table.
+
 Properties - Refresh and sync (in progress)
 Overview
 - Scope: Ops > Properties compares DynamoDB `yalla-properties` against an external
