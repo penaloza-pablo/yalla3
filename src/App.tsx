@@ -104,12 +104,6 @@ type InventoryFormState = {
   rebuyQty: string
   unitPrice: string
   tolerance: string
-  apartmentAmount: string
-  apartmentUnit: string
-  hostelAmount: string
-  hostelUnit: string
-  roomAmount: string
-  roomUnit: string
 }
 
 type PurchaseFormState = {
@@ -691,39 +685,33 @@ const formatDateForInput = (value: string) => {
   return ''
 }
 
-const buildRule = (amountValue: string, unitValue: string) => {
-  const amount = Number(amountValue)
-  const unit = unitValue.trim()
-  if (!unit && !amountValue) {
-    return null
+const getPurchaseSortTime = (row: PurchaseRow) => {
+  const primary = parseDateValue(row.purchaseDateRaw || row.purchaseDate)
+  if (primary) {
+    return primary.getTime()
   }
-  return {
-    amount: Number.isFinite(amount) ? amount : 0,
-    unit: unit || 'n/a',
-  }
+  const secondary = parseDateValue(row.deliveryDateRaw || row.deliveryDate)
+  return secondary?.getTime() ?? 0
 }
 
-const buildConsumptionRules = (values: InventoryFormState) => {
-  const apartment = buildRule(values.apartmentAmount, values.apartmentUnit)
-  const hostel = buildRule(values.hostelAmount, values.hostelUnit)
-  const room = buildRule(values.roomAmount, values.roomUnit)
-  const rules: ConsumptionRules = {}
-  if (apartment) {
-    rules.apartment = apartment
+const getPurchaseUnitPrice = (row: PurchaseRow) => {
+  if (!row.units || row.units <= 0) {
+    return 0
   }
-  if (hostel) {
-    rules.hostel = hostel
-  }
-  if (room) {
-    rules.room = room
-  }
-  return Object.keys(rules).length ? rules : null
+  return row.totalPrice / row.units
 }
 
-const getRuleValue = (rule?: ConsumptionRule) => ({
-  amount: rule ? String(rule.amount) : '',
-  unit: rule?.unit ?? '',
-})
+/** Most recent purchases for an inventory item (default last 3). */
+const getRecentPurchasesForItem = (
+  itemId: string,
+  purchases: PurchaseRow[],
+  limit = 3,
+) =>
+  purchases
+    .filter((purchase) => purchase.itemId === itemId)
+    .slice()
+    .sort((a, b) => getPurchaseSortTime(b) - getPurchaseSortTime(a))
+    .slice(0, limit)
 
 const statusRank: Record<string, number> = {
   Reorder: 3,
@@ -1095,12 +1083,6 @@ const emptyFormState: InventoryFormState = {
   rebuyQty: '',
   unitPrice: '',
   tolerance: '',
-  apartmentAmount: '',
-  apartmentUnit: '',
-  hostelAmount: '',
-  hostelUnit: '',
-  roomAmount: '',
-  roomUnit: '',
 }
 
 const emptyPurchaseFormState: PurchaseFormState = {
@@ -2575,6 +2557,7 @@ function App() {
   useEffect(() => {
     if (activePage === 'Inventory') {
       void fetchInventory()
+      void fetchPurchases()
     }
     if (activePage === 'Alerts') {
       void fetchAlerts()
@@ -2681,9 +2664,6 @@ function App() {
   }
 
   const openEditItem = (row: InventoryRow) => {
-    const apartmentRule = getRuleValue(row.consumptionRules?.apartment)
-    const hostelRule = getRuleValue(row.consumptionRules?.hostel)
-    const roomRule = getRuleValue(row.consumptionRules?.room)
     const resolvedCategoryChoice =
       row.category && categoryOptions.includes(row.category)
         ? row.category
@@ -2709,12 +2689,6 @@ function App() {
       rebuyQty: row.rebuyQty ? String(row.rebuyQty) : '',
       unitPrice: row.unitPrice ? String(row.unitPrice) : '',
       tolerance: row.tolerance ? String(row.tolerance) : '',
-      apartmentAmount: apartmentRule.amount,
-      apartmentUnit: apartmentRule.unit,
-      hostelAmount: hostelRule.amount,
-      hostelUnit: hostelRule.unit,
-      roomAmount: roomRule.amount,
-      roomUnit: roomRule.unit,
     })
     setFormStep('details')
     setFormError(null)
@@ -3655,7 +3629,6 @@ function App() {
     setIsSaving(true)
     setFormError(null)
 
-    const consumptionRules = buildConsumptionRules(formValues)
     const itemId = formValues.id.trim() || getNextInventoryId(inventoryRows)
     const quantityValue = Number(formValues.quantity) || 0
     const rebuyQtyValue = Number(formValues.rebuyQty) || 0
@@ -3675,7 +3648,6 @@ function App() {
       rebuyQty: rebuyQtyValue,
       unitPrice: Number(formValues.unitPrice) || 0,
       Tolerance: Number(formValues.tolerance) || 0,
-      consumptionRules: consumptionRules ?? undefined,
       createdBy,
     }
 
@@ -4571,34 +4543,54 @@ function App() {
                                 </div>
                                 <div className="detail-span">
                                   <p className="detail-label">
-                                    {t('common.consumptionRules')}
+                                    {t('inventory.recentPurchases')}
                                   </p>
-                                  <div className="rules-grid">
-                                    <div className="rule-card">
-                                      <p className="rule-title">{t('common.apartment')}</p>
-                                      <p className="rule-value">
-                                        {row.consumptionRules?.apartment
-                                          ? `${row.consumptionRules.apartment.amount} / ${row.consumptionRules.apartment.unit}`
-                                          : '—'}
-                                      </p>
-                                    </div>
-                                    <div className="rule-card">
-                                      <p className="rule-title">{t('common.hostel')}</p>
-                                      <p className="rule-value">
-                                        {row.consumptionRules?.hostel
-                                          ? `${row.consumptionRules.hostel.amount} / ${row.consumptionRules.hostel.unit}`
-                                          : '—'}
-                                      </p>
-                                    </div>
-                                    <div className="rule-card">
-                                      <p className="rule-title">{t('common.room')}</p>
-                                      <p className="rule-value">
-                                        {row.consumptionRules?.room
-                                          ? `${row.consumptionRules.room.amount} / ${row.consumptionRules.room.unit}`
-                                          : '—'}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  {(() => {
+                                    const recent = getRecentPurchasesForItem(
+                                      row.id,
+                                      purchaseRows,
+                                      3,
+                                    )
+                                    if (recent.length === 0) {
+                                      return (
+                                        <p className="detail-value detail-muted">
+                                          {t('inventory.noRecentPurchases')}
+                                        </p>
+                                      )
+                                    }
+                                    return (
+                                      <div className="purchase-history">
+                                        <table className="purchase-history-table">
+                                          <thead>
+                                            <tr>
+                                              <th>{t('inventory.purchaseDate')}</th>
+                                              <th>{t('inventory.purchaseUnits')}</th>
+                                              <th>{t('inventory.purchaseUnitPrice')}</th>
+                                              <th>{t('common.status')}</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {recent.map((purchase) => (
+                                              <tr key={purchase.id}>
+                                                <td>
+                                                  {purchase.purchaseDate ||
+                                                    purchase.deliveryDate ||
+                                                    '—'}
+                                                </td>
+                                                <td>{purchase.units || '—'}</td>
+                                                <td>
+                                                  {formatUnitPrice(
+                                                    getPurchaseUnitPrice(purchase),
+                                                  )}
+                                                </td>
+                                                <td>{purchase.status || '—'}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )
+                                  })()}
                                 </div>
                               </div>
                             </td>
@@ -7433,95 +7425,6 @@ function App() {
                         }
                         placeholder="0"
                       />
-                    </label>
-                    <label className="form-field form-field-span">
-                      <span>{t('common.consumptionRules')}</span>
-                      <div className="rule-form-grid">
-                        <div className="rule-form">
-                          <p className="rule-form-title">{t('common.apartment')}</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.apartmentAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  apartmentAmount: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.amount')}
-                            />
-                            <input
-                              type="text"
-                              value={formValues.apartmentUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  apartmentUnit: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.unit')}
-                            />
-                          </div>
-                        </div>
-                        <div className="rule-form">
-                          <p className="rule-form-title">{t('common.hostel')}</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.hostelAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  hostelAmount: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.amount')}
-                            />
-                            <input
-                              type="text"
-                              value={formValues.hostelUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  hostelUnit: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.unit')}
-                            />
-                          </div>
-                        </div>
-                        <div className="rule-form">
-                          <p className="rule-form-title">{t('common.room')}</p>
-                          <div className="rule-form-fields">
-                            <input
-                              type="number"
-                              min="0"
-                              value={formValues.roomAmount}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  roomAmount: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.amount')}
-                            />
-                            <input
-                              type="text"
-                              value={formValues.roomUnit}
-                              onChange={(event) =>
-                                setFormValues((current) => ({
-                                  ...current,
-                                  roomUnit: event.target.value,
-                                }))
-                              }
-                              placeholder={t('common.unit')}
-                            />
-                          </div>
-                        </div>
-                      </div>
                     </label>
                   </div>
                 )}

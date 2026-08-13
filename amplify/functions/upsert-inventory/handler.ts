@@ -292,7 +292,10 @@ export const handler = async (event: {
   const itemId = String(payload.id).trim();
 
   let preservedNameEs: string | undefined;
-  if (!hasNameEs) {
+  let preservedRules: Record<string, unknown> | undefined;
+  const incomingRules = parseConsumptionRules(payload);
+  const needsExistingRead = !hasNameEs || incomingRules === undefined;
+  if (needsExistingRead && itemId) {
     try {
       const existing = await client.send(
         new GetCommand({
@@ -300,12 +303,20 @@ export const handler = async (event: {
           Key: { id: itemId },
         }),
       );
-      const existingNameEs = existing.Item?.nameEs;
-      if (typeof existingNameEs === 'string' && existingNameEs.trim()) {
-        preservedNameEs = existingNameEs.trim();
+      if (!hasNameEs) {
+        const existingNameEs = existing.Item?.nameEs;
+        if (typeof existingNameEs === 'string' && existingNameEs.trim()) {
+          preservedNameEs = existingNameEs.trim();
+        }
+      }
+      if (incomingRules === undefined) {
+        const existingRules = existing.Item?.consumptionRules;
+        if (existingRules && typeof existingRules === 'object') {
+          preservedRules = existingRules as Record<string, unknown>;
+        }
       }
     } catch (readError) {
-      console.error('Failed to read existing inventory item for nameEs', {
+      console.error('Failed to read existing inventory item for preserve fields', {
         itemId,
         error: readError,
       });
@@ -326,7 +337,11 @@ export const handler = async (event: {
     rebuyQty: rebuyQtyValue,
     unitPrice: Number(payload.unitPrice) || 0,
     Tolerance: Number(tolerance) || 0,
-    consumptionRules: parseConsumptionRules(payload),
+    ...(incomingRules !== undefined
+      ? { consumptionRules: incomingRules }
+      : preservedRules
+        ? { consumptionRules: preservedRules }
+        : {}),
   };
 
   if (!item['Item name']) {

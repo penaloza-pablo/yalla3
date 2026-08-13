@@ -166,7 +166,7 @@ const inventoryBucket = Bucket.fromBucketName(
 );
 
 inventoryTable.grantReadData(backend.getInventory.resources.lambda);
-inventoryTable.grantWriteData(backend.upsertInventory.resources.lambda);
+inventoryTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 inventoryTable.grantWriteData(backend.deleteInventory.resources.lambda);
 inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
 inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
