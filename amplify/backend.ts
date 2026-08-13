@@ -69,6 +69,7 @@ const backend = defineBackend({
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
+const userPoolClientId = backend.auth.resources.userPoolClient.userPoolClientId;
 const lambdaFunctionsWithHttp = [
   backend.getInventory,
   backend.upsertInventory,
@@ -102,6 +103,7 @@ const lambdaFunctionsWithHttp = [
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
   lambdaFunction.addEnvironment('USER_POOL_ID', userPoolId);
+  lambdaFunction.addEnvironment('USER_POOL_CLIENT_ID', userPoolClientId);
 }
 
 const dataStack = backend.createStack('data-access');

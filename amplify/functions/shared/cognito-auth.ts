@@ -3,17 +3,23 @@ import { buildHttpResponse } from './dynamo-http';
 
 type HttpHeaders = Record<string, string | undefined>;
 
-let verifier: ReturnType<typeof CognitoJwtVerifier.create> | null = null;
+type JwtVerifier = {
+  verify: (token: string) => Promise<unknown>;
+};
 
-const getVerifier = () => {
+let verifier: JwtVerifier | null = null;
+
+const getVerifier = (): JwtVerifier | null => {
   const userPoolId = process.env.USER_POOL_ID;
   if (!userPoolId) {
     return null;
   }
   if (!verifier) {
+    const clientId = process.env.USER_POOL_CLIENT_ID;
     verifier = CognitoJwtVerifier.create({
       userPoolId,
       tokenUse: 'id',
+      clientId: clientId && clientId.length > 0 ? clientId : null,
     });
   }
   return verifier;
