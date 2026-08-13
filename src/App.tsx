@@ -86,6 +86,12 @@ type SubtractionRow = {
   units: number
   cost: number
   billable: boolean
+  markupApplied: boolean
+  markup: number
+  ivaMarkup: number
+  priceExclIva: number
+  iva: number
+  totalPrice: number
   note: string
   date: string
   dateRaw: string
@@ -128,6 +134,7 @@ type SubtractionFormState = {
   units: string
   cost: string
   billable: boolean
+  markup: boolean
   note: string
 }
 
@@ -327,11 +334,33 @@ const subtractionFieldMap = {
   propertyId: ['Property id', 'Property ID', 'propertyId', 'property id'],
   location: ['Location', 'location'],
   units: ['Units', 'units'],
-  cost: ['Cost', 'cost'],
+  cost: ['Cost', 'cost', 'Price incl. IVA', 'priceInclIva'],
   billable: ['Billable', 'billable'],
+  markupApplied: ['Markup applied', 'markupApplied', 'MarkupApplied'],
+  markup: ['Markup', 'markup'],
+  ivaMarkup: ['IVA Markup', 'ivaMarkup', 'Iva Markup'],
+  priceExclIva: ['Price excl. IVA', 'priceExclIva', 'Price excl IVA'],
+  iva: ['IVA', 'iva'],
+  totalPrice: ['Total Price', 'totalPrice', 'Total price'],
   note: ['Note', 'note'],
   date: ['Date', 'date', 'Substraction date', 'Subtraction date'],
   status: ['Status', 'status'],
+}
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100
+
+/** Pricing breakdown from price incl. IVA and optional 12% markup. */
+const computeSubtractionPricing = (
+  costInclIva: number,
+  markupApplied: boolean,
+) => {
+  const safeCost = Number.isFinite(costInclIva) ? Math.max(0, costInclIva) : 0
+  const markup = markupApplied ? roundMoney(safeCost * 0.12) : 0
+  const ivaMarkup = roundMoney(markup * 0.21)
+  const totalPrice = roundMoney(safeCost + markup + ivaMarkup)
+  const priceExclIva = roundMoney(totalPrice / 1.21)
+  const iva = roundMoney(priceExclIva * 0.21)
+  return { markup, ivaMarkup, priceExclIva, iva, totalPrice }
 }
 
 const propertyFieldMap = {
@@ -820,6 +849,17 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
 
 const mapSubtractionRow = (item: Record<string, unknown>): SubtractionRow => {
   const dateRaw = getStringValue(getItemValue(item, subtractionFieldMap.date))
+  const cost = getNumberValue(getItemValue(item, subtractionFieldMap.cost))
+  const markupApplied = getBooleanValue(
+    getItemValue(item, subtractionFieldMap.markupApplied),
+  )
+  const storedMarkup = getItemValue(item, subtractionFieldMap.markup)
+  const storedIvaMarkup = getItemValue(item, subtractionFieldMap.ivaMarkup)
+  const storedPriceExclIva = getItemValue(item, subtractionFieldMap.priceExclIva)
+  const storedIva = getItemValue(item, subtractionFieldMap.iva)
+  const storedTotalPrice = getItemValue(item, subtractionFieldMap.totalPrice)
+  const computed = computeSubtractionPricing(cost, markupApplied)
+
   return {
     id: getStringValue(getItemValue(item, subtractionFieldMap.id)) || '—',
     itemId: getStringValue(getItemValue(item, subtractionFieldMap.itemId)) || '—',
@@ -834,8 +874,29 @@ const mapSubtractionRow = (item: Record<string, unknown>): SubtractionRow => {
     location:
       getStringValue(getItemValue(item, subtractionFieldMap.location)) || '—',
     units: getNumberValue(getItemValue(item, subtractionFieldMap.units)),
-    cost: getNumberValue(getItemValue(item, subtractionFieldMap.cost)),
+    cost,
     billable: getBooleanValue(getItemValue(item, subtractionFieldMap.billable)),
+    markupApplied,
+    markup:
+      storedMarkup === undefined || storedMarkup === null
+        ? computed.markup
+        : getNumberValue(storedMarkup),
+    ivaMarkup:
+      storedIvaMarkup === undefined || storedIvaMarkup === null
+        ? computed.ivaMarkup
+        : getNumberValue(storedIvaMarkup),
+    priceExclIva:
+      storedPriceExclIva === undefined || storedPriceExclIva === null
+        ? computed.priceExclIva
+        : getNumberValue(storedPriceExclIva),
+    iva:
+      storedIva === undefined || storedIva === null
+        ? computed.iva
+        : getNumberValue(storedIva),
+    totalPrice:
+      storedTotalPrice === undefined || storedTotalPrice === null
+        ? computed.totalPrice
+        : getNumberValue(storedTotalPrice),
     note: getStringValue(getItemValue(item, subtractionFieldMap.note)),
     dateRaw,
     date: formatUpdatedDate(dateRaw),
@@ -1107,6 +1168,7 @@ const emptySubtractionFormState: SubtractionFormState = {
   units: '1',
   cost: '',
   billable: true,
+  markup: false,
   note: '',
 }
 
@@ -2640,6 +2702,7 @@ function App() {
       units: '1',
       cost: row.unitPrice ? String(row.unitPrice) : '0',
       billable: true,
+      markup: false,
       note: '',
     })
     setSubtractionFormError(null)
@@ -3394,6 +3457,11 @@ function App() {
       return
     }
 
+    const pricing = computeSubtractionPricing(
+      costValue,
+      subtractionFormValues.markup,
+    )
+
     setIsSubtractionSaving(true)
     setSubtractionFormError(null)
 
@@ -3406,6 +3474,12 @@ function App() {
       Units: unitsValue,
       Cost: costValue,
       Billable: subtractionFormValues.billable,
+      'Markup applied': subtractionFormValues.markup,
+      Markup: pricing.markup,
+      'IVA Markup': pricing.ivaMarkup,
+      'Price excl. IVA': pricing.priceExclIva,
+      IVA: pricing.iva,
+      'Total Price': pricing.totalPrice,
       Note: subtractionFormValues.note.trim(),
     }
 
@@ -5464,26 +5538,16 @@ function App() {
                                   <div className="detail-grid">
                                     <div>
                                       <p className="detail-label">
-                                        Subtraction ID
+                                        {t('subtractions.subtractionId')}
                                       </p>
                                       <p className="detail-value">{row.id}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">{t('common.itemId')}</p>
-                                      <p className="detail-value">{row.itemId}</p>
-                                    </div>
-                                    <div>
                                       <p className="detail-label">
-                                        Inventory location
+                                        {t('common.inventoryLocation')}
                                       </p>
                                       <p className="detail-value">
                                         {row.inventoryLocation}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">{t('common.propertyId')}</p>
-                                      <p className="detail-value">
-                                        {row.propertyId}
                                       </p>
                                     </div>
                                     <div>
@@ -5491,21 +5555,49 @@ function App() {
                                       <p className="detail-value">{row.units}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">{t('common.cost')}</p>
+                                      <p className="detail-label">
+                                        {t('common.priceInclIva')}
+                                      </p>
                                       <p className="detail-value">
                                         {formatUnitPrice(row.cost)}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">{t('common.total')}</p>
+                                      <p className="detail-label">
+                                        {t('common.markup')}
+                                      </p>
                                       <p className="detail-value">
-                                        {formatUnitPrice(row.units * row.cost)}
+                                        {formatUnitPrice(row.markup)}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">{t('common.billable')}</p>
+                                      <p className="detail-label">
+                                        {t('common.ivaMarkup')}
+                                      </p>
                                       <p className="detail-value">
-                                        {row.billable ? t('common.yes') : t('common.no')}
+                                        {formatUnitPrice(row.ivaMarkup)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.priceExclIva')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {formatUnitPrice(row.priceExclIva)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">{t('common.iva')}</p>
+                                      <p className="detail-value">
+                                        {formatUnitPrice(row.iva)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.totalPrice')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {formatUnitPrice(row.totalPrice)}
                                       </p>
                                     </div>
                                     <div className="detail-span">
@@ -7674,7 +7766,7 @@ function App() {
                     </select>
                   </label>
                   <label className="form-field">
-                    <span>{t('common.cost')}</span>
+                    <span>{t('common.priceInclIva')}</span>
                     <input
                       type="number"
                       min="0"
@@ -7702,6 +7794,19 @@ function App() {
                       }
                     />
                   </label>
+                  <label className="form-field form-field-checkbox">
+                    <span>{t('common.markup')}</span>
+                    <input
+                      type="checkbox"
+                      checked={subtractionFormValues.markup}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          markup: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
                   <label className="form-field form-field-span">
                     <span>{t('common.noteOptional')}</span>
                     <textarea
@@ -7717,6 +7822,47 @@ function App() {
                     />
                   </label>
                 </div>
+                {(() => {
+                  const costValue = Number(subtractionFormValues.cost)
+                  const pricing = computeSubtractionPricing(
+                    Number.isFinite(costValue) ? costValue : 0,
+                    subtractionFormValues.markup,
+                  )
+                  return (
+                    <div className="subtraction-pricing-grid">
+                      <div>
+                        <p className="detail-label">{t('common.markup')}</p>
+                        <p className="detail-value">
+                          {formatUnitPrice(pricing.markup)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="detail-label">{t('common.ivaMarkup')}</p>
+                        <p className="detail-value">
+                          {formatUnitPrice(pricing.ivaMarkup)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="detail-label">{t('common.priceExclIva')}</p>
+                        <p className="detail-value">
+                          {formatUnitPrice(pricing.priceExclIva)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="detail-label">{t('common.iva')}</p>
+                        <p className="detail-value">
+                          {formatUnitPrice(pricing.iva)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="detail-label">{t('common.totalPrice')}</p>
+                        <p className="detail-value">
+                          {formatUnitPrice(pricing.totalPrice)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {subtractionFormError ? (
                   <div className="alert">{subtractionFormError}</div>
                 ) : null}

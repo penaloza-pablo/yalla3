@@ -30,6 +30,8 @@ type SubtractionPayload = {
   units?: number;
   cost?: number;
   billable?: boolean;
+  markup?: boolean;
+  markupApplied?: boolean;
   note?: string;
   date?: string;
   status?: string;
@@ -44,6 +46,12 @@ type SubtractionPayload = {
   Units?: number;
   Cost?: number;
   Billable?: boolean;
+  ['Markup applied']?: boolean;
+  Markup?: number;
+  ['IVA Markup']?: number;
+  ['Price excl. IVA']?: number;
+  IVA?: number;
+  ['Total Price']?: number;
   Note?: string;
   Date?: string;
   Status?: string;
@@ -60,6 +68,12 @@ type SubtractionItem = {
   Units: number;
   Cost: number;
   Billable: boolean;
+  'Markup applied': boolean;
+  Markup: number;
+  'IVA Markup': number;
+  'Price excl. IVA': number;
+  IVA: number;
+  'Total Price': number;
   Note: string;
   Date: string;
   Status: string;
@@ -233,6 +247,34 @@ const parseBillable = (payload: SubtractionPayload) => {
     return payload.Billable;
   }
   return true;
+};
+
+const parseMarkupApplied = (payload: SubtractionPayload) => {
+  if (typeof payload.markupApplied === 'boolean') {
+    return payload.markupApplied;
+  }
+  if (typeof payload.markup === 'boolean') {
+    return payload.markup;
+  }
+  if (typeof payload['Markup applied'] === 'boolean') {
+    return payload['Markup applied'];
+  }
+  return false;
+};
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+const computeSubtractionPricing = (
+  costInclIva: number,
+  markupApplied: boolean,
+) => {
+  const safeCost = Number.isFinite(costInclIva) ? Math.max(0, costInclIva) : 0;
+  const markup = markupApplied ? roundMoney(safeCost * 0.12) : 0;
+  const ivaMarkup = roundMoney(markup * 0.21);
+  const totalPrice = roundMoney(safeCost + markup + ivaMarkup);
+  const priceExclIva = roundMoney(totalPrice / 1.21);
+  const iva = roundMoney(priceExclIva * 0.21);
+  return { markup, ivaMarkup, priceExclIva, iva, totalPrice };
 };
 
 const resolveCreateStatus = (billable: boolean) =>
@@ -421,6 +463,8 @@ export const handler = async (event: {
 
     const unitsValue = Number(units) || 0;
     const costValue = Number(cost) || 0;
+    const markupApplied = parseMarkupApplied(payload);
+    const pricing = computeSubtractionPricing(costValue, markupApplied);
     // Creates always allocate a new id. Status changes use action=mark_billed|reverse.
     if (existingId) {
       const message =
@@ -449,6 +493,12 @@ export const handler = async (event: {
       Units: unitsValue,
       Cost: costValue,
       Billable: billable,
+      'Markup applied': markupApplied,
+      Markup: pricing.markup,
+      'IVA Markup': pricing.ivaMarkup,
+      'Price excl. IVA': pricing.priceExclIva,
+      IVA: pricing.iva,
+      'Total Price': pricing.totalPrice,
       Note: String(note).trim(),
       Date: formatDateForStorage(date ? String(date) : undefined),
       Status: statusValue,
