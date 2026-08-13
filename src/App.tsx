@@ -7773,9 +7773,8 @@ function App() {
                       placeholder="0.00"
                     />
                   </label>
-                  <div className="form-field form-field-span subtraction-checkboxes">
+                  <div className="form-field-span subtraction-checkboxes">
                     <label className="form-field-checkbox">
-                      <span>{t('common.shouldBeBilled')}</span>
                       <input
                         type="checkbox"
                         checked={subtractionFormValues.billable}
@@ -7786,9 +7785,9 @@ function App() {
                           }))
                         }
                       />
+                      <span>{t('common.shouldBeBilled')}</span>
                     </label>
                     <label className="form-field-checkbox">
-                      <span>{t('common.markup')}</span>
                       <input
                         type="checkbox"
                         checked={subtractionFormValues.markup}
@@ -7799,6 +7798,7 @@ function App() {
                           }))
                         }
                       />
+                      <span>{t('common.markup')}</span>
                     </label>
                   </div>
                   <label className="form-field form-field-span">
