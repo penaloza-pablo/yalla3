@@ -6,25 +6,26 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const PRIMARY = '#6D5EF7'
 const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.'
 
-const STEP_LABELS = [
-  'Not started',
-  'Strategy',
-  'Removal request',
-  'Reminder',
-  'Deletion confirmation',
-  'Finished',
+const STEP_LABEL_KEYS = [
+  'reviewWorkflow.stepNotStarted',
+  'reviewWorkflow.stepStrategy',
+  'reviewWorkflow.stepRemovalRequest',
+  'reviewWorkflow.stepReminder',
+  'reviewWorkflow.stepDeletionConfirmation',
+  'reviewWorkflow.stepFinished',
 ] as const
 
 function RwNextSkipRow({
   onNext,
   onSkip,
-  nextLabel = 'Next',
-  skipLabel = 'Skip',
+  nextLabel,
+  skipLabel,
   nextDisabled,
   skipDisabled,
 }: {
@@ -35,6 +36,9 @@ function RwNextSkipRow({
   nextDisabled?: boolean
   skipDisabled?: boolean
 }) {
+  const { t } = useTranslation()
+  const resolvedNext = nextLabel ?? t('reviewWorkflow.next')
+  const resolvedSkip = skipLabel ?? t('reviewWorkflow.skip')
   return (
     <div className="rw-next-skip-row">
       <button
@@ -45,7 +49,7 @@ function RwNextSkipRow({
           void onNext()
         }}
       >
-        {nextLabel}
+        {resolvedNext}
       </button>
       <button
         className="btn-ghost rw-skip"
@@ -55,7 +59,7 @@ function RwNextSkipRow({
           void onSkip()
         }}
       >
-        {skipLabel}
+        {resolvedSkip}
       </button>
     </div>
   )
@@ -164,6 +168,7 @@ function parseStrategyFromRow(removalStrategy: string): StrategyChoice {
 }
 
 export function ReviewWorkflowPanel({ row, onPersist, isSaving }: Props) {
+  const { t } = useTranslation()
   const dbStep = resolveWorkflowStepIndex(row)
   const fiveStars = isFiveStarsStatus(row.status)
   const [viewStep, setViewStep] = useState<number | null>(null)
@@ -237,8 +242,9 @@ export function ReviewWorkflowPanel({ row, onPersist, isSaving }: Props) {
     <div className="rw-workflow">
       <div className="rw-progress-outer">
         <div className="rw-progress-scroll">
-          <div className="rw-progress" role="list" aria-label="Review workflow progress">
-            {STEP_LABELS.map((label, i) => {
+          <div className="rw-progress" role="list" aria-label={t('reviewWorkflow.progress')}>
+            {STEP_LABEL_KEYS.map((labelKey, i) => {
+              const label = t(labelKey)
               const n = i + 1
               const isLast = n === 6
               const visual = getStepVisualState(
@@ -349,13 +355,14 @@ function calcEuro(guestPaidDay: number, pct: number) {
 }
 
 function FiveStarsFinished({ row }: { row: ReviewWorkflowRow }) {
+  const { t } = useTranslation()
   return (
     <div className="rw-finished-block">
-      <p className="rw-actions-title">No action required</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.noActionRequired')}</p>
       <p className="rw-actions-desc">
         This review received 5 stars.
       </p>
-      <span className="rw-badge rw-badge-blue">Closed — 5 stars review</span>
+      <span className="rw-badge rw-badge-blue">{t('reviewWorkflow.closedFiveStars')}</span>
       {row.lowRatingReason ? (
         <p className="rw-meta-text">{row.lowRatingReason}</p>
       ) : null}
@@ -508,9 +515,10 @@ function Step1NotStarted({
   onStart: () => Promise<void>
   onSkip: () => Promise<void>
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rw-step-inner rw-step-inner-center">
-      <p className="rw-actions-title">Review workflow</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.title')}</p>
       <p className="rw-actions-desc">
         Start the review resolution process.
       </p>
@@ -546,12 +554,13 @@ function Step2Strategy({
   compensationEuro: number
   setCompensationEuro: (n: number) => void
 }) {
+  const { t } = useTranslation()
   const canNext = strategyChoice !== null
   const presets = [0, 15, 20, 25] as const
 
   return (
     <div className="rw-step-inner">
-      <p className="rw-actions-title">Choose a strategy</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.chooseStrategy')}</p>
       <div className="rw-strategy-grid">
         <button
           type="button"
@@ -560,7 +569,7 @@ function Step2Strategy({
           }`}
           onClick={() => setStrategyChoice('guest_negotiation')}
         >
-          <span className="rw-strategy-card-title">Guest negotiation</span>
+          <span className="rw-strategy-card-title">{t('reviewWorkflow.guestNegotiation')}</span>
           <span className="rw-strategy-card-desc">
             Explain negotiation strategy.
           </span>
@@ -583,7 +592,7 @@ function Step2Strategy({
 
       {strategyChoice === 'guest_negotiation' ? (
         <div className="rw-compensation-block">
-          <p className="rw-field-label">Compensation</p>
+          <p className="rw-field-label">{t('reviewWorkflow.compensation')}</p>
           <div className="rw-preset-row">
             {presets.map((p) => (
               <button
@@ -667,6 +676,7 @@ function Step3RemovalRequest({
   setPhase: (n: number) => void
   copyText: (t: string) => Promise<void>
 }) {
+  const { t } = useTranslation()
   const advanceReminder = () =>
     persist({
       WorkflowStep: 'Reminder',
@@ -675,7 +685,7 @@ function Step3RemovalRequest({
 
   return (
     <div className="rw-step-inner">
-      <p className="rw-actions-title">Removal request</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.removalRequest')}</p>
       {phase === 0 ? (
         <RwNextSkipRow
           nextLabel="Generate message"
@@ -701,7 +711,7 @@ function Step3RemovalRequest({
               Copy
             </button>
           </div>
-          <p className="rw-prompt">Have you already contacted the guest?</p>
+          <p className="rw-prompt">{t('reviewWorkflow.contactedGuest')}</p>
           <RwNextSkipRow
             nextDisabled={isSaving}
             skipDisabled={isSaving}
@@ -731,12 +741,13 @@ function Step4Reminder({
   setReminderOut: (s: string) => void
   copyText: (t: string) => Promise<void>
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rw-step-inner">
-      <p className="rw-actions-title">Reminder</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.reminder')}</p>
       <div className="rw-reminder-grid">
         <div className="rw-reminder-card">
-          <p className="rw-strategy-card-title">Direct contact</p>
+          <p className="rw-strategy-card-title">{t('reviewWorkflow.directContact')}</p>
           <p className="rw-strategy-card-desc">
             Guest has not seen the original message.
           </p>
@@ -764,7 +775,7 @@ function Step4Reminder({
           ) : null}
         </div>
         <div className="rw-reminder-card">
-          <p className="rw-strategy-card-title">Reminder follow-up</p>
+          <p className="rw-strategy-card-title">{t('reviewWorkflow.reminderFollowUp')}</p>
           <p className="rw-strategy-card-desc">
             Guest agreed but has not deleted yet.
           </p>
@@ -797,7 +808,7 @@ function Step4Reminder({
           ) : null}
         </div>
       </div>
-      <p className="rw-prompt">Have you already contacted the guest?</p>
+      <p className="rw-prompt">{t('reviewWorkflow.contactedGuest')}</p>
       <RwNextSkipRow
         nextDisabled={isSaving}
         skipDisabled={isSaving}
@@ -837,6 +848,7 @@ function Step5Deletion({
   ) => void
   copyText: (t: string) => Promise<void>
 }) {
+  const { t } = useTranslation()
   const publicResponse = LOREM
 
   const finishNoDeleted = () =>
@@ -849,12 +861,12 @@ function Step5Deletion({
   if (branch === 'choose') {
     return (
       <div className="rw-step-inner">
-        <p className="rw-actions-title">Was the review deleted?</p>
+        <p className="rw-actions-title">{t('reviewWorkflow.wasDeleted')}</p>
         <div className="rw-icon-choice-row">
           <button
             type="button"
             className="rw-icon-choice rw-icon-yes"
-            aria-label="Yes, deleted"
+            aria-label={t('reviewWorkflow.yesDeleted')}
             disabled={isSaving}
             onClick={async () => {
               await persist({ ReviewDeleted: 'yes' })
@@ -867,12 +879,12 @@ function Step5Deletion({
                 d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
               />
             </svg>
-            <span>Yes</span>
+            <span>{t('common.yes')}</span>
           </button>
           <button
             type="button"
             className="rw-icon-choice rw-icon-no"
-            aria-label="No, not deleted"
+            aria-label={t('reviewWorkflow.noNotDeleted')}
             disabled={isSaving}
             onClick={async () => {
               await persist({ ReviewDeleted: 'no' })
@@ -885,7 +897,7 @@ function Step5Deletion({
                 d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"
               />
             </svg>
-            <span>No</span>
+            <span>{t('common.no')}</span>
           </button>
         </div>
         <div className="rw-next-skip-row rw-next-skip-single">
@@ -905,7 +917,7 @@ function Step5Deletion({
   if (branch === 'compensation') {
     return (
       <div className="rw-step-inner">
-        <p className="rw-actions-title">Was compensation sent?</p>
+        <p className="rw-actions-title">{t('reviewWorkflow.wasCompensationSent')}</p>
         <div className="rw-row-actions rw-row-actions-center">
           <button
             type="button"
@@ -953,7 +965,7 @@ function Step5Deletion({
   if (branch === 'public_idle') {
     return (
       <div className="rw-step-inner">
-        <p className="rw-actions-title">Public response</p>
+        <p className="rw-actions-title">{t('reviewWorkflow.publicResponse')}</p>
         <RwNextSkipRow
           nextLabel="Generate public response"
           nextDisabled={isSaving}
@@ -967,7 +979,7 @@ function Step5Deletion({
 
   return (
     <div className="rw-step-inner">
-      <p className="rw-actions-title">Public response</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.publicResponse')}</p>
       <textarea
         className="rw-textarea"
         readOnly
@@ -983,7 +995,7 @@ function Step5Deletion({
           Copy
         </button>
       </div>
-      <p className="rw-prompt">Did you post the public response?</p>
+      <p className="rw-prompt">{t('reviewWorkflow.didPostPublicResponse')}</p>
       <RwNextSkipRow
         nextDisabled={isSaving}
         skipDisabled={isSaving}
@@ -1013,6 +1025,7 @@ function Step6Finished({
   row: ReviewWorkflowRow
   copyText: (t: string) => Promise<void>
 }) {
+  const { t } = useTranslation()
   const summary = useMemo(() => {
     if (row.lowRatingReason.trim()) {
       return row.lowRatingReason
@@ -1023,7 +1036,7 @@ function Step6Finished({
   const badge = useMemo(() => {
     const s = row.status.trim().toLowerCase()
     if (s.includes('5 stars')) {
-      return { className: 'rw-badge rw-badge-blue', label: 'Closed — 5 stars review' }
+      return { className: 'rw-badge rw-badge-blue', label: t('reviewWorkflow.closedFiveStars') }
     }
     if (s.includes('deleted') && !s.includes('no deleted')) {
       return { className: 'rw-badge rw-badge-green', label: row.status }
@@ -1031,15 +1044,15 @@ function Step6Finished({
     if (s.includes('no deleted')) {
       return { className: 'rw-badge rw-badge-amber', label: row.status }
     }
-    return { className: 'rw-badge rw-badge-neutral', label: row.status || 'Finished' }
+    return { className: 'rw-badge rw-badge-neutral', label: row.status || t('reviewWorkflow.stepFinished') }
   }, [row.status])
 
   return (
     <div className="rw-step-inner rw-step-inner-center">
-      <p className="rw-actions-title">Summary</p>
+      <p className="rw-actions-title">{t('reviewWorkflow.summary')}</p>
       <div className="rw-summary-card">
         <p className="rw-summary-text">{summary}</p>
-        <p className="rw-field-label rw-muted">LowRatingReason</p>
+        <p className="rw-field-label rw-muted">{t('reviewWorkflow.lowRatingReason')}</p>
         <p className="rw-meta-text">
           {row.lowRatingReason.trim() ? row.lowRatingReason : '—'}
         </p>

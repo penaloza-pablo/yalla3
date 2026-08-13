@@ -3174,27 +3174,27 @@ function App() {
       return
     }
     if (!purchaseFormValues.itemName.trim()) {
-      setPurchaseFormError('Item name is required.')
+      setPurchaseFormError(t('purchases.itemNameRequired'))
       return
     }
     if (!purchaseFormValues.location.trim()) {
-      setPurchaseFormError('Location is required.')
+      setPurchaseFormError(t('purchases.locationRequired'))
       return
     }
     if (!purchaseFormValues.vendor.trim()) {
-      setPurchaseFormError('Vendor is required.')
+      setPurchaseFormError(t('purchases.vendorRequired'))
       return
     }
     if (!purchaseFormValues.units.trim()) {
-      setPurchaseFormError('Units are required.')
+      setPurchaseFormError(t('purchases.unitsRequired'))
       return
     }
     if (!purchaseFormValues.totalPrice.trim()) {
-      setPurchaseFormError('Total price is required.')
+      setPurchaseFormError(t('purchases.totalPriceRequired'))
       return
     }
     if (!purchaseFormValues.deliveryDate.trim()) {
-      setPurchaseFormError('Delivery date is required.')
+      setPurchaseFormError(t('purchases.deliveryDateRequired'))
       return
     }
 
@@ -3272,7 +3272,7 @@ function App() {
       return
     }
     const shouldConfirm = window.confirm(
-      'Are you sure you want to confirm this delivery?',
+      t('purchases.confirmDeliveryPrompt'),
     )
     if (!shouldConfirm) {
       return
@@ -3317,7 +3317,7 @@ function App() {
         ),
       )
     } catch (updateError) {
-      setPurchasesError('Unable to update purchase status. Please try again.')
+      setPurchasesError(t('purchases.updateStatusError'))
     }
   }
 
@@ -3334,37 +3334,37 @@ function App() {
     }
 
     if (!subtractionFormValues.itemId.trim()) {
-      setSubtractionFormError('Item ID is required.')
+      setSubtractionFormError(t('subtractions.itemIdRequired'))
       return
     }
     if (!subtractionFormValues.itemName.trim()) {
-      setSubtractionFormError('Item name is required.')
+      setSubtractionFormError(t('subtractions.itemNameRequired'))
       return
     }
     if (!subtractionFormValues.propertyId.trim()) {
-      setSubtractionFormError('Receiving property is required.')
+      setSubtractionFormError(t('subtractions.propertyRequired'))
       return
     }
     if (!subtractionFormValues.location.trim()) {
-      setSubtractionFormError('Receiving property is required.')
+      setSubtractionFormError(t('subtractions.propertyRequired'))
       return
     }
     if (!subtractionFormValues.units.trim()) {
-      setSubtractionFormError('Units are required.')
+      setSubtractionFormError(t('subtractions.unitsRequired'))
       return
     }
     const unitsValue = Number(subtractionFormValues.units)
     if (!Number.isFinite(unitsValue) || unitsValue <= 0) {
-      setSubtractionFormError('Units must be greater than zero.')
+      setSubtractionFormError(t('subtractions.unitsPositive'))
       return
     }
     if (!subtractionFormValues.cost.trim()) {
-      setSubtractionFormError('Cost is required.')
+      setSubtractionFormError(t('subtractions.costRequired'))
       return
     }
     const costValue = Number(subtractionFormValues.cost)
     if (!Number.isFinite(costValue) || costValue < 0) {
-      setSubtractionFormError('Cost must be a valid number.')
+      setSubtractionFormError(t('subtractions.costInvalid'))
       return
     }
 
@@ -3462,7 +3462,7 @@ function App() {
       return
     }
     const shouldConfirm = window.confirm(
-      'Mark this subtraction as billed?',
+      t('subtractions.markBilledPrompt'),
     )
     if (!shouldConfirm) {
       return
@@ -3513,7 +3513,7 @@ function App() {
       return
     }
     const shouldConfirm = window.confirm(
-      'Reverse this subtraction and restore inventory quantity?',
+      t('subtractions.reversePrompt'),
     )
     if (!shouldConfirm) {
       return
@@ -3697,7 +3697,7 @@ function App() {
         ),
       )
     } catch (updateError) {
-      setAlertsError('Unable to update alert status. Please try again.')
+      setAlertsError(t('alerts.updateError'))
     }
   }
 
@@ -4186,7 +4186,7 @@ function App() {
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -4584,7 +4584,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -4592,10 +4594,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Purchase data is read from the production DynamoDB table via
-                  Lambda access.
-                </p>
+                <p className="subtitle">{t('purchases.subtitle')}</p>
               </div>
               <div
                 className={`page-action-bar ${
@@ -4680,7 +4679,7 @@ function App() {
                   onClick={fetchPurchases}
                   type="button"
                   disabled={isPurchasesLoading}
-                  aria-label="Refresh"
+                  aria-label={t('common.refresh')}
                 >
                   <svg
                     aria-hidden="true"
@@ -4704,31 +4703,29 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Total purchases</p>
+                <p className="card-label">{t('purchases.totalPurchases')}</p>
                 <p className="card-value">{purchasesFilteredRows.length}</p>
-                <p className="card-meta">Visible purchases</p>
+                <p className="card-meta">{t('purchases.visiblePurchases')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Pending deliveries</p>
+                <p className="card-label">{t('purchases.pendingDeliveries')}</p>
                 <p className="card-value">{pendingPurchasesCount}</p>
-                <p className="card-meta">Awaiting confirmation</p>
+                <p className="card-meta">{t('purchases.awaitingConfirmation')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last Sync</p>
+                <p className="card-label">{t('common.lastSync')}</p>
                 <p className="card-value">
-                  {purchasesLastUpdated ?? 'Not synced yet'}
+                  {purchasesLastUpdated ?? t('common.notSyncedYet')}
                 </p>
-                <p className="card-meta">Production DynamoDB</p>
+                <p className="card-meta">{t('common.productionDynamoDb')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Purchases</h2>
-                  <p className="card-subtitle">
-                    Confirm delivery to mark purchases as delivered.
-                  </p>
+                  <h2 className="card-title">{t('purchases.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('purchases.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -4739,14 +4736,14 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Select one or more values to filter the purchases.
+                          {t('purchases.filterSubtitle')}
                         </p>
                       </div>
                       <button
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsPurchasesFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -4759,7 +4756,7 @@ function App() {
                           <div className="filter-options">
                             {purchaseLocationOptions.length === 0 ? (
                               <p className="modal-subtitle">
-                                No locations available yet.
+                                {t('common.locationsEmpty')}
                               </p>
                             ) : (
                               purchaseLocationOptions.map((option) => {
@@ -4835,10 +4832,10 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Delivery date range</p>
+                          <p className="filter-title">{t('purchases.deliveryDateRange')}</p>
                           <div className="filter-options">
                             <label className="form-field">
-                              <span>From</span>
+                              <span>{t('common.from')}</span>
                               <input
                                 type="date"
                                 value={purchasesFilterDraft.deliveryDateFrom}
@@ -4851,7 +4848,7 @@ function App() {
                               />
                             </label>
                             <label className="form-field">
-                              <span>To</span>
+                              <span>{t('common.to')}</span>
                               <input
                                 type="date"
                                 value={purchasesFilterDraft.deliveryDateTo}
@@ -4911,7 +4908,7 @@ function App() {
                       <th scope="col">{t('common.itemName')}</th>
                       <th scope="col">{t('common.location')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">Delivery date</th>
+                      <th scope="col">{t('common.deliveryDate')}</th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
@@ -4919,15 +4916,15 @@ function App() {
                     {isPurchasesLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          Loading purchases...
+                          {t('purchases.loading')}
                         </td>
                       </tr>
                     ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
                           {purchaseRows.length > 0
-                            ? 'No purchases match the current filters.'
-                            : 'No purchases available yet.'}
+                            ? t('purchases.emptyFiltered')
+                            : t('purchases.empty')}
                         </td>
                       </tr>
                     ) : (
@@ -4949,7 +4946,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Confirm delivery"
+                                    aria-label={t('common.confirmDelivery')}
                                     onClick={() => confirmPurchaseDelivery(row)}
                                     disabled={row.status === 'Confirmed'}
                                   >
@@ -4958,7 +4955,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Edit purchase"
+                                    aria-label={t('common.editPurchase')}
                                     onClick={() => openPurchaseEdit(row)}
                                   >
                                     ✎
@@ -4968,7 +4965,7 @@ function App() {
                                     type="button"
                                     onClick={() => togglePurchaseRow(row.id)}
                                     aria-expanded={isExpanded}
-                                    aria-label="Toggle details"
+                                    aria-label={t('common.toggleDetails')}
                                   >
                                     {isExpanded ? '▾' : '▸'}
                                   </button>
@@ -4980,7 +4977,7 @@ function App() {
                                 <td colSpan={5}>
                                   <div className="detail-grid">
                                     <div>
-                                      <p className="detail-label">Purchase ID</p>
+                                      <p className="detail-label">{t('common.purchaseId')}</p>
                                       <p className="detail-value">{row.id}</p>
                                     </div>
                                     <div>
@@ -4988,21 +4985,21 @@ function App() {
                                       <p className="detail-value">{row.itemId}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Vendor</p>
+                                      <p className="detail-label">{t('common.vendor')}</p>
                                       <p className="detail-value">{row.vendor}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Units</p>
+                                      <p className="detail-label">{t('common.units')}</p>
                                       <p className="detail-value">{row.units}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Total price</p>
+                                      <p className="detail-label">{t('common.totalPrice')}</p>
                                       <p className="detail-value">
                                         {row.totalPrice}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Purchase date</p>
+                                      <p className="detail-label">{t('common.purchaseDate')}</p>
                                       <p className="detail-value">
                                         {row.purchaseDate}
                                       </p>
@@ -5033,7 +5030,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -5041,10 +5040,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Manual inventory removals are stored in the production DynamoDB
-                  table via Lambda access.
-                </p>
+                <p className="subtitle">{t('subtractions.subtitle')}</p>
               </div>
               <div
                 className={`page-action-bar ${
@@ -5129,7 +5125,7 @@ function App() {
                   onClick={fetchSubtractions}
                   type="button"
                   disabled={isSubtractionsLoading}
-                  aria-label="Refresh"
+                  aria-label={t('common.refresh')}
                 >
                   <svg
                     aria-hidden="true"
@@ -5155,31 +5151,29 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Total subtractions</p>
+                <p className="card-label">{t('subtractions.totalSubtractions')}</p>
                 <p className="card-value">{subtractionsFilteredRows.length}</p>
-                <p className="card-meta">Visible subtractions</p>
+                <p className="card-meta">{t('subtractions.visibleSubtractions')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Pending billing</p>
+                <p className="card-label">{t('subtractions.pendingBilling')}</p>
                 <p className="card-value">{pendingSubtractionsCount}</p>
-                <p className="card-meta">Awaiting billing</p>
+                <p className="card-meta">{t('subtractions.awaitingBilling')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last Sync</p>
+                <p className="card-label">{t('common.lastSync')}</p>
                 <p className="card-value">
-                  {subtractionsLastUpdated ?? 'Not synced yet'}
+                  {subtractionsLastUpdated ?? t('common.notSyncedYet')}
                 </p>
-                <p className="card-meta">Production DynamoDB</p>
+                <p className="card-meta">{t('common.productionDynamoDb')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Subtractions</h2>
-                  <p className="card-subtitle">
-                    Track manual inventory removals and billing status.
-                  </p>
+                  <h2 className="card-title">{t('subtractions.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('subtractions.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -5190,14 +5184,14 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Select one or more values to filter the subtractions.
+                          {t('subtractions.filterSubtitle')}
                         </p>
                       </div>
                       <button
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsSubtractionsFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -5210,7 +5204,7 @@ function App() {
                           <div className="filter-options">
                             {subtractionLocationOptions.length === 0 ? (
                               <p className="modal-subtitle">
-                                No locations available yet.
+                                {t('common.locationsEmpty')}
                               </p>
                             ) : (
                               subtractionLocationOptions.map((option) => {
@@ -5290,10 +5284,10 @@ function App() {
                         </div>
 
                         <div className="filter-group">
-                          <p className="filter-title">Date range</p>
+                          <p className="filter-title">{t('common.dateRange')}</p>
                           <div className="form-grid">
                             <label className="form-field">
-                              <span>From</span>
+                              <span>{t('common.from')}</span>
                               <input
                                 type="date"
                                 value={subtractionsFilterDraft.dateFrom}
@@ -5306,7 +5300,7 @@ function App() {
                               />
                             </label>
                             <label className="form-field">
-                              <span>To</span>
+                              <span>{t('common.to')}</span>
                               <input
                                 type="date"
                                 value={subtractionsFilterDraft.dateTo}
@@ -5365,7 +5359,7 @@ function App() {
                       <th scope="col">{t('common.itemName')}</th>
                       <th scope="col">{t('common.location')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">Date</th>
+                      <th scope="col">{t('common.date')}</th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
@@ -5373,13 +5367,13 @@ function App() {
                     {isSubtractionsLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          Loading subtractions...
+                          {t('subtractions.loading')}
                         </td>
                       </tr>
                     ) : subtractionsFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          No subtractions available yet.
+                          {t('subtractions.empty')}
                         </td>
                       </tr>
                     ) : (
@@ -5401,7 +5395,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Mark billed"
+                                    aria-label={t('common.markBilled')}
                                     title="Mark billed"
                                     onClick={() => markSubtractionBilled(row)}
                                     disabled={row.status !== 'Pending Billing'}
@@ -5411,7 +5405,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Reverse subtraction"
+                                    aria-label={t('common.reverseSubtraction')}
                                     title="Reverse"
                                     onClick={() => reverseSubtraction(row)}
                                     disabled={row.status === 'Reversed'}
@@ -5423,7 +5417,7 @@ function App() {
                                     type="button"
                                     onClick={() => toggleSubtractionRow(row.id)}
                                     aria-expanded={isExpanded}
-                                    aria-label="Toggle details"
+                                    aria-label={t('common.toggleDetails')}
                                   >
                                     {isExpanded ? '▾' : '▸'}
                                   </button>
@@ -5453,35 +5447,35 @@ function App() {
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Property ID</p>
+                                      <p className="detail-label">{t('common.propertyId')}</p>
                                       <p className="detail-value">
                                         {row.propertyId}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Units</p>
+                                      <p className="detail-label">{t('common.units')}</p>
                                       <p className="detail-value">{row.units}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Cost</p>
+                                      <p className="detail-label">{t('common.cost')}</p>
                                       <p className="detail-value">
                                         {formatUnitPrice(row.cost)}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Total</p>
+                                      <p className="detail-label">{t('common.total')}</p>
                                       <p className="detail-value">
                                         {formatUnitPrice(row.units * row.cost)}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Billable</p>
+                                      <p className="detail-label">{t('common.billable')}</p>
                                       <p className="detail-value">
-                                        {row.billable ? 'Yes' : 'No'}
+                                        {row.billable ? t('common.yes') : t('common.no')}
                                       </p>
                                     </div>
                                     <div className="detail-span">
-                                      <p className="detail-label">Note</p>
+                                      <p className="detail-label">{t('common.note')}</p>
                                       <p className="detail-value">
                                         {row.note || '—'}
                                       </p>
@@ -5512,7 +5506,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -5520,10 +5516,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Property data is read from the production DynamoDB table via
-                  Lambda access.
-                </p>
+                <p className="subtitle">{t('properties.subtitle')}</p>
               </div>
               <div className="page-action-bar">
                 <div className="header-actions">
@@ -5579,31 +5572,29 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Active properties</p>
+                <p className="card-label">{t('properties.activeProperties')}</p>
                 <p className="card-value">{activePropertiesCount}</p>
-                <p className="card-meta">MTL parent properties are excluded</p>
+                <p className="card-meta">{t('properties.mtlExcluded')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Filtered properties</p>
+                <p className="card-label">{t('properties.filteredProperties')}</p>
                 <p className="card-value">{filteredPropertiesCount}</p>
-                <p className="card-meta">Visible in current filters</p>
+                <p className="card-meta">{t('common.visibleInFilters')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last Sync</p>
+                <p className="card-label">{t('common.lastSync')}</p>
                 <p className="card-value">
-                  {propertiesLastUpdated ?? 'Not synced yet'}
+                  {propertiesLastUpdated ?? t('common.notSyncedYet')}
                 </p>
-                <p className="card-meta">Fetched from Guesty PMS</p>
+                <p className="card-meta">{t('common.fetchedFromGuesty')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Properties</h2>
-                  <p className="card-subtitle">
-                    Use Refresh to compare with the external source.
-                  </p>
+                  <h2 className="card-title">{t('properties.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('properties.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -5614,14 +5605,14 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Select one or more values to filter the properties.
+                          {t('properties.filterSubtitle')}
                         </p>
                       </div>
                       <button
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsPropertiesFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -5823,16 +5814,16 @@ function App() {
                             )
                           }
                         >
-                          Nickname
+                          {t('properties.nickname')}
                           <span className="sort-indicator">
                             {propertiesSortDirection === 'asc' ? '▲' : '▼'}
                           </span>
                         </button>
                       </th>
-                      <th scope="col">Title</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">RoomType</th>
-                      <th scope="col">Neighborhood</th>
+                      <th scope="col">{t('common.title')}</th>
+                      <th scope="col">{t('common.type')}</th>
+                      <th scope="col">{t('common.roomType')}</th>
+                      <th scope="col">{t('common.neighborhood')}</th>
                       <th scope="col">{t('common.status')}</th>
                     </tr>
                   </thead>
@@ -5840,13 +5831,13 @@ function App() {
                     {isPropertiesLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          Loading properties...
+                          {t('properties.loading')}
                         </td>
                       </tr>
                     ) : propertiesFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          No properties available yet.
+                          {t('properties.empty')}
                         </td>
                       </tr>
                     ) : (
@@ -5863,7 +5854,7 @@ function App() {
                                 row.active ? 'status-success' : 'status-neutral'
                               }`}
                             >
-                              {row.active ? 'Active' : 'Inactive'}
+                              {row.active ? t('common.active') : t('common.inactive')}
                             </span>
                           </td>
                         </tr>
@@ -5887,7 +5878,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -5895,10 +5888,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Booking data is read from the production DynamoDB table via Lambda
-                  access.
-                </p>
+                <p className="subtitle">{t('bookings.subtitle')}</p>
               </div>
               <div className="page-action-bar">
                 <div className="header-actions">
@@ -5950,34 +5940,31 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Visible bookings</p>
+                <p className="card-label">{t('bookings.visibleBookings')}</p>
                 <p className="card-value">{sortedBookingsRows.length}</p>
-                <p className="card-meta">Rows in the current page</p>
+                <p className="card-meta">{t('common.rowsInCurrentPage')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Page size</p>
+                <p className="card-label">{t('common.pageSize')}</p>
                 <p className="card-value">{bookingsPageSize}</p>
-                <p className="card-meta">Server-side pagination size</p>
+                <p className="card-meta">{t('bookings.serverPageSize')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last refresh</p>
+                <p className="card-label">{t('common.lastRefresh')}</p>
                 <p className="card-value">{bookingsLastUpdated ?? 'Not refreshed yet'}</p>
-                <p className="card-meta">Fetched from DynamoDB</p>
+                <p className="card-meta">{t('common.fetchedFromDynamoDb')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Bookings</h2>
-                  <p className="card-subtitle">
-                    Use cursor pagination and check-in filters for large booking
-                    datasets.
-                  </p>
+                  <h2 className="card-title">{t('bookings.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('bookings.cardSubtitle')}</p>
                 </div>
                 <div className="table-actions">
                   <label className="form-field">
-                    <span>Rows per page</span>
+                    <span>{t('common.rowsPerPage')}</span>
                     <select
                       className="select-input"
                       value={bookingsPageSize}
@@ -6013,7 +6000,7 @@ function App() {
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsBookingsFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -6056,10 +6043,10 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Check-in range</p>
+                          <p className="filter-title">{t('bookings.checkInRange')}</p>
                           <div className="filter-options">
                             <label className="form-field">
-                              <span>From</span>
+                              <span>{t('common.from')}</span>
                               <input
                                 type="date"
                                 value={bookingsFilterDraft.checkInFrom}
@@ -6072,7 +6059,7 @@ function App() {
                               />
                             </label>
                             <label className="form-field">
-                              <span>To</span>
+                              <span>{t('common.to')}</span>
                               <input
                                 type="date"
                                 value={bookingsFilterDraft.checkInTo}
@@ -6129,9 +6116,9 @@ function App() {
                 <table className="data-table data-table-bookings">
                   <thead>
                     <tr>
-                      <th scope="col">Booking</th>
-                      <th scope="col">Guest</th>
-                      <th scope="col">Property</th>
+                      <th scope="col">{t('common.booking')}</th>
+                      <th scope="col">{t('common.guest')}</th>
+                      <th scope="col">{t('common.property')}</th>
                       <th scope="col">
                         <button
                           className="btn-sort is-active"
@@ -6142,28 +6129,28 @@ function App() {
                             )
                           }
                         >
-                          Check-in
+                          {t('common.checkIn')}
                           <span className="sort-indicator">
                             {bookingsSortDirection === 'asc' ? '▲' : '▼'}
                           </span>
                         </button>
                       </th>
-                      <th scope="col">Check-out</th>
+                      <th scope="col">{t('common.checkOut')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">Source</th>
+                      <th scope="col">{t('common.source')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isBookingsLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={7}>
-                          Loading bookings...
+                          {t('bookings.loading')}
                         </td>
                       </tr>
                     ) : sortedBookingsRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={7}>
-                          No bookings found for this page and filter combination.
+                          {t('bookings.emptyPage')}
                         </td>
                       </tr>
                     ) : (
@@ -6197,7 +6184,7 @@ function App() {
                   }}
                   disabled={isBookingsLoading || bookingsCursorHistory.length === 0}
                 >
-                  Previous
+                  {t('common.previous')}
                 </button>
                 <button
                   className="btn-secondary"
@@ -6214,7 +6201,7 @@ function App() {
                   }}
                   disabled={isBookingsLoading || !bookingsNextCursor}
                 >
-                  Next
+                  {t('common.next')}
                 </button>
               </div>
             </section>
@@ -6232,7 +6219,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -6240,9 +6229,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Refresh triggers a sync run and then reloads data and sync-state.
-                </p>
+                <p className="subtitle">{t('reviews.subtitle')}</p>
               </div>
               <div className="page-action-bar">
                 <div className="header-actions">
@@ -6251,8 +6238,8 @@ function App() {
                     reviewsCreatedPreset === 'last7' ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Show last 7 days"
-                  title="Rating < 5, last 7 days"
+                  aria-label={t('reviews.showLast7')}
+                  title={t('reviews.ratingLast7')}
                   onClick={() =>
                     setReviewsCreatedPreset((current) =>
                       current === 'last7' ? 'none' : 'last7',
@@ -6266,8 +6253,8 @@ function App() {
                     reviewsCreatedPreset === 'last30' ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Show last 30 days"
-                  title="Rating < 5, last 30 days"
+                  aria-label={t('reviews.showLast30')}
+                  title={t('reviews.ratingLast30')}
                   onClick={() =>
                     setReviewsCreatedPreset((current) =>
                       current === 'last30' ? 'none' : 'last30',
@@ -6326,17 +6313,17 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Total reviews</p>
+                <p className="card-label">{t('reviews.totalReviews')}</p>
                 <p className="card-value">{sortedReviewsRows.length}</p>
-                <p className="card-meta">Total shown with current filters</p>
+                <p className="card-meta">{t('common.totalShownFilters')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Pending reviews under 5</p>
+                <p className="card-label">{t('reviews.pendingUnder5')}</p>
                 <p className="card-value">{reviewsPendingUnderFiveCount}</p>
-                <p className="card-meta">Status Pending and rating below 5</p>
+                <p className="card-meta">{t('reviews.statusPendingUnder5Meta')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last sync</p>
+                <p className="card-label">{t('common.lastSync')}</p>
                 <p className="card-value">
                   {reviewsLastSyncAt ?? 'No sync recorded yet'}
                 </p>
@@ -6349,10 +6336,8 @@ function App() {
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Reviews</h2>
-                  <p className="card-subtitle">
-                    Click details to reveal private and public review content.
-                  </p>
+                  <h2 className="card-title">{t('reviews.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('reviews.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -6370,7 +6355,7 @@ function App() {
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsReviewsFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -6382,7 +6367,7 @@ function App() {
                           <p className="filter-title">Property</p>
                           <div className="filter-options">
                             <label className="form-field">
-                              <span>ListingNickname</span>
+                              <span>{t('reviews.listingNickname')}</span>
                               <select
                                 value={reviewsFilterDraft.listingNickname}
                                 onChange={(event) =>
@@ -6392,7 +6377,7 @@ function App() {
                                   }))
                                 }
                               >
-                                <option value="">All properties</option>
+                                <option value="">{t('common.allProperties')}</option>
                                 {reviewsPropertyOptions.map((option) => (
                                   <option key={option} value={option}>
                                     {option}
@@ -6406,7 +6391,7 @@ function App() {
                           <p className="filter-title">Rating</p>
                           <div className="filter-options">
                             <label className="form-field">
-                              <span>Min rating</span>
+                              <span>{t('reviews.minRating')}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -6422,7 +6407,7 @@ function App() {
                               />
                             </label>
                             <label className="form-field">
-                              <span>Max rating</span>
+                              <span>{t('reviews.maxRating')}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -6443,7 +6428,7 @@ function App() {
                           <p className="filter-title">Created at</p>
                           <div className="filter-options">
                             <label className="form-field">
-                              <span>From</span>
+                              <span>{t('common.from')}</span>
                               <input
                                 type="date"
                                 value={reviewsFilterDraft.createdFrom}
@@ -6456,7 +6441,7 @@ function App() {
                               />
                             </label>
                             <label className="form-field">
-                              <span>To</span>
+                              <span>{t('common.to')}</span>
                               <input
                                 type="date"
                                 value={reviewsFilterDraft.createdTo}
@@ -6515,9 +6500,9 @@ function App() {
                 <table className="data-table data-table-reviews">
                   <thead>
                     <tr>
-                      <th scope="col">Guest</th>
-                      <th scope="col">Listing</th>
-                      <th scope="col">Rating</th>
+                      <th scope="col">{t('common.guest')}</th>
+                      <th scope="col">{t('common.listing')}</th>
+                      <th scope="col">{t('common.rating')}</th>
                       <th scope="col">
                         <button
                           className="btn-sort is-active"
@@ -6528,27 +6513,27 @@ function App() {
                             )
                           }
                         >
-                          Created at
+                          {t('common.createdAt')}
                           <span className="sort-indicator">
                             {reviewsSortDirection === 'asc' ? '▲' : '▼'}
                           </span>
                         </button>
                       </th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">Details</th>
+                      <th scope="col">{t('common.details')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isReviewsLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          Loading reviews...
+                          {t('reviews.loading')}
                         </td>
                       </tr>
                     ) : sortedReviewsRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={6}>
-                          No reviews available yet.
+                          {t('reviews.empty')}
                         </td>
                       </tr>
                     ) : (
@@ -6610,14 +6595,14 @@ function App() {
                                 <td colSpan={6}>
                                   <div className="detail-grid">
                                     <div className="detail-span">
-                                      <p className="detail-label">Informative section</p>
+                                      <p className="detail-label">{t('reviews.informativeSection')}</p>
                                     </div>
                                     <div className="detail-span">
-                                      <p className="detail-label">Private Note</p>
+                                      <p className="detail-label">{t('reviews.privateNote')}</p>
                                       <p className="detail-value">{row.privateReview}</p>
                                     </div>
                                     <div className="detail-span">
-                                      <p className="detail-label">Public Review</p>
+                                      <p className="detail-label">{t('reviews.publicReview')}</p>
                                       <p className="detail-value">{row.publicReview}</p>
                                     </div>
                                     <div className="detail-span">
@@ -6627,37 +6612,37 @@ function App() {
                                         </summary>
                                         <div className="rules-grid">
                                           <div className="rule-card">
-                                            <p className="rule-title">Accuracy</p>
+                                            <p className="rule-title">{t('reviews.accuracy')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.accuracy || '—'}
                                             </p>
                                           </div>
                                           <div className="rule-card">
-                                            <p className="rule-title">Check-in</p>
+                                            <p className="rule-title">{t('common.checkIn')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.checkIn || '—'}
                                             </p>
                                           </div>
                                           <div className="rule-card">
-                                            <p className="rule-title">Cleanliness</p>
+                                            <p className="rule-title">{t('reviews.cleanliness')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.cleanliness || '—'}
                                             </p>
                                           </div>
                                           <div className="rule-card">
-                                            <p className="rule-title">Communication</p>
+                                            <p className="rule-title">{t('reviews.communication')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.communication || '—'}
                                             </p>
                                           </div>
                                           <div className="rule-card">
-                                            <p className="rule-title">Location</p>
+                                            <p className="rule-title">{t('common.location')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.location || '—'}
                                             </p>
                                           </div>
                                           <div className="rule-card">
-                                            <p className="rule-title">Value</p>
+                                            <p className="rule-title">{t('reviews.value')}</p>
                                             <p className="rule-value">
                                               {row.categoryRatings.value || '—'}
                                             </p>
@@ -6670,7 +6655,7 @@ function App() {
                                         <summary className="btn-link">Value</summary>
                                         <div className="review-value-details">
                                           <div>
-                                            <p className="detail-label">Total Guest Payment</p>
+                                            <p className="detail-label">{t('reviews.totalGuestPayment')}</p>
                                             <p className="detail-value">
                                               {row.guestPaidTotal
                                                 ? `${row.guestPaidTotal} €`
@@ -6701,7 +6686,7 @@ function App() {
                                       </details>
                                     </div>
                                     <div className="detail-span review-workflow-slot">
-                                      <p className="detail-label">Workflow section</p>
+                                      <p className="detail-label">{t('reviews.workflowSection')}</p>
                                       <ReviewWorkflowPanel
                                         row={{
                                           reviewId: row.reviewId,
@@ -6747,7 +6732,9 @@ function App() {
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -6755,10 +6742,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Alerts are read from the production DynamoDB table via Lambda
-                  access.
-                </p>
+                <p className="subtitle">{t('alerts.subtitle')}</p>
               </div>
               <div
                 className={`page-action-bar ${
@@ -6851,31 +6835,29 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Total alerts</p>
+                <p className="card-label">{t('alerts.totalAlerts')}</p>
                 <p className="card-value">{alertRows.length}</p>
-                <p className="card-meta">All origins</p>
+                <p className="card-meta">{t('common.allOrigins')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Pending</p>
+                <p className="card-label">{t('common.pending')}</p>
                 <p className="card-value">{pendingAlertsCount}</p>
-                <p className="card-meta">Needs action</p>
+                <p className="card-meta">{t('common.needsAction')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Last Sync</p>
+                <p className="card-label">{t('common.lastSync')}</p>
                 <p className="card-value">
-                  {alertsLastUpdated ?? 'Not synced yet'}
+                  {alertsLastUpdated ?? t('common.notSyncedYet')}
                 </p>
-                <p className="card-meta">Production DynamoDB</p>
+                <p className="card-meta">{t('common.productionDynamoDb')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Alerts</h2>
-                  <p className="card-subtitle">
-                    Pending alerts are shown by default.
-                  </p>
+                  <h2 className="card-title">{t('alerts.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('alerts.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -6886,14 +6868,14 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Select one or more values to filter the alerts.
+                          {t('alerts.filterSubtitle')}
                         </p>
                       </div>
                       <button
                         className="btn-icon"
                         type="button"
                         onClick={() => setIsAlertsFilterOpen(false)}
-                        aria-label="Close filters"
+                        aria-label={t('common.closeFilters')}
                       >
                         ✕
                       </button>
@@ -6902,7 +6884,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Origin</p>
+                          <p className="filter-title">{t('common.origin')}</p>
                           <div className="filter-options">
                             {alertsOriginOptions.map((option) => {
                               const isChecked =
@@ -7010,9 +6992,9 @@ function App() {
                 <table className="data-table data-table-alerts">
                   <thead>
                     <tr>
-                      <th scope="col">Name</th>
-                      <th scope="col">Description</th>
-                      <th scope="col">Date</th>
+                      <th scope="col">{t('common.name')}</th>
+                      <th scope="col">{t('common.description')}</th>
+                      <th scope="col">{t('common.date')}</th>
                       <th scope="col">{t('common.status')}</th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
@@ -7021,13 +7003,13 @@ function App() {
                     {isAlertsLoading ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          Loading alerts...
+                          {t('alerts.loading')}
                         </td>
                       </tr>
                     ) : alertsFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          No alerts available.
+                          {t('alerts.empty')}
                         </td>
                       </tr>
                     ) : (
@@ -7049,7 +7031,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Mark done"
+                                    aria-label={t('common.markDone')}
                                     onClick={() =>
                                       updateAlertStatus(row.id, 'Done')
                                     }
@@ -7059,7 +7041,7 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label="Snooze alert"
+                                    aria-label={t('alerts.snoozeTitle')}
                                     onClick={() => openSnoozeModal(row.id)}
                                   >
                                     ⏲
@@ -7069,7 +7051,7 @@ function App() {
                                     type="button"
                                     onClick={() => toggleAlertRow(row.id)}
                                     aria-expanded={isExpanded}
-                                    aria-label="Toggle details"
+                                    aria-label={t('common.toggleDetails')}
                                   >
                                     {isExpanded ? '▾' : '▸'}
                                   </button>
@@ -7081,15 +7063,15 @@ function App() {
                                 <td colSpan={5}>
                                   <div className="detail-grid">
                                     <div>
-                                      <p className="detail-label">Alert ID</p>
+                                      <p className="detail-label">{t('common.alertId')}</p>
                                       <p className="detail-value">{row.id}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Origin</p>
+                                      <p className="detail-label">{t('common.origin')}</p>
                                       <p className="detail-value">{row.origin}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Created by</p>
+                                      <p className="detail-label">{t('common.createdBy')}</p>
                                       <p className="detail-value">
                                         {row.createdBy}
                                       </p>
@@ -7136,16 +7118,14 @@ function App() {
             <div className="modal properties-diff-modal">
               <div className="modal-header">
                 <div>
-                  <h3 className="modal-title">Property changes detected</h3>
-                  <p className="modal-subtitle">
-                    Select each change to apply in DynamoDB table yalla-properties.
-                  </p>
+                  <h3 className="modal-title">{t('properties.changesTitle')}</h3>
+                  <p className="modal-subtitle">{t('properties.changesSubtitle')}</p>
                 </div>
                 <button
                   className="btn-icon"
                   type="button"
                   onClick={() => setIsPropertiesDiffOpen(false)}
-                  aria-label="Close property changes"
+                  aria-label={t('common.closePropertyChanges')}
                 >
                   ✕
                 </button>
@@ -7563,7 +7543,9 @@ function App() {
                   <div className="modal-header">
                     <div>
                       <h3 className="modal-title">
-                        {isEditingPurchase ? 'Purchase' : 'New Purchase.'}
+                        {isEditingPurchase
+                          ? t('purchases.formTitleShort')
+                          : t('purchases.formTitleNew')}
                       </h3>
                       {isEditingPurchase ? (
                         <p className="modal-subtitle">
@@ -7581,7 +7563,7 @@ function App() {
                       className="btn-icon"
                       type="button"
                       onClick={closePurchaseForm}
-                      aria-label="Close purchase form"
+                      aria-label={t('common.closePurchaseForm')}
                     >
                       ✕
                     </button>
@@ -7591,7 +7573,7 @@ function App() {
               <div className="modal-body">
                 <div className="form-grid">
                   <label className="form-field">
-                    <span>Vendor</span>
+                    <span>{t('common.vendor')}</span>
                     <input
                       type="text"
                       value={purchaseFormValues.vendor}
@@ -7601,11 +7583,11 @@ function App() {
                           vendor: event.target.value,
                         }))
                       }
-                      placeholder="Vendor name"
+                      placeholder={t('common.vendorName')}
                     />
                   </label>
                   <label className="form-field">
-                    <span>Units</span>
+                    <span>{t('common.units')}</span>
                     <input
                       type="number"
                       min="0"
@@ -7620,7 +7602,7 @@ function App() {
                     />
                   </label>
                   <label className="form-field">
-                    <span>Total price</span>
+                    <span>{t('common.totalPrice')}</span>
                     <input
                       type="number"
                       min="0"
@@ -7636,7 +7618,7 @@ function App() {
                     />
                   </label>
                   <label className="form-field">
-                    <span>Delivery date</span>
+                    <span>{t('common.deliveryDate')}</span>
                     <input
                       type="date"
                       value={purchaseFormValues.deliveryDate}
@@ -7700,7 +7682,7 @@ function App() {
                   className="btn-icon"
                   type="button"
                   onClick={closeSubtractionForm}
-                  aria-label="Close subtraction form"
+                  aria-label={t('common.closeSubtractionForm')}
                 >
                   ✕
                 </button>
@@ -7708,7 +7690,7 @@ function App() {
               <div className="modal-body">
                 <div className="form-grid">
                   <label className="form-field">
-                    <span>Units</span>
+                    <span>{t('common.units')}</span>
                     <input
                       type="number"
                       min="1"
@@ -7723,7 +7705,7 @@ function App() {
                     />
                   </label>
                   <label className="form-field">
-                    <span>Receiving property</span>
+                    <span>{t('common.receivingProperty')}</span>
                     <select
                       value={subtractionFormValues.propertyId}
                       onChange={(event) => {
@@ -7738,7 +7720,7 @@ function App() {
                         }))
                       }}
                     >
-                      <option value="">Select property</option>
+                      <option value="">{t('common.selectProperty')}</option>
                       {activePropertyOptions.map((property) => (
                         <option key={property.id} value={property.id}>
                           {property.nickname}
@@ -7747,7 +7729,7 @@ function App() {
                     </select>
                   </label>
                   <label className="form-field">
-                    <span>Cost</span>
+                    <span>{t('common.cost')}</span>
                     <input
                       type="number"
                       min="0"
@@ -7763,7 +7745,7 @@ function App() {
                     />
                   </label>
                   <label className="form-field form-field-checkbox">
-                    <span>Should be billed?</span>
+                    <span>{t('common.shouldBeBilled')}</span>
                     <input
                       type="checkbox"
                       checked={subtractionFormValues.billable}
@@ -7776,7 +7758,7 @@ function App() {
                     />
                   </label>
                   <label className="form-field form-field-span">
-                    <span>Note (optional)</span>
+                    <span>{t('common.noteOptional')}</span>
                     <textarea
                       value={subtractionFormValues.note}
                       onChange={(event) =>
@@ -7785,7 +7767,7 @@ function App() {
                           note: event.target.value,
                         }))
                       }
-                      placeholder="Add a note"
+                      placeholder={t('common.addNote')}
                       rows={3}
                     />
                   </label>
@@ -7831,14 +7813,14 @@ function App() {
                   className="btn-icon"
                   type="button"
                   onClick={() => setIsSnoozeOpen(false)}
-                  aria-label="Close snooze"
+                  aria-label={t('common.closeSnooze')}
                 >
                   ✕
                 </button>
               </div>
               <div className="modal-body">
                 <label className="form-field">
-                  <span>Reminder date</span>
+                  <span>{t('common.reminderDate')}</span>
                   <input
                     type="date"
                     value={snoozeDate}
@@ -7860,16 +7842,16 @@ function App() {
                   type="button"
                   onClick={() => {
                     if (!snoozeDate) {
-                      setSnoozeError('Select a reminder date.')
+                      setSnoozeError(t('alerts.selectReminderDate'))
                       return
                     }
                     if (!snoozeTargetId) {
-                      setSnoozeError('Missing alert ID.')
+                      setSnoozeError(t('alerts.missingId'))
                       return
                     }
                     const snoozeUntil = formatSnoozeUntil(snoozeDate)
                     if (!snoozeUntil) {
-                      setSnoozeError('Select a valid date.')
+                      setSnoozeError(t('alerts.selectValidDate'))
                       return
                     }
                     void updateAlertStatus(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   fetchJson,
   getReferenceList,
@@ -52,12 +53,16 @@ type Props = {
   propertyOptions: PropertyOption[]
 }
 
-const VISIT_COLUMNS: { key: VisitStatus | 'DONE'; label: string; statuses: VisitStatus[] }[] = [
-  { key: 'SCHEDULED', label: 'Scheduled', statuses: ['SCHEDULED'] },
-  { key: 'OVERDUE', label: 'Overdue', statuses: ['OVERDUE'] },
+const VISIT_COLUMN_DEFS: {
+  key: VisitStatus | 'DONE'
+  labelKey: string
+  statuses: VisitStatus[]
+}[] = [
+  { key: 'SCHEDULED', labelKey: 'operations.scheduled', statuses: ['SCHEDULED'] },
+  { key: 'OVERDUE', labelKey: 'operations.overdue', statuses: ['OVERDUE'] },
   {
     key: 'DONE',
-    label: 'Completed & Cancelled',
+    labelKey: 'operations.completedCancelled',
     statuses: ['COMPLETED', 'CANCELLED'],
   },
 ]
@@ -191,6 +196,15 @@ export function DailyOperationsView({
   getCurrentUserEmail,
   propertyOptions: propertyOptionsProp,
 }: Props) {
+  const { t } = useTranslation()
+  const visitColumns = useMemo(
+    () =>
+      VISIT_COLUMN_DEFS.map((column) => ({
+        ...column,
+        label: t(column.labelKey),
+      })),
+    [t],
+  )
   const [opsTab, setOpsTab] = useState<'dashboard' | 'pool' | 'templates'>(
     'dashboard',
   )
@@ -365,16 +379,16 @@ export function DailyOperationsView({
 
   const visitsByColumn = useMemo(() => {
     const map = new Map<string, VisitRecord[]>()
-    VISIT_COLUMNS.forEach((column) => map.set(column.key, []))
+    visitColumns.forEach((column) => map.set(column.key, []))
     filteredVisits.forEach((visit) => {
-      const column = VISIT_COLUMNS.find((entry) =>
+      const column = visitColumns.find((entry) =>
         entry.statuses.includes(visit.status),
       )
       if (column) {
         map.get(column.key)?.push(visit)
       }
     })
-    VISIT_COLUMNS.forEach((column) => {
+    visitColumns.forEach((column) => {
       const rows = map.get(column.key) ?? []
       rows.sort((a, b) => {
         const dateCompare = a.scheduledDate.localeCompare(b.scheduledDate)
@@ -432,7 +446,7 @@ export function DailyOperationsView({
 
   const loadVisits = useCallback(async () => {
     if (!endpoints.visits) {
-      setError('Missing get visits endpoint (VITE_GET_VISITS_URL).')
+      setError(t('operations.missingVisitsEndpoint'))
       return
     }
     const { from, to } = visitQueryRange
@@ -443,7 +457,7 @@ export function DailyOperationsView({
       setVisits((payload.items ?? []).map((entry) => mapVisit(entry)))
     } catch (loadError) {
       setError(
-        loadError instanceof Error ? loadError.message : 'Unable to load visits.',
+        loadError instanceof Error ? loadError.message : t('operations.unableLoadVisits'),
       )
     } finally {
       setIsLoading(false)
@@ -469,7 +483,7 @@ export function DailyOperationsView({
       setPoolTasks((payload.items ?? []).map((entry) => mapTask(entry)))
     } catch (loadError) {
       setError(
-        loadError instanceof Error ? loadError.message : 'Unable to load tasks.',
+        loadError instanceof Error ? loadError.message : t('operations.unableLoadTasks'),
       )
     }
   }, [endpoints.tasks])
@@ -669,14 +683,16 @@ export function DailyOperationsView({
       setDraftVisitTasks([])
       setMessage(
         hasBulkTasks
-          ? `Visit saved with ${createdTasks || tasksToCreate.length} tasks.`
-          : 'Visit saved.',
+          ? t('operations.visitSavedWithTasks', {
+              count: createdTasks || tasksToCreate.length,
+            })
+          : t('operations.visitSaved'),
       )
       if (!mapped || !isCreatingVisit) {
         await loadVisits()
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save visit.')
+      setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveVisit'))
     } finally {
       setIsSavingVisitWithTasks(false)
     }
@@ -927,13 +943,13 @@ export function DailyOperationsView({
     try {
       await saveTask(endpoints.upsertTask, payload)
       setIsTaskFormOpen(false)
-      setMessage('Task saved.')
+      setMessage(t('operations.taskSaved'))
       await loadPool()
       if (taskForm.visitId || selectedVisitId) {
         await loadVisitTasks(taskForm.visitId || selectedVisitId || '')
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save task.')
+      setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveTask'))
     }
   }
 
@@ -945,7 +961,7 @@ export function DailyOperationsView({
       status: 'COMPLETED',
       closedBy,
     })
-    setMessage('Task completed.')
+    setMessage(t('operations.taskCompleted'))
     await loadPool()
     if (selectedVisitId) await loadVisitTasks(selectedVisitId)
   }
@@ -953,7 +969,7 @@ export function DailyOperationsView({
   const dismissTask = async (task: TaskRecord) => {
     if (!endpoints.upsertTask) return
     await saveTask(endpoints.upsertTask, { id: task.id, action: 'dismiss' })
-    setMessage('Task dismissed.')
+    setMessage(t('operations.taskDismissed'))
     await loadPool()
     if (selectedVisitId) await loadVisitTasks(selectedVisitId)
   }
@@ -1047,10 +1063,8 @@ export function DailyOperationsView({
       <section className="card">
         <div className="page-header">
           <div className="page-header-leading">
-            <h1 className="page-title">Daily Operations</h1>
-            <p className="subtitle">
-              Schedule visits, track overdue work, and manage tasks.
-            </p>
+            <h1 className="page-title">{t('operations.title')}</h1>
+            <p className="subtitle">{t('operations.subtitlePage')}</p>
           </div>
           <div className="page-action-bar">
             <div className="header-actions">
@@ -1063,7 +1077,7 @@ export function DailyOperationsView({
                     setIsTaskFormOpen(true)
                   }}
                 >
-                  Create task
+                  {t('operations.createTask')}
                 </button>
               ) : opsTab === 'dashboard' ? (
                 <button
@@ -1071,7 +1085,7 @@ export function DailyOperationsView({
                   type="button"
                   onClick={openCreateVisit}
                 >
-                  Create visit
+                  {t('operations.createVisit')}
                 </button>
               ) : null}
               <button
@@ -1086,7 +1100,7 @@ export function DailyOperationsView({
                   }
                 }}
               >
-                Refresh
+                {t('operations.refresh')}
               </button>
             </div>
           </div>
@@ -1098,21 +1112,21 @@ export function DailyOperationsView({
             className={opsTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setOpsTab('dashboard')}
           >
-            Dashboard
+            {t('operations.dashboard')}
           </button>
           <button
             type="button"
             className={opsTab === 'pool' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setOpsTab('pool')}
           >
-            Unassigned
+            {t('operations.unassigned')}
           </button>
           <button
             type="button"
             className={opsTab === 'templates' ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setOpsTab('templates')}
           >
-            Templates
+            {t('operations.templates')}
           </button>
         </div>
 
@@ -1165,7 +1179,7 @@ export function DailyOperationsView({
                   }
                   onClick={applyTodayRange}
                 >
-                  Today
+                  {t('operations.today')}
                 </button>
                 <button
                   type="button"
@@ -1177,19 +1191,20 @@ export function DailyOperationsView({
                   }
                   onClick={applyTomorrowRange}
                 >
-                  Tomorrow
+                  {t('operations.tomorrow')}
                 </button>
               </div>
             ) : dashboardViewMode === 'agenda' ? (
               <p className="subtitle operations-view-hint">
-                Showing {formatAgendaDayLabel(visitQueryRange.from)} –{' '}
-                {formatAgendaDayLabel(visitQueryRange.to)}. Click a day header to
-                open the day timeline.
+                {t('operations.agendaHint', {
+                  from: formatAgendaDayLabel(visitQueryRange.from),
+                  to: formatAgendaDayLabel(visitQueryRange.to),
+                })}
               </p>
             ) : (
               <div className="filters-grid operations-day-date-filter">
                 <label>
-                  Day
+                  {t('operations.dayLabel')}
                   <input
                     type="date"
                     value={dayViewDate}
@@ -1203,7 +1218,7 @@ export function DailyOperationsView({
               {dashboardViewMode === 'kanban' ? (
                 <>
                   <label>
-                    From
+                    {t('operations.from')}
                     <input
                       type="date"
                       value={filterDateFrom}
@@ -1212,7 +1227,7 @@ export function DailyOperationsView({
                     />
                   </label>
                   <label>
-                    To
+                    {t('operations.to')}
                     <input
                       type="date"
                       value={filterDateTo}
@@ -1223,12 +1238,12 @@ export function DailyOperationsView({
                 </>
               ) : null}
               <label>
-                Team
+                {t('operations.team')}
                 <select
                   value={filterTeamId}
                   onChange={(event) => setFilterTeamId(event.target.value)}
                 >
-                  <option value="">All teams</option>
+                  <option value="">{t('operations.allTeams')}</option>
                   {teams.map((team) => (
                     <option key={team.id} value={team.id}>
                       {team.name}
@@ -1237,25 +1252,25 @@ export function DailyOperationsView({
                 </select>
               </label>
               <label>
-                Status
+                {t('operations.status')}
                 <select
                   value={filterStatus}
                   onChange={(event) => setFilterStatus(event.target.value)}
                 >
-                  <option value="">All statuses</option>
-                  <option value="SCHEDULED">Scheduled</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="">{t('operations.allStatuses')}</option>
+                  <option value="SCHEDULED">{t('operations.scheduled')}</option>
+                  <option value="OVERDUE">{t('operations.overdue')}</option>
+                  <option value="COMPLETED">{t('operations.completed')}</option>
+                  <option value="CANCELLED">{t('operations.cancelled')}</option>
                 </select>
               </label>
               <label>
-                Property
+                {t('operations.property')}
                 <select
                   value={filterPropertyId}
                   onChange={(event) => setFilterPropertyId(event.target.value)}
                 >
-                  <option value="">All properties</option>
+                  <option value="">{t('operations.allProperties')}</option>
                   {sortedPropertyOptions.map((property) => (
                     <option key={property.id} value={property.id}>
                       {getPropertyLabel(property)}
@@ -1264,12 +1279,12 @@ export function DailyOperationsView({
                 </select>
               </label>
               <label>
-                Assigned user
+                {t('operations.assignedUser')}
                 <select
                   value={filterUserId}
                   onChange={(event) => setFilterUserId(event.target.value)}
                 >
-                  <option value="">All users</option>
+                  <option value="">{t('operations.allUsers')}</option>
                   {users.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}
@@ -1284,7 +1299,7 @@ export function DailyOperationsView({
 
           {dashboardViewMode === 'kanban' ? (
             <OperationsKanbanView
-              columns={VISIT_COLUMNS}
+              columns={visitColumns}
               visitsByColumn={visitsByColumn}
               isMultiDayRange={isMultiDayRange}
               propertyById={propertyById}
@@ -1442,7 +1457,7 @@ export function DailyOperationsView({
                 className="btn-icon"
                 type="button"
                 onClick={() => setSelectedVisitId(null)}
-                aria-label="Close visit detail"
+                aria-label={t('operations.closeVisitDetail')}
               >
                 ✕
               </button>
@@ -1497,7 +1512,7 @@ export function DailyOperationsView({
                       disabled={visitHasOpenTasks}
                       title={
                         visitHasOpenTasks
-                          ? 'Complete or dismiss all tasks first'
+                          ? t('operations.completeTasksFirst')
                           : undefined
                       }
                       onClick={openCompleteVisitModal}
@@ -1568,7 +1583,7 @@ export function DailyOperationsView({
                           className={`btn-icon btn-icon-ghost${
                             isCompleted ? ' is-task-complete' : ''
                           }`}
-                          aria-label="Complete task"
+                          aria-label={t('operations.completeTask')}
                           disabled={isCompleted || isCancelled || !canActOnTask}
                           onClick={() => void completeTask(task)}
                         >
@@ -1580,7 +1595,7 @@ export function DailyOperationsView({
                             className={`btn-icon btn-icon-ghost${
                               isDismissing ? ' is-task-dismiss-active' : ''
                             }`}
-                            aria-label="Dismiss task"
+                            aria-label={t('operations.dismissTask')}
                             disabled={isDismissing}
                             onClick={() => void handleDismissTask(task)}
                           >
@@ -1604,7 +1619,7 @@ export function DailyOperationsView({
           >
             <div className="modal-header">
               <h3 className="modal-title">
-                {visitForm.id ? 'Edit visit' : 'Create visit'}
+                {visitForm.id ? t('operations.editVisit') : t('operations.createVisit')}
               </h3>
               <button
                 className="btn-icon"
@@ -1835,7 +1850,7 @@ export function DailyOperationsView({
                   {draftVisitTasks.map((task, index) => (
                     <div key={`draft-${index}`} className="template-task-row">
                       <input
-                        placeholder="Task title"
+                        placeholder={t('operations.taskTitle')}
                         value={task.title}
                         onChange={(event) =>
                           setDraftVisitTasks((current) =>
@@ -1848,7 +1863,7 @@ export function DailyOperationsView({
                         }
                       />
                       <input
-                        placeholder="Description"
+                        placeholder={t('operations.description')}
                         value={task.description}
                         onChange={(event) =>
                           setDraftVisitTasks((current) =>
@@ -1907,7 +1922,7 @@ export function DailyOperationsView({
                 disabled={isSavingVisitWithTasks}
                 onClick={() => void submitVisit()}
               >
-                {isSavingVisitWithTasks ? 'Saving…' : 'Save visit'}
+                {isSavingVisitWithTasks ? t('operations.saving') : t('operations.saveVisit')}
               </button>
             </div>
           </div>
@@ -1918,7 +1933,7 @@ export function DailyOperationsView({
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">{taskForm.id ? 'Edit task' : 'Create task'}</h3>
+              <h3 className="modal-title">{taskForm.id ? t('operations.editTask') : t('operations.createTask')}</h3>
               <button
                 className="btn-icon"
                 type="button"
