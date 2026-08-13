@@ -2212,8 +2212,8 @@ function App() {
 
     try {
       const [reviewsResponse, syncStateResponse] = await Promise.all([
-        fetch(reviewsEndpoint),
-        fetch(syncStateEndpoint),
+        authFetch(reviewsEndpoint),
+        authFetch(syncStateEndpoint),
       ])
 
       if (!reviewsResponse.ok) {

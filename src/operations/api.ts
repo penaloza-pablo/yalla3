@@ -4,24 +4,12 @@ import type {
   VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
+import { authFetch } from '../lib/auth-fetch'
 
 type ListResponse<T> = { items?: T[]; item?: T; count?: number; message?: string }
 
-import { fetchAuthSession } from 'aws-amplify/auth'
-
-const withAuthHeaders = async (init?: RequestInit): Promise<RequestInit> => {
-  const session = await fetchAuthSession()
-  const token = session.tokens?.idToken?.toString()
-  if (!token) {
-    return init ?? {}
-  }
-  const headers = new Headers(init?.headers)
-  headers.set('Authorization', `Bearer ${token}`)
-  return { ...init, headers }
-}
-
 export const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(url, await withAuthHeaders(init))
+  const response = await authFetch(url, init)
   if (!response.ok) {
     const text = await response.text()
     throw new Error(text || `Request failed (${response.status})`)

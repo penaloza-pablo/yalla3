@@ -1,7 +1,7 @@
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { buildHttpResponse } from './dynamo-http';
 
-type HttpHeaders = Record<string, string | undefined>;
+type HttpHeaders = Record<string, string | string[] | undefined>;
 
 type JwtVerifier = {
   verify: (token: string) => Promise<unknown>;
@@ -26,8 +26,11 @@ const getVerifier = (): JwtVerifier | null => {
 };
 
 export const getBearerToken = (headers: HttpHeaders) => {
-  const auth = headers.authorization ?? headers.Authorization;
-  if (!auth?.startsWith('Bearer ')) {
+  const entries = Object.entries(headers ?? {});
+  const authEntry = entries.find(([key]) => key.toLowerCase() === 'authorization');
+  const authValue = authEntry?.[1];
+  const auth = Array.isArray(authValue) ? authValue[0] : authValue;
+  if (typeof auth !== 'string' || !auth.toLowerCase().startsWith('bearer ')) {
     return null;
   }
   return auth.slice('Bearer '.length).trim();

@@ -2,9 +2,13 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 
 const withAuthHeaders = async (init?: RequestInit): Promise<RequestInit> => {
   const session = await fetchAuthSession()
-  const token = session.tokens?.idToken?.toString()
+  const token =
+    session.tokens?.idToken?.toString() ||
+    session.tokens?.accessToken?.toString()
   if (!token) {
-    return init ?? {}
+    throw new Error(
+      'Missing Cognito session token. Sign in again and retry.',
+    )
   }
   const headers = new Headers(init?.headers)
   headers.set('Authorization', `Bearer ${token}`)
