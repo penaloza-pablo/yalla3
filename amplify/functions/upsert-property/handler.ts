@@ -1,6 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+} from '@aws-sdk/lib-dynamodb';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -50,6 +54,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   body?: string;
+  headers?: Record<string, string | string[] | undefined>;
   arguments?: PropertyPayload;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -64,7 +69,6 @@ export const handler = async (event: {
     const denied = await rejectIfUnauthenticated(event);
     if (denied) return denied;
   }
-
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {
@@ -93,7 +97,7 @@ export const handler = async (event: {
     throw new Error(message);
   }
 
-  const item = {
+  const propertyFields = {
     id,
     title: payload.title?.trim() ?? '',
     nickname: payload.nickname?.trim() ?? '',
@@ -108,6 +112,32 @@ export const handler = async (event: {
   };
 
   try {
+    // Merge with existing item so bookings/reviews metrics (GuestPaid*, Listing*)
+    // are preserved when enriching a stub via Update from Guesty.
+    const existing = await client.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { id },
+      }),
+    );
+    const previous =
+      existing.Item && typeof existing.Item === 'object'
+        ? (existing.Item as Record<string, unknown>)
+        : {};
+    const item = {
+      ...previous,
+      ...propertyFields,
+      ListingID:
+        typeof previous.ListingID === 'string' && previous.ListingID.length > 0
+          ? previous.ListingID
+          : id,
+      ListingNickname:
+        propertyFields.nickname ||
+        (typeof previous.ListingNickname === 'string'
+          ? previous.ListingNickname
+          : ''),
+    };
+
     await client.send(
       new PutCommand({
         TableName: tableName,

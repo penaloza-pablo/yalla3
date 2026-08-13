@@ -169,6 +169,8 @@ type PropertyRow = {
   bathrooms: number
   city: string
   neighborhood: string
+  /** False for metrics-only Dynamo stubs (ListingNickname without property fields). */
+  isManaged?: boolean
 }
 
 type PropertiesApiResponse = {
@@ -339,9 +341,9 @@ const subtractionFieldMap = {
 }
 
 const propertyFieldMap = {
-  id: ['id', 'ID'],
+  id: ['id', 'ID', 'ListingID', 'listingId'],
   title: ['title', 'Title'],
-  nickname: ['nickname', 'Nickname'],
+  nickname: ['nickname', 'Nickname', 'ListingNickname', 'listingNickname'],
   active: ['active', 'Active'],
   type: ['type', 'Type'],
   roomType: ['roomType', 'Room Type', 'room type'],
@@ -864,6 +866,10 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
   const cityValue = address?.city ?? getItemValue(item, propertyFieldMap.city)
   const neighborhoodValue =
     address?.neighborhood ?? getItemValue(item, propertyFieldMap.neighborhood)
+  const hasManagedFields =
+    getItemValue(item, ['nickname', 'Nickname']) !== undefined ||
+    getItemValue(item, ['title', 'Title']) !== undefined ||
+    getItemValue(item, ['active', 'Active']) !== undefined
 
   return {
     id: getStringValue(getItemValue(item, propertyFieldMap.id)) || '—',
@@ -880,8 +886,13 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
     bathrooms: getNumberValue(getItemValue(item, propertyFieldMap.bathrooms)),
     city: getStringValue(cityValue) || '—',
     neighborhood: getStringValue(neighborhoodValue) || '—',
+    // Stubs created by bookings/reviews sync only have ListingNickname metrics.
+    isManaged: hasManagedFields,
   }
 }
+
+/** Fully managed in Properties (not a metrics-only stub). */
+const isManagedProperty = (row: PropertyRow) => row.isManaged === true
 
 const parseDateValue = (value: string) => {
   if (!value) {
@@ -1765,7 +1776,7 @@ function App() {
 
   const activePropertyOptions = useMemo(() => {
     return propertyRows
-      .filter((row) => row.active)
+      .filter((row) => isManagedProperty(row) && row.active)
       .slice()
       .sort((a, b) => a.nickname.localeCompare(b.nickname))
   }, [propertyRows])
@@ -2361,12 +2372,17 @@ function App() {
         mapPropertyRow(normalizeInventoryItem(item)),
       )
 
-      const currentById = new Map(propertyRows.map((row) => [row.id, row]))
+      // Only fully managed Dynamo rows count as "already in Yalla" for add/remove.
+      // Metrics-only stubs (e.g. Jerte with ListingNickname but no nickname/active)
+      // should still be suggested as add when Guesty reports them active.
+      const managedById = new Map(
+        propertyRows.filter(isManagedProperty).map((row) => [row.id, row]),
+      )
       const externalById = new Map(externalRows.map((row) => [row.id, row]))
       const nextDiffs: PropertyDiff[] = []
 
       externalRows.forEach((row) => {
-        if (!currentById.has(row.id)) {
+        if (row.active && !managedById.has(row.id)) {
           nextDiffs.push({
             id: `add:${row.id}`,
             action: 'add',
@@ -2375,7 +2391,7 @@ function App() {
         }
       })
 
-      propertyRows.forEach((row) => {
+      propertyRows.filter(isManagedProperty).forEach((row) => {
         if (!externalById.has(row.id)) {
           nextDiffs.push({
             id: `remove:${row.id}`,
@@ -2919,6 +2935,9 @@ function App() {
 
   const propertiesFilteredRows = useMemo(() => {
     return propertyRows.filter((row) => {
+      if (!isManagedProperty(row)) {
+        return false
+      }
       const statusValue = row.active ? 'Active' : 'Inactive'
       const statusMatch =
         propertiesFilters.statuses.length === 0 ||
@@ -2964,7 +2983,9 @@ function App() {
   }, [propertyRows])
 
   const activePropertiesCount = useMemo(() => {
-    return propertyRows.filter((row) => row.active && row.type !== 'MTL').length
+    return propertyRows.filter(
+      (row) => isManagedProperty(row) && row.active && row.type !== 'MTL',
+    ).length
   }, [propertyRows])
 
   const filteredPropertiesCount = useMemo(() => {
@@ -7109,7 +7130,7 @@ function App() {
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={propertyRows
-              .filter((row) => row.active)
+              .filter((row) => isManagedProperty(row) && row.active)
               .map((row) => ({
                 id: row.id,
                 nickname: row.nickname,
