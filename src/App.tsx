@@ -5556,14 +5556,6 @@ function App() {
                                     </div>
                                     <div>
                                       <p className="detail-label">
-                                        {t('common.priceInclIva')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {formatUnitPrice(row.cost)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
                                         {t('common.markup')}
                                       </p>
                                       <p className="detail-value">
@@ -7781,32 +7773,34 @@ function App() {
                       placeholder="0.00"
                     />
                   </label>
-                  <label className="form-field form-field-checkbox">
-                    <span>{t('common.shouldBeBilled')}</span>
-                    <input
-                      type="checkbox"
-                      checked={subtractionFormValues.billable}
-                      onChange={(event) =>
-                        setSubtractionFormValues((current) => ({
-                          ...current,
-                          billable: event.target.checked,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="form-field form-field-checkbox">
-                    <span>{t('common.markup')}</span>
-                    <input
-                      type="checkbox"
-                      checked={subtractionFormValues.markup}
-                      onChange={(event) =>
-                        setSubtractionFormValues((current) => ({
-                          ...current,
-                          markup: event.target.checked,
-                        }))
-                      }
-                    />
-                  </label>
+                  <div className="form-field form-field-span subtraction-checkboxes">
+                    <label className="form-field-checkbox">
+                      <span>{t('common.shouldBeBilled')}</span>
+                      <input
+                        type="checkbox"
+                        checked={subtractionFormValues.billable}
+                        onChange={(event) =>
+                          setSubtractionFormValues((current) => ({
+                            ...current,
+                            billable: event.target.checked,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="form-field-checkbox">
+                      <span>{t('common.markup')}</span>
+                      <input
+                        type="checkbox"
+                        checked={subtractionFormValues.markup}
+                        onChange={(event) =>
+                          setSubtractionFormValues((current) => ({
+                            ...current,
+                            markup: event.target.checked,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
                   <label className="form-field form-field-span">
                     <span>{t('common.noteOptional')}</span>
                     <textarea
@@ -7830,31 +7824,31 @@ function App() {
                   )
                   return (
                     <div className="subtraction-pricing-grid">
-                      <div>
+                      <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.markup')}</p>
                         <p className="detail-value">
                           {formatUnitPrice(pricing.markup)}
                         </p>
                       </div>
-                      <div>
+                      <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.ivaMarkup')}</p>
                         <p className="detail-value">
                           {formatUnitPrice(pricing.ivaMarkup)}
                         </p>
                       </div>
-                      <div>
+                      <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.priceExclIva')}</p>
                         <p className="detail-value">
                           {formatUnitPrice(pricing.priceExclIva)}
                         </p>
                       </div>
-                      <div>
+                      <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.iva')}</p>
                         <p className="detail-value">
                           {formatUnitPrice(pricing.iva)}
                         </p>
                       </div>
-                      <div>
+                      <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.totalPrice')}</p>
                         <p className="detail-value">
                           {formatUnitPrice(pricing.totalPrice)}

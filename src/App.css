@@ -859,9 +859,43 @@ th {
   border-radius: 8px;
 }
 
+.subtraction-pricing-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.subtraction-pricing-item .detail-label {
+  margin: 0;
+  min-height: 2.5em;
+  line-height: 1.25;
+  display: flex;
+  align-items: flex-end;
+}
+
+.subtraction-pricing-item .detail-value {
+  margin: 0;
+}
+
+.subtraction-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: center;
+}
+
+.subtraction-checkboxes .form-field-checkbox {
+  margin: 0;
+}
+
 @media (max-width: 720px) {
   .subtraction-pricing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .subtraction-checkboxes {
+    grid-template-columns: 1fr;
   }
 }
 
