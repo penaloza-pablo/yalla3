@@ -2254,7 +2254,9 @@ function App() {
     setReviewsError(null)
 
     try {
-      const response = await authFetch(REVIEWS_SYNC_TRIGGER_URL)
+      // Guesty sync Lambdas are external and public; do not send Authorization
+      // (that triggers a CORS preflight these URLs do not answer correctly).
+      const response = await fetch(REVIEWS_SYNC_TRIGGER_URL)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2330,7 +2332,9 @@ function App() {
     setPropertiesSyncMessage(null)
 
     try {
-      const response = await authFetch(PROPERTIES_SYNC_TRIGGER_URL)
+      // Guesty sync Lambdas are external and public; do not send Authorization
+      // (that triggers a CORS preflight these URLs do not answer correctly).
+      const response = await fetch(PROPERTIES_SYNC_TRIGGER_URL)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(

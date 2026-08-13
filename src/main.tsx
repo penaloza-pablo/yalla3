@@ -9,13 +9,15 @@ import './index.css'
 import App from './App.tsx'
 
 const loadAmplifyOutputs = async () => {
+  // Prefer runtime file when present (Amplify Hosting copies it into dist).
+  // Fall back to the build-time import so auth still works if the file 404s.
   try {
-    const response = await fetch('/amplify_outputs.json')
+    const response = await fetch('/amplify_outputs.json', { cache: 'no-store' })
     if (response.ok) {
       return (await response.json()) as Record<string, unknown>
     }
   } catch {
-    // No-op: fallback to empty config for non-Amplify builds.
+    // Ignore network/404; use bundled outputs below.
   }
   return outputs as Record<string, unknown>
 }
