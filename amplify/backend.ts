@@ -181,7 +181,7 @@ substractionsTable.grantReadData(backend.getSubtractions.resources.lambda);
 substractionsTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
-propertiesTable.grantWriteData(backend.upsertProperty.resources.lambda);
+propertiesTable.grantReadWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
 bookingsTable.grantReadData(backend.getBookings.resources.lambda);
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);

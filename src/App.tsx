@@ -2410,7 +2410,7 @@ function App() {
       }
 
       setPropertyDiffs(nextDiffs)
-      setSelectedPropertyDiffIds(new Set(nextDiffs.map((diff) => diff.id)))
+      setSelectedPropertyDiffIds(new Set())
       setIsPropertiesDiffOpen(true)
     } catch (requestError) {
       const message =
@@ -2473,7 +2473,10 @@ function App() {
             body: JSON.stringify(payload),
           })
           if (!response.ok) {
-            throw new Error(`Failed to add property ${diff.row.id}.`)
+            const errorText = await response.text()
+            throw new Error(
+              `Failed to add property ${diff.row.id} (${response.status}). ${errorText}`.trim(),
+            )
           }
           continue
         }
@@ -2484,7 +2487,10 @@ function App() {
           body: JSON.stringify({ id: diff.row.id }),
         })
         if (!response.ok) {
-          throw new Error(`Failed to delete property ${diff.row.id}.`)
+          const errorText = await response.text()
+          throw new Error(
+            `Failed to delete property ${diff.row.id} (${response.status}). ${errorText}`.trim(),
+          )
         }
       }
 

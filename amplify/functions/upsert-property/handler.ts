@@ -147,10 +147,12 @@ export const handler = async (event: {
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {
+    console.error('Failed to save property', error);
     const message = 'Failed to save property.';
+    const details = error instanceof Error ? error.message : String(error);
     if (isHttp) {
-      return buildHttpResponse(500, { message });
+      return buildHttpResponse(500, { message, details });
     }
-    throw new Error(message);
+    throw new Error(`${message} ${details}`.trim());
   }
 };
