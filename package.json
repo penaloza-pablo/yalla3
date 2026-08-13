@@ -16,8 +16,10 @@
     "@aws-sdk/lib-dynamodb": "^3.821.0",
     "aws-amplify": "~6.15.10",
     "aws-jwt-verify": "^4.0.1",
+    "i18next": "^26.3.6",
     "react": "~18.3.1",
     "react-dom": "~18.3.1",
+    "react-i18next": "^17.0.11",
     "xlsx": "^0.18.5"
   },
   "packageManager": "npm@10.9.2",

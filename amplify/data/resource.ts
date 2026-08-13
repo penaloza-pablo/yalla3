@@ -21,6 +21,7 @@ const schema = a.schema({
   InventoryItem: a.customType({
     id: a.string(),
     name: a.string(),
+    nameEs: a.string(),
     category: a.string(),
     location: a.string(),
     status: a.string(),
@@ -106,6 +107,7 @@ const schema = a.schema({
     .arguments({
       id: a.string().required(),
       name: a.string().required(),
+      nameEs: a.string(),
       category: a.string(),
       location: a.string(),
       status: a.string(),

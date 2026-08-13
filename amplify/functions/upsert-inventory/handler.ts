@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
+  GetCommand,
   PutCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
@@ -164,6 +165,7 @@ const hasDuplicateReorderAlert = async (
 type InventoryPayload = {
   id?: string;
   name?: string;
+  nameEs?: string;
   category?: string;
   location?: string;
   status?: string;
@@ -176,6 +178,7 @@ type InventoryPayload = {
   consumptionRulesJson?: string;
   consumptionRules?: Record<string, unknown>;
   ['Item name']?: string;
+  ['Item name ES']?: string;
   Category?: string;
   Location?: string;
   Status?: string;
@@ -267,6 +270,12 @@ export const handler = async (event: {
   }
 
   const name = payload.name ?? payload['Item name'];
+  const hasNameEs =
+    Object.prototype.hasOwnProperty.call(payload, 'nameEs') ||
+    Object.prototype.hasOwnProperty.call(payload, 'Item name ES');
+  const nameEsRaw = hasNameEs
+    ? (payload.nameEs ?? payload['Item name ES'])
+    : undefined;
   const category = payload.category ?? payload.Category;
   const location = payload.location ?? payload.Location;
   const status = payload.status ?? payload.Status;
@@ -274,14 +283,41 @@ export const handler = async (event: {
   const updated = payload.updated ?? payload['Last updated'];
   const tolerance = payload.tolerance ?? payload.Tolerance;
   const trimmedCategory = category?.trim();
+  const trimmedNameEs =
+    typeof nameEsRaw === 'string' ? nameEsRaw.trim() : undefined;
   const quantityValue = Number(quantity) || 0;
   const rebuyQtyValue = Number(payload.rebuyQty) || 0;
   const statusValue = status?.trim() || computeInventoryStatus(quantityValue, rebuyQtyValue);
   const createdBy = payload.createdBy?.trim() || 'system';
+  const itemId = String(payload.id).trim();
+
+  let preservedNameEs: string | undefined;
+  if (!hasNameEs) {
+    try {
+      const existing = await client.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { id: itemId },
+        }),
+      );
+      const existingNameEs = existing.Item?.nameEs;
+      if (typeof existingNameEs === 'string' && existingNameEs.trim()) {
+        preservedNameEs = existingNameEs.trim();
+      }
+    } catch (readError) {
+      console.error('Failed to read existing inventory item for nameEs', {
+        itemId,
+        error: readError,
+      });
+    }
+  }
+
+  const resolvedNameEs = hasNameEs ? trimmedNameEs : preservedNameEs;
 
   const item = {
-    id: String(payload.id).trim(),
+    id: itemId,
     'Item name': name?.trim() ?? '',
+    ...(resolvedNameEs ? { nameEs: resolvedNameEs } : {}),
     category: trimmedCategory || undefined,
     Location: location?.trim() ?? '',
     Status: statusValue,

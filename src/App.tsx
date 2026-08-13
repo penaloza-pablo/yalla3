@@ -1,4 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { LanguageSwitcher } from './i18n/LanguageSwitcher'
+import {
+  displayInventoryName,
+  translatePage,
+  translateSection,
+  translateStatus,
+} from './i18n/display'
 import { Amplify } from 'aws-amplify'
 import { fetchUserAttributes } from 'aws-amplify/auth'
 import { authFetch } from './lib/auth-fetch'
@@ -29,6 +37,7 @@ type ConsumptionRules = {
 type InventoryRow = {
   id: string
   name: string
+  nameEs: string
   location: string
   status: string
   quantity: number
@@ -86,6 +95,7 @@ type SubtractionRow = {
 type InventoryFormState = {
   id: string
   name: string
+  nameEs: string
   categoryChoice: string
   categoryOther: string
   locationChoice: string
@@ -280,6 +290,7 @@ const PROPERTIES_SYNC_TRIGGER_URL =
 const inventoryFieldMap = {
   id: ['id', 'ID'],
   name: ['Item name', 'item name', 'name'],
+  nameEs: ['nameEs', 'Item name ES', 'item name es', 'name_es'],
   category: ['category', 'Category'],
   location: ['Location', 'location'],
   status: ['Status', 'status'],
@@ -765,6 +776,7 @@ const getCurrentUserEmail = async () => {
 const mapInventoryRow = (item: Record<string, unknown>): InventoryRow => ({
   id: getStringValue(getItemValue(item, inventoryFieldMap.id)) || '—',
   name: getStringValue(getItemValue(item, inventoryFieldMap.name)) || '—',
+  nameEs: getStringValue(getItemValue(item, inventoryFieldMap.nameEs)),
   category: getStringValue(getItemValue(item, inventoryFieldMap.category)),
   location:
     getStringValue(getItemValue(item, inventoryFieldMap.location)) || '—',
@@ -1070,6 +1082,7 @@ const getStatusClassName = (status: string) => {
 const emptyFormState: InventoryFormState = {
   id: '',
   name: '',
+  nameEs: '',
   categoryChoice: '',
   categoryOther: '',
   locationChoice: '',
@@ -1112,6 +1125,13 @@ const emptySubtractionFormState: SubtractionFormState = {
 }
 
 function App() {
+  const { t, i18n } = useTranslation()
+  const pageLabel = (page: string) => translatePage(t, page)
+  const sectionLabel = (section: string) => translateSection(t, section)
+  const statusLabel = (status: string) => translateStatus(t, status)
+  const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
+    displayInventoryName(i18n.language, row.name, row.nameEs)
+
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -1132,7 +1152,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed'],
+    statuses: ['To be confirmed', 'Waiting Delivery'],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1143,7 +1163,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed'],
+    statuses: ['To be confirmed', 'Waiting Delivery'],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1491,10 +1511,8 @@ function App() {
 
     return (
       <section className="card">
-        <h1 className="page-title">Chatbot</h1>
-        <p className="subtitle">
-          Test conversational AI powered by Amplify in this environment.
-        </p>
+        <h1 className="page-title">{t('chatbot.title')}</h1>
+        <p className="subtitle">{t('chatbot.subtitle')}</p>
         <div className="chat-layout">
           <div className="chat-panel">
             {!isAiConfigured ? (
@@ -1513,7 +1531,7 @@ function App() {
                     key={message.id}
                   >
                     <p className="chat-role">
-                      {message.role === 'user' ? 'You' : 'Assistant'}
+                      {message.role === 'user' ? t('chatbot.you') : t('chatbot.assistant')}
                     </p>
                     <p className="chat-content">
                       {formatChatContent(message.content)}
@@ -1521,9 +1539,7 @@ function App() {
                   </div>
                 ))
               ) : (
-                <p className="chat-empty">
-                  Start a conversation to see responses here.
-                </p>
+                <p className="chat-empty">{t('chatbot.empty')}</p>
               )}
             </div>
             <div className="chat-input-row">
@@ -1536,7 +1552,7 @@ function App() {
                     void sendMessage(chatInput)
                   }
                 }}
-                placeholder="Ask about inventory or alerts..."
+                placeholder={t('chatbot.placeholder')}
                 className="chat-input"
                 rows={2}
               />
@@ -1547,7 +1563,7 @@ function App() {
                   onClick={() => void sendMessage(chatInput)}
                   disabled={isChatLoading || !chatInput.trim()}
                 >
-                  {isChatLoading ? 'Sending...' : 'Send'}
+                  {isChatLoading ? t('chatbot.sending') : t('chatbot.send')}
                 </button>
                 <button
                   className="btn-ghost"
@@ -1572,10 +1588,8 @@ function App() {
               </p>
             </div>
             <div className="card">
-              <h2 className="card-title">Quick prompts</h2>
-              <p className="card-subtitle">
-                Try a starter prompt to validate the AI route.
-              </p>
+              <h2 className="card-title">{t('chatbot.quickPrompts')}</h2>
+              <p className="card-subtitle">{t('chatbot.quickPromptsSubtitle')}</p>
               <div className="quick-prompts">
                 {quickPrompts.map((prompt) => (
                   <button
@@ -2649,6 +2663,7 @@ function App() {
     setFormValues({
       id: row.id,
       name: row.name,
+      nameEs: row.nameEs || '',
       categoryChoice: resolvedCategoryChoice,
       categoryOther: resolvedCategoryChoice === OTHER_OPTION ? row.category : '',
       locationChoice: resolvedLocationChoice,
@@ -2671,7 +2686,7 @@ function App() {
 
   const deleteItem = async (row: InventoryRow) => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${row.name}" (${row.id})?`,
+      t('inventory.deleteConfirm', { name: itemDisplayName(row), id: row.id }),
     )
     if (!confirmed) return
 
@@ -2680,9 +2695,7 @@ function App() {
       import.meta.env.VITE_DELETE_INVENTORY_URL,
     )
     if (!endpoint) {
-      setError(
-        'Missing delete endpoint. Set VITE_DELETE_INVENTORY_URL in the environment.',
-      )
+      setError(t('inventory.missingDelete'))
       return
     }
 
@@ -2695,7 +2708,7 @@ function App() {
       if (!response.ok) throw new Error('Failed to delete item.')
       await fetchInventory()
     } catch (deleteError) {
-      setError('Unable to delete the item. Please try again.')
+      setError(t('inventory.deleteError'))
     }
   }
 
@@ -2763,7 +2776,10 @@ function App() {
     const direction = sortConfig.direction === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       if (sortConfig.key === 'name') {
-        return a.name.localeCompare(b.name) * direction
+        return (
+          itemDisplayName(a).localeCompare(itemDisplayName(b), i18n.language) *
+          direction
+        )
       }
       if (sortConfig.key === 'status') {
         const statusDiff =
@@ -2771,7 +2787,10 @@ function App() {
         if (statusDiff !== 0) {
           return statusDiff * direction
         }
-        return a.name.localeCompare(b.name) * direction
+        return (
+          itemDisplayName(a).localeCompare(itemDisplayName(b), i18n.language) *
+          direction
+        )
       }
       return 0
     })
@@ -2828,6 +2847,7 @@ function App() {
       return matchesTableSearch(tableSearchQuery, [
         row.id,
         row.name,
+        row.nameEs,
         row.location,
         row.status,
         row.category,
@@ -3086,7 +3106,7 @@ function App() {
   const goToRestockStep = () => {
     setFormError(null)
     if (!formValues.name.trim()) {
-      setFormError('Item name is required.')
+      setFormError(t('inventory.nameRequired'))
       return
     }
     const resolvedCategory = resolveChoice(
@@ -3094,7 +3114,7 @@ function App() {
       formValues.categoryOther,
     )
     if (!resolvedCategory) {
-      setFormError('Category is required.')
+      setFormError(t('inventory.categoryRequired'))
       return
     }
     const resolvedLocation = resolveChoice(
@@ -3102,11 +3122,11 @@ function App() {
       formValues.locationOther,
     )
     if (!resolvedLocation) {
-      setFormError('Location is required.')
+      setFormError(t('inventory.locationRequired'))
       return
     }
     if (!formValues.quantity.trim()) {
-      setFormError('Quantity is required.')
+      setFormError(t('inventory.quantityRequired'))
       return
     }
     setFormStep('restock')
@@ -3207,7 +3227,10 @@ function App() {
         body: JSON.stringify(payload),
       })
       if (!response.ok) {
-        throw new Error('Failed to save purchase.')
+        const errorText = await response.text()
+        throw new Error(
+          `Failed to save purchase (${response.status}). ${errorText}`.trim(),
+        )
       }
       const responseBody = (await response.json()) as {
         item?: Record<string, unknown>
@@ -3234,7 +3257,11 @@ function App() {
 
       setIsPurchaseFormOpen(false)
     } catch (saveError) {
-      setPurchaseFormError('Unable to save the purchase. Please try again.')
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : 'Unable to save the purchase. Please try again.'
+      setPurchaseFormError(message)
     } finally {
       setIsPurchaseSaving(false)
     }
@@ -3551,14 +3578,12 @@ function App() {
       import.meta.env.VITE_UPSERT_INVENTORY_URL,
     )
     if (!endpoint) {
-      setFormError(
-        'Missing upsert endpoint. Set VITE_UPSERT_INVENTORY_URL in the environment.',
-      )
+      setFormError(t('inventory.missingUpsert'))
       return
     }
 
     if (!formValues.name.trim()) {
-      setFormError('Item name is required.')
+      setFormError(t('inventory.nameRequired'))
       return
     }
 
@@ -3567,7 +3592,7 @@ function App() {
       formValues.categoryOther,
     )
     if (!resolvedCategory) {
-      setFormError('Category is required.')
+      setFormError(t('inventory.categoryRequired'))
       return
     }
 
@@ -3576,12 +3601,12 @@ function App() {
       formValues.locationOther,
     )
     if (!resolvedLocation) {
-      setFormError('Location is required.')
+      setFormError(t('inventory.locationRequired'))
       return
     }
 
     if (!formValues.quantity.trim()) {
-      setFormError('Quantity is required.')
+      setFormError(t('inventory.quantityRequired'))
       return
     }
 
@@ -3599,6 +3624,7 @@ function App() {
     const payload = {
       id: itemId,
       'Item name': formValues.name.trim(),
+      nameEs: formValues.nameEs.trim(),
       category: resolvedCategory,
       Location: resolvedLocation,
       Status: statusValue,
@@ -3626,7 +3652,7 @@ function App() {
       setIsFormOpen(false)
       await fetchInventory()
     } catch (saveError) {
-      setFormError('Unable to save the item. Please try again.')
+      setFormError(t('inventory.saveError'))
     } finally {
       setIsSaving(false)
     }
@@ -3749,7 +3775,7 @@ function App() {
         <button
           className="btn-icon btn-icon-ghost mobile-menu-button"
           type="button"
-          aria-label={isMobileNavOpen ? 'Close menu' : 'Open menu'}
+          aria-label={isMobileNavOpen ? t('common.closeMenu') : t('common.openMenu')}
           aria-expanded={isMobileNavOpen}
           onClick={() => (isMobileNavOpen ? closeMobileNav() : openMobileNav())}
         >
@@ -3775,13 +3801,13 @@ function App() {
         </button>
         <div className="mobile-topbar-brand">
           <span className="mobile-topbar-title">Yalla!</span>
-          <span className="mobile-topbar-page">{activePage}</span>
+          <span className="mobile-topbar-page">{pageLabel(activePage)}</span>
         </div>
         {pendingAlertsCount > 0 ? (
           <button
             className="mobile-topbar-alert"
             type="button"
-            aria-label={`${pendingAlertsCount} pending alerts`}
+            aria-label={t('common.pendingAlerts', { count: pendingAlertsCount })}
             onClick={() => navigateToPage('Alerts')}
           >
             {pendingAlertsCount}
@@ -3809,7 +3835,7 @@ function App() {
           <button
             className="btn-icon btn-icon-ghost mobile-nav-close"
             type="button"
-            aria-label="Close menu"
+            aria-label={t('common.closeMenu')}
             onClick={closeMobileNav}
           >
             ✕
@@ -3828,7 +3854,7 @@ function App() {
                       type="button"
                       onClick={() => navigateToPage(item)}
                     >
-                      <span>{item}</span>
+                      <span>{pageLabel(item)}</span>
                       {item === 'Alerts' && pendingAlertsCount > 0 ? (
                         <span className="nav-badge">{pendingAlertsCount}</span>
                       ) : null}
@@ -3852,7 +3878,7 @@ function App() {
                         aria-current={isActive ? 'page' : undefined}
                         type="button"
                         onClick={() => navigateToPage(item)}
-                        aria-label={item}
+                        aria-label={pageLabel(item)}
                       >
                         {item === 'Alerts' ? (
                           <>
@@ -3894,7 +3920,9 @@ function App() {
                     <button
                       className="nav-button nav-section-shortcut"
                       type="button"
-                      aria-label={`Open ${group.section}`}
+                      aria-label={t('common.openSection', {
+                        section: sectionLabel(group.section),
+                      })}
                       onClick={() => handleSectionShortcut(group.section)}
                     >
                       {group.section.charAt(0)}
@@ -3912,7 +3940,7 @@ function App() {
                 onClick={() => toggleSection(group.section)}
                 aria-expanded={!collapsedSections.has(group.section)}
               >
-                <span>{group.section}</span>
+                <span>{sectionLabel(group.section)}</span>
                 <span className="nav-section-caret">
                   {collapsedSections.has(group.section) ? '▸' : '▾'}
                 </span>
@@ -3929,7 +3957,7 @@ function App() {
                           type="button"
                           onClick={() => navigateToPage(item)}
                         >
-                          {item}
+                          {pageLabel(item)}
                         </button>
                       </li>
                     )
@@ -3939,13 +3967,18 @@ function App() {
             </div>
           ))}
         </nav>
+        <LanguageSwitcher compact={isSidebarCollapsed} />
       </aside>
       <button
         className={`btn-icon btn-icon-ghost sidebar-toggle ${
           isSidebarCollapsed ? 'is-collapsed' : ''
         }`}
         type="button"
-        aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={
+          isSidebarCollapsed
+            ? t('common.expandSidebar')
+            : t('common.collapseSidebar')
+        }
         onClick={handleSidebarToggle}
       >
         {isSidebarCollapsed ? '›' : '‹'}
@@ -3956,16 +3989,18 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Inventory</p>
+                <p className="eyebrow">{t('inventory.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Inventory</h1>
+                  <h1 className="page-title">{pageLabel('Inventory')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
                       isSummaryInfoOpen ? 'is-active' : ''
                     }`}
                     aria-label={
-                      isSummaryInfoOpen ? 'Hide summary info' : 'Show summary info'
+                      isSummaryInfoOpen
+                        ? t('common.hideSummaryInfo')
+                        : t('common.showSummaryInfo')
                     }
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
@@ -3973,10 +4008,7 @@ function App() {
                     i
                   </button>
                 </div>
-                <p className="subtitle">
-                  Inventory data is read from the production DynamoDB table via
-                  Lambda access.
-                </p>
+                <p className="subtitle">{t('inventory.subtitle')}</p>
               </div>
               <div
                 className={`page-action-bar ${
@@ -3985,9 +4017,9 @@ function App() {
               >
                 <input
                   className="search-input"
-                  placeholder="Search inventory"
+                  placeholder={t('inventory.search')}
                   type="search"
-                  aria-label="Search inventory"
+                  aria-label={t('inventory.search')}
                   value={tableSearchQuery}
                   onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
@@ -3998,7 +4030,9 @@ function App() {
                   }`}
                   type="button"
                   aria-label={
-                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
                   }
                   aria-expanded={isMobileSearchOpen}
                   onClick={() =>
@@ -4026,7 +4060,7 @@ function App() {
                     isFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setFilterDraft({
                       locations: [...filters.locations],
@@ -4056,7 +4090,7 @@ function App() {
                   type="button"
                   onClick={exportInventory}
                   disabled={isExporting}
-                  aria-label="Export"
+                  aria-label={t('common.export')}
                 >
                   <svg
                     aria-hidden="true"
@@ -4074,7 +4108,7 @@ function App() {
                   className="btn-ghost"
                   type="button"
                   onClick={openNewItem}
-                  aria-label="Add item"
+                  aria-label={t('common.addItem')}
                 >
                   <svg
                     aria-hidden="true"
@@ -4090,7 +4124,7 @@ function App() {
                   onClick={fetchInventory}
                   type="button"
                   disabled={isLoading}
-                  aria-label="Refresh"
+                  aria-label={t('common.refresh')}
                 >
                   <svg
                     aria-hidden="true"
@@ -4114,29 +4148,27 @@ function App() {
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
-                <p className="card-label">Locations</p>
+                <p className="card-label">{t('inventory.locations')}</p>
                 <p className="card-value">{locationCount}</p>
-                <p className="card-meta">Visible locations</p>
+                <p className="card-meta">{t('inventory.locationsMeta')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Reorder</p>
+                <p className="card-label">{t('inventory.reorder')}</p>
                 <p className="card-value">{reorderCount}</p>
-                <p className="card-meta">Requires purchase</p>
+                <p className="card-meta">{t('inventory.reorderMeta')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">Low Stock</p>
+                <p className="card-label">{t('inventory.lowStock')}</p>
                 <p className="card-value">{lowStockCount}</p>
-                <p className="card-meta">Needs attention</p>
+                <p className="card-meta">{t('inventory.lowStockMeta')}</p>
               </div>
             </section>
 
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2 className="card-title">Inventory</h2>
-                  <p className="card-subtitle">
-                    Live data from production will appear here.
-                  </p>
+                  <h2 className="card-title">{t('inventory.cardTitle')}</h2>
+                  <p className="card-subtitle">{t('inventory.cardSubtitle')}</p>
                 </div>
               </div>
 
@@ -4145,7 +4177,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Select one or more values to filter the inventory.
                         </p>
@@ -4163,7 +4195,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Location</p>
+                          <p className="filter-title">{t('common.location')}</p>
                           <div className="filter-options">
                             {locationOptions.map((option) => {
                               const isChecked =
@@ -4200,7 +4232,7 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Category</p>
+                          <p className="filter-title">{t('common.category')}</p>
                           <div className="filter-options">
                             {categoryOptions.map((option) => {
                               const isChecked =
@@ -4238,7 +4270,7 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {statusOptions.map((option) => {
                               const isChecked =
@@ -4289,7 +4321,7 @@ function App() {
                           })
                         }}
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -4303,7 +4335,7 @@ function App() {
                           setIsFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -4322,7 +4354,7 @@ function App() {
                           type="button"
                           onClick={() => toggleSort('name')}
                         >
-                          Item name
+                          {t('common.itemName')}
                           <span className="sort-indicator">
                             {sortConfig.key === 'name'
                               ? sortConfig.direction === 'asc'
@@ -4332,7 +4364,7 @@ function App() {
                           </span>
                         </button>
                       </th>
-                      <th scope="col">Location</th>
+                      <th scope="col">{t('common.location')}</th>
                       <th scope="col">
                         <button
                           className={`btn-sort ${
@@ -4341,7 +4373,7 @@ function App() {
                           type="button"
                           onClick={() => toggleSort('status')}
                         >
-                          Status
+                          {t('common.status')}
                           <span className="sort-indicator">
                             {sortConfig.key === 'status'
                               ? sortConfig.direction === 'asc'
@@ -4351,21 +4383,21 @@ function App() {
                           </span>
                         </button>
                       </th>
-                      <th scope="col">Quantity</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{t('common.quantity')}</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoading ? (
                       <tr>
                     <td className="table-empty" colSpan={5}>
-                          Loading inventory...
+                          {t('inventory.loading')}
                         </td>
                       </tr>
                     ) : inventoryRows.length === 0 ? (
                       <tr>
                     <td className="table-empty" colSpan={5}>
-                          No inventory data available yet.
+                          {t('inventory.empty')}
                         </td>
                       </tr>
                 ) : (
@@ -4374,11 +4406,11 @@ function App() {
                       return (
                         <Fragment key={row.id}>
                         <tr>
-                          <td>{row.name}</td>
+                          <td>{itemDisplayName(row)}</td>
                           <td>{row.location}</td>
                           <td>
                             <span className={getStatusClassName(row.status)}>
-                              {row.status}
+                              {statusLabel(row.status)}
                             </span>
                           </td>
                           <td>{row.quantity}</td>
@@ -4388,7 +4420,7 @@ function App() {
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
                                 onClick={() => openPurchaseWizard(row)}
-                                aria-label="Create purchase"
+                                aria-label={t('common.createPurchase')}
                               >
                                 <svg
                                   aria-hidden="true"
@@ -4406,8 +4438,8 @@ function App() {
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
                                 onClick={() => openSubtractionWizard(row)}
-                                aria-label="Create subtraction"
-                                title="Subtract"
+                                aria-label={t('common.createSubtraction')}
+                                title={t('common.subtract')}
                               >
                                 <svg
                                   aria-hidden="true"
@@ -4425,7 +4457,7 @@ function App() {
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
                                 onClick={() => openEditItem(row)}
-                                aria-label="Edit item"
+                                aria-label={t('common.edit')}
                               >
                                 ✎
                               </button>
@@ -4433,7 +4465,7 @@ function App() {
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
                                 onClick={() => deleteItem(row)}
-                                aria-label="Delete item"
+                                aria-label={t('common.delete')}
                               >
                                 <svg
                                   aria-hidden="true"
@@ -4452,7 +4484,7 @@ function App() {
                                 type="button"
                                 onClick={() => toggleRow(row.id)}
                                 aria-expanded={isExpanded}
-                                aria-label="Toggle details"
+                                aria-label={t('common.toggleDetails')}
                               >
                                 {isExpanded ? '▾' : '▸'}
                               </button>
@@ -4464,44 +4496,44 @@ function App() {
                             <td colSpan={5}>
                               <div className="detail-grid">
                                 <div>
-                                  <p className="detail-label">Item ID</p>
+                                  <p className="detail-label">{t('common.itemId')}</p>
                                   <p className="detail-value">{row.id}</p>
                                 </div>
                                 <div>
-                                  <p className="detail-label">Category</p>
+                                  <p className="detail-label">{t('common.category')}</p>
                                   <p className="detail-value">
                                     {row.category || '—'}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="detail-label">Last updated</p>
+                                  <p className="detail-label">{t('common.lastUpdated')}</p>
                                   <p className="detail-value">{row.updated}</p>
                                 </div>
                                 <div>
-                                  <p className="detail-label">Rebuy quantity</p>
+                                  <p className="detail-label">{t('common.rebuyQty')}</p>
                                   <p className="detail-value">
                                     {row.rebuyQty || '—'}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="detail-label">Unit price</p>
+                                  <p className="detail-label">{t('common.unitPrice')}</p>
                                   <p className="detail-value">
                                     {formatUnitPrice(row.unitPrice)}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="detail-label">Tolerance</p>
+                                  <p className="detail-label">{t('common.tolerance')}</p>
                                   <p className="detail-value">
                                     {row.tolerance || '—'}
                                   </p>
                                 </div>
                                 <div className="detail-span">
                                   <p className="detail-label">
-                                    Consumption rules
+                                    {t('common.consumptionRules')}
                                   </p>
                                   <div className="rules-grid">
                                     <div className="rule-card">
-                                      <p className="rule-title">Apartment</p>
+                                      <p className="rule-title">{t('common.apartment')}</p>
                                       <p className="rule-value">
                                         {row.consumptionRules?.apartment
                                           ? `${row.consumptionRules.apartment.amount} / ${row.consumptionRules.apartment.unit}`
@@ -4509,7 +4541,7 @@ function App() {
                                       </p>
                                     </div>
                                     <div className="rule-card">
-                                      <p className="rule-title">Hostel</p>
+                                      <p className="rule-title">{t('common.hostel')}</p>
                                       <p className="rule-value">
                                         {row.consumptionRules?.hostel
                                           ? `${row.consumptionRules.hostel.amount} / ${row.consumptionRules.hostel.unit}`
@@ -4517,7 +4549,7 @@ function App() {
                                       </p>
                                     </div>
                                     <div className="rule-card">
-                                      <p className="rule-title">Room</p>
+                                      <p className="rule-title">{t('common.room')}</p>
                                       <p className="rule-value">
                                         {row.consumptionRules?.room
                                           ? `${row.consumptionRules.room.amount} / ${row.consumptionRules.room.unit}`
@@ -4543,9 +4575,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Inventory / Purchases</p>
+                <p className="eyebrow">{t('purchases.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Purchases</h1>
+                  <h1 className="page-title">{pageLabel('Purchases')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -4572,9 +4604,9 @@ function App() {
               >
                 <input
                   className="search-input"
-                  placeholder="Search purchases"
+                  placeholder={t('purchases.search')}
                   type="search"
-                  aria-label="Search purchases"
+                  aria-label={t('purchases.search')}
                   value={tableSearchQuery}
                   onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
@@ -4585,7 +4617,9 @@ function App() {
                   }`}
                   type="button"
                   aria-label={
-                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
                   }
                   aria-expanded={isMobileSearchOpen}
                   onClick={() =>
@@ -4613,7 +4647,7 @@ function App() {
                     isPurchasesFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setPurchasesFilterDraft({
                       locations: [...purchasesFilters.locations],
@@ -4703,7 +4737,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Select one or more values to filter the purchases.
                         </p>
@@ -4721,7 +4755,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Location</p>
+                          <p className="filter-title">{t('common.location')}</p>
                           <div className="filter-options">
                             {purchaseLocationOptions.length === 0 ? (
                               <p className="modal-subtitle">
@@ -4764,7 +4798,7 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {purchaseStatusOptions.map((option) => {
                               const isChecked =
@@ -4847,7 +4881,7 @@ function App() {
                           })
                         }
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -4863,7 +4897,7 @@ function App() {
                           setIsPurchasesFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -4874,11 +4908,11 @@ function App() {
                 <table className="data-table data-table-purchases">
                   <thead>
                     <tr>
-                      <th scope="col">Item name</th>
-                      <th scope="col">Location</th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t('common.itemName')}</th>
+                      <th scope="col">{t('common.location')}</th>
+                      <th scope="col">{t('common.status')}</th>
                       <th scope="col">Delivery date</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4891,7 +4925,9 @@ function App() {
                     ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
                         <td className="table-empty" colSpan={5}>
-                          No purchases available yet.
+                          {purchaseRows.length > 0
+                            ? 'No purchases match the current filters.'
+                            : 'No purchases available yet.'}
                         </td>
                       </tr>
                     ) : (
@@ -4904,7 +4940,7 @@ function App() {
                               <td>{row.location}</td>
                               <td>
                                 <span className={getStatusClassName(row.status)}>
-                                  {row.status}
+                                  {statusLabel(row.status)}
                                 </span>
                               </td>
                               <td>{row.deliveryDate}</td>
@@ -4948,7 +4984,7 @@ function App() {
                                       <p className="detail-value">{row.id}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Item ID</p>
+                                      <p className="detail-label">{t('common.itemId')}</p>
                                       <p className="detail-value">{row.itemId}</p>
                                     </div>
                                     <div>
@@ -4988,9 +5024,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Inventory / Subtractions</p>
+                <p className="eyebrow">{t('subtractions.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Subtractions</h1>
+                  <h1 className="page-title">{pageLabel('Subtractions')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5017,9 +5053,9 @@ function App() {
               >
                 <input
                   className="search-input"
-                  placeholder="Search subtractions"
+                  placeholder={t('subtractions.search')}
                   type="search"
-                  aria-label="Search subtractions"
+                  aria-label={t('subtractions.search')}
                   value={tableSearchQuery}
                   onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
@@ -5030,7 +5066,9 @@ function App() {
                   }`}
                   type="button"
                   aria-label={
-                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
                   }
                   aria-expanded={isMobileSearchOpen}
                   onClick={() =>
@@ -5058,7 +5096,7 @@ function App() {
                     isSubtractionsFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setSubtractionsFilterDraft({
                       locations: [...subtractionsFilters.locations],
@@ -5150,7 +5188,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Select one or more values to filter the subtractions.
                         </p>
@@ -5168,7 +5206,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Location</p>
+                          <p className="filter-title">{t('common.location')}</p>
                           <div className="filter-options">
                             {subtractionLocationOptions.length === 0 ? (
                               <p className="modal-subtitle">
@@ -5214,7 +5252,7 @@ function App() {
                         </div>
 
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {subtractionStatusOptions.map((option) => {
                               const isChecked =
@@ -5298,7 +5336,7 @@ function App() {
                           })
                         }}
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -5313,7 +5351,7 @@ function App() {
                           setIsSubtractionsFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -5324,11 +5362,11 @@ function App() {
                 <table className="data-table data-table-subtractions">
                   <thead>
                     <tr>
-                      <th scope="col">Item name</th>
-                      <th scope="col">Location</th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t('common.itemName')}</th>
+                      <th scope="col">{t('common.location')}</th>
+                      <th scope="col">{t('common.status')}</th>
                       <th scope="col">Date</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5354,7 +5392,7 @@ function App() {
                               <td>{row.location}</td>
                               <td>
                                 <span className={getStatusClassName(row.status)}>
-                                  {row.status}
+                                  {statusLabel(row.status)}
                                 </span>
                               </td>
                               <td>{row.date}</td>
@@ -5403,7 +5441,7 @@ function App() {
                                       <p className="detail-value">{row.id}</p>
                                     </div>
                                     <div>
-                                      <p className="detail-label">Item ID</p>
+                                      <p className="detail-label">{t('common.itemId')}</p>
                                       <p className="detail-value">{row.itemId}</p>
                                     </div>
                                     <div>
@@ -5465,9 +5503,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Properties</p>
+                <p className="eyebrow">{t('properties.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Properties</h1>
+                  <h1 className="page-title">{pageLabel('Properties')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5494,7 +5532,7 @@ function App() {
                     isPropertiesFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setPropertiesFilterDraft({
                       statuses: [...propertiesFilters.statuses],
@@ -5574,7 +5612,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Select one or more values to filter the properties.
                         </p>
@@ -5592,7 +5630,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {propertiesStatusOptions.map((option) => {
                               const isChecked =
@@ -5747,7 +5785,7 @@ function App() {
                           })
                         }
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -5764,7 +5802,7 @@ function App() {
                           setIsPropertiesFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -5795,7 +5833,7 @@ function App() {
                       <th scope="col">Type</th>
                       <th scope="col">RoomType</th>
                       <th scope="col">Neighborhood</th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t('common.status')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5840,9 +5878,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Bookings</p>
+                <p className="eyebrow">{t('bookings.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Bookings</h1>
+                  <h1 className="page-title">{pageLabel('Bookings')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5869,7 +5907,7 @@ function App() {
                     isBookingsFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setBookingsFilterDraft({
                       statuses: [...bookingsFilters.statuses],
@@ -5966,7 +6004,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Filter bookings by status and check-in date range.
                         </p>
@@ -5984,7 +6022,7 @@ function App() {
                     <div className="modal-body">
                       <div className="filter-grid">
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {bookingsStatusOptions.map((option) => {
                               const isChecked =
@@ -6063,7 +6101,7 @@ function App() {
                           })
                         }
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -6080,7 +6118,7 @@ function App() {
                           setIsBookingsFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -6111,7 +6149,7 @@ function App() {
                         </button>
                       </th>
                       <th scope="col">Check-out</th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t('common.status')}</th>
                       <th scope="col">Source</th>
                     </tr>
                   </thead>
@@ -6185,9 +6223,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Ops / Reviews</p>
+                <p className="eyebrow">{t('reviews.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Reviews</h1>
+                  <h1 className="page-title">{pageLabel('Reviews')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -6243,7 +6281,7 @@ function App() {
                     isReviewsFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setReviewsFilterDraft({
                       minRating: reviewsFilters.minRating,
@@ -6323,7 +6361,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Filter by property, rating range, and created-at date.
                         </p>
@@ -6449,7 +6487,7 @@ function App() {
                           })
                         }
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -6466,7 +6504,7 @@ function App() {
                           setIsReviewsFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -6496,7 +6534,7 @@ function App() {
                           </span>
                         </button>
                       </th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t('common.status')}</th>
                       <th scope="col">Details</th>
                     </tr>
                   </thead>
@@ -6700,9 +6738,9 @@ function App() {
           <>
             <header className="page-header">
               <div className="page-header-leading">
-                <p className="eyebrow">Alerts</p>
+                <p className="eyebrow">{t('alerts.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">Alerts</h1>
+                  <h1 className="page-title">{pageLabel('Alerts')}</h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -6729,9 +6767,9 @@ function App() {
               >
                 <input
                   className="search-input"
-                  placeholder="Search alerts"
+                  placeholder={t('alerts.search')}
                   type="search"
-                  aria-label="Search alerts"
+                  aria-label={t('alerts.search')}
                   value={tableSearchQuery}
                   onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
@@ -6742,7 +6780,9 @@ function App() {
                   }`}
                   type="button"
                   aria-label={
-                    isMobileSearchOpen ? 'Hide search' : 'Show search'
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
                   }
                   aria-expanded={isMobileSearchOpen}
                   onClick={() =>
@@ -6770,7 +6810,7 @@ function App() {
                     isAlertsFilterOpen ? 'is-active' : ''
                   }`}
                   type="button"
-                  aria-label="Filters"
+                  aria-label={t('common.filters')}
                   onClick={() => {
                     setAlertsFilterDraft({
                       statuses: [...alertsFilters.statuses],
@@ -6844,7 +6884,7 @@ function App() {
                   <div className="modal">
                     <div className="modal-header">
                       <div>
-                        <h3 className="modal-title">Filters</h3>
+                        <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
                           Select one or more values to filter the alerts.
                         </p>
@@ -6899,7 +6939,7 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Status</p>
+                          <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {alertsStatusOptions.map((option) => {
                               const isChecked =
@@ -6946,7 +6986,7 @@ function App() {
                           setAlertsFilterDraft({ origins: [], statuses: [] })
                         }
                       >
-                        Clear
+                        {t('common.clear')}
                       </button>
                       <button
                         className="btn-primary"
@@ -6959,7 +6999,7 @@ function App() {
                           setIsAlertsFilterOpen(false)
                         }}
                       >
-                        Apply filters
+                        {t('common.applyFilters')}
                       </button>
                     </div>
                   </div>
@@ -6973,8 +7013,8 @@ function App() {
                       <th scope="col">Name</th>
                       <th scope="col">Description</th>
                       <th scope="col">Date</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">{t('common.status')}</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -7001,7 +7041,7 @@ function App() {
                               <td>{row.date}</td>
                               <td>
                                 <span className={getStatusClassName(row.status)}>
-                                  {row.status}
+                                  {statusLabel(row.status)}
                                 </span>
                               </td>
                               <td>
@@ -7084,9 +7124,9 @@ function App() {
           <ChatbotView />
         ) : (
           <section className="card">
-            <h1 className="page-title">{activePage}</h1>
+            <h1 className="page-title">{pageLabel(activePage)}</h1>
             <p className="subtitle">
-              {activePage === 'Chatbot' ? 'Chatbot' : 'Alerts'}
+              {t('common.comingSoon')}
             </p>
           </section>
         )}
@@ -7178,16 +7218,14 @@ function App() {
             <div className="modal" onClick={(event) => event.stopPropagation()}>
               <div className="modal-header">
                 <div>
-                  <h3 className="modal-title">Inventory item</h3>
-                  <p className="modal-subtitle">
-                    Create or update inventory data.
-                  </p>
+                  <h3 className="modal-title">{t('inventory.formTitle')}</h3>
+                  <p className="modal-subtitle">{t('inventory.formSubtitle')}</p>
                 </div>
                 <button
                   className="btn-icon"
                   type="button"
                   onClick={closeForm}
-                  aria-label="Close form"
+                  aria-label={t('common.closeForm')}
                 >
                   ✕
                 </button>
@@ -7195,12 +7233,14 @@ function App() {
 
               <div className="modal-body">
                 <p className="modal-subtitle">
-                  {formStep === 'details' ? 'Step 1 of 2' : 'Step 2 of 2'}
+                  {formStep === 'details'
+                    ? t('common.stepOf', { current: 1, total: 2 })
+                    : t('common.stepOf', { current: 2, total: 2 })}
                 </p>
                 {formStep === 'details' ? (
                   <div className="form-grid">
                     <label className="form-field">
-                      <span>Item name</span>
+                      <span>{t('common.itemName')}</span>
                       <input
                         type="text"
                         value={formValues.name}
@@ -7210,11 +7250,26 @@ function App() {
                             name: event.target.value,
                           }))
                         }
-                        placeholder="Cleaning Kit"
+                        placeholder={t('inventory.namePlaceholder')}
                       />
                     </label>
                     <label className="form-field">
-                      <span>Category</span>
+                      <span>{t('common.itemNameEs')}</span>
+                      <input
+                        type="text"
+                        value={formValues.nameEs}
+                        onChange={(event) =>
+                          setFormValues((current) => ({
+                            ...current,
+                            nameEs: event.target.value,
+                          }))
+                        }
+                        placeholder={t('inventory.nameEsPlaceholder')}
+                      />
+                      <p className="form-field-hint">{t('inventory.nameEsHint')}</p>
+                    </label>
+                    <label className="form-field">
+                      <span>{t('common.category')}</span>
                       <select
                         value={formValues.categoryChoice}
                         onChange={(event) =>
@@ -7228,18 +7283,18 @@ function App() {
                           }))
                         }
                       >
-                        <option value="">Select</option>
+                        <option value="">{t('common.select')}</option>
                         {categoryOptions.map((option) => (
                           <option value={option} key={option}>
                             {option}
                           </option>
                         ))}
-                        <option value={OTHER_OPTION}>Other</option>
+                        <option value={OTHER_OPTION}>{t('common.other')}</option>
                       </select>
                     </label>
                     {formValues.categoryChoice === OTHER_OPTION ? (
                       <label className="form-field">
-                        <span>Custom category</span>
+                        <span>{t('common.customCategory')}</span>
                         <input
                           type="text"
                           value={formValues.categoryOther}
@@ -7249,12 +7304,12 @@ function App() {
                               categoryOther: event.target.value,
                             }))
                           }
-                          placeholder="Welcome kit"
+                          placeholder={t('inventory.categoryPlaceholder')}
                         />
                       </label>
                     ) : null}
                     <label className="form-field">
-                      <span>Location</span>
+                      <span>{t('common.location')}</span>
                       <select
                         value={formValues.locationChoice}
                         onChange={(event) =>
@@ -7268,18 +7323,18 @@ function App() {
                           }))
                         }
                       >
-                        <option value="">Select</option>
+                        <option value="">{t('common.select')}</option>
                         {locationOptions.map((option) => (
                           <option value={option} key={option}>
                             {option}
                           </option>
                         ))}
-                        <option value={OTHER_OPTION}>Other</option>
+                        <option value={OTHER_OPTION}>{t('common.other')}</option>
                       </select>
                     </label>
                     {formValues.locationChoice === OTHER_OPTION ? (
                       <label className="form-field">
-                        <span>Custom location</span>
+                        <span>{t('common.customLocation')}</span>
                         <input
                           type="text"
                           value={formValues.locationOther}
@@ -7289,12 +7344,12 @@ function App() {
                               locationOther: event.target.value,
                             }))
                           }
-                          placeholder="Warehouse A"
+                          placeholder={t('inventory.locationPlaceholder')}
                         />
                       </label>
                     ) : null}
                     <label className="form-field">
-                      <span>Quantity</span>
+                      <span>{t('common.quantity')}</span>
                       <input
                         type="number"
                         min="0"
@@ -7312,7 +7367,7 @@ function App() {
                 ) : (
                   <div className="form-grid">
                     <label className="form-field">
-                      <span>Rebuy quantity</span>
+                      <span>{t('common.rebuyQty')}</span>
                       <input
                         type="number"
                         min="0"
@@ -7327,7 +7382,7 @@ function App() {
                       />
                     </label>
                     <label className="form-field">
-                      <span>Unit price</span>
+                      <span>{t('common.unitPrice')}</span>
                       <input
                         type="number"
                         min="0"
@@ -7343,7 +7398,7 @@ function App() {
                       />
                     </label>
                     <label className="form-field">
-                      <span>Tolerance</span>
+                      <span>{t('common.tolerance')}</span>
                       <input
                         type="number"
                         min="0"
@@ -7358,10 +7413,10 @@ function App() {
                       />
                     </label>
                     <label className="form-field form-field-span">
-                      <span>Consumption rules</span>
+                      <span>{t('common.consumptionRules')}</span>
                       <div className="rule-form-grid">
                         <div className="rule-form">
-                          <p className="rule-form-title">Apartment</p>
+                          <p className="rule-form-title">{t('common.apartment')}</p>
                           <div className="rule-form-fields">
                             <input
                               type="number"
@@ -7373,7 +7428,7 @@ function App() {
                                   apartmentAmount: event.target.value,
                                 }))
                               }
-                              placeholder="Amount"
+                              placeholder={t('common.amount')}
                             />
                             <input
                               type="text"
@@ -7384,12 +7439,12 @@ function App() {
                                   apartmentUnit: event.target.value,
                                 }))
                               }
-                              placeholder="Unit"
+                              placeholder={t('common.unit')}
                             />
                           </div>
                         </div>
                         <div className="rule-form">
-                          <p className="rule-form-title">Hostel</p>
+                          <p className="rule-form-title">{t('common.hostel')}</p>
                           <div className="rule-form-fields">
                             <input
                               type="number"
@@ -7401,7 +7456,7 @@ function App() {
                                   hostelAmount: event.target.value,
                                 }))
                               }
-                              placeholder="Amount"
+                              placeholder={t('common.amount')}
                             />
                             <input
                               type="text"
@@ -7412,12 +7467,12 @@ function App() {
                                   hostelUnit: event.target.value,
                                 }))
                               }
-                              placeholder="Unit"
+                              placeholder={t('common.unit')}
                             />
                           </div>
                         </div>
                         <div className="rule-form">
-                          <p className="rule-form-title">Room</p>
+                          <p className="rule-form-title">{t('common.room')}</p>
                           <div className="rule-form-fields">
                             <input
                               type="number"
@@ -7429,7 +7484,7 @@ function App() {
                                   roomAmount: event.target.value,
                                 }))
                               }
-                              placeholder="Amount"
+                              placeholder={t('common.amount')}
                             />
                             <input
                               type="text"
@@ -7440,7 +7495,7 @@ function App() {
                                   roomUnit: event.target.value,
                                 }))
                               }
-                              placeholder="Unit"
+                              placeholder={t('common.unit')}
                             />
                           </div>
                         </div>
@@ -7459,14 +7514,14 @@ function App() {
                       type="button"
                       onClick={closeForm}
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                     <button
                       className="btn-primary"
                       type="button"
                       onClick={goToRestockStep}
                     >
-                      Next
+                      {t('common.next')}
                     </button>
                   </>
                 ) : (
@@ -7477,7 +7532,7 @@ function App() {
                       onClick={() => setFormStep('details')}
                       disabled={isSaving}
                     >
-                      Back
+                      {t('common.back')}
                     </button>
                     <button
                       className="btn-primary"
@@ -7485,7 +7540,7 @@ function App() {
                       onClick={saveItem}
                       disabled={isSaving}
                     >
-                      {isSaving ? 'Saving...' : 'Save item'}
+                      {isSaving ? t('common.saving') : t('common.saveItem')}
                     </button>
                   </>
                 )}
@@ -7631,7 +7686,7 @@ function App() {
             <div className="modal" onClick={(event) => event.stopPropagation()}>
               <div className="modal-header">
                 <div>
-                  <h3 className="modal-title">New subtraction</h3>
+                  <h3 className="modal-title">{t('subtractions.formTitle')}</h3>
                   <p className="modal-subtitle">
                     Registering a manual removal of{' '}
                     <strong>{subtractionFormValues.itemName}</strong> from{' '}
@@ -7767,7 +7822,7 @@ function App() {
             <div className="modal">
               <div className="modal-header">
                 <div>
-                  <h3 className="modal-title">Snooze alert</h3>
+                  <h3 className="modal-title">{t('alerts.snoozeTitle')}</h3>
                   <p className="modal-subtitle">
                     Select the date to be reminded.
                   </p>
