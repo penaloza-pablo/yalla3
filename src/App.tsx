@@ -1918,12 +1918,16 @@ function App() {
   ])
 
   const getEndpoint = (key: string, fallback?: string) => {
-    if (fallback) {
-      return fallback
-    }
     const config = Amplify.getConfig() as { custom?: Record<string, string> }
     const outputCustom = (outputs as { custom?: Record<string, string> }).custom
-    return config.custom?.[key] ?? outputCustom?.[key]
+    const fromAmplify = config.custom?.[key] ?? outputCustom?.[key]
+    // Prefer amplify_outputs (synced from hosting/sandbox). Env URLs are only a
+    // fallback so stale .env.local overrides cannot break local development.
+    const preferEnv = import.meta.env.VITE_PREFER_ENV_ENDPOINTS === 'true'
+    if (preferEnv && fallback) {
+      return fallback
+    }
+    return fromAmplify ?? (fallback || undefined)
   }
 
   const fetchInventory = useCallback(async () => {
