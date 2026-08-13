@@ -199,7 +199,7 @@
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\" ({{id}})?",
     "deleteError": "Unable to delete the item. Please try again.",
     "empty": "No inventory data available yet.",
-    "eyebrow": "Ops / Inventory",
+    "eyebrow": "Inventory",
     "formSubtitle": "Create or update inventory data.",
     "formTitle": "Inventory item",
     "loading": "Loading inventory...",
@@ -231,6 +231,14 @@
     "en": "English",
     "es": "Spanish",
     "label": "Language"
+  },
+  "settings": {
+    "account": "Account",
+    "email": "Email",
+    "open": "Open settings",
+    "subtitle": "Account and preferences",
+    "title": "Settings",
+    "unknownUser": "Signed-in user"
   },
   "pages": {
     "Alerts": "Alerts",
@@ -276,7 +284,7 @@
     "emptyFiltered": "No properties match the current filters."
   },
   "purchases": {
-    "eyebrow": "Ops / Inventory / Purchases",
+    "eyebrow": "Inventory / Purchases",
     "search": "Search purchases",
     "subtitle": "Purchase data is read from the production DynamoDB table via Lambda access.",
     "cardTitle": "Purchases",
@@ -343,6 +351,7 @@
   "sections": {
     "Finance": "Finance",
     "Grow": "Grow",
+    "Inventory": "Inventory",
     "Ops": "Ops",
     "Tech": "Tech"
   },
@@ -362,7 +371,7 @@
     "Waiting Delivery": "Waiting Delivery"
   },
   "subtractions": {
-    "eyebrow": "Ops / Inventory / Subtractions",
+    "eyebrow": "Inventory / Subtractions",
     "formTitle": "New subtraction",
     "subtractionId": "Subtraction ID",
     "search": "Search subtractions",

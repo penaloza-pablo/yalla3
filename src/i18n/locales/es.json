@@ -199,7 +199,7 @@
     "deleteConfirm": "¿Seguro que quieres eliminar \"{{name}}\" ({{id}})?",
     "deleteError": "No se pudo eliminar el ítem. Inténtalo de nuevo.",
     "empty": "Aún no hay datos de inventario.",
-    "eyebrow": "Ops / Inventario",
+    "eyebrow": "Inventario",
     "formSubtitle": "Crea o actualiza datos de inventario.",
     "formTitle": "Ítem de inventario",
     "loading": "Cargando inventario...",
@@ -231,6 +231,14 @@
     "en": "Inglés",
     "es": "Español",
     "label": "Idioma"
+  },
+  "settings": {
+    "account": "Cuenta",
+    "email": "Correo electrónico",
+    "open": "Abrir ajustes",
+    "subtitle": "Cuenta y preferencias",
+    "title": "Ajustes",
+    "unknownUser": "Usuario conectado"
   },
   "pages": {
     "Alerts": "Alertas",
@@ -276,7 +284,7 @@
     "emptyFiltered": "Ninguna propiedad coincide con los filtros actuales."
   },
   "purchases": {
-    "eyebrow": "Ops / Inventario / Compras",
+    "eyebrow": "Inventario / Compras",
     "search": "Buscar compras",
     "subtitle": "Los datos de compras se leen de la tabla DynamoDB de producción mediante Lambda.",
     "cardTitle": "Compras",
@@ -343,6 +351,7 @@
   "sections": {
     "Finance": "Finance",
     "Grow": "Grow",
+    "Inventory": "Inventario",
     "Ops": "Ops",
     "Tech": "Tech"
   },
@@ -362,7 +371,7 @@
     "Waiting Delivery": "Esperando entrega"
   },
   "subtractions": {
-    "eyebrow": "Ops / Inventario / Extracciones",
+    "eyebrow": "Inventario / Extracciones",
     "formTitle": "Nueva extracción",
     "subtractionId": "ID de extracción",
     "search": "Buscar extracciones",

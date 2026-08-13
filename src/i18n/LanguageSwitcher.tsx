@@ -3,9 +3,13 @@ import type { AppLocale } from './index'
 
 type LanguageSwitcherProps = {
   compact?: boolean
+  embedded?: boolean
 }
 
-export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
+export function LanguageSwitcher({
+  compact = false,
+  embedded = false,
+}: LanguageSwitcherProps) {
   const { t, i18n } = useTranslation()
   const current = (i18n.resolvedLanguage || i18n.language || 'en').slice(
     0,
@@ -16,9 +20,44 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
     void i18n.changeLanguage(locale)
   }
 
+  if (embedded) {
+    return (
+      <div
+        className="language-switcher language-switcher-embedded"
+        role="group"
+        aria-label={t('language.label')}
+      >
+        <button
+          type="button"
+          className={`language-option language-option-wide ${
+            current === 'en' ? 'is-active' : ''
+          }`}
+          aria-pressed={current === 'en'}
+          onClick={() => setLocale('en')}
+        >
+          {t('language.en')}
+        </button>
+        <button
+          type="button"
+          className={`language-option language-option-wide ${
+            current === 'es' ? 'is-active' : ''
+          }`}
+          aria-pressed={current === 'es'}
+          onClick={() => setLocale('es')}
+        >
+          {t('language.es')}
+        </button>
+      </div>
+    )
+  }
+
   if (compact) {
     return (
-      <div className="language-switcher language-switcher-compact" role="group" aria-label={t('language.label')}>
+      <div
+        className="language-switcher language-switcher-compact"
+        role="group"
+        aria-label={t('language.label')}
+      >
         <button
           type="button"
           className={`language-option ${current === 'en' ? 'is-active' : ''}`}

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LanguageSwitcher } from './i18n/LanguageSwitcher'
+import { SettingsPanel } from './SettingsPanel'
 import {
   displayInventoryName,
   translatePage,
@@ -255,11 +255,12 @@ type PropertyDiff = {
 
 const navigation = [
   {
+    section: 'Inventory',
+    items: ['Inventory', 'Purchases', 'Subtractions'],
+  },
+  {
     section: 'Ops',
     items: [
-      'Inventory',
-      'Purchases',
-      'Subtractions',
       'Properties',
       'Bookings',
       'Reviews',
@@ -1414,7 +1415,7 @@ function App() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    new Set(),
+    () => new Set(navigation.map((group) => group.section)),
   )
   const [sortConfig, setSortConfig] = useState<{
     key: 'name' | 'status' | null
@@ -4059,7 +4060,10 @@ function App() {
             </div>
           ))}
         </nav>
-        <LanguageSwitcher compact={isSidebarCollapsed} />
+        <SettingsPanel
+          compact={isSidebarCollapsed}
+          onOpen={closeMobileNav}
+        />
       </aside>
       <button
         className={`btn-icon btn-icon-ghost sidebar-toggle ${
