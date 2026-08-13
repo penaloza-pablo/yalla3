@@ -280,13 +280,6 @@ const navigation = [
 
 const coreItems = ['Chatbot', 'Alerts']
 const OTHER_OPTION = '__other__'
-const REVIEWS_SYNC_TRIGGER_URL =
-  import.meta.env.VITE_GUESTY_REVIEWS_SYNC_URL ??
-  'https://r3faghrqj3o4x7b4noa53f4gee0pmnpf.lambda-url.eu-central-1.on.aws/'
-const PROPERTIES_SYNC_TRIGGER_URL =
-  import.meta.env.VITE_GUESTY_PROPERTIES_SYNC_URL ??
-  'https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/'
-
 const inventoryFieldMap = {
   id: ['id', 'ID'],
   name: ['Item name', 'item name', 'name'],
@@ -2254,9 +2247,18 @@ function App() {
     setReviewsError(null)
 
     try {
-      // Guesty sync Lambdas are external and public; do not send Authorization
-      // (that triggers a CORS preflight these URLs do not answer correctly).
-      const response = await fetch(REVIEWS_SYNC_TRIGGER_URL)
+      // Call Amplify proxy (same-origin CORS) which invokes Guesty server-side.
+      const endpoint = getEndpoint(
+        'proxyGuestyReviewsSyncUrl',
+        import.meta.env.VITE_PROXY_GUESTY_REVIEWS_SYNC_URL,
+      )
+      if (!endpoint) {
+        setReviewsError(
+          'Missing Guesty reviews sync proxy. Redeploy backend or set VITE_PROXY_GUESTY_REVIEWS_SYNC_URL.',
+        )
+        return
+      }
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2332,9 +2334,18 @@ function App() {
     setPropertiesSyncMessage(null)
 
     try {
-      // Guesty sync Lambdas are external and public; do not send Authorization
-      // (that triggers a CORS preflight these URLs do not answer correctly).
-      const response = await fetch(PROPERTIES_SYNC_TRIGGER_URL)
+      // Call Amplify proxy (same-origin CORS) which invokes Guesty server-side.
+      const endpoint = getEndpoint(
+        'proxyGuestyListingsUrl',
+        import.meta.env.VITE_PROXY_GUESTY_LISTINGS_URL,
+      )
+      if (!endpoint) {
+        setPropertiesError(
+          'Missing Guesty listings proxy. Redeploy backend or set VITE_PROXY_GUESTY_LISTINGS_URL.',
+        )
+        return
+      }
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(

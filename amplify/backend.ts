@@ -33,6 +33,8 @@ import { getVisitTypes } from './functions/get-visit-types/resource';
 import { getVisitTemplates } from './functions/get-visit-templates/resource';
 import { upsertVisitTemplate } from './functions/upsert-visit-template/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
+import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
+import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
 
 const backend = defineBackend({
   auth,
@@ -66,6 +68,8 @@ const backend = defineBackend({
   getVisitTemplates,
   upsertVisitTemplate,
   upsertVisitType,
+  proxyGuestyListings,
+  proxyGuestyReviewsSync,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -99,6 +103,8 @@ const lambdaFunctionsWithHttp = [
   backend.getVisitTemplates,
   backend.upsertVisitTemplate,
   backend.upsertVisitType,
+  backend.proxyGuestyListings,
+  backend.proxyGuestyReviewsSync,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -292,6 +298,14 @@ const upsertVisitTemplateUrl =
 const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const proxyGuestyListingsUrl =
+  backend.proxyGuestyListings.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const proxyGuestyReviewsSyncUrl =
+  backend.proxyGuestyReviewsSync.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -323,5 +337,7 @@ backend.addOutput({
     getVisitTemplatesUrl: getVisitTemplatesUrl.url,
     upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
+    proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
+    proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,
   },
 });
