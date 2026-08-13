@@ -224,7 +224,7 @@
     "reorder": "Reorder",
     "reorderMeta": "Requires purchase",
     "saveError": "Unable to save the item. Please try again.",
-    "search": "Search inventory",
+    "search": "Search in inventory",
     "subtitle": "Inventory data is read from the production DynamoDB table via Lambda access."
   },
   "language": {

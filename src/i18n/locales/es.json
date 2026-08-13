@@ -224,7 +224,7 @@
     "reorder": "Reordenar",
     "reorderMeta": "Requiere compra",
     "saveError": "No se pudo guardar el ítem. Inténtalo de nuevo.",
-    "search": "Buscar inventario",
+    "search": "Buscar en inventario",
     "subtitle": "Los datos de inventario se leen de la tabla DynamoDB de producción mediante Lambda."
   },
   "language": {

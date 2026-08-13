@@ -1,4 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { SettingsPanel } from './SettingsPanel'
 import {
@@ -283,6 +291,13 @@ const navigation = [
 ]
 
 const coreItems = ['Chatbot', 'Alerts']
+const pagesWithMobileSearch = new Set([
+  'Inventory',
+  'Purchases',
+  'Subtractions',
+  'Alerts',
+])
+const MOBILE_TITLE_COLLAPSE_DISTANCE = 56
 const OTHER_OPTION = '__other__'
 const inventoryFieldMap = {
   id: ['id', 'ID'],
@@ -1414,6 +1429,8 @@ function App() {
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [tableSearchQuery, setTableSearchQuery] = useState('')
+  const [titleProgress, setTitleProgress] = useState(0)
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     () => new Set(navigation.map((group) => group.section)),
   )
@@ -3858,22 +3875,145 @@ function App() {
     }
   }, [isMobileNavOpen])
 
+  useEffect(() => {
+    setTitleProgress(0)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+
+    const updateTitleProgress = () => {
+      const isMobileViewport = window.matchMedia('(max-width: 768px)').matches
+      if (!isMobileViewport) {
+        setTitleProgress(0)
+        return
+      }
+      const next = Math.min(
+        1,
+        Math.max(0, window.scrollY / MOBILE_TITLE_COLLAPSE_DISTANCE),
+      )
+      setTitleProgress(next)
+    }
+
+    updateTitleProgress()
+    window.addEventListener('scroll', updateTitleProgress, { passive: true })
+    window.addEventListener('resize', updateTitleProgress)
+    return () => {
+      window.removeEventListener('scroll', updateTitleProgress)
+      window.removeEventListener('resize', updateTitleProgress)
+    }
+  }, [activePage])
+
+  useEffect(() => {
+    if (!isMobileSearchOpen) {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      mobileSearchInputRef.current?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isMobileSearchOpen, activePage])
+
+  const mobileSearchPlaceholder = (() => {
+    switch (activePage) {
+      case 'Inventory':
+        return t('inventory.search')
+      case 'Purchases':
+        return t('purchases.search')
+      case 'Subtractions':
+        return t('subtractions.search')
+      case 'Alerts':
+        return t('alerts.search')
+      default:
+        return t('common.showSearch')
+    }
+  })()
+
+  const closeMobileSearch = () => {
+    setIsMobileSearchOpen(false)
+  }
+
+  const openMobileSearch = () => {
+    setIsMobileSearchOpen(true)
+  }
+
   return (
     <div
       className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
         isMobileNavOpen ? 'mobile-nav-is-open' : ''
       }`}
     >
-      <header className="mobile-topbar">
+      <header
+        className={`mobile-topbar ${titleProgress >= 0.99 ? 'is-collapsed' : ''} ${
+          isMobileSearchOpen ? 'is-search-open' : ''
+        }`}
+        style={
+          {
+            '--title-progress': String(titleProgress),
+          } as CSSProperties
+        }
+      >
+        <div className="mobile-topbar-title-group">
+          {!isMobileSearchOpen ? (
+            <h1 className="mobile-topbar-section-title">
+              {pageLabel(activePage)}
+            </h1>
+          ) : null}
+          {pagesWithMobileSearch.has(activePage) ? (
+            isMobileSearchOpen ? (
+              <input
+                ref={mobileSearchInputRef}
+                className="mobile-topbar-search-input"
+                type="search"
+                placeholder={mobileSearchPlaceholder}
+                aria-label={mobileSearchPlaceholder}
+                value={tableSearchQuery}
+                onChange={(event) => setTableSearchQuery(event.target.value)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="mobile-topbar-search-button"
+                aria-label={t('common.showSearch')}
+                onClick={openMobileSearch}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="18"
+                  height="18"
+                >
+                  <path
+                    d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            )
+          ) : null}
+        </div>
         <button
           className="btn-icon btn-icon-ghost mobile-menu-button"
           type="button"
-          aria-label={isMobileNavOpen ? t('common.closeMenu') : t('common.openMenu')}
-          aria-expanded={isMobileNavOpen}
-          onClick={() => (isMobileNavOpen ? closeMobileNav() : openMobileNav())}
+          aria-label={
+            isMobileSearchOpen
+              ? t('common.hideSearch')
+              : isMobileNavOpen
+                ? t('common.closeMenu')
+                : t('common.openMenu')
+          }
+          aria-expanded={isMobileSearchOpen ? undefined : isMobileNavOpen}
+          onClick={() => {
+            if (isMobileSearchOpen) {
+              closeMobileSearch()
+              return
+            }
+            if (isMobileNavOpen) {
+              closeMobileNav()
+              return
+            }
+            openMobileNav()
+          }}
         >
-          {isMobileNavOpen ? (
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="20" height="20">
+          {isMobileSearchOpen || isMobileNavOpen ? (
+            <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
               <path
                 d="M5 5l10 10M15 5L5 15"
                 stroke="currentColor"
@@ -3882,7 +4022,7 @@ function App() {
               />
             </svg>
           ) : (
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="20" height="20">
+            <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
               <path
                 d="M3 5h14M3 10h14M3 15h14"
                 stroke="currentColor"
@@ -3892,22 +4032,6 @@ function App() {
             </svg>
           )}
         </button>
-        <div className="mobile-topbar-brand">
-          <span className="mobile-topbar-title">Yalla!</span>
-          <span className="mobile-topbar-page">{pageLabel(activePage)}</span>
-        </div>
-        {pendingAlertsCount > 0 ? (
-          <button
-            className="mobile-topbar-alert"
-            type="button"
-            aria-label={t('common.pendingAlerts', { count: pendingAlertsCount })}
-            onClick={() => navigateToPage('Alerts')}
-          >
-            {pendingAlertsCount}
-          </button>
-        ) : (
-          <span className="mobile-topbar-spacer" aria-hidden="true" />
-        )}
       </header>
 
       <div
@@ -4087,7 +4211,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('inventory.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Inventory')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Inventory')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -4617,12 +4743,6 @@ function App() {
                                     {formatUnitPrice(row.unitPrice)}
                                   </p>
                                 </div>
-                                <div>
-                                  <p className="detail-label">{t('common.tolerance')}</p>
-                                  <p className="detail-value">
-                                    {row.tolerance || '—'}
-                                  </p>
-                                </div>
                                 <div className="detail-span">
                                   <p className="detail-label">
                                     {t('inventory.recentPurchases')}
@@ -4693,7 +4813,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('purchases.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Purchases')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Purchases')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5139,7 +5261,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('subtractions.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Subtractions')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Subtractions')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5625,7 +5749,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('properties.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Properties')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Properties')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -5997,7 +6123,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('bookings.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Bookings')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Bookings')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -6338,7 +6466,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('reviews.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Reviews')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Reviews')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -6851,7 +6981,9 @@ function App() {
               <div className="page-header-leading">
                 <p className="eyebrow">{t('alerts.eyebrow')}</p>
                 <div className="page-title-row">
-                  <h1 className="page-title">{pageLabel('Alerts')}</h1>
+                  <h1 className="page-title">
+                    {pageLabel('Alerts')}
+                  </h1>
                   <button
                     type="button"
                     className={`btn-page-info ${
@@ -7232,7 +7364,9 @@ function App() {
           <ChatbotView />
         ) : (
           <section className="card">
-            <h1 className="page-title">{pageLabel(activePage)}</h1>
+            <h1 className="page-title">
+              {pageLabel(activePage)}
+            </h1>
             <p className="subtitle">
               {t('common.comingSoon')}
             </p>
