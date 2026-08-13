@@ -5,11 +5,12 @@ import {
   isHttpRequest,
   normalizeStatus,
   nowIso,
-  parseBody,
-} from '../shared/dynamo-http';
+  parseBody, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import {
   docClient,
   getNextSequentialId,
+  mergeUserEditResponseItem,
+  patchUserOriginatedRecord,
   putItem,
   cancelVisitTasksOnVisitCancel,
   createVisitTasksBulk,
@@ -18,6 +19,7 @@ import {
   syncVisitTaskDueDates,
   TERMINAL_VISIT_STATUSES,
   visitHasOpenTasks,
+  withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
 
 type VisitPayload = {
@@ -72,6 +74,12 @@ export const handler = async (event: {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const visitsTable = process.env.TABLE_NAME;
   const tasksTable = process.env.TASKS_TABLE;
@@ -177,8 +185,11 @@ export const handler = async (event: {
     });
   }
 
-  const item: Record<string, unknown> = {
-    id: isUpdate ? payload.id?.trim() : await getNextSequentialId(visitsTable, 'VISIT'),
+  const visitId = isUpdate
+    ? payload.id?.trim()
+    : await getNextSequentialId(visitsTable, 'VISIT');
+
+  const editableFields: Record<string, unknown> = {
     propertyId: propertyId ?? existing?.propertyId ?? '',
     visitTypeId: visitTypeId ?? existing?.visitTypeId ?? '',
     teamId: teamId ?? existing?.teamId ?? '',
@@ -241,18 +252,30 @@ export const handler = async (event: {
       status === 'COMPLETED' || status === 'CANCELLED'
         ? payload.closedBy?.trim() ?? undefined
         : undefined,
-    createdAt:
-      (typeof existing?.createdAt === 'string' ? existing.createdAt : undefined) ??
-      timestamp,
-    updatedAt: timestamp,
   };
 
   if (status === 'COMPLETED' || status === 'CANCELLED') {
-    item.closedAt = item.closedAt ?? timestamp;
+    editableFields.closedAt = editableFields.closedAt ?? timestamp;
   }
 
   try {
-    await putItem(visitsTable, item);
+    let item: Record<string, unknown>;
+
+    if (isUpdate && existing && visitId) {
+      await patchUserOriginatedRecord(visitsTable, visitId, {
+        set: editableFields,
+      });
+      item = mergeUserEditResponseItem(existing, { set: editableFields }, timestamp);
+      item.id = visitId;
+    } else {
+      item = {
+        id: visitId,
+        ...editableFields,
+        createdAt: timestamp,
+        ...withUserEditSyncMetadata({}, timestamp),
+      };
+      await putItem(visitsTable, item);
+    }
 
     let releasedTasks: Record<string, unknown>[] = [];
     let cancelledTasks: Record<string, unknown>[] = [];

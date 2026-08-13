@@ -141,6 +141,9 @@ UI behavior
 - Consumption rules must be valid JSON to save.
 - Sorting is triggered by clicking table headers for Item name and Status.
 - Filters icon opens a modal with multi-select options for Location, Status, and Category.
+- Search input filters visible table rows by matching text across key fields
+  (case-insensitive). Shared across Inventory, Purchases, Subtractions, and Alerts;
+  clears when navigating to another page.
 
 Inventory - Consumption rules UI
 Overview

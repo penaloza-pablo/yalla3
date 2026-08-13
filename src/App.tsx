@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Amplify } from 'aws-amplify'
 import { fetchUserAttributes } from 'aws-amplify/auth'
+import { authFetch } from './lib/auth-fetch'
 import outputs from '../amplify_outputs.json'
 import type {
   ConversationMessage,
@@ -270,7 +271,11 @@ const navigation = [
 const coreItems = ['Chatbot', 'Alerts']
 const OTHER_OPTION = '__other__'
 const REVIEWS_SYNC_TRIGGER_URL =
+  import.meta.env.VITE_GUESTY_REVIEWS_SYNC_URL ??
   'https://r3faghrqj3o4x7b4noa53f4gee0pmnpf.lambda-url.eu-central-1.on.aws/'
+const PROPERTIES_SYNC_TRIGGER_URL =
+  import.meta.env.VITE_GUESTY_PROPERTIES_SYNC_URL ??
+  'https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/'
 
 const inventoryFieldMap = {
   id: ['id', 'ID'],
@@ -888,6 +893,22 @@ const parseDateValue = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+const matchesTableSearch = (
+  query: string,
+  values: Array<string | number | boolean | null | undefined>,
+) => {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) {
+    return true
+  }
+  return values.some((value) => {
+    if (value === null || value === undefined) {
+      return false
+    }
+    return String(value).toLowerCase().includes(normalized)
+  })
+}
+
 const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
   const checkInRaw = getStringValue(getItemValue(item, bookingFieldMap.checkIn))
   const checkOutRaw = getStringValue(getItemValue(item, bookingFieldMap.checkOut))
@@ -1323,6 +1344,7 @@ function App() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
+  const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
   )
@@ -1436,7 +1458,7 @@ function App() {
         }
 
         try {
-          const response = await fetch('/amplify_outputs.json', {
+          const response = await authFetch('/amplify_outputs.json', {
             cache: 'no-store',
           })
           if (!response.ok) {
@@ -1652,6 +1674,23 @@ function App() {
           return false
         }
 
+        if (
+          !matchesTableSearch(tableSearchQuery, [
+            row.id,
+            row.itemId,
+            row.itemName,
+            row.location,
+            row.vendor,
+            row.status,
+            row.units,
+            row.totalPrice,
+            row.deliveryDate,
+            row.purchaseDate,
+          ])
+        ) {
+          return false
+        }
+
         if (!fromDate && !toDate) {
           return true
         }
@@ -1680,6 +1719,7 @@ function App() {
     purchasesFilters.deliveryDateTo,
     purchasesFilters.locations,
     purchasesFilters.statuses,
+    tableSearchQuery,
   ])
 
   const pendingPurchasesCount = useMemo(
@@ -1744,6 +1784,25 @@ function App() {
           return false
         }
 
+        if (
+          !matchesTableSearch(tableSearchQuery, [
+            row.id,
+            row.itemId,
+            row.itemName,
+            row.inventoryLocation,
+            row.propertyId,
+            row.location,
+            row.status,
+            row.units,
+            row.cost,
+            row.note,
+            row.date,
+            row.billable ? 'yes' : 'no',
+          ])
+        ) {
+          return false
+        }
+
         if (!fromDate && !toDate) {
           return true
         }
@@ -1772,6 +1831,7 @@ function App() {
     subtractionsFilters.dateTo,
     subtractionsFilters.locations,
     subtractionsFilters.statuses,
+    tableSearchQuery,
   ])
 
   const pendingSubtractionsCount = useMemo(
@@ -1820,7 +1880,7 @@ function App() {
     setError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -1860,7 +1920,7 @@ function App() {
     setAlertsError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -1909,7 +1969,7 @@ function App() {
     setPurchasesError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -1958,7 +2018,7 @@ function App() {
     setSubtractionsError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2007,7 +2067,7 @@ function App() {
     setPropertiesError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2069,7 +2129,7 @@ function App() {
           query.set('checkInTo', bookingsFilters.checkInTo)
         }
 
-        const response = await fetch(`${endpoint}?${query.toString()}`)
+        const response = await authFetch(`${endpoint}?${query.toString()}`)
         if (!response.ok) {
           const errorText = await response.text()
           throw new Error(
@@ -2180,7 +2240,7 @@ function App() {
     setReviewsError(null)
 
     try {
-      const response = await fetch(REVIEWS_SYNC_TRIGGER_URL)
+      const response = await authFetch(REVIEWS_SYNC_TRIGGER_URL)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2219,7 +2279,7 @@ function App() {
       setReviewWorkflowSavingId(reviewId)
       setReviewsError(null)
       try {
-        const response = await fetch(endpoint, {
+        const response = await authFetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reviewId, ...payload }),
@@ -2256,9 +2316,7 @@ function App() {
     setPropertiesSyncMessage(null)
 
     try {
-      const response = await fetch(
-        'https://pgkntvnjnvqrlgmeboqebwa33u0ydznp.lambda-url.eu-central-1.on.aws/',
-      )
+      const response = await authFetch(PROPERTIES_SYNC_TRIGGER_URL)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2364,7 +2422,7 @@ function App() {
             city: diff.row.city,
             neighborhood: diff.row.neighborhood,
           }
-          const response = await fetch(upsertEndpoint, {
+          const response = await authFetch(upsertEndpoint, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(payload),
@@ -2375,7 +2433,7 @@ function App() {
           continue
         }
 
-        const response = await fetch(deleteEndpoint, {
+        const response = await authFetch(deleteEndpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ id: diff.row.id }),
@@ -2419,7 +2477,7 @@ function App() {
     setError(null)
 
     try {
-      const response = await fetch(endpoint)
+      const response = await authFetch(endpoint)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2629,7 +2687,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: row.id }),
@@ -2727,9 +2785,25 @@ function App() {
       const originMatch =
         alertsFilters.origins.length === 0 ||
         alertsFilters.origins.includes(row.origin)
-      return statusMatch && originMatch
+      if (!statusMatch || !originMatch) {
+        return false
+      }
+      return matchesTableSearch(tableSearchQuery, [
+        row.id,
+        row.name,
+        row.description,
+        row.status,
+        row.origin,
+        row.createdBy,
+        row.date,
+      ])
     })
-  }, [alertRows, alertsFilters.origins, alertsFilters.statuses])
+  }, [
+    alertRows,
+    alertsFilters.origins,
+    alertsFilters.statuses,
+    tableSearchQuery,
+  ])
 
   const alertsOriginOptions = useMemo(() => {
     const unique = new Set(alertRows.map((row) => row.origin).filter(Boolean))
@@ -2748,9 +2822,26 @@ function App() {
       const categoryMatch =
         filters.categories.length === 0 ||
         filters.categories.includes(row.category)
-      return locationMatch && statusMatch && categoryMatch
+      if (!locationMatch || !statusMatch || !categoryMatch) {
+        return false
+      }
+      return matchesTableSearch(tableSearchQuery, [
+        row.id,
+        row.name,
+        row.location,
+        row.status,
+        row.category,
+        row.quantity,
+        row.updated,
+      ])
     })
-  }, [filters.locations, filters.statuses, filters.categories, inventoryRows])
+  }, [
+    filters.locations,
+    filters.statuses,
+    filters.categories,
+    inventoryRows,
+    tableSearchQuery,
+  ])
 
   const lowStockCount = useMemo(
     () => filteredRows.filter((row) => row.status === 'Low Stock').length,
@@ -3108,7 +3199,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3183,7 +3274,7 @@ function App() {
         'Purchase date': formatDateForStorage(row.purchaseDateRaw),
         Status: 'Confirmed',
       }
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3276,7 +3367,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3361,7 +3452,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3412,7 +3503,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3521,7 +3612,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3558,7 +3649,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -3610,6 +3701,7 @@ function App() {
     setIsMobileNavOpen(false)
     setIsSummaryInfoOpen(false)
     setIsMobileSearchOpen(false)
+    setTableSearchQuery('')
   }
 
   const openMobileNav = () => {
@@ -3896,6 +3988,8 @@ function App() {
                   placeholder="Search inventory"
                   type="search"
                   aria-label="Search inventory"
+                  value={tableSearchQuery}
+                  onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
                 <div className="header-actions">
                 <button
@@ -4481,6 +4575,8 @@ function App() {
                   placeholder="Search purchases"
                   type="search"
                   aria-label="Search purchases"
+                  value={tableSearchQuery}
+                  onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
                 <div className="header-actions">
                 <button
@@ -4924,6 +5020,8 @@ function App() {
                   placeholder="Search subtractions"
                   type="search"
                   aria-label="Search subtractions"
+                  value={tableSearchQuery}
+                  onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
                 <div className="header-actions">
                 <button
@@ -6634,6 +6732,8 @@ function App() {
                   placeholder="Search alerts"
                   type="search"
                   aria-label="Search alerts"
+                  value={tableSearchQuery}
+                  onChange={(event) => setTableSearchQuery(event.target.value)}
                 />
                 <div className="header-actions">
                 <button

@@ -4,8 +4,7 @@ import {
   corsHeaders,
   isHttpRequest,
   nowIso,
-  parseBody,
-} from '../shared/dynamo-http';
+  parseBody, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import {
   getNextSequentialId,
   putItem,
@@ -74,6 +73,12 @@ export const handler = async (event: {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {

@@ -1,17 +1,19 @@
-import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
   normalizeStatus,
   nowIso,
-  parseBody,
-} from '../shared/dynamo-http';
+  parseBody, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import {
   docClient,
   getNextSequentialId,
+  mergeUserEditResponseItem,
+  patchUserOriginatedRecord,
   putItem,
   TERMINAL_VISIT_STATUSES,
+  withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
 
 type TaskPayload = {
@@ -54,6 +56,9 @@ const loadVisit = async (visitsTable: string, visitId: string) => {
   return (result.Item as Record<string, unknown> | undefined) ?? undefined;
 };
 
+const getVisitScheduledDate = (visit: Record<string, unknown>) =>
+  typeof visit.scheduledDate === 'string' ? visit.scheduledDate.trim() : '';
+
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
   body?: string;
@@ -62,6 +67,12 @@ export const handler = async (event: {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const tasksTable = process.env.TABLE_NAME;
   const visitsTable = process.env.VISITS_TABLE;
@@ -104,29 +115,13 @@ export const handler = async (event: {
   const timestamp = nowIso();
 
   if (action === 'dismiss' && existing) {
-    await docClient.send(
-      new UpdateCommand({
-        TableName: tasksTable,
-        Key: { id: existing.id },
-        UpdateExpression:
-          'SET #status = :status, #updatedAt = :updatedAt REMOVE #visitId',
-        ExpressionAttributeNames: {
-          '#status': 'status',
-          '#updatedAt': 'updatedAt',
-          '#visitId': 'visitId',
-        },
-        ExpressionAttributeValues: {
-          ':status': 'DISMISS',
-          ':updatedAt': timestamp,
-        },
-      }),
-    );
-    const item: Record<string, unknown> = {
-      ...existing,
-      status: 'DISMISS',
-      updatedAt: timestamp,
+    const taskId = typeof existing.id === 'string' ? existing.id : '';
+    const dismissPatch = {
+      set: { status: 'DISMISS' },
+      remove: ['visitId'],
     };
-    delete item.visitId;
+    await patchUserOriginatedRecord(tasksTable, taskId, dismissPatch);
+    const item = mergeUserEditResponseItem(existing, dismissPatch, timestamp);
     return buildHttpResponse(200, { item });
   }
 
@@ -170,36 +165,20 @@ export const handler = async (event: {
       });
     }
 
-    await docClient.send(
-      new UpdateCommand({
-        TableName: tasksTable,
-        Key: { id: existing.id },
-        UpdateExpression:
-          'SET #visitId = :visitId, #propertyId = :propertyId, #teamId = :teamId, #status = :status, #updatedAt = :updatedAt',
-        ExpressionAttributeNames: {
-          '#visitId': 'visitId',
-          '#propertyId': 'propertyId',
-          '#teamId': 'teamId',
-          '#status': 'status',
-          '#updatedAt': 'updatedAt',
-        },
-        ExpressionAttributeValues: {
-          ':visitId': assignVisitId,
-          ':propertyId': visitPropertyId,
-          ':teamId': visitTeamId,
-          ':status': 'PENDING',
-          ':updatedAt': timestamp,
-        },
-      }),
-    );
-    const item = {
-      ...existing,
+    const visitDueDate = getVisitScheduledDate(visit);
+    const taskId = typeof existing.id === 'string' ? existing.id : '';
+    const assignSet: Record<string, unknown> = {
       visitId: assignVisitId,
       propertyId: visitPropertyId,
       teamId: visitTeamId,
       status: 'PENDING',
-      updatedAt: timestamp,
     };
+    if (visitDueDate) {
+      assignSet.dueDate = visitDueDate;
+    }
+    const assignPatch = { set: assignSet };
+    await patchUserOriginatedRecord(tasksTable, taskId, assignPatch);
+    const item = mergeUserEditResponseItem(existing, assignPatch, timestamp);
     return buildHttpResponse(200, { item });
   }
 
@@ -232,44 +211,11 @@ export const handler = async (event: {
     return buildHttpResponse(400, { message: 'Invalid task status.' });
   }
 
-  if (status === 'COMPLETED') {
-    const item = {
-      ...(existing ?? {}),
-      id: isUpdate ? payload.id?.trim() : await getNextSequentialId(tasksTable, 'TASK'),
-      propertyId: propertyId ?? existing?.propertyId ?? '',
-      visitId: visitId ?? existing?.visitId,
-      teamId: teamId ?? existing?.teamId ?? '',
-      assignedUserId:
-        payload.assignedUserId?.trim() ??
-        (typeof existing?.assignedUserId === 'string'
-          ? existing.assignedUserId
-          : undefined),
-      title: title ?? (typeof existing?.title === 'string' ? existing.title : ''),
-      description:
-        payload.description?.trim() ??
-        (typeof existing?.description === 'string' ? existing.description : ''),
-      status: 'COMPLETED',
-      priority: normalizePriority(
-        payload.priority ??
-          (typeof existing?.priority === 'string' ? existing.priority : undefined),
-      ),
-      dueDate:
-        payload.dueDate?.trim() ??
-        (typeof existing?.dueDate === 'string' ? existing.dueDate : undefined),
-      closedAt: timestamp,
-      closedBy: payload.closedBy?.trim() ?? undefined,
-      createdAt:
-        (typeof existing?.createdAt === 'string'
-          ? existing.createdAt
-          : undefined) ?? timestamp,
-      updatedAt: timestamp,
-    };
-    await putItem(tasksTable, item);
-    return buildHttpResponse(200, { item });
-  }
+  const taskId = isUpdate
+    ? payload.id?.trim()
+    : await getNextSequentialId(tasksTable, 'TASK');
 
-  const item: Record<string, unknown> = {
-    id: isUpdate ? payload.id?.trim() : await getNextSequentialId(tasksTable, 'TASK'),
+  const editableFields: Record<string, unknown> = {
     propertyId: propertyId ?? existing?.propertyId ?? '',
     teamId: teamId ?? existing?.teamId ?? '',
     assignedUserId:
@@ -289,44 +235,80 @@ export const handler = async (event: {
     dueDate:
       payload.dueDate?.trim() ??
       (typeof existing?.dueDate === 'string' ? existing.dueDate : undefined),
-    createdAt:
-      (typeof existing?.createdAt === 'string' ? existing.createdAt : undefined) ??
-      timestamp,
-    updatedAt: timestamp,
   };
 
-  if (visitId) {
-    const visit = await loadVisit(visitsTable, visitId);
-    if (!visit) {
-      return buildHttpResponse(404, { message: 'Visit not found.' });
-    }
-    item.visitId = visitId;
-    item.propertyId =
-      typeof visit.propertyId === 'string' ? visit.propertyId : item.propertyId;
-    item.teamId = typeof visit.teamId === 'string' ? visit.teamId : item.teamId;
-    if (!isUpdate || status === 'UNASSIGNED' || status === 'DISMISS') {
-      item.status = 'PENDING';
-    }
-    if (
-      !item.assignedUserId &&
-      typeof visit.assignedUserId === 'string' &&
-      visit.assignedUserId
-    ) {
-      item.assignedUserId = visit.assignedUserId;
-    }
-  } else if (status !== 'UNASSIGNED' && status !== 'DISMISS') {
-    delete item.visitId;
+  if (status === 'COMPLETED') {
+    editableFields.status = 'COMPLETED';
+    editableFields.closedAt = timestamp;
+    editableFields.closedBy = payload.closedBy?.trim() ?? undefined;
   }
 
-  if (status === 'DISMISS' || status === 'UNASSIGNED') {
-    delete item.visitId;
-  }
-  if (!item.visitId) {
-    delete item.visitId;
+  const removeFields: string[] = [];
+  let linkedVisit: Record<string, unknown> | undefined;
+
+  if (
+    visitId &&
+    status !== 'UNASSIGNED' &&
+    status !== 'DISMISS'
+  ) {
+    linkedVisit = await loadVisit(visitsTable, visitId);
+    if (!linkedVisit) {
+      return buildHttpResponse(404, { message: 'Visit not found.' });
+    }
+    editableFields.visitId = visitId;
+    editableFields.propertyId =
+      typeof linkedVisit.propertyId === 'string'
+        ? linkedVisit.propertyId
+        : editableFields.propertyId;
+    editableFields.teamId =
+      typeof linkedVisit.teamId === 'string'
+        ? linkedVisit.teamId
+        : editableFields.teamId;
+    if (!isUpdate) {
+      editableFields.status = 'PENDING';
+    }
+    if (
+      !editableFields.assignedUserId &&
+      typeof linkedVisit.assignedUserId === 'string' &&
+      linkedVisit.assignedUserId
+    ) {
+      editableFields.assignedUserId = linkedVisit.assignedUserId;
+    }
+    const visitDueDate = getVisitScheduledDate(linkedVisit);
+    if (visitDueDate && !payload.dueDate?.trim()) {
+      editableFields.dueDate = visitDueDate;
+    }
+  } else if (isUpdate) {
+    removeFields.push('visitId');
   }
 
   try {
-    await putItem(tasksTable, item);
+    let item: Record<string, unknown>;
+
+    if (isUpdate && existing && taskId) {
+      await patchUserOriginatedRecord(tasksTable, taskId, {
+        set: editableFields,
+        remove: removeFields.length > 0 ? removeFields : undefined,
+      });
+      item = mergeUserEditResponseItem(
+        existing,
+        { set: editableFields, remove: removeFields },
+        timestamp,
+      );
+      item.id = taskId;
+    } else {
+      item = {
+        id: taskId,
+        ...editableFields,
+        createdAt: timestamp,
+        ...withUserEditSyncMetadata({}, timestamp),
+      };
+      if (!item.visitId) {
+        delete item.visitId;
+      }
+      await putItem(tasksTable, item);
+    }
+
     return buildHttpResponse(200, { item });
   } catch (error) {
     return buildHttpResponse(500, {

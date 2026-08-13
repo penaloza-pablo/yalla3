@@ -1,4 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
   DeleteCommand,
@@ -7,7 +8,7 @@ import {
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type,authorization',
   'Access-Control-Allow-Methods': 'POST,OPTIONS',
 };
 
@@ -51,6 +52,12 @@ export const handler = async (event: {
       headers: corsHeaders,
     };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {

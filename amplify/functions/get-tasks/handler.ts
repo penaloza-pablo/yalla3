@@ -3,8 +3,7 @@ import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
-  normalizeStatus,
-} from '../shared/dynamo-http';
+  normalizeStatus, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import { docClient } from '../shared/visit-task-utils';
 
 type HttpEvent = {
@@ -65,6 +64,12 @@ export const handler = async (event: HttpEvent) => {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {

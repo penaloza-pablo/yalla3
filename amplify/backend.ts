@@ -68,6 +68,42 @@ const backend = defineBackend({
   upsertVisitType,
 });
 
+const userPoolId = backend.auth.resources.userPool.userPoolId;
+const lambdaFunctionsWithHttp = [
+  backend.getInventory,
+  backend.upsertInventory,
+  backend.deleteInventory,
+  backend.getAlerts,
+  backend.updateAlertStatus,
+  backend.upsertAlert,
+  backend.exportInventory,
+  backend.getPurchases,
+  backend.upsertPurchase,
+  backend.getSubtractions,
+  backend.upsertSubtraction,
+  backend.getProperties,
+  backend.upsertProperty,
+  backend.deleteProperty,
+  backend.getBookings,
+  backend.getReviews,
+  backend.getReviewsSyncState,
+  backend.updateReviewWorkflow,
+  backend.getVisits,
+  backend.upsertVisit,
+  backend.getTasks,
+  backend.upsertTask,
+  backend.getTeams,
+  backend.getUsers,
+  backend.getVisitTypes,
+  backend.getVisitTemplates,
+  backend.upsertVisitTemplate,
+  backend.upsertVisitType,
+];
+
+for (const lambdaFunction of lambdaFunctionsWithHttp) {
+  lambdaFunction.addEnvironment('USER_POOL_ID', userPoolId);
+}
+
 const dataStack = backend.createStack('data-access');
 const inventoryTable = Table.fromTableName(
   dataStack,

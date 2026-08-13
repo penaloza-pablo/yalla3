@@ -306,6 +306,111 @@ export const putItem = async (tableName: string, item: Record<string, unknown>) 
     }),
   );
 
+export const USER_EDIT_SYNC_METADATA = {
+  lastUpdateSource: 'Yalla',
+  syncStatus: 'Pending',
+} as const;
+
+/** Never SET or REMOVE on user-originated frontend updates. */
+export const PRESERVED_SYNC_FIELDS = new Set([
+  'guestyTaskId',
+  'lastSyncedToGuestyAt',
+  'lastSyncedToGuestyHash',
+  'origin',
+  'rawGuestyPayload',
+  'lastGuestyEventType',
+]);
+
+export type UserOriginatedPatch = {
+  set: Record<string, unknown>;
+  remove?: string[];
+};
+
+export const withUserEditSyncMetadata = (
+  fields: Record<string, unknown>,
+  timestamp = nowIso(),
+) => ({
+  ...fields,
+  ...USER_EDIT_SYNC_METADATA,
+  updatedAt: timestamp,
+});
+
+export const patchUserOriginatedRecord = async (
+  tableName: string,
+  id: string,
+  patch: UserOriginatedPatch,
+) => {
+  const timestamp = nowIso();
+  const setFields = withUserEditSyncMetadata(patch.set, timestamp);
+
+  const names: Record<string, string> = {};
+  const values: Record<string, unknown> = {};
+  const setParts: string[] = [];
+  let setIdx = 0;
+
+  for (const [field, value] of Object.entries(setFields)) {
+    if (PRESERVED_SYNC_FIELDS.has(field) || value === undefined) {
+      continue;
+    }
+    const nameKey = `#s${setIdx}`;
+    const valueKey = `:s${setIdx}`;
+    names[nameKey] = field;
+    values[valueKey] = value;
+    setParts.push(`${nameKey} = ${valueKey}`);
+    setIdx += 1;
+  }
+
+  const removeFields = (patch.remove ?? []).filter(
+    (field) => !PRESERVED_SYNC_FIELDS.has(field),
+  );
+  const removeParts = removeFields.map((field, removeIdx) => {
+    const nameKey = `#r${removeIdx}`;
+    names[nameKey] = field;
+    return nameKey;
+  });
+
+  const expressionParts: string[] = [];
+  if (setParts.length > 0) {
+    expressionParts.push(`SET ${setParts.join(', ')}`);
+  }
+  if (removeParts.length > 0) {
+    expressionParts.push(`REMOVE ${removeParts.join(', ')}`);
+  }
+
+  if (expressionParts.length === 0) {
+    return;
+  }
+
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: { id },
+      UpdateExpression: expressionParts.join(' '),
+      ExpressionAttributeNames: names,
+      ...(Object.keys(values).length > 0
+        ? { ExpressionAttributeValues: values }
+        : {}),
+    }),
+  );
+};
+
+export const mergeUserEditResponseItem = (
+  existing: Record<string, unknown>,
+  patch: UserOriginatedPatch,
+  timestamp = nowIso(),
+): Record<string, unknown> => {
+  const item: Record<string, unknown> = {
+    ...existing,
+    ...patch.set,
+    ...USER_EDIT_SYNC_METADATA,
+    updatedAt: timestamp,
+  };
+  for (const field of patch.remove ?? []) {
+    delete item[field];
+  }
+  return item;
+};
+
 const TASK_STATUSES_SYNC_DUE_DATE = new Set(['PENDING', 'BLOCKED', 'CANCELLED']);
 
 export const syncVisitTaskDueDates = async (
@@ -339,22 +444,9 @@ export const syncVisitTaskDueDates = async (
       if (!TASK_STATUSES_SYNC_DUE_DATE.has(status)) {
         continue;
       }
-      const updatedAt = nowIso();
-      await docClient.send(
-        new UpdateCommand({
-          TableName: tasksTable,
-          Key: { id: taskId },
-          UpdateExpression: 'SET #dueDate = :dueDate, #updatedAt = :updatedAt',
-          ExpressionAttributeNames: {
-            '#dueDate': 'dueDate',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':dueDate': trimmedDueDate,
-            ':updatedAt': updatedAt,
-          },
-        }),
-      );
+      await patchUserOriginatedRecord(tasksTable, taskId, {
+        set: { dueDate: trimmedDueDate },
+      });
       updated += 1;
     }
     lastEvaluatedKey = result.LastEvaluatedKey as

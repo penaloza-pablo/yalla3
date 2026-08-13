@@ -1,4 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import * as XLSX from 'xlsx';
@@ -8,7 +9,7 @@ const s3Client = new S3Client({});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type,authorization',
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
   'Access-Control-Expose-Headers': 'content-disposition',
 };
@@ -73,6 +74,11 @@ export const handler = async (event: {
       statusCode: 204,
       headers: corsHeaders,
     };
+  }
+
+  if (event.requestContext?.http?.method) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
   }
 
   const tableName = process.env.TABLE_NAME;

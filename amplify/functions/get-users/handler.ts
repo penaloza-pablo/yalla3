@@ -2,8 +2,7 @@ import { QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import {
   buildHttpResponse,
   corsHeaders,
-  isHttpRequest,
-} from '../shared/dynamo-http';
+  isHttpRequest, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import { docClient } from '../shared/visit-task-utils';
 
 type HttpEvent = {
@@ -16,6 +15,12 @@ export const handler = async (event: HttpEvent) => {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {

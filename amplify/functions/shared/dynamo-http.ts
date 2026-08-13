@@ -1,8 +1,10 @@
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type,authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
 };
+
+export { rejectIfUnauthenticated } from './cognito-auth';
 
 export const isHttpRequest = (event: {
   requestContext?: { http?: { method?: string } };

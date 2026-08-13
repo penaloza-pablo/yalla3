@@ -2,7 +2,7 @@ import {
   GetCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { buildHttpResponse, corsHeaders, isHttpRequest } from '../shared/dynamo-http';
+import { buildHttpResponse, corsHeaders, isHttpRequest, rejectIfUnauthenticated } from '../shared/dynamo-http';
 import {
   getInclusiveDayCount,
   listDatesInRange,
@@ -66,6 +66,12 @@ export const handler = async (event: HttpEvent) => {
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders };
   }
+
+  if (isHttp) {
+    const denied = await rejectIfUnauthenticated(event);
+    if (denied) return denied;
+  }
+
 
   const visitsTable = process.env.TABLE_NAME;
   const tasksTable = process.env.TASKS_TABLE;
