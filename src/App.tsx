@@ -29,6 +29,7 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { MobileBodyPortal } from './MobileBodyPortal'
 import './App.css'
 
 type ConsumptionRule = {
@@ -3939,11 +3940,17 @@ function App() {
       className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
         isMobileNavOpen ? 'mobile-nav-is-open' : ''
       }`}
+      style={
+        {
+          '--title-progress': String(titleProgress),
+        } as CSSProperties
+      }
     >
+      <MobileBodyPortal>
       <header
-        className={`mobile-topbar ${titleProgress >= 0.99 ? 'is-collapsed' : ''} ${
-          isMobileSearchOpen ? 'is-search-open' : ''
-        }`}
+        className={`mobile-topbar ${titleProgress >= 0.25 ? 'is-frosted' : ''} ${
+          titleProgress >= 0.99 ? 'is-collapsed' : ''
+        } ${isMobileSearchOpen ? 'is-search-open' : ''}`}
         style={
           {
             '--title-progress': String(titleProgress),
@@ -4033,6 +4040,7 @@ function App() {
           )}
         </button>
       </header>
+      </MobileBodyPortal>
 
       <div
         className={`mobile-nav-backdrop ${isMobileNavOpen ? 'is-visible' : ''}`}
@@ -4232,6 +4240,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('inventory.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div
                 className={`page-action-bar ${
                   isMobileSearchOpen ? 'is-search-open' : ''
@@ -4362,6 +4371,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {error ? <div className="alert">{error}</div> : null}
@@ -4834,6 +4844,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('purchases.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div
                 className={`page-action-bar ${
                   isMobileSearchOpen ? 'is-search-open' : ''
@@ -4933,6 +4944,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {purchasesError ? <div className="alert">{purchasesError}</div> : null}
@@ -5282,6 +5294,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('subtractions.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div
                 className={`page-action-bar ${
                   isMobileSearchOpen ? 'is-search-open' : ''
@@ -5381,6 +5394,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {subtractionsError ? (
@@ -5770,6 +5784,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('properties.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div className="page-action-bar">
                 <div className="header-actions">
                 <button
@@ -5813,6 +5828,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {propertiesError ? <div className="alert">{propertiesError}</div> : null}
@@ -6144,6 +6160,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('bookings.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div className="page-action-bar">
                 <div className="header-actions">
                 <button
@@ -6186,6 +6203,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {bookingsError ? <div className="alert">{bookingsError}</div> : null}
@@ -6487,6 +6505,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('reviews.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div className="page-action-bar">
                 <div className="header-actions">
                 <button
@@ -6561,6 +6580,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {reviewsError ? <div className="alert">{reviewsError}</div> : null}
@@ -7002,6 +7022,7 @@ function App() {
                 </div>
                 <p className="subtitle">{t('alerts.subtitle')}</p>
               </div>
+              <MobileBodyPortal>
               <div
                 className={`page-action-bar ${
                   isMobileSearchOpen ? 'is-search-open' : ''
@@ -7085,6 +7106,7 @@ function App() {
                 </button>
                 </div>
               </div>
+              </MobileBodyPortal>
             </header>
 
             {alertsError ? <div className="alert">{alertsError}</div> : null}
