@@ -617,6 +617,38 @@
   color: #101828;
 }
 
+.btn-quick-filter {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-weight: 600;
+  color: #667085;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+}
+
+.quick-filter-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.btn-quick-filter.is-active {
+  color: #101828;
+}
+
+.btn-quick-filter.is-active .quick-filter-indicator {
+  background: currentColor;
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2906,6 +2938,10 @@ th {
 /* ==========================================================================
    Mobile-first UI (phones & small tablets)
    ========================================================================== */
+.data-table thead .mobile-quick-filter-col {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .app,
   .app.app-collapsed {
@@ -3278,6 +3314,10 @@ th {
     display: none !important;
   }
 
+  .page-action-bar .reviews-preset-action {
+    display: none !important;
+  }
+
   .page-action-bar .header-actions {
     width: auto;
     max-width: 100%;
@@ -3397,11 +3437,17 @@ th {
     border: 0;
   }
 
-  .data-table thead th:has(.btn-sort) {
+  .data-table thead th:has(.btn-sort),
+  .data-table thead th:has(.btn-quick-filter) {
     display: inline-flex;
   }
 
-  .data-table thead .btn-sort {
+  .data-table thead .mobile-quick-filter-col {
+    display: inline-flex;
+  }
+
+  .data-table thead .btn-sort,
+  .data-table thead .btn-quick-filter {
     background: #f2f4f7;
     border: 1px solid #e4e7ec;
     border-radius: 999px;
@@ -3413,10 +3459,16 @@ th {
     color: #344054;
   }
 
-  .data-table thead .btn-sort.is-active {
+  .data-table thead .btn-sort.is-active,
+  .data-table thead .btn-quick-filter.is-active {
     background: #1d2939;
     border-color: #1d2939;
     color: #ffffff;
+  }
+
+  .data-table thead .btn-quick-filter.is-active .quick-filter-indicator {
+    border-color: #ffffff;
+    background: #ffffff;
   }
 
   .data-table tbody {

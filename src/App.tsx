@@ -1439,6 +1439,14 @@ function App() {
     key: 'name' | 'status' | null
     direction: 'asc' | 'desc'
   }>({ key: null, direction: 'asc' })
+  const [purchasesSortConfig, setPurchasesSortConfig] = useState<{
+    key: 'date' | null
+    direction: 'asc' | 'desc'
+  }>({ key: 'date', direction: 'desc' })
+  const [subtractionsSortConfig, setSubtractionsSortConfig] = useState<{
+    key: 'date' | null
+    direction: 'asc' | 'desc'
+  }>({ key: 'date', direction: 'desc' })
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<{
     locations: string[]
@@ -1789,11 +1797,6 @@ function App() {
         }
         return true
       })
-      .sort((a, b) => {
-        const left = parseDateValue(a.deliveryDateRaw)?.getTime() ?? 0
-        const right = parseDateValue(b.deliveryDateRaw)?.getTime() ?? 0
-        return right - left
-      })
   }, [
     purchaseRows,
     purchasesFilters.deliveryDateFrom,
@@ -1822,6 +1825,29 @@ function App() {
     purchasesFilters.locations.length,
     purchasesFilters.statuses.length,
   ])
+
+  const isWaitingQuickFilterActive = useMemo(
+    () =>
+      purchasesFilters.statuses.length === 1 &&
+      purchasesFilters.statuses[0] === 'Waiting Delivery',
+    [purchasesFilters.statuses],
+  )
+
+  const toggleWaitingQuickFilter = () => {
+    if (isWaitingQuickFilterActive) {
+      setPurchasesFilters((current) => ({ ...current, statuses: [] }))
+      setPurchasesFilterDraft((current) => ({ ...current, statuses: [] }))
+      return
+    }
+    setPurchasesFilters((current) => ({
+      ...current,
+      statuses: ['Waiting Delivery'],
+    }))
+    setPurchasesFilterDraft((current) => ({
+      ...current,
+      statuses: ['Waiting Delivery'],
+    }))
+  }
 
   const subtractionStatusOptions = [
     'Pending Billing',
@@ -1901,11 +1927,6 @@ function App() {
         }
         return true
       })
-      .sort((a, b) => {
-        const left = parseDateValue(a.dateRaw)?.getTime() ?? 0
-        const right = parseDateValue(b.dateRaw)?.getTime() ?? 0
-        return right - left
-      })
   }, [
     subtractionRows,
     subtractionsFilters.dateFrom,
@@ -1935,6 +1956,29 @@ function App() {
     subtractionsFilters.locations.length,
     subtractionsFilters.statuses.length,
   ])
+
+  const isPendingBillingQuickFilterActive = useMemo(
+    () =>
+      subtractionsFilters.statuses.length === 1 &&
+      subtractionsFilters.statuses[0] === 'Pending Billing',
+    [subtractionsFilters.statuses],
+  )
+
+  const togglePendingBillingQuickFilter = () => {
+    if (isPendingBillingQuickFilterActive) {
+      setSubtractionsFilters((current) => ({ ...current, statuses: [] }))
+      setSubtractionsFilterDraft((current) => ({ ...current, statuses: [] }))
+      return
+    }
+    setSubtractionsFilters((current) => ({
+      ...current,
+      statuses: ['Pending Billing'],
+    }))
+    setSubtractionsFilterDraft((current) => ({
+      ...current,
+      statuses: ['Pending Billing'],
+    }))
+  }
 
   const getEndpoint = (key: string, fallback?: string) => {
     const config = Amplify.getConfig() as { custom?: Record<string, string> }
@@ -2866,6 +2910,22 @@ function App() {
     })
   }
 
+  const togglePurchasesSort = () => {
+    setPurchasesSortConfig((current) => ({
+      key: 'date',
+      direction:
+        current.key === 'date' && current.direction === 'desc' ? 'asc' : 'desc',
+    }))
+  }
+
+  const toggleSubtractionsSort = () => {
+    setSubtractionsSortConfig((current) => ({
+      key: 'date',
+      direction:
+        current.key === 'date' && current.direction === 'desc' ? 'asc' : 'desc',
+    }))
+  }
+
   const applySort = (rows: InventoryRow[]) => {
     if (!sortConfig.key) {
       return rows
@@ -2890,6 +2950,30 @@ function App() {
         )
       }
       return 0
+    })
+  }
+
+  const applyPurchasesSort = (rows: PurchaseRow[]) => {
+    if (!purchasesSortConfig.key) {
+      return rows
+    }
+    const direction = purchasesSortConfig.direction === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const left = getPurchaseSortTime(a)
+      const right = getPurchaseSortTime(b)
+      return (left - right) * direction
+    })
+  }
+
+  const applySubtractionsSort = (rows: SubtractionRow[]) => {
+    if (!subtractionsSortConfig.key) {
+      return rows
+    }
+    const direction = subtractionsSortConfig.direction === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const left = parseDateValue(a.dateRaw)?.getTime() ?? 0
+      const right = parseDateValue(b.dateRaw)?.getTime() ?? 0
+      return (left - right) * direction
     })
   }
 
@@ -2982,6 +3066,22 @@ function App() {
       filters.categories.length
     )
   }, [filters.locations, filters.statuses, filters.categories])
+
+  const isReorderQuickFilterActive = useMemo(
+    () =>
+      filters.statuses.length === 1 && filters.statuses[0] === 'Reorder',
+    [filters.statuses],
+  )
+
+  const toggleReorderQuickFilter = () => {
+    if (isReorderQuickFilterActive) {
+      setFilters((current) => ({ ...current, statuses: [] }))
+      setFilterDraft((current) => ({ ...current, statuses: [] }))
+      return
+    }
+    setFilters((current) => ({ ...current, statuses: ['Reorder'] }))
+    setFilterDraft((current) => ({ ...current, statuses: ['Reorder'] }))
+  }
 
   const locationOptions = useMemo(() => {
     const unique = new Set(
@@ -4586,7 +4686,7 @@ function App() {
                           type="button"
                           onClick={() => toggleSort('name')}
                         >
-                          {t('common.itemName')}
+                          {t('common.name')}
                           <span className="sort-indicator">
                             {sortConfig.key === 'name'
                               ? sortConfig.direction === 'asc'
@@ -4613,6 +4713,22 @@ function App() {
                                 : '▼'
                               : '↕'}
                           </span>
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            isReorderQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isReorderQuickFilterActive}
+                          onClick={toggleReorderQuickFilter}
+                        >
+                          {t('status.Reorder')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
                         </button>
                       </th>
                       <th scope="col">{t('common.quantity')}</th>
@@ -5158,27 +5274,60 @@ function App() {
                       <th scope="col">{t('common.itemName')}</th>
                       <th scope="col">{t('common.location')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">{t('common.deliveryDate')}</th>
+                      <th scope="col">
+                        <button
+                          className={`btn-sort ${
+                            purchasesSortConfig.key === 'date' ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          onClick={togglePurchasesSort}
+                        >
+                          {t('common.date')}
+                          <span className="sort-indicator">
+                            {purchasesSortConfig.key === 'date'
+                              ? purchasesSortConfig.direction === 'asc'
+                                ? '▲'
+                                : '▼'
+                              : '↕'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            isWaitingQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isWaitingQuickFilterActive}
+                          onClick={toggleWaitingQuickFilter}
+                        >
+                          {t('common.quickFilterWaiting')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isPurchasesLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           {t('purchases.loading')}
                         </td>
                       </tr>
                     ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           {purchaseRows.length > 0
                             ? t('purchases.emptyFiltered')
                             : t('purchases.empty')}
                         </td>
                       </tr>
                     ) : (
-                      purchasesFilteredRows.map((row) => {
+                      applyPurchasesSort(purchasesFilteredRows).map((row) => {
                         const isExpanded = expandedPurchaseIds.has(row.id)
                         return (
                           <Fragment key={row.id}>
@@ -5613,25 +5762,60 @@ function App() {
                       <th scope="col">{t('common.itemName')}</th>
                       <th scope="col">{t('common.location')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">{t('common.date')}</th>
+                      <th scope="col">
+                        <button
+                          className={`btn-sort ${
+                            subtractionsSortConfig.key === 'date'
+                              ? 'is-active'
+                              : ''
+                          }`}
+                          type="button"
+                          onClick={toggleSubtractionsSort}
+                        >
+                          {t('common.date')}
+                          <span className="sort-indicator">
+                            {subtractionsSortConfig.key === 'date'
+                              ? subtractionsSortConfig.direction === 'asc'
+                                ? '▲'
+                                : '▼'
+                              : '↕'}
+                          </span>
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            isPendingBillingQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isPendingBillingQuickFilterActive}
+                          onClick={togglePendingBillingQuickFilter}
+                        >
+                          {t('common.quickFilterBilling')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isSubtractionsLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           {t('subtractions.loading')}
                         </td>
                       </tr>
                     ) : subtractionsFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={5}>
+                        <td className="table-empty" colSpan={6}>
                           {t('subtractions.empty')}
                         </td>
                       </tr>
                     ) : (
-                      subtractionsFilteredRows.map((row) => {
+                      applySubtractionsSort(subtractionsFilteredRows).map((row) => {
                         const isExpanded = expandedSubtractionIds.has(row.id)
                         return (
                           <Fragment key={row.id}>
@@ -6509,7 +6693,7 @@ function App() {
               <div className="page-action-bar">
                 <div className="header-actions">
                 <button
-                  className={`btn-icon btn-icon-ghost btn-filter ${
+                  className={`btn-icon btn-icon-ghost btn-filter reviews-preset-action ${
                     reviewsCreatedPreset === 'last7' ? 'is-active' : ''
                   }`}
                   type="button"
@@ -6521,10 +6705,10 @@ function App() {
                     )
                   }
                 >
-                  7d
+                  {t('common.quickFilterLast7')}
                 </button>
                 <button
-                  className={`btn-icon btn-icon-ghost btn-filter ${
+                  className={`btn-icon btn-icon-ghost btn-filter reviews-preset-action ${
                     reviewsCreatedPreset === 'last30' ? 'is-active' : ''
                   }`}
                   type="button"
@@ -6536,7 +6720,7 @@ function App() {
                     )
                   }
                 >
-                  30d
+                  {t('common.quickFilterLast30')}
                 </button>
                 <button
                   className={`btn-ghost btn-filter ${
@@ -6571,12 +6755,23 @@ function App() {
                   ) : null}
                 </button>
                 <button
-                  className="btn-ghost"
+                  className="btn-primary"
                   type="button"
                   onClick={() => void refreshReviews()}
                   disabled={isReviewsLoading || isReviewsSyncing}
+                  aria-label={t('common.refresh')}
                 >
-                  {isReviewsSyncing ? 'Syncing...' : 'Refresh'}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
                 </div>
               </div>
@@ -6781,7 +6976,9 @@ function App() {
                       <th scope="col">{t('common.rating')}</th>
                       <th scope="col">
                         <button
-                          className="btn-sort is-active"
+                          className={`btn-sort ${
+                            reviewsSortDirection ? 'is-active' : ''
+                          }`}
                           type="button"
                           onClick={() =>
                             setReviewsSortDirection((current) =>
@@ -6789,10 +6986,52 @@ function App() {
                             )
                           }
                         >
-                          {t('common.createdAt')}
+                          {t('common.date')}
                           <span className="sort-indicator">
                             {reviewsSortDirection === 'asc' ? '▲' : '▼'}
                           </span>
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            reviewsCreatedPreset === 'last7' ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={reviewsCreatedPreset === 'last7'}
+                          aria-label={t('reviews.showLast7')}
+                          onClick={() =>
+                            setReviewsCreatedPreset((current) =>
+                              current === 'last7' ? 'none' : 'last7',
+                            )
+                          }
+                        >
+                          {t('common.quickFilterLast7')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            reviewsCreatedPreset === 'last30' ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={reviewsCreatedPreset === 'last30'}
+                          aria-label={t('reviews.showLast30')}
+                          onClick={() =>
+                            setReviewsCreatedPreset((current) =>
+                              current === 'last30' ? 'none' : 'last30',
+                            )
+                          }
+                        >
+                          {t('common.quickFilterLast30')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
                         </button>
                       </th>
                       <th scope="col">{t('common.status')}</th>
@@ -6802,13 +7041,13 @@ function App() {
                   <tbody>
                     {isReviewsLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={8}>
                           {t('reviews.loading')}
                         </td>
                       </tr>
                     ) : sortedReviewsRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={8}>
                           {t('reviews.empty')}
                         </td>
                       </tr>
