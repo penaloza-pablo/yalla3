@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
@@ -56,6 +61,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -134,6 +140,23 @@ export const handler = async (event: {
         ExpressionAttributeValues: values,
       }),
     );
+
+    const status =
+      typeof payload?.Status === 'string' ? payload.Status.trim() : '';
+    const step =
+      typeof payload?.WorkflowStep === 'string'
+        ? payload.WorkflowStep.trim()
+        : '';
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.REVIEWS,
+      action: 'update',
+      entityId: reviewId,
+      summary: status
+        ? `updated review workflow for ${quoted(reviewId)} to ${status}`
+        : step
+          ? `updated review workflow for ${quoted(reviewId)} (${step})`
+          : `updated review workflow for ${quoted(reviewId)}`,
+    });
 
     return buildHttpResponse(200, { ok: true, reviewId });
   } catch (error) {

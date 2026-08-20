@@ -1,6 +1,12 @@
 import { defineBackend } from '@aws-amplify/backend';
+import { RemovalPolicy } from 'aws-cdk-lib';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
-import { Table } from 'aws-cdk-lib/aws-dynamodb';
+import {
+  AttributeType,
+  BillingMode,
+  ProjectionType,
+  Table,
+} from 'aws-cdk-lib/aws-dynamodb';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -35,6 +41,7 @@ import { upsertVisitTemplate } from './functions/upsert-visit-template/resource'
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
+import { getActivityLogs } from './functions/get-activity-logs/resource';
 
 const backend = defineBackend({
   auth,
@@ -70,6 +77,7 @@ const backend = defineBackend({
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
+  getActivityLogs,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -105,6 +113,7 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitType,
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
+  backend.getActivityLogs,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -165,14 +174,33 @@ const inventoryBucket = Bucket.fromBucketName(
   'yalla-s3storage',
 );
 
+const activityLogsTable = new Table(dataStack, 'ActivityLogsTable', {
+  partitionKey: { name: 'pk', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+activityLogsTable.addGlobalSecondaryIndex({
+  indexName: 'feature-sk-index',
+  partitionKey: { name: 'feature', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+activityLogsTable.addGlobalSecondaryIndex({
+  indexName: 'userEmail-sk-index',
+  partitionKey: { name: 'userEmail', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+
 inventoryTable.grantReadData(backend.getInventory.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
-inventoryTable.grantWriteData(backend.deleteInventory.resources.lambda);
+inventoryTable.grantReadWriteData(backend.deleteInventory.resources.lambda);
 inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
 inventoryTable.grantReadData(backend.exportInventory.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 alarmsTable.grantReadWriteData(backend.getAlerts.resources.lambda);
-alarmsTable.grantWriteData(backend.updateAlertStatus.resources.lambda);
+alarmsTable.grantReadWriteData(backend.updateAlertStatus.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
@@ -182,7 +210,7 @@ substractionsTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda
 inventoryTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantReadWriteData(backend.upsertProperty.resources.lambda);
-propertiesTable.grantWriteData(backend.deleteProperty.resources.lambda);
+propertiesTable.grantReadWriteData(backend.deleteProperty.resources.lambda);
 bookingsTable.grantReadData(backend.getBookings.resources.lambda);
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
 reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
@@ -203,6 +231,29 @@ visitTemplatesTable.grantReadWriteData(
   backend.upsertVisitTemplate.resources.lambda,
 );
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
+
+const activityLogWriters = [
+  backend.upsertInventory,
+  backend.deleteInventory,
+  backend.updateAlertStatus,
+  backend.upsertAlert,
+  backend.upsertPurchase,
+  backend.upsertSubtraction,
+  backend.upsertProperty,
+  backend.deleteProperty,
+  backend.updateReviewWorkflow,
+  backend.upsertVisit,
+  backend.upsertTask,
+  backend.upsertVisitTemplate,
+  backend.upsertVisitType,
+  backend.proxyGuestyReviewsSync,
+];
+for (const lambdaFunction of activityLogWriters) {
+  lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
+  activityLogsTable.grantWriteData(lambdaFunction.resources.lambda);
+}
+backend.getActivityLogs.addEnvironment('TABLE_NAME', activityLogsTable.tableName);
+activityLogsTable.grantReadData(backend.getActivityLogs.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
@@ -306,6 +357,10 @@ const proxyGuestyReviewsSyncUrl =
   backend.proxyGuestyReviewsSync.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getActivityLogsUrl =
+  backend.getActivityLogs.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -339,5 +394,6 @@ backend.addOutput({
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,
+    getActivityLogsUrl: getActivityLogsUrl.url,
   },
 });

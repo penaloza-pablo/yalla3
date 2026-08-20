@@ -1,5 +1,10 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -67,6 +72,7 @@ const normalizeTasks = (tasks?: TemplateTask[]) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -175,6 +181,21 @@ export const handler = async (event: {
 
   try {
     await putItem(tableName, item);
+    const templateName =
+      typeof item.name === 'string' && item.name.trim()
+        ? item.name
+        : typeof item.id === 'string'
+          ? item.id
+          : 'template';
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: isUpdate ? 'update' : 'create',
+      entityId: typeof item.id === 'string' ? item.id : undefined,
+      entityName: templateName,
+      summary: isUpdate
+        ? `updated visit template ${quoted(templateName)}`
+        : `created visit template ${quoted(templateName)}`,
+    });
     return buildHttpResponse(200, { item });
   } catch (error) {
     return buildHttpResponse(500, {

@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -171,6 +176,7 @@ const getNextAlertId = async (tableName: string) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: AlertPayload;
 }) => {
@@ -245,6 +251,17 @@ export const handler = async (event: {
         Item: item,
       }),
     );
+
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.ALERTS,
+      action: payload.id ? 'update' : 'create',
+      entityId: item.id,
+      entityName: name,
+      summary: payload.id
+        ? `updated alert ${quoted(name)}`
+        : `created alert ${quoted(name)}`,
+      userEmail: payload.createdBy?.trim(),
+    });
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

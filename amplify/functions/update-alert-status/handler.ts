@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
@@ -41,6 +46,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: UpdatePayload;
 }) => {
@@ -115,7 +121,7 @@ export const handler = async (event: {
       : { ':status': payload.status };
 
   try {
-    await client.send(
+    const updated = await client.send(
       new UpdateCommand({
         TableName: tableName,
         Key: { id: payload.id },
@@ -124,8 +130,24 @@ export const handler = async (event: {
           '#status': 'Status',
         },
         ExpressionAttributeValues: expressionValues,
+        ReturnValues: 'ALL_NEW',
       }),
     );
+    const alertName =
+      typeof updated.Attributes?.['Name '] === 'string'
+        ? updated.Attributes['Name ']
+        : payload.id;
+    const statusLabel = payload.status.toLowerCase();
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.ALERTS,
+      action: 'update',
+      entityId: payload.id,
+      entityName: alertName,
+      summary:
+        payload.status === 'Snoozed'
+          ? `snoozed alert ${quoted(alertName)}`
+          : `marked alert ${quoted(alertName)} as ${statusLabel}`,
+    });
 
     const response = {
         id: payload.id,

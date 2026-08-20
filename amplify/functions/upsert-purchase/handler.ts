@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -193,6 +198,7 @@ const getNextPurchaseId = async (tableName: string) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: PurchasePayload;
 }) => {
@@ -328,6 +334,21 @@ export const handler = async (event: {
         totalPrice: Number(totalPrice) || 0,
       });
     }
+
+    const isUpdate = Boolean(payload.id?.trim());
+    const purchaseName = String(itemName).trim();
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.PURCHASES,
+      action: statusValue === 'Confirmed' ? 'confirm' : isUpdate ? 'update' : 'create',
+      entityId: id,
+      entityName: purchaseName,
+      summary:
+        statusValue === 'Confirmed'
+          ? `confirmed delivery of ${quoted(purchaseName)} (${Number(units) || 0} units)`
+          : isUpdate
+            ? `updated purchase of ${quoted(purchaseName)}`
+            : `created a purchase of ${Number(units) || 0} units of ${quoted(purchaseName)}`,
+    });
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

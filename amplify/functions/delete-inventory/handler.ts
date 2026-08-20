@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -42,6 +47,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: DeletePayload;
 }) => {
@@ -80,12 +86,24 @@ export const handler = async (event: {
   }
 
   try {
-    await client.send(
+    const deleted = await client.send(
       new DeleteCommand({
         TableName: tableName,
         Key: { id },
+        ReturnValues: 'ALL_OLD',
       }),
     );
+    const itemName =
+      typeof deleted.Attributes?.['Item name'] === 'string'
+        ? deleted.Attributes['Item name']
+        : id;
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.INVENTORY,
+      action: 'delete',
+      entityId: id,
+      entityName: itemName,
+      summary: `deleted the item ${quoted(itemName)}`,
+    });
     return isHttp ? buildHttpResponse(200, { deleted: id }) : { deleted: id };
   } catch (error) {
     const message = 'Failed to delete inventory item.';

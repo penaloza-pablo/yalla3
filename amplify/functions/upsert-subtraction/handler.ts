@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -282,6 +287,7 @@ const resolveCreateStatus = (billable: boolean) =>
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: SubtractionPayload;
 }) => {
@@ -368,6 +374,13 @@ export const handler = async (event: {
             Item: item,
           }),
         );
+        await recordActivityLog(event, {
+          feature: LOG_FEATURES.SUBTRACTIONS,
+          action: 'update',
+          entityId: item.id,
+          entityName: item['Item name'],
+          summary: `marked subtraction of ${quoted(item['Item name'])} as billed`,
+        });
         const response = { item };
         return isHttp ? buildHttpResponse(200, response) : response;
       }
@@ -396,6 +409,13 @@ export const handler = async (event: {
           Item: item,
         }),
       );
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.SUBTRACTIONS,
+        action: 'reverse',
+        entityId: item.id,
+        entityName: item['Item name'],
+        summary: `reversed subtraction of ${quoted(item['Item name'])}`,
+      });
       const response = { item };
       return isHttp ? buildHttpResponse(200, response) : response;
     }
@@ -510,6 +530,14 @@ export const handler = async (event: {
         Item: item,
       }),
     );
+
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.SUBTRACTIONS,
+      action: 'create',
+      entityId: item.id,
+      entityName: item['Item name'],
+      summary: `subtracted ${item.Units} units of ${quoted(item['Item name'])}`,
+    });
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

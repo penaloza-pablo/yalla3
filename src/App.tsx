@@ -29,6 +29,7 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { LogsPanel } from './LogsPanel'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import './App.css'
 
@@ -279,7 +280,7 @@ const navigation = [
   },
   {
     section: 'Tech',
-    items: ['Tech solution 1', 'Tech solution 2', 'Tech solution 3'],
+    items: ['Logs', 'Tech solution 2', 'Tech solution 3'],
   },
   {
     section: 'Grow',
@@ -297,6 +298,7 @@ const pagesWithMobileSearch = new Set([
   'Purchases',
   'Subtractions',
   'Alerts',
+  'Logs',
 ])
 const MOBILE_TITLE_COLLAPSE_DISTANCE = 56
 const OTHER_OPTION = '__other__'
@@ -4022,6 +4024,8 @@ function App() {
         return t('subtractions.search')
       case 'Alerts':
         return t('alerts.search')
+      case 'Logs':
+        return t('logs.search')
       default:
         return t('common.showSearch')
     }
@@ -7620,6 +7624,16 @@ function App() {
                 title: row.title,
                 listingNickname: row.nickname,
               }))}
+          />
+        ) : activePage === 'Logs' ? (
+          <LogsPanel
+            getEndpoint={getEndpoint}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
           />
         ) : activePage === 'Chatbot' ? (
           <ChatbotView />

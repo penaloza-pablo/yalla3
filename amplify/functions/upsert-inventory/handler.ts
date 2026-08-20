@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -234,6 +239,7 @@ const parseConsumptionRules = (payload: InventoryPayload) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: InventoryPayload;
 }) => {
@@ -293,9 +299,9 @@ export const handler = async (event: {
 
   let preservedNameEs: string | undefined;
   let preservedRules: Record<string, unknown> | undefined;
+  let existed = false;
   const incomingRules = parseConsumptionRules(payload);
-  const needsExistingRead = !hasNameEs || incomingRules === undefined;
-  if (needsExistingRead && itemId) {
+  if (itemId) {
     try {
       const existing = await client.send(
         new GetCommand({
@@ -303,6 +309,7 @@ export const handler = async (event: {
           Key: { id: itemId },
         }),
       );
+      existed = Boolean(existing.Item);
       if (!hasNameEs) {
         const existingNameEs = existing.Item?.nameEs;
         if (typeof existingNameEs === 'string' && existingNameEs.trim()) {
@@ -402,6 +409,17 @@ export const handler = async (event: {
         });
       }
     }
+
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.INVENTORY,
+      action: existed ? 'update' : 'create',
+      entityId: item.id,
+      entityName: item['Item name'],
+      summary: existed
+        ? `updated the item ${quoted(item['Item name'])}`
+        : `created the item ${quoted(item['Item name'])}`,
+      userEmail: createdBy !== 'system' ? createdBy : undefined,
+    });
 
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

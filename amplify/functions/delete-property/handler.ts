@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DeleteCommand,
@@ -42,6 +47,7 @@ const buildHttpResponse = (statusCode: number, payload: Record<string, unknown>)
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
   arguments?: DeletePayload;
 }) => {
@@ -79,12 +85,27 @@ export const handler = async (event: {
   }
 
   try {
-    await client.send(
+    const deleted = await client.send(
       new DeleteCommand({
         TableName: tableName,
         Key: { id },
+        ReturnValues: 'ALL_OLD',
       }),
     );
+    const propertyLabel =
+      typeof deleted.Attributes?.nickname === 'string' &&
+      deleted.Attributes.nickname.trim()
+        ? deleted.Attributes.nickname
+        : typeof deleted.Attributes?.title === 'string'
+          ? deleted.Attributes.title
+          : id;
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.PROPERTIES,
+      action: 'delete',
+      entityId: id,
+      entityName: propertyLabel,
+      summary: `removed property ${quoted(propertyLabel)}`,
+    });
     return isHttp ? buildHttpResponse(200, { deleted: id }) : { deleted: id };
   } catch (error) {
     const message = 'Failed to delete property.';

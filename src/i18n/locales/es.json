@@ -262,6 +262,7 @@
     "Reviews": "Reseñas",
     "Subtractions": "Extracciones",
     "Tech solution 1": "Solución Tech 1",
+    "Logs": "Registros",
     "Tech solution 2": "Solución Tech 2",
     "Tech solution 3": "Solución Tech 3"
   },
@@ -493,5 +494,25 @@
     "stepReminder": "Recordatorio",
     "stepDeletionConfirmation": "Confirmación de eliminación",
     "stepFinished": "Finalizado"
+  },
+  "logs": {
+    "eyebrow": "Tech / Registros",
+    "subtitle": "Un historial cronológico de los cambios considerables en Yalla.",
+    "search": "Buscar registros",
+    "cardTitle": "Registros de actividad",
+    "cardSubtitle": "Usuario, funcionalidad, fecha y un resumen corto de cada cambio.",
+    "loading": "Cargando registros...",
+    "empty": "Aún no se ha registrado actividad.",
+    "emptyFiltered": "Ningún registro coincide con los filtros actuales.",
+    "missingEndpoint": "Falta el endpoint de registros. Configura VITE_GET_ACTIVITY_LOGS_URL en el entorno.",
+    "loadError": "No se pudieron cargar los registros de actividad. Inténtalo de nuevo.",
+    "user": "Usuario",
+    "feature": "Funcionalidad",
+    "summary": "Resumen",
+    "allFeatures": "Todas las funcionalidades",
+    "totalEvents": "Eventos recientes",
+    "recentEvents": "Últimos 200 registros",
+    "uniqueUsers": "Usuarios",
+    "visibleInList": "En la lista actual"
   }
 }

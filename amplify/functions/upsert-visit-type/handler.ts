@@ -1,5 +1,10 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -23,6 +28,7 @@ type VisitTypePayload = {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -111,6 +117,21 @@ export const handler = async (event: {
 
   try {
     await putItem(tableName, item);
+    const typeName =
+      typeof item.name === 'string' && item.name.trim()
+        ? item.name
+        : typeof item.id === 'string'
+          ? item.id
+          : 'visit type';
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: isUpdate ? 'update' : 'create',
+      entityId: typeof item.id === 'string' ? item.id : undefined,
+      entityName: typeName,
+      summary: isUpdate
+        ? `updated visit type ${quoted(typeName)}`
+        : `created visit type ${quoted(typeName)}`,
+    });
     return buildHttpResponse(200, { item });
   } catch (error) {
     return buildHttpResponse(500, {

@@ -262,6 +262,7 @@
     "Reviews": "Reviews",
     "Subtractions": "Subtractions",
     "Tech solution 1": "Tech solution 1",
+    "Logs": "Logs",
     "Tech solution 2": "Tech solution 2",
     "Tech solution 3": "Tech solution 3"
   },
@@ -493,5 +494,25 @@
     "stepReminder": "Reminder",
     "stepDeletionConfirmation": "Deletion confirmation",
     "stepFinished": "Finished"
+  },
+  "logs": {
+    "eyebrow": "Tech / Logs",
+    "subtitle": "A chronological record of considerable changes across Yalla.",
+    "search": "Search logs",
+    "cardTitle": "Activity logs",
+    "cardSubtitle": "User, feature, date and a short summary of each change.",
+    "loading": "Loading logs...",
+    "empty": "No activity has been recorded yet.",
+    "emptyFiltered": "No logs match the current filters.",
+    "missingEndpoint": "Missing logs endpoint. Set VITE_GET_ACTIVITY_LOGS_URL in the environment.",
+    "loadError": "Unable to load activity logs. Please try again.",
+    "user": "User",
+    "feature": "Feature",
+    "summary": "Summary",
+    "allFeatures": "All features",
+    "totalEvents": "Recent events",
+    "recentEvents": "Latest 200 records",
+    "uniqueUsers": "Users",
+    "visibleInList": "In the current list"
   }
 }

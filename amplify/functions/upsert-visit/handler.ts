@@ -1,5 +1,10 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -68,6 +73,7 @@ const normalizePriority = (value?: string) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -320,6 +326,26 @@ export const handler = async (event: {
         );
       }
     }
+
+    const visitTitle =
+      typeof item.title === 'string' && item.title.trim()
+        ? item.title
+        : typeof item.id === 'string'
+          ? item.id
+          : 'visit';
+    const visitStatus =
+      typeof item.status === 'string' ? item.status.toLowerCase() : '';
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: isUpdate ? 'update' : 'create',
+      entityId: typeof item.id === 'string' ? item.id : undefined,
+      entityName: visitTitle,
+      summary: isUpdate
+        ? visitStatus === 'cancelled' || visitStatus === 'completed'
+          ? `marked visit ${quoted(visitTitle)} as ${visitStatus}`
+          : `updated visit ${quoted(visitTitle)}`
+        : `created visit ${quoted(visitTitle)}`,
+    });
 
     return buildHttpResponse(200, {
       item,

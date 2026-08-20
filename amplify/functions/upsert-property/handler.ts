@@ -1,4 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
@@ -144,6 +149,16 @@ export const handler = async (event: {
         Item: item,
       }),
     );
+    const propertyLabel = propertyFields.nickname || propertyFields.title || id;
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.PROPERTIES,
+      action: existing.Item ? 'update' : 'create',
+      entityId: id,
+      entityName: propertyLabel,
+      summary: existing.Item
+        ? `updated property ${quoted(propertyLabel)}`
+        : `added property ${quoted(propertyLabel)}`,
+    });
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {

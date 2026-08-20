@@ -67,3 +67,34 @@ export const rejectIfUnauthenticated = async (event: {
     return buildHttpResponse(401, { message: 'Invalid token' });
   }
 };
+
+type JwtPayload = {
+  email?: string;
+  'cognito:username'?: string;
+  username?: string;
+};
+
+export const getActorEmail = async (event: {
+  headers?: HttpHeaders;
+}): Promise<string> => {
+  const jwtVerifier = getVerifier();
+  const token = getBearerToken(event.headers ?? {});
+  if (!jwtVerifier || !token) {
+    return 'system';
+  }
+
+  try {
+    const payload = (await jwtVerifier.verify(token)) as JwtPayload;
+    const email = payload.email?.trim();
+    if (email) {
+      return email;
+    }
+    return (
+      payload['cognito:username']?.trim() ||
+      payload.username?.trim() ||
+      'system'
+    );
+  } catch {
+    return 'system';
+  }
+};

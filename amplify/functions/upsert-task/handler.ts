@@ -1,5 +1,10 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  LOG_FEATURES,
+  quoted,
+  recordActivityLog,
+} from '../shared/activity-log';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -61,6 +66,7 @@ const getVisitScheduledDate = (visit: Record<string, unknown>) =>
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | string[] | undefined>;
   body?: string;
 }) => {
   const isHttp = isHttpRequest(event);
@@ -308,6 +314,26 @@ export const handler = async (event: {
       }
       await putItem(tasksTable, item);
     }
+
+    const taskTitle =
+      typeof item.title === 'string' && item.title.trim()
+        ? item.title
+        : typeof item.id === 'string'
+          ? item.id
+          : 'task';
+    const taskStatus =
+      typeof item.status === 'string' ? item.status.toLowerCase() : '';
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: isUpdate ? 'update' : 'create',
+      entityId: typeof item.id === 'string' ? item.id : undefined,
+      entityName: taskTitle,
+      summary: isUpdate
+        ? taskStatus === 'completed' || taskStatus === 'cancelled' || taskStatus === 'dismiss'
+          ? `marked task ${quoted(taskTitle)} as ${taskStatus}`
+          : `updated task ${quoted(taskTitle)}`
+        : `created task ${quoted(taskTitle)}`,
+    });
 
     return buildHttpResponse(200, { item });
   } catch (error) {

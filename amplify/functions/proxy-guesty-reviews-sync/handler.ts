@@ -1,3 +1,7 @@
+import {
+  LOG_FEATURES,
+  recordActivityLog,
+} from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   buildHttpResponse,
@@ -57,7 +61,15 @@ export const handler = async (event: {
   }
 
   try {
-    return await proxyUpstream(upstreamUrl);
+    const response = await proxyUpstream(upstreamUrl);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.REVIEWS,
+        action: 'sync',
+        summary: 'triggered a reviews sync from Guesty',
+      });
+    }
+    return response;
   } catch (error) {
     return buildHttpResponse(502, {
       message: 'Failed to reach Guesty reviews sync upstream.',
