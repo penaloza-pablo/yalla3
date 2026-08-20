@@ -20,12 +20,16 @@ type LogsApiResponse = {
   count?: number
 }
 
+type LogsQuickPreset = 'none' | 'today' | 'last100'
+
 type LogsPanelProps = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
   searchQuery: string
   onSearchQueryChange: (value: string) => void
   isMobileSearchOpen: boolean
   onToggleMobileSearch: () => void
+  isSummaryInfoOpen: boolean
+  onToggleSummaryInfo: () => void
 }
 
 const FEATURE_OPTIONS = [
@@ -55,19 +59,36 @@ const formatLogDate = (value: string, locale: string) => {
   })
 }
 
+const isSameLocalDay = (isoValue: string, now = new Date()) => {
+  const parsed = new Date(isoValue)
+  if (Number.isNaN(parsed.getTime())) {
+    return false
+  }
+  return (
+    parsed.getFullYear() === now.getFullYear() &&
+    parsed.getMonth() === now.getMonth() &&
+    parsed.getDate() === now.getDate()
+  )
+}
+
 export function LogsPanel({
   getEndpoint,
   searchQuery,
   onSearchQueryChange,
   isMobileSearchOpen,
   onToggleMobileSearch,
+  isSummaryInfoOpen,
+  onToggleSummaryInfo,
 }: LogsPanelProps) {
   const { t, i18n } = useTranslation()
   const [rows, setRows] = useState<ActivityLogRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [featureFilter, setFeatureFilter] = useState('')
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [featureFilters, setFeatureFilters] = useState<string[]>([])
+  const [featureFilterDraft, setFeatureFilterDraft] = useState<string[]>([])
+  const [quickPreset, setQuickPreset] = useState<LogsQuickPreset>('none')
 
   const fetchLogs = useCallback(async () => {
     const endpoint = getEndpoint(
@@ -85,9 +106,6 @@ export function LogsPanel({
     try {
       const params = new URLSearchParams()
       params.set('limit', '200')
-      if (featureFilter) {
-        params.set('feature', featureFilter)
-      }
       const separator = endpoint.includes('?') ? '&' : '?'
       const response = await authFetch(`${endpoint}${separator}${params.toString()}`)
       if (!response.ok) {
@@ -108,7 +126,7 @@ export function LogsPanel({
     } finally {
       setIsLoading(false)
     }
-  }, [featureFilter, getEndpoint, t])
+  }, [getEndpoint, t])
 
   useEffect(() => {
     void fetchLogs()
@@ -116,24 +134,44 @@ export function LogsPanel({
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    if (!query) {
-      return rows
+    let next = rows
+
+    if (featureFilters.length > 0) {
+      const selected = new Set(featureFilters)
+      next = next.filter((row) => selected.has(row.feature))
     }
-    return rows.filter((row) => {
-      const featureLabel = translatePage(t, row.feature).toLowerCase()
-      return (
-        row.userEmail.toLowerCase().includes(query) ||
-        row.feature.toLowerCase().includes(query) ||
-        featureLabel.includes(query) ||
-        row.summary.toLowerCase().includes(query) ||
-        (row.entityName ?? '').toLowerCase().includes(query)
-      )
-    })
-  }, [rows, searchQuery, t])
+
+    if (query) {
+      next = next.filter((row) => {
+        const featureLabel = translatePage(t, row.feature).toLowerCase()
+        return (
+          row.userEmail.toLowerCase().includes(query) ||
+          row.feature.toLowerCase().includes(query) ||
+          featureLabel.includes(query) ||
+          row.summary.toLowerCase().includes(query) ||
+          (row.entityName ?? '').toLowerCase().includes(query)
+        )
+      })
+    }
+
+    if (quickPreset === 'today') {
+      next = next.filter((row) => isSameLocalDay(row.createdAt))
+    }
+
+    if (quickPreset === 'last100') {
+      next = next.slice(0, 100)
+    }
+
+    return next
+  }, [featureFilters, quickPreset, rows, searchQuery, t])
 
   const uniqueUsers = useMemo(() => {
-    return new Set(rows.map((row) => row.userEmail).filter(Boolean)).size
-  }, [rows])
+    return new Set(filteredRows.map((row) => row.userEmail).filter(Boolean)).size
+  }, [filteredRows])
+
+  const activeFilterCount = featureFilters.length
+  const hasActiveFilters =
+    activeFilterCount > 0 || Boolean(searchQuery.trim()) || quickPreset !== 'none'
 
   return (
     <>
@@ -142,6 +180,19 @@ export function LogsPanel({
           <p className="eyebrow">{t('logs.eyebrow')}</p>
           <div className="page-title-row">
             <h1 className="page-title">{t('pages.Logs')}</h1>
+            <button
+              type="button"
+              className={`btn-page-info ${isSummaryInfoOpen ? 'is-active' : ''}`}
+              aria-label={
+                isSummaryInfoOpen
+                  ? t('common.hideSummaryInfo')
+                  : t('common.showSummaryInfo')
+              }
+              aria-expanded={isSummaryInfoOpen}
+              onClick={onToggleSummaryInfo}
+            >
+              i
+            </button>
           </div>
           <p className="subtitle">{t('logs.subtitle')}</p>
         </div>
@@ -189,27 +240,48 @@ export function LogsPanel({
                   </svg>
                 )}
               </button>
-              <label className="logs-feature-filter">
-                <span className="visually-hidden">{t('logs.feature')}</span>
-                <select
-                  value={featureFilter}
-                  onChange={(event) => setFeatureFilter(event.target.value)}
-                  aria-label={t('logs.feature')}
-                >
-                  <option value="">{t('logs.allFeatures')}</option>
-                  {FEATURE_OPTIONS.map((feature) => (
-                    <option key={feature} value={feature}>
-                      {translatePage(t, feature)}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <button
-                className="btn-ghost"
+                className={`btn-ghost btn-filter ${isFilterOpen ? 'is-active' : ''}`}
+                type="button"
+                aria-label={t('common.filters')}
+                onClick={() => {
+                  setFeatureFilterDraft([...featureFilters])
+                  setIsFilterOpen(true)
+                }}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                    fill="currentColor"
+                  />
+                </svg>
+                {activeFilterCount > 0 ? (
+                  <span className="filter-badge">{activeFilterCount}</span>
+                ) : null}
+              </button>
+              <button
+                className="btn-primary"
                 type="button"
                 onClick={() => void fetchLogs()}
+                disabled={isLoading}
+                aria-label={t('common.refresh')}
               >
-                {t('common.refresh')}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                    fill="currentColor"
+                  />
+                </svg>
               </button>
             </div>
           </div>
@@ -218,10 +290,12 @@ export function LogsPanel({
 
       {error ? <div className="alert">{error}</div> : null}
 
-      <section className="summary-cards is-open">
+      <section
+        className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+      >
         <div className="card card-compact">
           <p className="card-label">{t('logs.totalEvents')}</p>
-          <p className="card-value">{rows.length}</p>
+          <p className="card-value">{filteredRows.length}</p>
           <p className="card-meta">{t('logs.recentEvents')}</p>
         </div>
         <div className="card card-compact">
@@ -247,14 +321,118 @@ export function LogsPanel({
             <p className="card-subtitle">{t('logs.cardSubtitle')}</p>
           </div>
         </div>
-        <div className="table-wrapper">
+
+        {isFilterOpen ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">{t('common.filters')}</h3>
+                  <p className="modal-subtitle">{t('logs.filterSubtitle')}</p>
+                </div>
+                <button
+                  className="btn-icon"
+                  type="button"
+                  onClick={() => setIsFilterOpen(false)}
+                  aria-label={t('common.closeFilters')}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="filter-grid">
+                  <div className="filter-group">
+                    <p className="filter-title">{t('logs.feature')}</p>
+                    <div className="filter-options">
+                      {FEATURE_OPTIONS.map((option) => {
+                        const isChecked = featureFilterDraft.includes(option)
+                        return (
+                          <label className="filter-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(event) => {
+                                setFeatureFilterDraft((current) => {
+                                  if (event.target.checked) {
+                                    return [...current, option]
+                                  }
+                                  return current.filter((value) => value !== option)
+                                })
+                              }}
+                            />
+                            <span>{translatePage(t, option)}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setFeatureFilterDraft([])}
+                >
+                  {t('common.clear')}
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => {
+                    setFeatureFilters([...featureFilterDraft])
+                    setIsFilterOpen(false)
+                  }}
+                >
+                  {t('common.applyFilters')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="table-wrapper" aria-busy={isLoading}>
           <table className="data-table data-table-logs">
             <thead>
               <tr>
-                <th>{t('logs.user')}</th>
-                <th>{t('logs.feature')}</th>
-                <th>{t('common.date')}</th>
-                <th>{t('logs.summary')}</th>
+                <th scope="col">{t('logs.user')}</th>
+                <th scope="col">{t('logs.feature')}</th>
+                <th scope="col">{t('common.date')}</th>
+                <th scope="col" className="mobile-quick-filter-col">
+                  <button
+                    className={`btn-quick-filter ${
+                      quickPreset === 'today' ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-pressed={quickPreset === 'today'}
+                    onClick={() =>
+                      setQuickPreset((current) =>
+                        current === 'today' ? 'none' : 'today',
+                      )
+                    }
+                  >
+                    {t('common.quickFilterToday')}
+                    <span className="quick-filter-indicator" aria-hidden="true" />
+                  </button>
+                </th>
+                <th scope="col" className="mobile-quick-filter-col">
+                  <button
+                    className={`btn-quick-filter ${
+                      quickPreset === 'last100' ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-pressed={quickPreset === 'last100'}
+                    onClick={() =>
+                      setQuickPreset((current) =>
+                        current === 'last100' ? 'none' : 'last100',
+                      )
+                    }
+                  >
+                    {t('common.quickFilterLast100')}
+                    <span className="quick-filter-indicator" aria-hidden="true" />
+                  </button>
+                </th>
+                <th scope="col">{t('logs.summary')}</th>
               </tr>
             </thead>
             <tbody>
@@ -267,9 +445,7 @@ export function LogsPanel({
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td className="table-empty" colSpan={4}>
-                    {searchQuery || featureFilter
-                      ? t('logs.emptyFiltered')
-                      : t('logs.empty')}
+                    {hasActiveFilters ? t('logs.emptyFiltered') : t('logs.empty')}
                   </td>
                 </tr>
               ) : (

@@ -280,7 +280,7 @@ const navigation = [
   },
   {
     section: 'Tech',
-    items: ['Logs', 'Tech solution 2', 'Tech solution 3'],
+    items: ['Logs'],
   },
   {
     section: 'Grow',
@@ -7633,6 +7633,10 @@ function App() {
             isMobileSearchOpen={isMobileSearchOpen}
             onToggleMobileSearch={() =>
               setIsMobileSearchOpen((current) => !current)
+            }
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
             }
           />
         ) : activePage === 'Chatbot' ? (
