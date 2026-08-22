@@ -188,6 +188,8 @@ INVENTORY RULES
     - otherwise → Low Stock
   - If Status is Waiting Delivery, a purchase is already in progress.
     Do not suggest buying that item again.
+  - If Status is Skipped, the item was omitted in the last spot check.
+    Quantity was not changed. Do not treat Skipped as a confirmed stock level.
 
 ALERT RULES
 - Interpret #alarm as a request to create a new alert.

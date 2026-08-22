@@ -27,6 +27,7 @@ const s3Client = new S3Client({});
 type SpotCheckItemPayload = {
   id?: string;
   quantity?: number;
+  skipped?: boolean;
 };
 
 type SpotCheckPayload = {
@@ -45,6 +46,7 @@ type InventorySnapshot = {
   previousStatus: string;
   status: string;
   changed: boolean;
+  skipped: boolean;
 };
 
 const formatDateForStorage = () => {
@@ -96,6 +98,7 @@ const buildXlsxBuffer = (rows: InventorySnapshot[]) => {
     { key: 'previousStatus', label: 'previousStatus' },
     { key: 'status', label: 'Status' },
     { key: 'changed', label: 'changed' },
+    { key: 'skipped', label: 'skipped' },
   ] as const;
 
   const data = rows.map((item) => {
@@ -168,27 +171,31 @@ export const handler = async (event: {
     return buildHttpResponse(400, { message: 'At least one category is required.' });
   }
   if (incomingItems.length === 0) {
-    return buildHttpResponse(400, { message: 'At least one confirmed item is required.' });
+    return buildHttpResponse(400, { message: 'At least one item is required.' });
   }
   if (incomingItems.length > 300) {
     return buildHttpResponse(400, { message: 'Too many items in this spot check.' });
   }
 
-  const uniqueItems = new Map<string, number>();
+  const uniqueItems = new Map<string, { quantity: number; skipped: boolean }>();
   for (const entry of incomingItems) {
     const id = entry.id?.trim();
+    const skipped = Boolean(entry.skipped);
     const quantity = Number(entry.quantity);
-    if (!id || !Number.isFinite(quantity) || quantity < 0) {
+    if (!id || (!skipped && (!Number.isFinite(quantity) || quantity < 0))) {
       return buildHttpResponse(400, {
-        message: 'Each item needs a valid id and quantity.',
+        message: 'Each item needs a valid id and quantity, or must be skipped.',
       });
     }
-    uniqueItems.set(id, Math.trunc(quantity));
+    uniqueItems.set(id, {
+      quantity: Number.isFinite(quantity) ? Math.trunc(quantity) : 0,
+      skipped,
+    });
   }
 
   try {
     const snapshots: InventorySnapshot[] = [];
-    for (const [itemId, quantity] of uniqueItems.entries()) {
+    for (const [itemId, entry] of uniqueItems.entries()) {
       const result = await client.send(
         new GetCommand({
           TableName: inventoryTable,
@@ -215,10 +222,12 @@ export const handler = async (event: {
       const rebuyQty = Number(inventoryItem.rebuyQty ?? 0) || 0;
       const previousStatus =
         typeof inventoryItem.Status === 'string' ? inventoryItem.Status : '';
-      const nextStatus =
-        previousStatus === 'Waiting Delivery'
+      const nextQuantity = entry.skipped ? previousQuantity : entry.quantity;
+      const nextStatus = entry.skipped
+        ? 'Skipped'
+        : previousStatus === 'Waiting Delivery'
           ? 'Waiting Delivery'
-          : computeInventoryStatus(quantity, rebuyQty);
+          : computeInventoryStatus(nextQuantity, rebuyQty);
 
       snapshots.push({
         id: itemId,
@@ -229,10 +238,11 @@ export const handler = async (event: {
         category: itemCategory,
         location: itemLocation,
         previousQuantity,
-        quantity,
+        quantity: nextQuantity,
         previousStatus,
         status: nextStatus,
-        changed: previousQuantity !== quantity,
+        changed: !entry.skipped && previousQuantity !== nextQuantity,
+        skipped: entry.skipped,
       });
     }
 
@@ -254,6 +264,25 @@ export const handler = async (event: {
 
     const lastUpdated = formatDateForStorage();
     await runInBatches(snapshots, 8, async (snapshot) => {
+      if (snapshot.skipped) {
+        await client.send(
+          new UpdateCommand({
+            TableName: inventoryTable,
+            Key: { id: snapshot.id },
+            UpdateExpression: 'SET #status = :status, #lastUpdated = :lastUpdated',
+            ConditionExpression: 'attribute_exists(id)',
+            ExpressionAttributeNames: {
+              '#status': 'Status',
+              '#lastUpdated': 'Last updated',
+            },
+            ExpressionAttributeValues: {
+              ':status': 'Skipped',
+              ':lastUpdated': lastUpdated,
+            },
+          }),
+        );
+        return;
+      }
       await client.send(
         new UpdateCommand({
           TableName: inventoryTable,
@@ -278,6 +307,8 @@ export const handler = async (event: {
     const createdAt = new Date().toISOString();
     const id = `SPOT-${crypto.randomUUID()}`;
     const changedCount = snapshots.filter((item) => item.changed).length;
+    const skippedCount = snapshots.filter((item) => item.skipped).length;
+    const checkedCount = snapshots.length - skippedCount;
     const userEmail = await getActorEmail(event);
     await client.send(
       new PutCommand({
@@ -292,6 +323,7 @@ export const handler = async (event: {
           userEmail,
           itemCount: snapshots.length,
           changedCount,
+          skippedCount,
           createdAt,
           s3Key,
           items: snapshots.map((item) => ({
@@ -300,6 +332,7 @@ export const handler = async (event: {
             previousQuantity: item.previousQuantity,
             quantity: item.quantity,
             changed: item.changed,
+            skipped: item.skipped,
           })),
         },
       }),
@@ -311,7 +344,7 @@ export const handler = async (event: {
       entityId: id,
       entityName: location,
       userEmail,
-      summary: `completed a spot check at ${quoted(location)} (${snapshots.length} items checked, ${changedCount} quantities updated)`,
+      summary: `completed a spot check at ${quoted(location)} (${checkedCount} items checked, ${skippedCount} skipped, ${changedCount} quantities updated)`,
     });
 
     return buildHttpResponse(200, {
@@ -322,6 +355,7 @@ export const handler = async (event: {
         createdAt,
         itemCount: snapshots.length,
         changedCount,
+        skippedCount,
         s3Key,
       },
     });

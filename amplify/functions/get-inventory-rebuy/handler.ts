@@ -145,6 +145,7 @@ export const handler = async (event: {
     const nearRebuy = items.filter(
       (item) =>
         item.status !== 'Waiting Delivery' &&
+        item.status !== 'Skipped' &&
         item.quantity <= item.rebuyThreshold,
     );
 

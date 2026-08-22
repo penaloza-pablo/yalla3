@@ -73,6 +73,9 @@ export const handler = async (event: {
       createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
       itemCount: Number(item.itemCount) || 0,
       changedCount: Number(item.changedCount) || 0,
+      categories: Array.isArray(item.categories)
+        ? item.categories.map((value) => String(value).trim()).filter(Boolean)
+        : [],
       s3Key: typeof item.s3Key === 'string' ? item.s3Key : '',
     }));
 

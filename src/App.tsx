@@ -763,6 +763,7 @@ const getRecentPurchasesForItem = (
     .slice(0, limit)
 
 const statusRank: Record<string, number> = {
+  Skipped: 5,
   Reorder: 4,
   'Low Stock': 3,
   'Waiting Delivery': 2,
@@ -781,7 +782,7 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   return 'Low Stock'
 }
 
-const REORDER_LOW_STATUSES = ['Reorder', 'Low Stock'] as const
+const WARNING_STATUSES = ['Reorder', 'Low Stock', 'Skipped'] as const
 
 const applyConfirmedPurchaseToInventory = (
   rows: InventoryRow[],
@@ -1150,6 +1151,9 @@ const getStatusClassName = (status: string) => {
   }
   if (status === 'Waiting Delivery') {
     return 'status status-info'
+  }
+  if (status === 'Skipped') {
+    return 'status status-warning'
   }
   if (status === 'To be confirmed') {
     return 'status status-warning'
@@ -3099,26 +3103,26 @@ function App() {
     )
   }, [filters.locations, filters.statuses, filters.categories])
 
-  const isReorderLowQuickFilterActive = useMemo(
+  const isWarningsQuickFilterActive = useMemo(
     () =>
-      filters.statuses.length === REORDER_LOW_STATUSES.length &&
-      REORDER_LOW_STATUSES.every((status) => filters.statuses.includes(status)),
+      filters.statuses.length === WARNING_STATUSES.length &&
+      WARNING_STATUSES.every((status) => filters.statuses.includes(status)),
     [filters.statuses],
   )
 
-  const toggleReorderLowQuickFilter = () => {
-    if (isReorderLowQuickFilterActive) {
+  const toggleWarningsQuickFilter = () => {
+    if (isWarningsQuickFilterActive) {
       setFilters((current) => ({ ...current, statuses: [] }))
       setFilterDraft((current) => ({ ...current, statuses: [] }))
       return
     }
     setFilters((current) => ({
       ...current,
-      statuses: [...REORDER_LOW_STATUSES],
+      statuses: [...WARNING_STATUSES],
     }))
     setFilterDraft((current) => ({
       ...current,
-      statuses: [...REORDER_LOW_STATUSES],
+      statuses: [...WARNING_STATUSES],
     }))
   }
 
@@ -3136,7 +3140,13 @@ function App() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
   }, [inventoryRows])
 
-  const statusOptions = ['OK', 'Waiting Delivery', 'Low Stock', 'Reorder']
+  const statusOptions = [
+    'OK',
+    'Waiting Delivery',
+    'Low Stock',
+    'Reorder',
+    'Skipped',
+  ]
 
   const propertiesFilteredRows = useMemo(() => {
     return propertyRows.filter((row) => {
@@ -4804,13 +4814,13 @@ function App() {
                       <th scope="col" className="mobile-quick-filter-col">
                         <button
                           className={`btn-quick-filter ${
-                            isReorderLowQuickFilterActive ? 'is-active' : ''
+                            isWarningsQuickFilterActive ? 'is-active' : ''
                           }`}
                           type="button"
-                          aria-pressed={isReorderLowQuickFilterActive}
-                          onClick={toggleReorderLowQuickFilter}
+                          aria-pressed={isWarningsQuickFilterActive}
+                          onClick={toggleWarningsQuickFilter}
                         >
-                          {t('inventory.quickFilterReorderLow')}
+                          {t('inventory.quickFilterWarnings')}
                           <span
                             className="quick-filter-indicator"
                             aria-hidden="true"

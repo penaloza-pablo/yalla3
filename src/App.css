@@ -3362,6 +3362,10 @@ th {
     padding: 0;
   }
 
+  .spot-check-complete-label {
+    display: none;
+  }
+
   .btn-primary,
   .btn-secondary,
   .btn-ghost {
@@ -4147,6 +4151,11 @@ th {
   background: #f6fef9;
 }
 
+.spot-check-item.is-skipped {
+  border-color: #fedf89;
+  background: #fffcf5;
+}
+
 .spot-check-item-header {
   display: flex;
   justify-content: space-between;
@@ -4166,33 +4175,66 @@ th {
 }
 
 .spot-check-qty-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 72px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
   align-items: center;
-  gap: 8px;
 }
 
 .spot-check-qty-btn {
-  min-width: 58px;
-  padding: 8px 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 8px 4px;
   font-size: 0.82rem;
 }
 
 .spot-check-qty-input {
-  width: 72px;
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 0;
   text-align: center;
   font-weight: 700;
   font-size: 1rem;
+  line-height: 40px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.spot-check-qty-input::-webkit-outer-spin-button,
+.spot-check-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.spot-check-qty-input:disabled,
+.spot-check-qty-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .spot-check-item-actions {
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
 }
 
-.spot-check-item-actions .btn-primary,
-.spot-check-item-actions .btn-secondary {
-  flex: 1;
+.btn-icon-ghost.is-skipped {
+  background: #fffaeb;
+  border-color: #f79009;
+  color: #b54708;
+}
+
+.spot-check-complete-label {
+  margin-left: 8px;
+}
+
+.page-action-bar .header-actions > .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (max-width: 480px) {
@@ -4211,8 +4253,13 @@ th {
   }
 
   .spot-check-qty-btn {
-    min-width: 52px;
-    padding: 8px 6px;
+    min-width: 0;
+    padding: 8px 2px;
+    font-size: 0.78rem;
+  }
+
+  .spot-check-complete-label {
+    display: none;
   }
 
   .spot-check-item-header {
