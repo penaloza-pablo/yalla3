@@ -18,6 +18,7 @@ import { updateAlertStatus } from './functions/update-alert-status/resource';
 import { upsertAlert } from './functions/upsert-alert/resource';
 import { getInventoryRebuy } from './functions/get-inventory-rebuy/resource';
 import { exportInventory } from './functions/export-inventory/resource';
+import { exportSubtractions } from './functions/export-subtractions/resource';
 import { getPurchases } from './functions/get-purchases/resource';
 import { upsertPurchase } from './functions/upsert-purchase/resource';
 import { getSubtractions } from './functions/get-subtractions/resource';
@@ -56,6 +57,7 @@ const backend = defineBackend({
   upsertAlert,
   getInventoryRebuy,
   exportInventory,
+  exportSubtractions,
   getPurchases,
   upsertPurchase,
   getSubtractions,
@@ -94,6 +96,7 @@ const lambdaFunctionsWithHttp = [
   backend.updateAlertStatus,
   backend.upsertAlert,
   backend.exportInventory,
+  backend.exportSubtractions,
   backend.getPurchases,
   backend.upsertPurchase,
   backend.getSubtractions,
@@ -212,6 +215,7 @@ alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
 purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 substractionsTable.grantReadData(backend.getSubtractions.resources.lambda);
+substractionsTable.grantReadData(backend.exportSubtractions.resources.lambda);
 substractionsTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
@@ -237,6 +241,7 @@ visitTemplatesTable.grantReadWriteData(
   backend.upsertVisitTemplate.resources.lambda,
 );
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
+inventoryBucket.grantPut(backend.exportSubtractions.resources.lambda);
 inventoryBucket.grantPut(backend.completeSpotCheck.resources.lambda);
 inventoryTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
 
@@ -307,6 +312,10 @@ const exportInventoryUrl = backend.exportInventory.resources.lambda.addFunctionU
     authType: FunctionUrlAuthType.NONE,
   },
 );
+const exportSubtractionsUrl =
+  backend.exportSubtractions.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getPurchasesUrl = backend.getPurchases.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -404,6 +413,7 @@ backend.addOutput({
     updateAlertStatusUrl: updateAlertStatusUrl.url,
     upsertAlertUrl: upsertAlertUrl.url,
     exportInventoryUrl: exportInventoryUrl.url,
+    exportSubtractionsUrl: exportSubtractionsUrl.url,
     getPurchasesUrl: getPurchasesUrl.url,
     upsertPurchaseUrl: upsertPurchaseUrl.url,
     getSubtractionsUrl: getSubtractionsUrl.url,

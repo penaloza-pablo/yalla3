@@ -1008,6 +1008,23 @@ const parseDateValue = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+const formatLocalIsoDate = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getCalendarMonthRange = (monthOffset: number) => {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0)
+  return {
+    dateFrom: formatLocalIsoDate(start),
+    dateTo: formatLocalIsoDate(end),
+  }
+}
+
 const matchesTableSearch = (
   query: string,
   values: Array<string | number | boolean | null | undefined>,
@@ -1270,6 +1287,7 @@ function App() {
   })
   const [subtractionRows, setSubtractionRows] = useState<SubtractionRow[]>([])
   const [isSubtractionsLoading, setIsSubtractionsLoading] = useState(false)
+  const [isSubtractionsExporting, setIsSubtractionsExporting] = useState(false)
   const [subtractionsError, setSubtractionsError] = useState<string | null>(null)
   const [isSubtractionsFilterOpen, setIsSubtractionsFilterOpen] = useState(false)
   const [subtractionsFilters, setSubtractionsFilters] = useState<{
@@ -1958,8 +1976,12 @@ function App() {
         if (fromDate && rowDate.getTime() < fromDate.getTime()) {
           return false
         }
-        if (toDate && rowDate.getTime() > toDate.getTime()) {
-          return false
+        if (toDate) {
+          const endOfToDate = new Date(toDate)
+          endOfToDate.setUTCHours(23, 59, 59, 999)
+          if (rowDate.getTime() > endOfToDate.getTime()) {
+            return false
+          }
         }
         return true
       })
@@ -2014,6 +2036,45 @@ function App() {
       ...current,
       statuses: ['Pending Billing'],
     }))
+  }
+
+  const currentMonthRange = getCalendarMonthRange(0)
+  const previousMonthRange = getCalendarMonthRange(-1)
+
+  const isCurrentMonthQuickFilterActive =
+    subtractionsFilters.dateFrom === currentMonthRange.dateFrom &&
+    subtractionsFilters.dateTo === currentMonthRange.dateTo
+
+  const isPreviousMonthQuickFilterActive =
+    subtractionsFilters.dateFrom === previousMonthRange.dateFrom &&
+    subtractionsFilters.dateTo === previousMonthRange.dateTo
+
+  const applySubtractionsMonthRange = (range: {
+    dateFrom: string
+    dateTo: string
+  } | null) => {
+    setSubtractionsFilters((current) => ({
+      ...current,
+      dateFrom: range?.dateFrom ?? '',
+      dateTo: range?.dateTo ?? '',
+    }))
+    setSubtractionsFilterDraft((current) => ({
+      ...current,
+      dateFrom: range?.dateFrom ?? '',
+      dateTo: range?.dateTo ?? '',
+    }))
+  }
+
+  const toggleCurrentMonthQuickFilter = () => {
+    applySubtractionsMonthRange(
+      isCurrentMonthQuickFilterActive ? null : getCalendarMonthRange(0),
+    )
+  }
+
+  const togglePreviousMonthQuickFilter = () => {
+    applySubtractionsMonthRange(
+      isPreviousMonthQuickFilterActive ? null : getCalendarMonthRange(-1),
+    )
   }
 
   const getEndpoint = (key: string, fallback?: string) => {
@@ -2711,6 +2772,57 @@ function App() {
       setIsExporting(false)
     }
   }, [])
+
+  const exportSubtractions = useCallback(async () => {
+    const endpoint = getEndpoint(
+      'exportSubtractionsUrl',
+      import.meta.env.VITE_EXPORT_SUBTRACTIONS_URL,
+    )
+    if (!endpoint) {
+      setSubtractionsError(t('subtractions.missingExport'))
+      return
+    }
+
+    setIsSubtractionsExporting(true)
+    setSubtractionsError(null)
+
+    try {
+      const response = await authFetch(endpoint)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Export request failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+
+      const contentDisposition = response.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="([^"]+)"/)
+      const fallbackStamp = new Date()
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\.\d{3}Z$/, '')
+      const fileName =
+        match?.[1] ?? `subtractions-export-${fallbackStamp}.xlsx`
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : t('subtractions.exportError')
+      setSubtractionsError(message)
+    } finally {
+      setIsSubtractionsExporting(false)
+    }
+  }, [t])
 
   const openSnoozeModal = (id: string) => {
     setSnoozeTargetId(id)
@@ -5633,6 +5745,47 @@ function App() {
                   ) : null}
                 </button>
                 <button
+                  className={`btn-ghost btn-filter subtractions-preset-action ${
+                    isCurrentMonthQuickFilterActive ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-pressed={isCurrentMonthQuickFilterActive}
+                  aria-label={t('common.quickFilterCurrentMonth')}
+                  onClick={toggleCurrentMonthQuickFilter}
+                >
+                  {t('common.quickFilterCurrentMonth')}
+                </button>
+                <button
+                  className={`btn-ghost btn-filter subtractions-preset-action ${
+                    isPreviousMonthQuickFilterActive ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-pressed={isPreviousMonthQuickFilterActive}
+                  aria-label={t('common.quickFilterPreviousMonth')}
+                  onClick={togglePreviousMonthQuickFilter}
+                >
+                  {t('common.quickFilterPreviousMonth')}
+                </button>
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={() => void exportSubtractions()}
+                  disabled={isSubtractionsExporting}
+                  aria-label={t('common.export')}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+                <button
                   className="btn-primary"
                   onClick={fetchSubtractions}
                   type="button"
@@ -5895,6 +6048,38 @@ function App() {
                       <th scope="col" className="mobile-quick-filter-col">
                         <button
                           className={`btn-quick-filter ${
+                            isCurrentMonthQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isCurrentMonthQuickFilterActive}
+                          onClick={toggleCurrentMonthQuickFilter}
+                        >
+                          {t('common.quickFilterCurrentMonth')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
+                            isPreviousMonthQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isPreviousMonthQuickFilterActive}
+                          onClick={togglePreviousMonthQuickFilter}
+                        >
+                          {t('common.quickFilterPreviousMonth')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
                             isPendingBillingQuickFilterActive ? 'is-active' : ''
                           }`}
                           type="button"
@@ -5914,13 +6099,13 @@ function App() {
                   <tbody>
                     {isSubtractionsLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={8}>
                           {t('subtractions.loading')}
                         </td>
                       </tr>
                     ) : subtractionsFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={8}>
                           {t('subtractions.empty')}
                         </td>
                       </tr>

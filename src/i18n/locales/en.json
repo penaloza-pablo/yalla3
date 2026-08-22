@@ -146,6 +146,8 @@
     "quickFilterLast30": "30d",
     "quickFilterToday": "Today",
     "quickFilterLast100": "Last 100",
+    "quickFilterCurrentMonth": "This month",
+    "quickFilterPreviousMonth": "Last month",
     "previous": "Previous",
     "lastRefresh": "Last refresh",
     "lastSync": "Last sync",
@@ -410,7 +412,9 @@
     "updateError": "Unable to update subtraction. Please try again.",
     "reverseError": "Unable to reverse subtraction. Please try again.",
     "emptyFiltered": "No subtractions match the current filters.",
-    "filterSubtitle": "Select one or more values to filter the subtractions."
+    "filterSubtitle": "Select one or more values to filter the subtractions.",
+    "missingExport": "Missing export endpoint. Set VITE_EXPORT_SUBTRACTIONS_URL in the environment.",
+    "exportError": "Unable to export subtractions. Please try again."
   },
   "operations": {
     "title": "Daily Ops",

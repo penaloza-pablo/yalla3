@@ -3319,7 +3319,8 @@ th {
     display: none !important;
   }
 
-  .page-action-bar .reviews-preset-action {
+  .page-action-bar .reviews-preset-action,
+  .page-action-bar .subtractions-preset-action {
     display: none !important;
   }
 

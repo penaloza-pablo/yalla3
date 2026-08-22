@@ -146,6 +146,8 @@
     "quickFilterLast30": "30d",
     "quickFilterToday": "Hoy",
     "quickFilterLast100": "Last 100",
+    "quickFilterCurrentMonth": "Este mes",
+    "quickFilterPreviousMonth": "Mes ant.",
     "previous": "Anterior",
     "lastRefresh": "Última actualización",
     "lastSync": "Última sincronización",
@@ -410,7 +412,9 @@
     "updateError": "No se pudo actualizar la extracción. Inténtalo de nuevo.",
     "reverseError": "No se pudo revertir la extracción. Inténtalo de nuevo.",
     "emptyFiltered": "Ninguna extracción coincide con los filtros actuales.",
-    "filterSubtitle": "Selecciona uno o más valores para filtrar las extracciones."
+    "filterSubtitle": "Selecciona uno o más valores para filtrar las extracciones.",
+    "missingExport": "Falta el endpoint de exportación. Configura VITE_EXPORT_SUBTRACTIONS_URL en el entorno.",
+    "exportError": "No se pudieron exportar las extracciones. Inténtalo de nuevo."
   },
   "operations": {
     "title": "Daily Ops",
