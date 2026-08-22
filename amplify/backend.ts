@@ -1,6 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { RemovalPolicy } from 'aws-cdk-lib';
-import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { Function as LambdaFunction, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import {
   AttributeType,
   BillingMode,
@@ -45,6 +45,10 @@ import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/re
 import { getActivityLogs } from './functions/get-activity-logs/resource';
 import { getSpotChecks } from './functions/get-spot-checks/resource';
 import { completeSpotCheck } from './functions/complete-spot-check/resource';
+import { getCleaners } from './functions/get-cleaners/resource';
+import { upsertCleaner } from './functions/upsert-cleaner/resource';
+import { getCleaningPlan } from './functions/get-cleaning-plan/resource';
+import { upsertCleaningPlan } from './functions/upsert-cleaning-plan/resource';
 
 const backend = defineBackend({
   auth,
@@ -84,6 +88,10 @@ const backend = defineBackend({
   getActivityLogs,
   getSpotChecks,
   completeSpotCheck,
+  getCleaners,
+  upsertCleaner,
+  getCleaningPlan,
+  upsertCleaningPlan,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -123,6 +131,10 @@ const lambdaFunctionsWithHttp = [
   backend.getActivityLogs,
   backend.getSpotChecks,
   backend.completeSpotCheck,
+  backend.getCleaners,
+  backend.upsertCleaner,
+  backend.getCleaningPlan,
+  backend.upsertCleaningPlan,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -261,6 +273,8 @@ const activityLogWriters = [
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
   backend.completeSpotCheck,
+  backend.upsertCleaner,
+  backend.upsertCleaningPlan,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -285,6 +299,46 @@ backend.getSpotChecks.addEnvironment('TABLE_NAME', spotChecksTable.tableName);
 backend.completeSpotCheck.addEnvironment('TABLE_NAME', spotChecksTable.tableName);
 spotChecksTable.grantReadData(backend.getSpotChecks.resources.lambda);
 spotChecksTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
+
+const cleanersTable = new Table(dataStack, 'CleanersTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const cleaningPlansTable = new Table(dataStack, 'CleaningPlansTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+
+backend.getCleaners.addEnvironment('TABLE_NAME', cleanersTable.tableName);
+backend.upsertCleaner.addEnvironment('TABLE_NAME', cleanersTable.tableName);
+backend.getCleaningPlan.addEnvironment('TABLE_NAME', cleaningPlansTable.tableName);
+backend.upsertCleaningPlan.addEnvironment(
+  'TABLE_NAME',
+  cleaningPlansTable.tableName,
+);
+backend.upsertCleaningPlan.addEnvironment(
+  'CLEANERS_TABLE',
+  cleanersTable.tableName,
+);
+
+cleanersTable.grantReadData(backend.getCleaners.resources.lambda);
+cleanersTable.grantReadWriteData(backend.upsertCleaner.resources.lambda);
+cleanersTable.grantReadData(backend.upsertCleaningPlan.resources.lambda);
+cleaningPlansTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+cleaningPlansTable.grantReadWriteData(
+  backend.upsertCleaningPlan.resources.lambda,
+);
+visitsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+visitsTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+
+const syncTaskToGuesty = LambdaFunction.fromFunctionName(
+  dataStack,
+  'SyncTaskToGuesty',
+  'yalla-syncTaskToGuesty',
+);
+syncTaskToGuesty.grantInvoke(backend.upsertCleaningPlan.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
@@ -403,6 +457,20 @@ const completeSpotCheckUrl =
   backend.completeSpotCheck.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getCleanersUrl = backend.getCleaners.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertCleanerUrl = backend.upsertCleaner.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getCleaningPlanUrl =
+  backend.getCleaningPlan.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertCleaningPlanUrl =
+  backend.upsertCleaningPlan.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -440,5 +508,9 @@ backend.addOutput({
     getActivityLogsUrl: getActivityLogsUrl.url,
     getSpotChecksUrl: getSpotChecksUrl.url,
     completeSpotCheckUrl: completeSpotCheckUrl.url,
+    getCleanersUrl: getCleanersUrl.url,
+    upsertCleanerUrl: upsertCleanerUrl.url,
+    getCleaningPlanUrl: getCleaningPlanUrl.url,
+    upsertCleaningPlanUrl: upsertCleaningPlanUrl.url,
   },
 });

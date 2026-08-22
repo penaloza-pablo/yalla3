@@ -40,6 +40,8 @@ const FEATURE_OPTIONS = [
   'Properties',
   'Reviews',
   'Daily Operations',
+  'Cleaning Plan',
+  'Cleaning settings',
 ] as const
 
 const formatLogDate = (value: string, locale: string) => {

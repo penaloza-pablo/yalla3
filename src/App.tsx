@@ -29,6 +29,8 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { CleaningPlanView } from './cleaning/CleaningPlanView'
+import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { MobileBodyPortal } from './MobileBodyPortal'
@@ -275,7 +277,8 @@ const navigation = [
       'Properties',
       'Bookings',
       'Reviews',
-      'Cleaning Report',
+      'Cleaning Plan',
+      'Cleaning settings',
       'Daily Operations',
     ],
   },
@@ -2855,6 +2858,9 @@ function App() {
       void fetchReviews()
     }
     if (activePage === 'Daily Operations') {
+      void fetchProperties()
+    }
+    if (activePage === 'Cleaning Plan') {
       void fetchProperties()
     }
   }, [
@@ -7916,6 +7922,20 @@ function App() {
                 listingNickname: row.nickname,
               }))}
           />
+        ) : activePage === 'Cleaning Plan' ? (
+          <CleaningPlanView
+            getEndpoint={getEndpoint}
+            propertyOptions={propertyRows
+              .filter((row) => isManagedProperty(row) && row.active)
+              .map((row) => ({
+                id: row.id,
+                nickname: row.nickname,
+                title: row.title,
+                listingNickname: row.nickname,
+              }))}
+          />
+        ) : activePage === 'Cleaning settings' ? (
+          <CleaningSettingsView getEndpoint={getEndpoint} />
         ) : activePage === 'Logs' ? (
           <LogsPanel
             getEndpoint={getEndpoint}

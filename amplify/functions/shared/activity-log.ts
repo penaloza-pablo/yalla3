@@ -15,6 +15,8 @@ export const LOG_FEATURES = {
   PROPERTIES: 'Properties',
   REVIEWS: 'Reviews',
   OPERATIONS: 'Daily Operations',
+  CLEANING_PLAN: 'Cleaning Plan',
+  CLEANING_SETTINGS: 'Cleaning settings',
 } as const;
 
 type HttpHeaders = Record<string, string | string[] | undefined>;

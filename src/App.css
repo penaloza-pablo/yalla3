@@ -4269,3 +4269,53 @@ th {
   }
 }
 
+.cleaning-plan-actions {
+  margin-top: 16px;
+}
+
+.cleaning-plan-status-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.cleaning-plan-status-label {
+  font-size: 0.85rem;
+}
+
+.cleaning-status-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cleaning-status-tag.is-draft {
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.cleaning-status-tag.is-ready {
+  background: #d1fadf;
+  color: #027a48;
+}
+
+.cleaning-visit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cleaning-quality-check {
+  white-space: nowrap;
+}
+
+.cleaning-plan-actions .btn-primary,
+.cleaning-plan-actions .btn-secondary {
+  min-height: 40px;
+}
+
