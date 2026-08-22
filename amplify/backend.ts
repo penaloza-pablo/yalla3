@@ -7,6 +7,7 @@ import {
   ProjectionType,
   Table,
 } from 'aws-cdk-lib/aws-dynamodb';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -332,6 +333,17 @@ cleaningPlansTable.grantReadWriteData(
 );
 visitsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+const visitsIndexPolicy = new PolicyStatement({
+  actions: ['dynamodb:Query', 'dynamodb:Scan'],
+  resources: [`${visitsTable.tableArn}/index/*`],
+});
+backend.getCleaningPlan.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${visitsTable.tableArn}/index/*`],
+  }),
+);
 
 const syncTaskToGuesty = LambdaFunction.fromFunctionName(
   dataStack,
