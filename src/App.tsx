@@ -30,6 +30,7 @@ import {
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
 import { LogsPanel } from './LogsPanel'
+import { SpotCheckPanel } from './SpotCheckPanel'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import './App.css'
 
@@ -266,7 +267,7 @@ type PropertyDiff = {
 const navigation = [
   {
     section: 'Inventory',
-    items: ['Inventory', 'Purchases', 'Subtractions'],
+    items: ['Inventory', 'Spot Check', 'Purchases', 'Subtractions'],
   },
   {
     section: 'Ops',
@@ -762,8 +763,9 @@ const getRecentPurchasesForItem = (
     .slice(0, limit)
 
 const statusRank: Record<string, number> = {
-  Reorder: 3,
-  'Low Stock': 2,
+  Reorder: 4,
+  'Low Stock': 3,
+  'Waiting Delivery': 2,
   OK: 1,
   'In Stock': 1,
 }
@@ -786,6 +788,7 @@ const applyConfirmedPurchaseToInventory = (
   itemId: string,
   units: number,
   totalPrice: number,
+  statusOverride?: string,
 ) =>
   rows.map((entry) => {
     if (entry.id !== itemId) {
@@ -796,9 +799,15 @@ const applyConfirmedPurchaseToInventory = (
       ...entry,
       quantity: nextQuantity,
       unitPrice: units > 0 ? totalPrice / units : entry.unitPrice,
-      status: computeInventoryStatus(nextQuantity, entry.rebuyQty),
+      status:
+        statusOverride ?? computeInventoryStatus(nextQuantity, entry.rebuyQty),
     }
   })
+
+const markInventoryWaitingDelivery = (rows: InventoryRow[], itemId: string) =>
+  rows.map((entry) =>
+    entry.id === itemId ? { ...entry, status: 'Waiting Delivery' } : entry,
+  )
 
 const resolveChoice = (choice: string, other: string) =>
   choice === OTHER_OPTION ? other.trim() : choice.trim()
@@ -1140,7 +1149,7 @@ const getStatusClassName = (status: string) => {
     return 'status status-success'
   }
   if (status === 'Waiting Delivery') {
-    return 'status status-neutral'
+    return 'status status-info'
   }
   if (status === 'To be confirmed') {
     return 'status status-warning'
@@ -3127,7 +3136,7 @@ function App() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
   }, [inventoryRows])
 
-  const statusOptions = ['OK', 'Low Stock', 'Reorder']
+  const statusOptions = ['OK', 'Waiting Delivery', 'Low Stock', 'Reorder']
 
   const propertiesFilteredRows = useMemo(() => {
     return propertyRows.filter((row) => {
@@ -3478,6 +3487,12 @@ function App() {
       const wasAlreadyConfirmed = purchaseRows.some(
         (entry) => entry.id === updatedRow.id && entry.status === 'Confirmed',
       )
+      const hasOtherOpenPurchases = purchaseRows.some(
+        (entry) =>
+          entry.itemId === updatedRow.itemId &&
+          entry.id !== updatedRow.id &&
+          entry.status !== 'Confirmed',
+      )
       setPurchaseRows((current) => {
         const existingIndex = current.findIndex(
           (row) => row.id === updatedRow.id,
@@ -3496,7 +3511,12 @@ function App() {
             updatedRow.itemId,
             updatedRow.units,
             updatedRow.totalPrice,
+            hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
           ),
+        )
+      } else if (updatedRow.status !== 'Confirmed') {
+        setInventoryRows((current) =>
+          markInventoryWaitingDelivery(current, updatedRow.itemId),
         )
       }
 
@@ -3556,6 +3576,12 @@ function App() {
       if (!response.ok) {
         throw new Error('Failed to update purchase.')
       }
+      const hasOtherOpenPurchases = purchaseRows.some(
+        (entry) =>
+          entry.itemId === row.itemId &&
+          entry.id !== row.id &&
+          entry.status !== 'Confirmed',
+      )
       setPurchaseRows((current) =>
         current.map((entry) =>
           entry.id === row.id ? { ...entry, status: 'Confirmed' } : entry,
@@ -3567,6 +3593,7 @@ function App() {
           row.itemId,
           row.units,
           row.totalPrice,
+          hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
         ),
       )
     } catch (updateError) {
@@ -3705,7 +3732,10 @@ function App() {
           return {
             ...row,
             quantity: nextQuantity,
-            status: computeInventoryStatus(nextQuantity, row.rebuyQty),
+            status:
+              row.status === 'Waiting Delivery'
+                ? 'Waiting Delivery'
+                : computeInventoryStatus(nextQuantity, row.rebuyQty),
           }
         }),
       )
@@ -3825,7 +3855,10 @@ function App() {
           return {
             ...entry,
             quantity: nextQuantity,
-            status: computeInventoryStatus(nextQuantity, entry.rebuyQty),
+            status:
+              entry.status === 'Waiting Delivery'
+                ? 'Waiting Delivery'
+                : computeInventoryStatus(nextQuantity, entry.rebuyQty),
           }
         }),
       )
@@ -4986,6 +5019,20 @@ function App() {
               </div>
             </section>
           </>
+        ) : activePage === 'Spot Check' ? (
+          <SpotCheckPanel
+            getEndpoint={getEndpoint}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+          />
         ) : activePage === 'Purchases' ? (
           <>
             <header className="page-header">

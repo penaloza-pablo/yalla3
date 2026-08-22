@@ -957,6 +957,11 @@ th {
   color: #344054;
 }
 
+.status-info {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
 .table-empty {
   text-align: center;
   color: #98a2b3;
@@ -4098,6 +4103,98 @@ th {
   }
 }
 
+.modal-spot-check {
+  width: min(760px, 100%);
+}
+
+.spot-check-fieldset {
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  margin: 0;
+  padding: 12px 14px 16px;
+}
+
+.spot-check-fieldset legend {
+  padding: 0 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.spot-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spot-check-item {
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #ffffff;
+}
+
+.spot-check-item.is-confirmed {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.spot-check-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.spot-check-item-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.spot-check-item-meta {
+  margin: 0;
+  color: #667085;
+  font-size: 0.85rem;
+}
+
+.spot-check-qty-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.spot-check-qty-btn {
+  min-width: 58px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.spot-check-qty-input {
+  width: 72px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.spot-check-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.spot-check-item-actions .btn-primary,
+.spot-check-item-actions .btn-secondary {
+  flex: 1;
+}
+
 @media (max-width: 480px) {
   .main {
     padding-left: 10px;
@@ -4111,6 +4208,16 @@ th {
 
   .page-title {
     font-size: 1.2rem;
+  }
+
+  .spot-check-qty-btn {
+    min-width: 52px;
+    padding: 8px 6px;
+  }
+
+  .spot-check-item-header {
+    flex-direction: column;
+    gap: 4px;
   }
 }
 

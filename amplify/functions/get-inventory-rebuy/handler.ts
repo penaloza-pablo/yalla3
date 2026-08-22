@@ -142,7 +142,11 @@ export const handler = async (event: {
       };
     });
 
-    const nearRebuy = items.filter((item) => item.quantity <= item.rebuyThreshold);
+    const nearRebuy = items.filter(
+      (item) =>
+        item.status !== 'Waiting Delivery' &&
+        item.quantity <= item.rebuyThreshold,
+    );
 
     const payload = {
       items: nearRebuy,

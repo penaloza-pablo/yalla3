@@ -186,6 +186,8 @@ INVENTORY RULES
     - quantity <= rebuyQty → Reorder
     - quantity >= floor(rebuyQty * 1.25) → OK
     - otherwise → Low Stock
+  - If Status is Waiting Delivery, a purchase is already in progress.
+    Do not suggest buying that item again.
 
 ALERT RULES
 - Interpret #alarm as a request to create a new alert.

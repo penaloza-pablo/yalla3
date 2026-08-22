@@ -217,7 +217,12 @@ const adjustInventoryQuantity = async (params: {
   }
 
   const rebuyQty = Number(inventoryItem.rebuyQty ?? 0) || 0;
-  const nextStatus = computeInventoryStatus(nextQuantity, rebuyQty);
+  const currentStatus =
+    typeof inventoryItem.Status === 'string' ? inventoryItem.Status : '';
+  const nextStatus =
+    currentStatus === 'Waiting Delivery'
+      ? 'Waiting Delivery'
+      : computeInventoryStatus(nextQuantity, rebuyQty);
 
   await client.send(
     new UpdateCommand({

@@ -42,6 +42,8 @@ import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
 import { getActivityLogs } from './functions/get-activity-logs/resource';
+import { getSpotChecks } from './functions/get-spot-checks/resource';
+import { completeSpotCheck } from './functions/complete-spot-check/resource';
 
 const backend = defineBackend({
   auth,
@@ -78,6 +80,8 @@ const backend = defineBackend({
   proxyGuestyListings,
   proxyGuestyReviewsSync,
   getActivityLogs,
+  getSpotChecks,
+  completeSpotCheck,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -114,6 +118,8 @@ const lambdaFunctionsWithHttp = [
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
   backend.getActivityLogs,
+  backend.getSpotChecks,
+  backend.completeSpotCheck,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -231,6 +237,8 @@ visitTemplatesTable.grantReadWriteData(
   backend.upsertVisitTemplate.resources.lambda,
 );
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
+inventoryBucket.grantPut(backend.completeSpotCheck.resources.lambda);
+inventoryTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
 
 const activityLogWriters = [
   backend.upsertInventory,
@@ -247,6 +255,7 @@ const activityLogWriters = [
   backend.upsertVisitTemplate,
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
+  backend.completeSpotCheck,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -254,6 +263,23 @@ for (const lambdaFunction of activityLogWriters) {
 }
 backend.getActivityLogs.addEnvironment('TABLE_NAME', activityLogsTable.tableName);
 activityLogsTable.grantReadData(backend.getActivityLogs.resources.lambda);
+
+const spotChecksTable = new Table(dataStack, 'SpotChecksTable', {
+  partitionKey: { name: 'pk', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+spotChecksTable.addGlobalSecondaryIndex({
+  indexName: 'locationKey-sk-index',
+  partitionKey: { name: 'locationKey', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+backend.getSpotChecks.addEnvironment('TABLE_NAME', spotChecksTable.tableName);
+backend.completeSpotCheck.addEnvironment('TABLE_NAME', spotChecksTable.tableName);
+spotChecksTable.grantReadData(backend.getSpotChecks.resources.lambda);
+spotChecksTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
@@ -361,6 +387,13 @@ const getActivityLogsUrl =
   backend.getActivityLogs.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getSpotChecksUrl = backend.getSpotChecks.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const completeSpotCheckUrl =
+  backend.completeSpotCheck.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -395,5 +428,7 @@ backend.addOutput({
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,
     getActivityLogsUrl: getActivityLogsUrl.url,
+    getSpotChecksUrl: getSpotChecksUrl.url,
+    completeSpotCheckUrl: completeSpotCheckUrl.url,
   },
 });

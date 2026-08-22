@@ -120,6 +120,8 @@ const parseDateOnly = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const INVENTORY_WAITING_DELIVERY = 'Waiting Delivery';
+
 const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   if (quantity <= rebuyQty) {
     return 'Reorder';
@@ -129,6 +131,71 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
     return 'OK';
   }
   return 'Low Stock';
+};
+
+const hasOpenPurchasesForItem = async (params: {
+  purchasesTable: string;
+  itemId: string;
+  excludePurchaseId?: string;
+}) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: params.purchasesTable,
+        FilterExpression: '#itemId = :itemId AND #status <> :confirmed',
+        ExpressionAttributeNames: {
+          '#itemId': 'Item id',
+          '#status': 'Status',
+        },
+        ExpressionAttributeValues: {
+          ':itemId': params.itemId,
+          ':confirmed': 'Confirmed',
+        },
+        ProjectionExpression: 'id',
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    const hasOther = (result.Items ?? []).some((entry) => {
+      const id = typeof entry.id === 'string' ? entry.id : '';
+      if (!id) {
+        return false;
+      }
+      if (params.excludePurchaseId && id === params.excludePurchaseId) {
+        return false;
+      }
+      return true;
+    });
+    if (hasOther) {
+      return true;
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+  return false;
+};
+
+const markInventoryWaitingDelivery = async (params: {
+  inventoryTable: string;
+  itemId: string;
+}) => {
+  await client.send(
+    new UpdateCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+      UpdateExpression: 'SET #status = :status, #lastUpdated = :lastUpdated',
+      ConditionExpression: 'attribute_exists(id)',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#lastUpdated': 'Last updated',
+      },
+      ExpressionAttributeValues: {
+        ':status': INVENTORY_WAITING_DELIVERY,
+        ':lastUpdated': formatDateForStorage(),
+      },
+    }),
+  );
 };
 
 const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string) => {
@@ -149,6 +216,8 @@ const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string
 
 const updateInventoryOnConfirm = async (params: {
   inventoryTable: string;
+  purchasesTable: string;
+  purchaseId: string;
   itemId: string;
   units: number;
   totalPrice: number;
@@ -167,7 +236,14 @@ const updateInventoryOnConfirm = async (params: {
   const currentQuantity = Number(inventoryItem.Quantity ?? 0) || 0;
   const nextQuantity = currentQuantity + params.units;
   const rebuyQty = Number(inventoryItem.rebuyQty ?? 0) || 0;
-  const nextStatus = computeInventoryStatus(nextQuantity, rebuyQty);
+  const hasOtherOpenPurchases = await hasOpenPurchasesForItem({
+    purchasesTable: params.purchasesTable,
+    itemId: params.itemId,
+    excludePurchaseId: params.purchaseId,
+  });
+  const nextStatus = hasOtherOpenPurchases
+    ? INVENTORY_WAITING_DELIVERY
+    : computeInventoryStatus(nextQuantity, rebuyQty);
   const unitPriceValue =
     params.units > 0 ? params.totalPrice / params.units : 0;
 
@@ -368,18 +444,28 @@ export const handler = async (event: {
       }),
     );
 
+    const inventoryTable = process.env.INVENTORY_TABLE;
     const shouldUpdateInventory =
       statusValue === 'Confirmed' && previousStatus !== 'Confirmed';
     if (shouldUpdateInventory) {
-      const inventoryTable = process.env.INVENTORY_TABLE;
       if (!inventoryTable) {
         throw new Error('INVENTORY_TABLE is not configured.');
       }
       await updateInventoryOnConfirm({
         inventoryTable,
+        purchasesTable: tableName,
+        purchaseId: id,
         itemId: String(itemId).trim(),
         units: Number(units) || 0,
         totalPrice: Number(totalPrice) || 0,
+      });
+    } else if (statusValue !== 'Confirmed') {
+      if (!inventoryTable) {
+        throw new Error('INVENTORY_TABLE is not configured.');
+      }
+      await markInventoryWaitingDelivery({
+        inventoryTable,
+        itemId: String(itemId).trim(),
       });
     }
 
