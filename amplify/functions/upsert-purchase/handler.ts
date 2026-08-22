@@ -7,6 +7,7 @@ import {
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
+  GetCommand,
   PutCommand,
   ScanCommand,
   UpdateCommand,
@@ -119,6 +120,17 @@ const parseDateOnly = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
+  if (quantity <= rebuyQty) {
+    return 'Reorder';
+  }
+  const okThreshold = Math.floor(rebuyQty * 1.25);
+  if (quantity >= okThreshold) {
+    return 'OK';
+  }
+  return 'Low Stock';
+};
+
 const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string) => {
   if (currentStatus?.trim().toLowerCase() === 'confirmed') {
     return 'Confirmed';
@@ -141,24 +153,44 @@ const updateInventoryOnConfirm = async (params: {
   units: number;
   totalPrice: number;
 }) => {
+  const inventoryResult = await client.send(
+    new GetCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+    }),
+  );
+  const inventoryItem = inventoryResult.Item;
+  if (!inventoryItem) {
+    throw new Error('Inventory item not found.');
+  }
+
+  const currentQuantity = Number(inventoryItem.Quantity ?? 0) || 0;
+  const nextQuantity = currentQuantity + params.units;
+  const rebuyQty = Number(inventoryItem.rebuyQty ?? 0) || 0;
+  const nextStatus = computeInventoryStatus(nextQuantity, rebuyQty);
   const unitPriceValue =
     params.units > 0 ? params.totalPrice / params.units : 0;
+
   await client.send(
     new UpdateCommand({
       TableName: params.inventoryTable,
       Key: { id: params.itemId },
       UpdateExpression:
-        'SET #quantity = if_not_exists(#quantity, :zero) + :units, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated',
+        'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated',
+      ConditionExpression:
+        'attribute_exists(id) AND (attribute_not_exists(#quantity) OR #quantity = :currentQuantity)',
       ExpressionAttributeNames: {
         '#quantity': 'Quantity',
+        '#status': 'Status',
         '#unitPrice': 'unitPrice',
         '#lastUpdated': 'Last updated',
       },
       ExpressionAttributeValues: {
-        ':zero': 0,
-        ':units': params.units,
+        ':quantity': nextQuantity,
+        ':status': nextStatus,
         ':unitPrice': unitPriceValue,
         ':lastUpdated': formatDateForStorage(),
+        ':currentQuantity': currentQuantity,
       },
     }),
   );
@@ -315,6 +347,20 @@ export const handler = async (event: {
   };
 
   try {
+    let previousStatus = '';
+    if (payload.id?.trim()) {
+      const existingPurchase = await client.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { id },
+        }),
+      );
+      previousStatus =
+        typeof existingPurchase.Item?.Status === 'string'
+          ? existingPurchase.Item.Status
+          : '';
+    }
+
     await client.send(
       new PutCommand({
         TableName: tableName,
@@ -322,7 +368,9 @@ export const handler = async (event: {
       }),
     );
 
-    if (statusValue === 'Confirmed') {
+    const shouldUpdateInventory =
+      statusValue === 'Confirmed' && previousStatus !== 'Confirmed';
+    if (shouldUpdateInventory) {
       const inventoryTable = process.env.INVENTORY_TABLE;
       if (!inventoryTable) {
         throw new Error('INVENTORY_TABLE is not configured.');

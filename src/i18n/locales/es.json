@@ -227,6 +227,7 @@
     "purchaseDate": "Fecha",
     "purchaseUnits": "Cant.",
     "purchaseUnitPrice": "Precio unitario",
+    "quickFilterReorderLow": "Comprar y Low",
     "reorder": "Reordenar",
     "reorderMeta": "Requiere compra",
     "saveError": "No se pudo guardar el ítem. Inténtalo de nuevo.",
@@ -251,7 +252,7 @@
     "Bookings": "Reservas",
     "Chatbot": "Chatbot",
     "Cleaning Report": "Informe de limpieza",
-    "Daily Operations": "Operaciones diarias",
+    "Daily Operations": "Daily Ops",
     "Finance solution 1": "Solución Finance 1",
     "Finance solution 2": "Solución Finance 2",
     "Finance solution 3": "Solución Finance 3",
@@ -410,7 +411,7 @@
     "filterSubtitle": "Selecciona uno o más valores para filtrar las extracciones."
   },
   "operations": {
-    "title": "Operaciones diarias",
+    "title": "Daily Ops",
     "scheduled": "Programadas",
     "overdue": "Atrasadas",
     "completedCancelled": "Completadas y canceladas",

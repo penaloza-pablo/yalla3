@@ -779,6 +779,27 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   return 'Low Stock'
 }
 
+const REORDER_LOW_STATUSES = ['Reorder', 'Low Stock'] as const
+
+const applyConfirmedPurchaseToInventory = (
+  rows: InventoryRow[],
+  itemId: string,
+  units: number,
+  totalPrice: number,
+) =>
+  rows.map((entry) => {
+    if (entry.id !== itemId) {
+      return entry
+    }
+    const nextQuantity = entry.quantity + units
+    return {
+      ...entry,
+      quantity: nextQuantity,
+      unitPrice: units > 0 ? totalPrice / units : entry.unitPrice,
+      status: computeInventoryStatus(nextQuantity, entry.rebuyQty),
+    }
+  })
+
 const resolveChoice = (choice: string, other: string) =>
   choice === OTHER_OPTION ? other.trim() : choice.trim()
 
@@ -3069,20 +3090,27 @@ function App() {
     )
   }, [filters.locations, filters.statuses, filters.categories])
 
-  const isReorderQuickFilterActive = useMemo(
+  const isReorderLowQuickFilterActive = useMemo(
     () =>
-      filters.statuses.length === 1 && filters.statuses[0] === 'Reorder',
+      filters.statuses.length === REORDER_LOW_STATUSES.length &&
+      REORDER_LOW_STATUSES.every((status) => filters.statuses.includes(status)),
     [filters.statuses],
   )
 
-  const toggleReorderQuickFilter = () => {
-    if (isReorderQuickFilterActive) {
+  const toggleReorderLowQuickFilter = () => {
+    if (isReorderLowQuickFilterActive) {
       setFilters((current) => ({ ...current, statuses: [] }))
       setFilterDraft((current) => ({ ...current, statuses: [] }))
       return
     }
-    setFilters((current) => ({ ...current, statuses: ['Reorder'] }))
-    setFilterDraft((current) => ({ ...current, statuses: ['Reorder'] }))
+    setFilters((current) => ({
+      ...current,
+      statuses: [...REORDER_LOW_STATUSES],
+    }))
+    setFilterDraft((current) => ({
+      ...current,
+      statuses: [...REORDER_LOW_STATUSES],
+    }))
   }
 
   const locationOptions = useMemo(() => {
@@ -3099,7 +3127,7 @@ function App() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
   }, [inventoryRows])
 
-  const statusOptions = ['OK', 'In Stock', 'Low Stock', 'Reorder']
+  const statusOptions = ['OK', 'Low Stock', 'Reorder']
 
   const propertiesFilteredRows = useMemo(() => {
     return propertyRows.filter((row) => {
@@ -3447,6 +3475,9 @@ function App() {
           id: payload.id ?? '',
         })
 
+      const wasAlreadyConfirmed = purchaseRows.some(
+        (entry) => entry.id === updatedRow.id && entry.status === 'Confirmed',
+      )
       setPurchaseRows((current) => {
         const existingIndex = current.findIndex(
           (row) => row.id === updatedRow.id,
@@ -3458,6 +3489,16 @@ function App() {
         }
         return [updatedRow, ...current]
       })
+      if (updatedRow.status === 'Confirmed' && !wasAlreadyConfirmed) {
+        setInventoryRows((current) =>
+          applyConfirmedPurchaseToInventory(
+            current,
+            updatedRow.itemId,
+            updatedRow.units,
+            updatedRow.totalPrice,
+          ),
+        )
+      }
 
       setIsPurchaseFormOpen(false)
     } catch (saveError) {
@@ -3518,6 +3559,14 @@ function App() {
       setPurchaseRows((current) =>
         current.map((entry) =>
           entry.id === row.id ? { ...entry, status: 'Confirmed' } : entry,
+        ),
+      )
+      setInventoryRows((current) =>
+        applyConfirmedPurchaseToInventory(
+          current,
+          row.itemId,
+          row.units,
+          row.totalPrice,
         ),
       )
     } catch (updateError) {
@@ -4722,13 +4771,13 @@ function App() {
                       <th scope="col" className="mobile-quick-filter-col">
                         <button
                           className={`btn-quick-filter ${
-                            isReorderQuickFilterActive ? 'is-active' : ''
+                            isReorderLowQuickFilterActive ? 'is-active' : ''
                           }`}
                           type="button"
-                          aria-pressed={isReorderQuickFilterActive}
-                          onClick={toggleReorderQuickFilter}
+                          aria-pressed={isReorderLowQuickFilterActive}
+                          onClick={toggleReorderLowQuickFilter}
                         >
-                          {t('status.Reorder')}
+                          {t('inventory.quickFilterReorderLow')}
                           <span
                             className="quick-filter-indicator"
                             aria-hidden="true"
