@@ -31,25 +31,26 @@ export const handler = async (event: HttpEvent) => {
 
   try {
     const items = (await scanAllItems(tableName))
-      .map((item) => ({
-        ...item,
-        cleaningTypes: normalizeCleaningTypes(item.cleaningTypes),
-      }))
-      .sort((a, b) => {
-        const nameA =
-          typeof a.nickname === 'string'
-            ? a.nickname
-            : typeof a.id === 'string'
-              ? a.id
-              : '';
-        const nameB =
-          typeof b.nickname === 'string'
-            ? b.nickname
-            : typeof b.id === 'string'
-              ? b.id
-              : '';
-        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-      });
+      .map((item) => {
+        const id = typeof item.id === 'string' ? item.id : '';
+        const propertyId =
+          typeof item.propertyId === 'string' ? item.propertyId : id;
+        const nickname =
+          typeof item.nickname === 'string' && item.nickname.trim()
+            ? item.nickname
+            : id;
+        return {
+          id,
+          propertyId,
+          nickname,
+          cleaningTypes: normalizeCleaningTypes(item.cleaningTypes),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        };
+      })
+      .sort((a, b) =>
+        a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }),
+      );
     return buildHttpResponse(200, { items, count: items.length });
   } catch (error) {
     return buildHttpResponse(500, {
