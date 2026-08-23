@@ -5,13 +5,13 @@ import {
   getTodayMadrid,
   getTomorrowMadrid,
 } from '../operations/dateHelpers'
-import { getPropertyLabel } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import type {
   CleanerRecord,
   CleaningPlanRecord,
   CleaningPlanRow,
   CleaningPlanStatus,
+  PropertyCleaningType,
 } from './types'
 
 type Props = {
@@ -25,20 +25,40 @@ const mapCleaner = (item: Record<string, unknown>): CleanerRecord => ({
   active: item.active !== false,
 })
 
-const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => ({
-  visitId: String(item.visitId ?? ''),
-  propertyId: String(item.propertyId ?? ''),
-  title: String(item.title ?? ''),
-  visitStatus: String(item.visitStatus ?? ''),
-  visitStartTime: String(item.visitStartTime ?? ''),
-  cleanerId: String(item.cleanerId ?? ''),
-  startTime: String(item.startTime ?? item.visitStartTime ?? '')
-    .trim()
-    .replace(/^(\d):/, '0$1'),
-  qualityReview: Boolean(item.qualityReview),
-  guestyTaskId:
-    typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
+const mapCleaningType = (item: Record<string, unknown>): PropertyCleaningType => ({
+  id: String(item.id ?? ''),
+  name: String(item.name ?? ''),
+  price: Number(item.price ?? 0),
+  durationHours: Number(item.durationHours ?? 0),
+  isDefault: Boolean(item.isDefault),
 })
+
+const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => {
+  const cleaningTypes = Array.isArray(item.cleaningTypes)
+    ? (item.cleaningTypes as Record<string, unknown>[]).map(mapCleaningType)
+    : []
+  const defaultType = cleaningTypes.find((type) => type.isDefault) ?? cleaningTypes[0]
+  const savedTypeId = String(item.cleaningTypeId ?? '')
+  const cleaningTypeId = cleaningTypes.some((type) => type.id === savedTypeId)
+    ? savedTypeId
+    : defaultType?.id ?? ''
+  return {
+    visitId: String(item.visitId ?? ''),
+    propertyId: String(item.propertyId ?? ''),
+    title: String(item.title ?? ''),
+    visitStatus: String(item.visitStatus ?? ''),
+    visitStartTime: String(item.visitStartTime ?? ''),
+    cleanerId: String(item.cleanerId ?? ''),
+    startTime: String(item.startTime ?? item.visitStartTime ?? '')
+      .trim()
+      .replace(/^(\d):/, '0$1'),
+    qualityReview: Boolean(item.qualityReview),
+    cleaningTypeId,
+    cleaningTypes,
+    guestyTaskId:
+      typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
+  }
+}
 
 const mapPlan = (item: Record<string, unknown>): CleaningPlanRecord => ({
   id: String(item.id ?? ''),
@@ -52,7 +72,7 @@ const mapPlan = (item: Record<string, unknown>): CleaningPlanRecord => ({
   readyAt: typeof item.readyAt === 'string' ? item.readyAt : undefined,
 })
 
-export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
+export function CleaningPlanView({ getEndpoint, propertyOptions: _propertyOptions }: Props) {
   const { t } = useTranslation()
   const endpoints = useMemo(
     () => ({
@@ -68,10 +88,6 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
         'getCleanersUrl',
         import.meta.env.VITE_GET_CLEANERS_URL,
       ),
-      properties: getEndpoint(
-        'getPropertiesUrl',
-        import.meta.env.VITE_GET_PROPERTIES_URL,
-      ),
     }),
     [getEndpoint],
   )
@@ -81,23 +97,12 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
   const [rows, setRows] = useState<CleaningPlanRow[]>([])
   const [history, setHistory] = useState<CleaningPlanRecord[]>([])
   const [cleaners, setCleaners] = useState<CleanerRecord[]>([])
-  const [properties, setProperties] = useState<PropertyOption[]>(propertyOptions)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const isReady = status === 'READY'
-  const propertyById = useMemo(
-    () =>
-      new Map(
-        properties.map((property) => [
-          property.id,
-          getPropertyLabel(property),
-        ]),
-      ),
-    [properties],
-  )
   const cleanerById = useMemo(
     () => new Map(cleaners.map((cleaner) => [cleaner.id, cleaner])),
     [cleaners],
@@ -106,25 +111,6 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
     () => cleaners.filter((cleaner) => cleaner.active),
     [cleaners],
   )
-
-  const loadProperties = useCallback(async () => {
-    if (!endpoints.properties) {
-      return
-    }
-    const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
-      endpoints.properties,
-    )
-    setProperties(
-      (payload.items ?? []).map((item) => ({
-        id: String(item.id ?? ''),
-        nickname: String(item.nickname ?? item.Nickname ?? item.title ?? item.id ?? ''),
-        title: String(item.title ?? ''),
-        listingNickname: String(
-          item.ListingNickname ?? item.listingNickname ?? item.nickname ?? '',
-        ),
-      })),
-    )
-  }, [endpoints.properties])
 
   const loadCleaners = useCallback(async () => {
     if (!endpoints.getCleaners) {
@@ -179,14 +165,6 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
   )
 
   useEffect(() => {
-    setProperties(propertyOptions)
-  }, [propertyOptions])
-
-  useEffect(() => {
-    void loadProperties()
-  }, [loadProperties])
-
-  useEffect(() => {
     void loadCleaners().catch(() => {
       setError(t('cleaningPlan.missingCleaners'))
     })
@@ -202,7 +180,9 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
 
   const updateRow = (
     visitId: string,
-    patch: Partial<Pick<CleaningPlanRow, 'cleanerId' | 'startTime' | 'qualityReview'>>,
+    patch: Partial<
+      Pick<CleaningPlanRow, 'cleanerId' | 'startTime' | 'qualityReview' | 'cleaningTypeId'>
+    >,
   ) => {
     setRows((current) =>
       current.map((row) =>
@@ -241,6 +221,7 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
             cleanerId: row.cleanerId,
             startTime: row.startTime,
             qualityReview: row.qualityReview,
+            cleaningTypeId: row.cleaningTypeId,
           })),
         }),
       })
@@ -291,7 +272,6 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
                 void loadPlan(plannedDate)
                 void loadHistory()
                 void loadCleaners()
-                void loadProperties()
               }}
             >
               {t('common.refresh')}
@@ -396,8 +376,8 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>{t('cleaningPlan.property')}</th>
                 <th>{t('cleaningPlan.visit')}</th>
+                <th>{t('cleaningPlan.type')}</th>
                 <th>{t('cleaningPlan.cleaner')}</th>
                 <th>{t('cleaningPlan.startTime')}</th>
                 <th>{t('cleaningPlan.qualityReview')}</th>
@@ -426,15 +406,35 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
                   return (
                     <tr key={row.visitId}>
                       <td>
-                        {propertyById.get(row.propertyId) || row.propertyId}
-                      </td>
-                      <td>
                         <div className="cleaning-visit-cell">
                           <strong>{row.title || row.visitId}</strong>
                           {row.visitStatus ? (
                             <span className="card-meta">{row.visitStatus}</span>
                           ) : null}
                         </div>
+                      </td>
+                      <td>
+                        <select
+                          value={row.cleaningTypeId}
+                          disabled={isReady || row.cleaningTypes.length === 0}
+                          onChange={(event) =>
+                            updateRow(row.visitId, {
+                              cleaningTypeId: event.target.value,
+                            })
+                          }
+                        >
+                          {row.cleaningTypes.length === 0 ? (
+                            <option value="">
+                              {t('cleaningPlan.noTypes')}
+                            </option>
+                          ) : (
+                            row.cleaningTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
                       </td>
                       <td>
                         <select
@@ -467,20 +467,18 @@ export function CleaningPlanView({ getEndpoint, propertyOptions }: Props) {
                           }
                         />
                       </td>
-                      <td>
-                        <label className="checkbox-row cleaning-quality-check">
-                          <input
-                            type="checkbox"
-                            checked={row.qualityReview}
-                            disabled={isReady}
-                            onChange={(event) =>
-                              updateRow(row.visitId, {
-                                qualityReview: event.target.checked,
-                              })
-                            }
-                          />
-                          {t('cleaningPlan.qualityReview')}
-                        </label>
+                      <td className="cleaning-quality-cell">
+                        <input
+                          type="checkbox"
+                          checked={row.qualityReview}
+                          disabled={isReady}
+                          onChange={(event) =>
+                            updateRow(row.visitId, {
+                              qualityReview: event.target.checked,
+                            })
+                          }
+                          aria-label={t('cleaningPlan.qualityReview')}
+                        />
                       </td>
                     </tr>
                   )

@@ -3261,7 +3261,8 @@ th {
     gap: 10px;
   }
 
-  .summary-cards.is-open {
+  .summary-cards.is-open,
+  .summary-cards.cleaning-settings-cards {
     display: grid;
   }
 
@@ -4310,8 +4311,37 @@ th {
   gap: 2px;
 }
 
+.cleaning-quality-cell {
+  text-align: center;
+  width: 72px;
+}
+
 .cleaning-quality-check {
   white-space: nowrap;
+}
+
+.cleaning-settings-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary-card-button {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.summary-card-button.is-selected {
+  border-color: #1570ef;
+  box-shadow: 0 0 0 1px #1570ef;
+}
+
+.cleaning-type-summary {
+  margin: 0;
+  padding-left: 16px;
 }
 
 .cleaning-plan-actions .btn-primary,

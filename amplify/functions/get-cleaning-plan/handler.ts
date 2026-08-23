@@ -7,7 +7,9 @@ import {
 import {
   getPlanByDate,
   isDateOnly,
+  normalizeCleaningTypes,
   queryCleaningVisitsForDate,
+  resolveCleaningType,
   scanAllItems,
 } from '../shared/cleaning-plan';
 
@@ -22,6 +24,7 @@ type PlanItem = {
   cleanerId?: string;
   startTime?: string;
   qualityReview?: boolean;
+  cleaningTypeId?: string;
 };
 
 const asPlanItems = (value: unknown): PlanItem[] =>
@@ -29,7 +32,8 @@ const asPlanItems = (value: unknown): PlanItem[] =>
 
 const mergePlanRows = (
   visits: Record<string, unknown>[],
-  plan?: Record<string, unknown>,
+  plan: Record<string, unknown> | undefined,
+  detailsByPropertyId: Map<string, ReturnType<typeof normalizeCleaningTypes>>,
 ) => {
   const savedByVisitId = new Map(
     asPlanItems(plan?.items)
@@ -45,16 +49,24 @@ const mergePlanRows = (
         typeof visit.scheduledStartTime === 'string'
           ? visit.scheduledStartTime
           : '';
+      const propertyId =
+        typeof visit.propertyId === 'string' ? visit.propertyId : '';
+      const cleaningTypes = detailsByPropertyId.get(propertyId) ?? [];
+      const selectedType = resolveCleaningType(
+        cleaningTypes,
+        saved?.cleaningTypeId,
+      );
       return {
         visitId,
-        propertyId:
-          typeof visit.propertyId === 'string' ? visit.propertyId : '',
+        propertyId,
         title: typeof visit.title === 'string' ? visit.title : '',
         visitStatus: typeof visit.status === 'string' ? visit.status : '',
         visitStartTime: visitStart,
         cleanerId: saved?.cleanerId?.trim() ?? '',
         startTime: saved?.startTime?.trim() || visitStart,
         qualityReview: Boolean(saved?.qualityReview),
+        cleaningTypeId: selectedType?.id ?? '',
+        cleaningTypes,
         guestyTaskId:
           typeof visit.guestyTaskId === 'string' ? visit.guestyTaskId : '',
       };
@@ -108,11 +120,24 @@ export const handler = async (event: HttpEvent) => {
       });
     }
 
-    const [visits, plan] = await Promise.all([
+    const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE;
+    const [visits, plan, detailItems] = await Promise.all([
       queryCleaningVisitsForDate(visitsTable, plannedDate as string),
       getPlanByDate(plansTable, plannedDate as string),
+      detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
     ]);
-    const rows = mergePlanRows(visits, plan);
+    const detailsByPropertyId = new Map(
+      detailItems.map((item) => {
+        const propertyId =
+          typeof item.propertyId === 'string'
+            ? item.propertyId
+            : typeof item.id === 'string'
+              ? item.id
+              : '';
+        return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
+      }),
+    );
+    const rows = mergePlanRows(visits, plan, detailsByPropertyId);
 
     return buildHttpResponse(200, {
       plannedDate,

@@ -7935,7 +7935,17 @@ function App() {
               }))}
           />
         ) : activePage === 'Cleaning settings' ? (
-          <CleaningSettingsView getEndpoint={getEndpoint} />
+          <CleaningSettingsView
+            getEndpoint={getEndpoint}
+            propertyOptions={propertyRows
+              .filter((row) => isManagedProperty(row) && row.active)
+              .map((row) => ({
+                id: row.id,
+                nickname: row.nickname,
+                title: row.title,
+                listingNickname: row.nickname,
+              }))}
+          />
         ) : activePage === 'Logs' ? (
           <LogsPanel
             getEndpoint={getEndpoint}

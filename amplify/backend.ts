@@ -50,6 +50,8 @@ import { getCleaners } from './functions/get-cleaners/resource';
 import { upsertCleaner } from './functions/upsert-cleaner/resource';
 import { getCleaningPlan } from './functions/get-cleaning-plan/resource';
 import { upsertCleaningPlan } from './functions/upsert-cleaning-plan/resource';
+import { getPropertyCleaningDetails } from './functions/get-property-cleaning-details/resource';
+import { upsertPropertyCleaningDetails } from './functions/upsert-property-cleaning-details/resource';
 
 const backend = defineBackend({
   auth,
@@ -93,6 +95,8 @@ const backend = defineBackend({
   upsertCleaner,
   getCleaningPlan,
   upsertCleaningPlan,
+  getPropertyCleaningDetails,
+  upsertPropertyCleaningDetails,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -136,6 +140,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertCleaner,
   backend.getCleaningPlan,
   backend.upsertCleaningPlan,
+  backend.getPropertyCleaningDetails,
+  backend.upsertPropertyCleaningDetails,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -276,6 +282,7 @@ const activityLogWriters = [
   backend.completeSpotCheck,
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
+  backend.upsertPropertyCleaningDetails,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -311,6 +318,15 @@ const cleaningPlansTable = new Table(dataStack, 'CleaningPlansTable', {
   billingMode: BillingMode.PAY_PER_REQUEST,
   removalPolicy: RemovalPolicy.RETAIN,
 });
+const propertyCleaningDetailsTable = new Table(
+  dataStack,
+  'PropertyCleaningDetailsTable',
+  {
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
 
 backend.getCleaners.addEnvironment('TABLE_NAME', cleanersTable.tableName);
 backend.upsertCleaner.addEnvironment('TABLE_NAME', cleanersTable.tableName);
@@ -323,6 +339,26 @@ backend.upsertCleaningPlan.addEnvironment(
   'CLEANERS_TABLE',
   cleanersTable.tableName,
 );
+backend.getPropertyCleaningDetails.addEnvironment(
+  'TABLE_NAME',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.upsertPropertyCleaningDetails.addEnvironment(
+  'TABLE_NAME',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.upsertPropertyCleaningDetails.addEnvironment(
+  'PROPERTIES_TABLE',
+  'yalla-properties',
+);
+backend.getCleaningPlan.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.upsertCleaningPlan.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
 
 cleanersTable.grantReadData(backend.getCleaners.resources.lambda);
 cleanersTable.grantReadWriteData(backend.upsertCleaner.resources.lambda);
@@ -330,6 +366,21 @@ cleanersTable.grantReadData(backend.upsertCleaningPlan.resources.lambda);
 cleaningPlansTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 cleaningPlansTable.grantReadWriteData(
   backend.upsertCleaningPlan.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.getPropertyCleaningDetails.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadWriteData(
+  backend.upsertPropertyCleaningDetails.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.getCleaningPlan.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.upsertCleaningPlan.resources.lambda,
+);
+propertiesTable.grantReadData(
+  backend.upsertPropertyCleaningDetails.resources.lambda,
 );
 visitsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
@@ -483,6 +534,14 @@ const upsertCleaningPlanUrl =
   backend.upsertCleaningPlan.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getPropertyCleaningDetailsUrl =
+  backend.getPropertyCleaningDetails.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertPropertyCleaningDetailsUrl =
+  backend.upsertPropertyCleaningDetails.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -524,5 +583,7 @@ backend.addOutput({
     upsertCleanerUrl: upsertCleanerUrl.url,
     getCleaningPlanUrl: getCleaningPlanUrl.url,
     upsertCleaningPlanUrl: upsertCleaningPlanUrl.url,
+    getPropertyCleaningDetailsUrl: getPropertyCleaningDetailsUrl.url,
+    upsertPropertyCleaningDetailsUrl: upsertPropertyCleaningDetailsUrl.url,
   },
 });

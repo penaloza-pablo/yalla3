@@ -17,6 +17,8 @@ export type CleaningPlanRow = {
   cleanerId: string
   startTime: string
   qualityReview: boolean
+  cleaningTypeId: string
+  cleaningTypes: PropertyCleaningType[]
   guestyTaskId?: string
 }
 
@@ -30,8 +32,29 @@ export type CleaningPlanRecord = {
     cleanerId?: string
     startTime?: string
     qualityReview?: boolean
+    cleaningTypeId?: string
+    cleaningTypeName?: string
+    durationHours?: number
+    price?: number
   }>
   createdAt?: string
   updatedAt?: string
   readyAt?: string
+}
+
+export type PropertyCleaningType = {
+  id: string
+  name: string
+  price: number
+  durationHours: number
+  isDefault: boolean
+}
+
+export type PropertyCleaningDetailsRecord = {
+  id: string
+  propertyId: string
+  nickname: string
+  cleaningTypes: PropertyCleaningType[]
+  createdAt?: string
+  updatedAt?: string
 }

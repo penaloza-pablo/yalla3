@@ -6,10 +6,14 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import {
+  addHoursToTime,
   getPlanByDate,
   isDateOnly,
+  normalizeCleaningTypes,
   normalizeStartTime,
   queryCleaningVisitsForDate,
+  resolveCleaningType,
+  scanAllItems,
 } from '../shared/cleaning-plan';
 import {
   buildHttpResponse,
@@ -32,6 +36,7 @@ type PlanItemInput = {
   cleanerId?: string;
   startTime?: string;
   qualityReview?: boolean;
+  cleaningTypeId?: string;
 };
 
 type PlanPayload = {
@@ -46,6 +51,10 @@ type SavedPlanItem = {
   cleanerId: string;
   startTime: string;
   qualityReview: boolean;
+  cleaningTypeId: string;
+  cleaningTypeName: string;
+  durationHours: number;
+  price: number;
 };
 
 const loadCleaner = async (tableName: string | undefined, cleanerId: string) => {
@@ -111,6 +120,7 @@ export const handler = async (event: {
   const plansTable = process.env.TABLE_NAME;
   const visitsTable = process.env.VISITS_TABLE;
   const cleanersTable = process.env.CLEANERS_TABLE;
+  const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE;
   if (!plansTable || !visitsTable) {
     return buildHttpResponse(500, {
       message: 'TABLE_NAME or VISITS_TABLE is not configured.',
@@ -152,6 +162,18 @@ export const handler = async (event: {
         .filter((visit) => typeof visit.id === 'string')
         .map((visit) => [visit.id as string, visit]),
     );
+    const detailItems = detailsTable ? await scanAllItems(detailsTable) : [];
+    const detailsByPropertyId = new Map(
+      detailItems.map((item) => {
+        const propertyId =
+          typeof item.propertyId === 'string'
+            ? item.propertyId
+            : typeof item.id === 'string'
+              ? item.id
+              : '';
+        return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
+      }),
+    );
 
     const incomingItems = Array.isArray(payload.items)
       ? payload.items
@@ -180,13 +202,22 @@ export const handler = async (event: {
         }
       }
       const startTime = normalizeStartTime(draft.startTime);
+      const propertyId =
+        typeof visit.propertyId === 'string' ? visit.propertyId : '';
+      const selectedType = resolveCleaningType(
+        detailsByPropertyId.get(propertyId) ?? [],
+        draft.cleaningTypeId,
+      );
       normalizedItems.push({
         visitId,
-        propertyId:
-          typeof visit.propertyId === 'string' ? visit.propertyId : '',
+        propertyId,
         cleanerId,
         startTime,
         qualityReview: Boolean(draft.qualityReview),
+        cleaningTypeId: selectedType?.id ?? '',
+        cleaningTypeName: selectedType?.name ?? '',
+        durationHours: selectedType?.durationHours ?? 0,
+        price: selectedType?.price ?? 0,
       });
     }
 
@@ -240,12 +271,40 @@ export const handler = async (event: {
           typeof visit.scheduledStartTime === 'string'
             ? visit.scheduledStartTime
             : '';
-        if (currentStart === planItem.startTime) {
+        const currentEnd =
+          typeof visit.scheduledEndTime === 'string'
+            ? visit.scheduledEndTime
+            : '';
+        const currentDurationMinutes = Number(visit.estimatedDurationMinutes);
+        const endTime =
+          planItem.durationHours > 0
+            ? addHoursToTime(planItem.startTime, planItem.durationHours)
+            : '';
+        const durationMinutes =
+          planItem.durationHours > 0
+            ? Math.round(planItem.durationHours * 60)
+            : undefined;
+        const startChanged = currentStart !== planItem.startTime;
+        const endChanged = Boolean(endTime) && currentEnd !== endTime;
+        const durationChanged =
+          durationMinutes !== undefined &&
+          currentDurationMinutes !== durationMinutes;
+        if (!startChanged && !endChanged && !durationChanged) {
           continue;
         }
 
+        const setFields: Record<string, unknown> = {
+          scheduledStartTime: planItem.startTime,
+        };
+        if (endTime) {
+          setFields.scheduledEndTime = endTime;
+        }
+        if (durationMinutes !== undefined) {
+          setFields.estimatedDurationMinutes = durationMinutes;
+        }
+
         await patchUserOriginatedRecord(visitsTable, planItem.visitId, {
-          set: { scheduledStartTime: planItem.startTime },
+          set: setFields,
         });
 
         const guestyTaskId =
@@ -264,9 +323,18 @@ export const handler = async (event: {
             continue;
           }
           syncedVisitIds.push(planItem.visitId);
-          // Guesty echoes the update as UTC; re-assert Madrid wall time for Daily Ops.
+          // Guesty echoes the update as UTC; re-assert Madrid wall times for Daily Ops.
+          const reassert: Record<string, unknown> = {
+            scheduledStartTime: planItem.startTime,
+          };
+          if (endTime) {
+            reassert.scheduledEndTime = endTime;
+          }
+          if (durationMinutes !== undefined) {
+            reassert.estimatedDurationMinutes = durationMinutes;
+          }
           await patchUserOriginatedRecord(visitsTable, planItem.visitId, {
-            set: { scheduledStartTime: planItem.startTime },
+            set: reassert,
           });
         } catch (error) {
           syncErrors.push({
