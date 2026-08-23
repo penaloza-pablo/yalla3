@@ -642,13 +642,39 @@ export function CleaningPlanView({
             <p className="card-subtitle">{t('cleaningPlan.historySubtitle')}</p>
           </div>
         </div>
-        <div className="table-wrap">
-          <table className="data-table">
+        <div className="table-wrapper">
+          <table className="data-table data-table-cleaning-plan">
             <thead>
               <tr>
+                <th scope="col" className="mobile-quick-filter-col">
+                  <button
+                    className={`btn-quick-filter ${
+                      isDayModalOpen && plannedDate === today ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-pressed={isDayModalOpen && plannedDate === today}
+                    onClick={() => void openDay(today)}
+                  >
+                    {t('cleaningPlan.todayCard')}
+                    <span className="quick-filter-dot" aria-hidden="true" />
+                  </button>
+                </th>
+                <th scope="col" className="mobile-quick-filter-col">
+                  <button
+                    className={`btn-quick-filter ${
+                      isDayModalOpen && plannedDate === tomorrow ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-pressed={isDayModalOpen && plannedDate === tomorrow}
+                    onClick={() => void openDay(tomorrow)}
+                  >
+                    {t('cleaningPlan.tomorrowCard')}
+                    <span className="quick-filter-dot" aria-hidden="true" />
+                  </button>
+                </th>
                 <th>{t('cleaningPlan.day')}</th>
-                <th>{t('cleaningPlan.planStatus')}</th>
                 <th>{t('cleaningPlan.cleanings')}</th>
+                <th>{t('cleaningPlan.planStatus')}</th>
                 <th>{t('cleaningPlan.qualityChecks')}</th>
                 <th>{t('common.actions')}</th>
               </tr>
@@ -656,7 +682,9 @@ export function CleaningPlanView({
             <tbody>
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>{t('cleaningPlan.emptyHistory')}</td>
+                  <td className="table-empty" colSpan={5}>
+                    {t('cleaningPlan.emptyHistory')}
+                  </td>
                 </tr>
               ) : (
                 filteredHistory.map((plan) => {
@@ -667,6 +695,12 @@ export function CleaningPlanView({
                     <tr key={plan.id}>
                       <td>{formatDateOnlyLabel(date, i18n.language)}</td>
                       <td>
+                        <span className="cleaning-plan-count-label">
+                          {t('cleaningPlan.cleanings')}:{' '}
+                        </span>
+                        {items.length}
+                      </td>
+                      <td>
                         <span
                           className={`cleaning-status-tag ${
                             plan.status === 'READY' ? 'is-ready' : 'is-draft'
@@ -675,15 +709,29 @@ export function CleaningPlanView({
                           {statusLabel(plan.status)}
                         </span>
                       </td>
-                      <td>{items.length}</td>
                       <td>{quality}</td>
                       <td>
                         <button
-                          className="btn-secondary"
+                          className="btn-secondary cleaning-plan-view-btn"
                           type="button"
                           onClick={() => void openDay(date)}
+                          aria-label={t('cleaningPlan.viewDay')}
                         >
-                          {t('cleaningPlan.viewDay')}
+                          <span className="cleaning-plan-view-text">
+                            {t('cleaningPlan.viewDay')}
+                          </span>
+                          <svg
+                            className="cleaning-plan-view-icon"
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            width="18"
+                            height="18"
+                          >
+                            <path
+                              d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                              fill="currentColor"
+                            />
+                          </svg>
                         </button>
                       </td>
                     </tr>

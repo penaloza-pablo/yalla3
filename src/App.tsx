@@ -4192,15 +4192,22 @@ function App() {
     setTitleProgress(0)
     window.scrollTo({ top: 0, behavior: 'auto' })
 
+    const main = document.querySelector('main.main')
+
     const updateTitleProgress = () => {
       const isMobileViewport = window.matchMedia('(max-width: 768px)').matches
       if (!isMobileViewport) {
         setTitleProgress(0)
         return
       }
+      const windowScroll = window.scrollY || document.documentElement.scrollTop
+      const mainScroll = main instanceof HTMLElement ? main.scrollTop : 0
       const next = Math.min(
         1,
-        Math.max(0, window.scrollY / MOBILE_TITLE_COLLAPSE_DISTANCE),
+        Math.max(
+          0,
+          Math.max(windowScroll, mainScroll) / MOBILE_TITLE_COLLAPSE_DISTANCE,
+        ),
       )
       setTitleProgress(next)
     }
@@ -4208,9 +4215,11 @@ function App() {
     updateTitleProgress()
     window.addEventListener('scroll', updateTitleProgress, { passive: true })
     window.addEventListener('resize', updateTitleProgress)
+    main?.addEventListener('scroll', updateTitleProgress, { passive: true })
     return () => {
       window.removeEventListener('scroll', updateTitleProgress)
       window.removeEventListener('resize', updateTitleProgress)
+      main?.removeEventListener('scroll', updateTitleProgress)
     }
   }, [activePage])
 
