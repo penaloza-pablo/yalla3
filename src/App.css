@@ -1836,7 +1836,6 @@ th {
 .operations-tabs {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
 }
 
 .operations-kanban {
@@ -4342,6 +4341,11 @@ th {
 .cleaning-type-summary {
   margin: 0;
   padding-left: 16px;
+}
+
+.cleaning-plan-modal {
+  width: min(1080px, 100%);
+  max-width: 1080px;
 }
 
 .cleaning-plan-actions .btn-primary,

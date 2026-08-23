@@ -7925,6 +7925,10 @@ function App() {
         ) : activePage === 'Cleaning Plan' ? (
           <CleaningPlanView
             getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
             propertyOptions={propertyRows
               .filter((row) => isManagedProperty(row) && row.active)
               .map((row) => ({

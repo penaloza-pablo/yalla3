@@ -57,6 +57,30 @@ export const normalizeDateRange = (from: string, to: string) => {
 
 export const getTomorrowMadrid = () => addDaysToDateString(getTodayMadrid(), 1)
 
+export const getMadridMonthRange = (monthOffset = 0) => {
+  const today = getTodayMadrid()
+  const [year, month] = today.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1 + monthOffset, 1))
+  const end = new Date(Date.UTC(year, month + monthOffset, 0))
+  return {
+    from: formatDateOnly(start),
+    to: formatDateOnly(end),
+  }
+}
+
+export const formatDateOnlyLabel = (value: string, locale = 'en') => {
+  const parsed = parseDateOnly(value)
+  if (!parsed) {
+    return value
+  }
+  return new Intl.DateTimeFormat(locale.toLowerCase().startsWith('es') ? 'es-ES' : 'en-GB', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(parsed)
+}
+
 export const formatTaskCreatedDate = (value?: string) => {
   if (!value?.trim()) {
     return '—'

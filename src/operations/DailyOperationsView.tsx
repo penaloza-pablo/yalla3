@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MobileBodyPortal } from '../MobileBodyPortal'
 import {
   fetchJson,
   getReferenceList,
@@ -1060,32 +1061,51 @@ export function DailyOperationsView({
 
   return (
     <>
-      <section className="card">
-        <div className="page-header">
-          <div className="page-header-leading">
-            <h1 className="page-title">{t('operations.title')}</h1>
-            <p className="subtitle">{t('operations.subtitlePage')}</p>
+      <header className="page-header">
+        <div className="page-header-leading">
+          <p className="eyebrow">{t('operations.eyebrow')}</p>
+          <div className="page-title-row">
+            <h1 className="page-title">{t('pages.Daily Operations')}</h1>
           </div>
+          <p className="subtitle">{t('operations.subtitlePage')}</p>
+        </div>
+        <MobileBodyPortal>
           <div className="page-action-bar">
             <div className="header-actions">
               {opsTab === 'pool' ? (
                 <button
-                  className="btn-secondary"
+                  className="btn-ghost"
                   type="button"
                   onClick={() => {
                     setTaskForm({ ...emptyTaskForm(), propertyId: '', visitId: '' })
                     setIsTaskFormOpen(true)
                   }}
+                  aria-label={t('operations.createTask')}
                 >
-                  {t('operations.createTask')}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
+                  </svg>
                 </button>
               ) : opsTab === 'dashboard' ? (
                 <button
-                  className="btn-secondary"
+                  className="btn-ghost"
                   type="button"
                   onClick={openCreateVisit}
+                  aria-label={t('operations.createVisit')}
                 >
-                  {t('operations.createVisit')}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
+                  </svg>
                 </button>
               ) : null}
               <button
@@ -1099,40 +1119,51 @@ export function DailyOperationsView({
                     void loadVisits()
                   }
                 }}
+                aria-label={t('operations.refresh')}
               >
-                {t('operations.refresh')}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                    fill="currentColor"
+                  />
+                </svg>
               </button>
             </div>
           </div>
-        </div>
+        </MobileBodyPortal>
+      </header>
 
-        <div className="operations-tabs">
-          <button
-            type="button"
-            className={opsTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setOpsTab('dashboard')}
-          >
-            {t('operations.dashboard')}
-          </button>
-          <button
-            type="button"
-            className={opsTab === 'pool' ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setOpsTab('pool')}
-          >
-            {t('operations.unassigned')}
-          </button>
-          <button
-            type="button"
-            className={opsTab === 'templates' ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setOpsTab('templates')}
-          >
-            {t('operations.templates')}
-          </button>
-        </div>
+      {message ? <p className="notice success">{message}</p> : null}
+      {error ? <p className="notice error">{error}</p> : null}
 
-        {message ? <p className="notice success">{message}</p> : null}
-        {error ? <p className="notice error">{error}</p> : null}
-      </section>
+      <div className="operations-tabs">
+        <button
+          type="button"
+          className={opsTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setOpsTab('dashboard')}
+        >
+          {t('operations.dashboard')}
+        </button>
+        <button
+          type="button"
+          className={opsTab === 'pool' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setOpsTab('pool')}
+        >
+          {t('operations.unassigned')}
+        </button>
+        <button
+          type="button"
+          className={opsTab === 'templates' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setOpsTab('templates')}
+        >
+          {t('operations.templates')}
+        </button>
+      </div>
 
       {opsTab === 'dashboard' ? (
         <>
