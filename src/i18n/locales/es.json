@@ -31,7 +31,11 @@
     "missingEndpoint": "Falta el endpoint de reservas. Configura VITE_GET_BOOKINGS_URL en el entorno.",
     "filterSubtitle": "Selecciona uno o más valores para filtrar las reservas.",
     "emptyFiltered": "Ninguna reserva coincide con los filtros actuales.",
-    "emptyPage": "No se encontraron reservas para esta página y combinación de filtros."
+    "emptyPage": "No se encontraron reservas para esta página y combinación de filtros.",
+    "updateFromGuesty": "Actualizar desde Guesty",
+    "updatingFromGuesty": "Actualizando...",
+    "missingSyncEndpoint": "Falta el proxy de sync de reservas de Guesty. Redesplega el backend o configura VITE_PROXY_GUESTY_BOOKINGS_SYNC_URL.",
+    "syncError": "No se pudo sincronizar las reservas desde Guesty. Inténtalo de nuevo."
   },
   "chatbot": {
     "clear": "Limpiar",

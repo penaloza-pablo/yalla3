@@ -7,5 +7,5 @@ export const getBookings = defineFunction({
   environment: {
     TABLE_NAME: 'yalla-bookings',
   },
-  timeoutSeconds: 20,
+  timeoutSeconds: 30,
 });

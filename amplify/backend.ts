@@ -43,6 +43,7 @@ import { upsertVisitTemplate } from './functions/upsert-visit-template/resource'
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
+import { proxyGuestyBookingsSync } from './functions/proxy-guesty-bookings-sync/resource';
 import { getActivityLogs } from './functions/get-activity-logs/resource';
 import { getSpotChecks } from './functions/get-spot-checks/resource';
 import { completeSpotCheck } from './functions/complete-spot-check/resource';
@@ -88,6 +89,7 @@ const backend = defineBackend({
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
+  proxyGuestyBookingsSync,
   getActivityLogs,
   getSpotChecks,
   completeSpotCheck,
@@ -133,6 +135,7 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitType,
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
+  backend.proxyGuestyBookingsSync,
   backend.getActivityLogs,
   backend.getSpotChecks,
   backend.completeSpotCheck,
@@ -241,6 +244,22 @@ propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantReadWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantReadWriteData(backend.deleteProperty.resources.lambda);
 bookingsTable.grantReadData(backend.getBookings.resources.lambda);
+backend.getBookings.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:Scan',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+      'dynamodb:ConditionCheckItem',
+      'dynamodb:DescribeTable',
+    ],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
+);
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
 reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
 reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
@@ -279,6 +298,7 @@ const activityLogWriters = [
   backend.upsertVisitTemplate,
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
+  backend.proxyGuestyBookingsSync,
   backend.completeSpotCheck,
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
@@ -509,6 +529,10 @@ const proxyGuestyReviewsSyncUrl =
   backend.proxyGuestyReviewsSync.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const proxyGuestyBookingsSyncUrl =
+  backend.proxyGuestyBookingsSync.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getActivityLogsUrl =
   backend.getActivityLogs.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
@@ -576,6 +600,7 @@ backend.addOutput({
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,
+    proxyGuestyBookingsSyncUrl: proxyGuestyBookingsSyncUrl.url,
     getActivityLogsUrl: getActivityLogsUrl.url,
     getSpotChecksUrl: getSpotChecksUrl.url,
     completeSpotCheckUrl: completeSpotCheckUrl.url,

@@ -1018,6 +1018,20 @@ const formatLocalIsoDate = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
+const addLocalDays = (date: Date, days: number) => {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+const defaultBookingsCheckInRange = () => {
+  const today = new Date()
+  return {
+    checkInFrom: formatLocalIsoDate(today),
+    checkInTo: formatLocalIsoDate(addLocalDays(today, 14)),
+  }
+}
+
 const getCalendarMonthRange = (monthOffset: number) => {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
@@ -1364,6 +1378,7 @@ function App() {
   >('asc')
   const [bookingRows, setBookingRows] = useState<BookingRow[]>([])
   const [isBookingsLoading, setIsBookingsLoading] = useState(false)
+  const [isBookingsSyncing, setIsBookingsSyncing] = useState(false)
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [bookingsLastUpdated, setBookingsLastUpdated] = useState<string | null>(null)
   const [isBookingsFilterOpen, setIsBookingsFilterOpen] = useState(false)
@@ -1373,8 +1388,7 @@ function App() {
     checkInTo: string
   }>({
     statuses: [],
-    checkInFrom: '',
-    checkInTo: '',
+    ...defaultBookingsCheckInRange(),
   })
   const [bookingsFilterDraft, setBookingsFilterDraft] = useState<{
     statuses: string[]
@@ -1382,8 +1396,7 @@ function App() {
     checkInTo: string
   }>({
     statuses: [],
-    checkInFrom: '',
-    checkInTo: '',
+    ...defaultBookingsCheckInRange(),
   })
   const [bookingsSortDirection, setBookingsSortDirection] = useState<'asc' | 'desc'>(
     'asc',
@@ -2399,6 +2412,53 @@ function App() {
     },
     [bookingsFilters, bookingsPageSize],
   )
+
+  const refreshBookingsFromGuesty = useCallback(async () => {
+    setIsBookingsSyncing(true)
+    setBookingsError(null)
+
+    try {
+      const endpoint = getEndpoint(
+        'proxyGuestyBookingsSyncUrl',
+        import.meta.env.VITE_PROXY_GUESTY_BOOKINGS_SYNC_URL,
+      )
+      if (!endpoint) {
+        setBookingsError(
+          t('bookings.missingSyncEndpoint'),
+        )
+        return
+      }
+
+      const range = defaultBookingsCheckInRange()
+      const fromYmd = bookingsFilters.checkInFrom || range.checkInFrom
+      const toYmd = bookingsFilters.checkInTo || range.checkInTo
+      const query = new URLSearchParams()
+      query.set('fromYmd', fromYmd)
+      query.set('toYmd', toYmd)
+      query.set('maxItems', '5000')
+
+      const response = await authFetch(`${endpoint}?${query.toString()}`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(
+          `Bookings sync trigger failed (${response.status}). ${errorText}`.trim(),
+        )
+      }
+
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 1500)
+      })
+      await fetchBookings(null)
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : t('bookings.syncError')
+      setBookingsError(message)
+    } finally {
+      setIsBookingsSyncing(false)
+    }
+  }, [bookingsFilters.checkInFrom, bookingsFilters.checkInTo, fetchBookings, t])
 
   const fetchReviews = useCallback(async () => {
     const reviewsEndpoint = getEndpoint(
@@ -6691,9 +6751,19 @@ function App() {
                   className="btn-ghost"
                   type="button"
                   onClick={() => void fetchBookings(bookingsCurrentCursor)}
-                  disabled={isBookingsLoading}
+                  disabled={isBookingsLoading || isBookingsSyncing}
                 >
                   Refresh
+                </button>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void refreshBookingsFromGuesty()}
+                  disabled={isBookingsLoading || isBookingsSyncing}
+                >
+                  {isBookingsSyncing
+                    ? t('bookings.updatingFromGuesty')
+                    : t('bookings.updateFromGuesty')}
                 </button>
                 </div>
               </div>

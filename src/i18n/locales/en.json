@@ -31,7 +31,11 @@
     "missingEndpoint": "Missing bookings endpoint. Set VITE_GET_BOOKINGS_URL in the environment.",
     "filterSubtitle": "Select one or more values to filter the bookings.",
     "emptyFiltered": "No bookings match the current filters.",
-    "emptyPage": "No bookings found for this page and filter combination."
+    "emptyPage": "No bookings found for this page and filter combination.",
+    "updateFromGuesty": "Update from Guesty",
+    "updatingFromGuesty": "Updating...",
+    "missingSyncEndpoint": "Missing Guesty bookings sync proxy. Redeploy backend or set VITE_PROXY_GUESTY_BOOKINGS_SYNC_URL.",
+    "syncError": "Unable to sync bookings from Guesty. Please try again."
   },
   "chatbot": {
     "clear": "Clear",

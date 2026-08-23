@@ -13,6 +13,7 @@ export const LOG_FEATURES = {
   SUBTRACTIONS: 'Subtractions',
   ALERTS: 'Alerts',
   PROPERTIES: 'Properties',
+  BOOKINGS: 'Bookings',
   REVIEWS: 'Reviews',
   OPERATIONS: 'Daily Operations',
   CLEANING_PLAN: 'Cleaning Plan',
