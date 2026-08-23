@@ -264,6 +264,10 @@ export const handler = async (event: {
             continue;
           }
           syncedVisitIds.push(planItem.visitId);
+          // Guesty echoes the update as UTC; re-assert Madrid wall time for Daily Ops.
+          await patchUserOriginatedRecord(visitsTable, planItem.visitId, {
+            set: { scheduledStartTime: planItem.startTime },
+          });
         } catch (error) {
           syncErrors.push({
             visitId: planItem.visitId,
