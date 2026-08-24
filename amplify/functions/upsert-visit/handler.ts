@@ -4,6 +4,7 @@ import {
   quoted,
   recordActivityLog,
 } from '../shared/activity-log';
+import { recordCleaningCompletion } from '../shared/cleaner-stats';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -121,6 +122,10 @@ export const handler = async (event: {
       });
     }
   }
+
+  const previousStatus = existing
+    ? normalizeStatus(typeof existing.status === 'string' ? existing.status : '')
+    : '';
 
   const propertyId = payload.propertyId?.trim();
   const visitTypeId = payload.visitTypeId?.trim();
@@ -346,6 +351,14 @@ export const handler = async (event: {
           : `updated visit ${quoted(visitTitle)}`
         : `created visit ${quoted(visitTitle)}`,
     });
+
+    if (status === 'COMPLETED' && previousStatus !== 'COMPLETED') {
+      try {
+        await recordCleaningCompletion(item);
+      } catch (error) {
+        console.error('Failed to record cleaning completion', error);
+      }
+    }
 
     return buildHttpResponse(200, {
       item,

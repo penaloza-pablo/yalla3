@@ -2,6 +2,25 @@ export type CleanerRecord = {
   id: string
   name: string
   active: boolean
+  cleaningsCount?: number
+  incidentsCount?: number
+  uniqueIncidentVisitCount?: number
+  historicalRating?: number
+  trendRating?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type CleaningIncidentRecord = {
+  id: string
+  visitId: string
+  visitTitle: string
+  propertyId: string
+  property: string
+  date: string
+  cleanerId: string
+  cleanerName: string
+  description: string
   createdAt?: string
   updatedAt?: string
 }

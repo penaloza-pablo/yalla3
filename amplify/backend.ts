@@ -53,6 +53,8 @@ import { getCleaningPlan } from './functions/get-cleaning-plan/resource';
 import { upsertCleaningPlan } from './functions/upsert-cleaning-plan/resource';
 import { getPropertyCleaningDetails } from './functions/get-property-cleaning-details/resource';
 import { upsertPropertyCleaningDetails } from './functions/upsert-property-cleaning-details/resource';
+import { getCleaningIncidents } from './functions/get-cleaning-incidents/resource';
+import { upsertCleaningIncident } from './functions/upsert-cleaning-incident/resource';
 
 const backend = defineBackend({
   auth,
@@ -99,6 +101,8 @@ const backend = defineBackend({
   upsertCleaningPlan,
   getPropertyCleaningDetails,
   upsertPropertyCleaningDetails,
+  getCleaningIncidents,
+  upsertCleaningIncident,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -145,6 +149,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertCleaningPlan,
   backend.getPropertyCleaningDetails,
   backend.upsertPropertyCleaningDetails,
+  backend.getCleaningIncidents,
+  backend.upsertCleaningIncident,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -303,6 +309,7 @@ const activityLogWriters = [
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
   backend.upsertPropertyCleaningDetails,
+  backend.upsertCleaningIncident,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -347,6 +354,17 @@ const propertyCleaningDetailsTable = new Table(
     removalPolicy: RemovalPolicy.RETAIN,
   },
 );
+const cleaningIncidentsTable = new Table(dataStack, 'CleaningIncidentsTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+cleaningIncidentsTable.addGlobalSecondaryIndex({
+  indexName: 'cleanerId-createdAt-index',
+  partitionKey: { name: 'cleanerId', type: AttributeType.STRING },
+  sortKey: { name: 'createdAtKey', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
 
 backend.getCleaners.addEnvironment('TABLE_NAME', cleanersTable.tableName);
 backend.upsertCleaner.addEnvironment('TABLE_NAME', cleanersTable.tableName);
@@ -379,10 +397,51 @@ backend.upsertCleaningPlan.addEnvironment(
   'PROPERTY_CLEANING_DETAILS_TABLE',
   propertyCleaningDetailsTable.tableName,
 );
+backend.getCleaningIncidents.addEnvironment(
+  'TABLE_NAME',
+  cleaningIncidentsTable.tableName,
+);
+backend.upsertCleaningIncident.addEnvironment(
+  'TABLE_NAME',
+  cleaningIncidentsTable.tableName,
+);
+backend.upsertCleaningIncident.addEnvironment(
+  'CLEANING_INCIDENTS_TABLE',
+  cleaningIncidentsTable.tableName,
+);
+backend.upsertCleaningIncident.addEnvironment(
+  'CLEANERS_TABLE',
+  cleanersTable.tableName,
+);
+backend.upsertCleaningIncident.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.upsertVisit.addEnvironment('CLEANERS_TABLE', cleanersTable.tableName);
+backend.upsertVisit.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.upsertVisit.addEnvironment(
+  'CLEANING_INCIDENTS_TABLE',
+  cleaningIncidentsTable.tableName,
+);
+backend.upsertCleaningPlan.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.upsertCleaningPlan.addEnvironment(
+  'CLEANING_INCIDENTS_TABLE',
+  cleaningIncidentsTable.tableName,
+);
 
 cleanersTable.grantReadData(backend.getCleaners.resources.lambda);
 cleanersTable.grantReadWriteData(backend.upsertCleaner.resources.lambda);
-cleanersTable.grantReadData(backend.upsertCleaningPlan.resources.lambda);
+cleanersTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+cleanersTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
+cleanersTable.grantReadWriteData(
+  backend.upsertCleaningIncident.resources.lambda,
+);
 cleaningPlansTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 cleaningPlansTable.grantReadWriteData(
   backend.upsertCleaningPlan.resources.lambda,
@@ -404,6 +463,22 @@ propertiesTable.grantReadData(
 );
 visitsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+visitsTable.grantReadData(backend.upsertCleaningIncident.resources.lambda);
+propertiesTable.grantReadData(backend.upsertCleaningIncident.resources.lambda);
+cleaningPlansTable.grantReadData(
+  backend.upsertCleaningIncident.resources.lambda,
+);
+cleaningPlansTable.grantReadData(backend.upsertVisit.resources.lambda);
+cleaningIncidentsTable.grantReadData(
+  backend.getCleaningIncidents.resources.lambda,
+);
+cleaningIncidentsTable.grantReadWriteData(
+  backend.upsertCleaningIncident.resources.lambda,
+);
+cleaningIncidentsTable.grantReadData(backend.upsertVisit.resources.lambda);
+cleaningIncidentsTable.grantReadData(
+  backend.upsertCleaningPlan.resources.lambda,
+);
 const visitsIndexPolicy = new PolicyStatement({
   actions: ['dynamodb:Query', 'dynamodb:Scan'],
   resources: [`${visitsTable.tableArn}/index/*`],
@@ -566,6 +641,14 @@ const upsertPropertyCleaningDetailsUrl =
   backend.upsertPropertyCleaningDetails.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getCleaningIncidentsUrl =
+  backend.getCleaningIncidents.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertCleaningIncidentUrl =
+  backend.upsertCleaningIncident.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -610,5 +693,7 @@ backend.addOutput({
     upsertCleaningPlanUrl: upsertCleaningPlanUrl.url,
     getPropertyCleaningDetailsUrl: getPropertyCleaningDetailsUrl.url,
     upsertPropertyCleaningDetailsUrl: upsertPropertyCleaningDetailsUrl.url,
+    getCleaningIncidentsUrl: getCleaningIncidentsUrl.url,
+    upsertCleaningIncidentUrl: upsertCleaningIncidentUrl.url,
   },
 });

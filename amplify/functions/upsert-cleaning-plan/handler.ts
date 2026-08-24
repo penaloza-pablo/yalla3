@@ -5,6 +5,7 @@ import {
   quoted,
   recordActivityLog,
 } from '../shared/activity-log';
+import { recordCleaningCompletion } from '../shared/cleaner-stats';
 import {
   addHoursToTime,
   getPlanByDate,
@@ -257,6 +258,18 @@ export const handler = async (event: {
     }
 
     await putItem(plansTable, item);
+
+    for (const planItem of normalizedItems) {
+      const visit = visitById.get(planItem.visitId);
+      if (!visit || !planItem.cleanerId) {
+        continue;
+      }
+      try {
+        await recordCleaningCompletion(visit, planItem.cleanerId);
+      } catch (error) {
+        console.error('Failed to record cleaning completion', error);
+      }
+    }
 
     const syncedVisitIds: string[] = [];
     const syncErrors: { visitId: string; error: string }[] = [];

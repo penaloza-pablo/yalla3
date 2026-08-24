@@ -72,6 +72,7 @@ export const handler = async (event: {
 
   const timestamp = nowIso();
   const item: Record<string, unknown> = {
+    ...(existing ?? {}),
     id: isUpdate
       ? payload.id?.trim()
       : await getNextSequentialId(tableName, 'CLEANER'),
@@ -82,6 +83,14 @@ export const handler = async (event: {
       timestamp,
     updatedAt: timestamp,
   };
+  if (!isUpdate) {
+    item.cleaningsCount = 0;
+    item.incidentsCount = 0;
+    item.uniqueIncidentVisitCount = 0;
+    item.historicalRating = 5;
+    item.trendRating = 5;
+    item.recentCompletions = [];
+  }
 
   try {
     await putItem(tableName, item);

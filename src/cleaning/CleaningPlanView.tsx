@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
+import { VisitDetailModal } from '../operations/VisitDetailModal'
 import {
   formatDateOnlyLabel,
   getMadridMonthRange,
@@ -87,7 +88,7 @@ const planStatusOf = (
 
 export function CleaningPlanView({
   getEndpoint,
-  propertyOptions: _propertyOptions,
+  propertyOptions,
   isSummaryInfoOpen,
   onToggleSummaryInfo,
 }: Props) {
@@ -113,6 +114,7 @@ export function CleaningPlanView({
 
   const [plannedDate, setPlannedDate] = useState('')
   const [isDayModalOpen, setIsDayModalOpen] = useState(false)
+  const [openVisitId, setOpenVisitId] = useState('')
   const [status, setStatus] = useState<CleaningPlanStatus>('DRAFT')
   const [rows, setRows] = useState<CleaningPlanRow[]>([])
   const [history, setHistory] = useState<CleaningPlanRecord[]>([])
@@ -249,6 +251,7 @@ export function CleaningPlanView({
   }
 
   const closeDay = () => {
+    setOpenVisitId('')
     setIsDayModalOpen(false)
     setMessage('')
   }
@@ -361,7 +364,14 @@ export function CleaningPlanView({
         <tr key={row.visitId}>
           <td>
             <div className="cleaning-visit-cell">
-              <strong>{row.title || row.visitId}</strong>
+              <button
+                type="button"
+                className="cleaning-visit-title-btn"
+                aria-label={t('cleaningPlan.openVisit')}
+                onClick={() => setOpenVisitId(row.visitId)}
+              >
+                {row.title || row.visitId}
+              </button>
               {row.visitStatus ? (
                 <span className="card-meta">{row.visitStatus}</span>
               ) : null}
@@ -821,6 +831,15 @@ export function CleaningPlanView({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {openVisitId ? (
+        <VisitDetailModal
+          visitId={openVisitId}
+          getEndpoint={getEndpoint}
+          propertyOptions={propertyOptions}
+          onClose={() => setOpenVisitId('')}
+        />
       ) : null}
     </>
   )

@@ -30,6 +30,7 @@ import {
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
+import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
@@ -278,6 +279,7 @@ const navigation = [
       'Bookings',
       'Reviews',
       'Cleaning Plan',
+      'Cleaning Incidents',
       'Cleaning settings',
       'Daily Operations',
     ],
@@ -303,6 +305,7 @@ const pagesWithMobileSearch = new Set([
   'Subtractions',
   'Alerts',
   'Logs',
+  'Cleaning Incidents',
 ])
 const MOBILE_TITLE_COLLAPSE_DISTANCE = 56
 const OTHER_OPTION = '__other__'
@@ -2920,7 +2923,7 @@ function App() {
     if (activePage === 'Daily Operations') {
       void fetchProperties()
     }
-    if (activePage === 'Cleaning Plan') {
+    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents') {
       void fetchProperties()
     }
   }, [
@@ -4305,6 +4308,8 @@ function App() {
         return t('alerts.search')
       case 'Logs':
         return t('logs.search')
+      case 'Cleaning Incidents':
+        return t('cleaningIncidents.search')
       default:
         return t('common.showSearch')
     }
@@ -8008,6 +8013,24 @@ function App() {
             onToggleSummaryInfo={() =>
               setIsSummaryInfoOpen((current) => !current)
             }
+            propertyOptions={propertyRows
+              .filter((row) => isManagedProperty(row) && row.active)
+              .map((row) => ({
+                id: row.id,
+                nickname: row.nickname,
+                title: row.title,
+                listingNickname: row.nickname,
+              }))}
+          />
+        ) : activePage === 'Cleaning Incidents' ? (
+          <CleaningIncidentsView
+            getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
             propertyOptions={propertyRows
               .filter((row) => isManagedProperty(row) && row.active)
               .map((row) => ({

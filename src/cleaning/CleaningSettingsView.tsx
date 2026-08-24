@@ -9,6 +9,7 @@ import type {
   PropertyCleaningDetailsRecord,
   PropertyCleaningType,
 } from './types'
+import { StarRating } from './StarRating'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -39,10 +40,20 @@ const emptyTypeDraft = (isDefault = false): TypeDraft => ({
   isDefault,
 })
 
+const toNumber = (value: unknown) => {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
 const mapCleaner = (item: Record<string, unknown>): CleanerRecord => ({
   id: String(item.id ?? ''),
   name: String(item.name ?? item.id ?? ''),
   active: item.active !== false,
+  cleaningsCount: toNumber(item.cleaningsCount),
+  incidentsCount: toNumber(item.incidentsCount),
+  uniqueIncidentVisitCount: toNumber(item.uniqueIncidentVisitCount),
+  historicalRating: toNumber(item.historicalRating),
+  trendRating: toNumber(item.trendRating),
   createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
   updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined,
 })
@@ -626,17 +637,21 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                   <tr>
                     <th>{t('cleaningSettings.name')}</th>
                     <th>{t('cleaningSettings.status')}</th>
+                    <th>{t('cleaningSettings.cleanings')}</th>
+                    <th>{t('cleaningSettings.incidents')}</th>
+                    <th>{t('cleaningSettings.historicalRating')}</th>
+                    <th>{t('cleaningSettings.trendRating')}</th>
                     <th>{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={3}>{t('common.loading')}</td>
+                      <td colSpan={7}>{t('common.loading')}</td>
                     </tr>
                   ) : cleaners.length === 0 ? (
                     <tr>
-                      <td colSpan={3}>{t('cleaningSettings.empty')}</td>
+                      <td colSpan={7}>{t('cleaningSettings.empty')}</td>
                     </tr>
                   ) : (
                     cleaners.map((cleaner) => (
@@ -648,6 +663,26 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                               ? t('cleaningSettings.active')
                               : t('cleaningSettings.inactive')}
                           </span>
+                        </td>
+                        <td>{cleaner.cleaningsCount ?? 0}</td>
+                        <td>{cleaner.incidentsCount ?? 0}</td>
+                        <td>
+                          <StarRating
+                            value={
+                              (cleaner.cleaningsCount ?? 0) > 0
+                                ? cleaner.historicalRating
+                                : undefined
+                            }
+                          />
+                        </td>
+                        <td>
+                          <StarRating
+                            value={
+                              (cleaner.cleaningsCount ?? 0) > 0
+                                ? cleaner.trendRating
+                                : undefined
+                            }
+                          />
                         </td>
                         <td>
                           <div className="table-actions">

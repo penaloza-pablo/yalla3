@@ -42,6 +42,7 @@ const FEATURE_OPTIONS = [
   'Reviews',
   'Daily Operations',
   'Cleaning Plan',
+  'Cleaning Incidents',
   'Cleaning settings',
 ] as const
 

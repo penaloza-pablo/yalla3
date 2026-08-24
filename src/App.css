@@ -1194,6 +1194,10 @@ th {
   z-index: 20;
 }
 
+.modal-overlay.is-stacked {
+  z-index: 60;
+}
+
 .modal {
   background: #ffffff;
   border-radius: 16px;
@@ -3795,6 +3799,10 @@ th {
     z-index: 50;
   }
 
+  .modal-overlay.is-stacked {
+    z-index: 60;
+  }
+
   /* Settings stays centered on the full viewport (not a bottom sheet) */
   .modal-overlay.settings-modal-overlay {
     align-items: center;
@@ -4366,6 +4374,23 @@ th {
   gap: 2px;
 }
 
+.cleaning-visit-title-btn {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: #1570ef;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cleaning-visit-title-btn:hover,
+.cleaning-visit-title-btn:focus-visible {
+  text-decoration: underline;
+}
+
 .cleaning-quality-cell {
   text-align: center;
   width: 72px;
@@ -4414,5 +4439,46 @@ th {
 .cleaning-plan-actions .btn-primary,
 .cleaning-plan-actions .btn-secondary {
   min-height: 40px;
+}
+
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.star-rating-star {
+  color: #d6d3d1;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.star-rating-star.is-filled {
+  color: #f5a524;
+}
+
+.star-rating-number {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #78716c);
+  font-size: 0.8rem;
+}
+
+.incident-description-cell {
+  max-width: 28rem;
+  white-space: pre-wrap;
+}
+
+.form-field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  .data-table-cleaning-incidents td:nth-child(1)::before { content: 'Property'; }
+  .data-table-cleaning-incidents td:nth-child(2)::before { content: 'Date'; }
+  .data-table-cleaning-incidents td:nth-child(3)::before { content: 'Cleaner'; }
+  .data-table-cleaning-incidents td:nth-child(4)::before { content: 'Description'; }
+  .data-table-cleaning-incidents td:nth-child(5)::before { content: 'Actions'; }
 }
 
