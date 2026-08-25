@@ -780,6 +780,16 @@
   gap: 10px;
 }
 
+.filter-options-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  max-height: min(50vh, calc(100vh - 16rem));
+  max-height: min(50dvh, calc(100dvh - 16rem));
+  min-height: 0;
+  padding-right: 4px;
+}
+
 .filter-option {
   display: flex;
   align-items: center;
@@ -1192,6 +1202,8 @@ th {
   justify-content: center;
   padding: 24px;
   z-index: 20;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .modal-overlay.is-stacked {
@@ -1991,6 +2003,11 @@ th {
   max-width: 720px;
 }
 
+.operations-detail-modal.modal-scrollable {
+  height: min(92vh, calc(100vh - 48px));
+  height: min(92dvh, calc(100dvh - 48px));
+}
+
 .operations-detail-body {
   display: flex;
   flex-direction: column;
@@ -2002,6 +2019,12 @@ th {
   flex-wrap: wrap;
   gap: 8px;
   margin: 12px 0;
+}
+
+.modal-footer.operations-detail-actions {
+  justify-content: flex-start;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .operations-task-list {
@@ -2078,7 +2101,8 @@ th {
 }
 
 .modal-scrollable {
-  max-height: min(92vh, 100%);
+  max-height: min(92vh, calc(100vh - 48px));
+  max-height: min(92dvh, calc(100dvh - 48px));
   overflow: hidden;
   padding-bottom: 0;
 }
@@ -2092,6 +2116,8 @@ th {
   flex: 1 1 auto;
   min-height: 0;
   padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-scrollable .modal-footer {
@@ -3241,6 +3267,11 @@ th {
     display: none;
   }
 
+  .property-group-chips {
+    padding: 0 4px 4px;
+    margin-bottom: 10px;
+  }
+
   .page-title {
     font-size: 1.35rem;
   }
@@ -3833,8 +3864,17 @@ th {
     max-height: min(90dvh, 100%);
   }
 
-  .modal-scrollable {
-    max-height: min(92dvh, 100%);
+  .modal.modal-scrollable {
+    overflow: hidden;
+    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px)));
+  }
+
+  .operations-detail-modal.modal-scrollable {
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px)));
+  }
+
+  .filter-options-scroll {
+    max-height: min(40dvh, calc(100dvh - 18rem));
   }
 
   .modal-footer {
@@ -4472,6 +4512,65 @@ th {
 
 .form-field-wide {
   grid-column: 1 / -1;
+}
+
+.property-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.property-group-chips .btn-quick-filter {
+  background: #f2f4f7;
+  border: 1px solid #e4e7ec;
+  border-radius: 999px;
+  padding: 8px 12px;
+  min-height: 36px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.82rem;
+  color: #344054;
+}
+
+.property-group-chips .btn-quick-filter.is-active {
+  background: #1d2939;
+  border-color: #1d2939;
+  color: #ffffff;
+}
+
+.data-table tbody td.mobile-quick-filter-col {
+  display: none;
+}
+
+.billing-warning-row td {
+  background: #fff7ed;
+}
+
+.billing-warning-text {
+  color: #c2410c;
+  margin: 4px 0 0;
+}
+
+@media (max-width: 768px) {
+  .data-table-cleaning-incidents td:nth-child(1)::before { content: 'Property'; }
+  .data-table-cleaning-incidents td:nth-child(2)::before { content: 'Date'; }
+  .data-table-cleaning-incidents td:nth-child(3)::before { content: 'Cleaner'; }
+  .data-table-cleaning-incidents td:nth-child(4)::before { content: 'Description'; }
+  .data-table-cleaning-incidents td:nth-child(5)::before { content: 'Actions'; }
+  .data-table-cleaning-billing-months td:nth-child(1)::before { content: 'Month'; }
+  .data-table-cleaning-billing-months td:nth-child(2)::before { content: 'Status'; }
+  .data-table-cleaning-billing-months td:nth-child(3)::before { content: 'Lines'; }
+  .data-table-cleaning-billing-months td:nth-child(4)::before { content: 'Warnings'; }
+  .data-table-cleaning-billing-months td:nth-child(5)::before { content: 'Total'; }
+  .data-table-cleaning-billing-months td:nth-child(6)::before { content: 'Actions'; }
+  .data-table-cleaning-billing td:nth-child(1)::before { content: 'Property'; }
+  .data-table-cleaning-billing td:nth-child(2)::before { content: 'Date'; }
+  .data-table-cleaning-billing td:nth-child(3)::before { content: 'Status'; }
+  .data-table-cleaning-billing td:nth-child(4)::before { content: 'Type'; }
+  .data-table-cleaning-billing td:nth-child(5)::before { content: 'Price'; }
+  .data-table-cleaning-billing td:nth-child(6)::before { content: 'Source'; }
+  .data-table-cleaning-billing td:nth-child(7)::before { content: 'Actions'; }
 }
 
 @media (max-width: 768px) {

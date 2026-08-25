@@ -31,6 +31,7 @@ import {
 import { DailyOperationsView } from './operations/DailyOperationsView'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
+import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
@@ -280,6 +281,7 @@ const navigation = [
       'Reviews',
       'Cleaning Plan',
       'Cleaning Incidents',
+      'Cleaning Billing',
       'Cleaning settings',
       'Daily Operations',
     ],
@@ -2923,7 +2925,7 @@ function App() {
     if (activePage === 'Daily Operations') {
       void fetchProperties()
     }
-    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents') {
+    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing') {
       void fetchProperties()
     }
   }, [
@@ -8031,6 +8033,22 @@ function App() {
             }
             searchQuery={tableSearchQuery}
             onSearchQueryChange={setTableSearchQuery}
+            propertyOptions={propertyRows
+              .filter((row) => isManagedProperty(row) && row.active)
+              .map((row) => ({
+                id: row.id,
+                nickname: row.nickname,
+                title: row.title,
+                listingNickname: row.nickname,
+              }))}
+          />
+        ) : activePage === 'Cleaning Billing' ? (
+          <CleaningBillingView
+            getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
             propertyOptions={propertyRows
               .filter((row) => isManagedProperty(row) && row.active)
               .map((row) => ({

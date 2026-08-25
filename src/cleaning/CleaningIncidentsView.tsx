@@ -5,7 +5,13 @@ import { fetchJson } from '../operations/api'
 import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
 import { getPropertyLabel } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
-import type { CleanerRecord, CleaningIncidentRecord } from './types'
+import { PropertyGroupChips } from './PropertyGroupChips'
+import { propertyGroupOf } from './propertyGroups'
+import type {
+  CleanerRecord,
+  CleaningBillingPropertyGroup,
+  CleaningIncidentRecord,
+} from './types'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -108,6 +114,8 @@ export function CleaningIncidentsView({
   const [formDescription, setFormDescription] = useState('')
   const [filters, setFilters] = useState<Filters>(emptyFilters)
   const [filterDraft, setFilterDraft] = useState<Filters>(emptyFilters)
+  const [groupFilter, setGroupFilter] =
+    useState<CleaningBillingPropertyGroup | ''>('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -197,6 +205,12 @@ export function CleaningIncidentsView({
   const filteredIncidents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     return incidents.filter((incident) => {
+      if (groupFilter) {
+        const label = propertyById.get(incident.propertyId) || incident.property
+        if (propertyGroupOf(label, incident.propertyId) !== groupFilter) {
+          return false
+        }
+      }
       if (
         filters.propertyIds.length > 0 &&
         !filters.propertyIds.includes(incident.propertyId)
@@ -229,7 +243,7 @@ export function CleaningIncidentsView({
         .toLowerCase()
         .includes(query)
     })
-  }, [filters, incidents, searchQuery])
+  }, [filters, groupFilter, incidents, propertyById, searchQuery])
 
   const propertyFilterOptions = useMemo(() => {
     const ids = new Set(incidents.map((item) => item.propertyId).filter(Boolean))
@@ -251,7 +265,8 @@ export function CleaningIncidentsView({
     filters.propertyIds.length +
     filters.cleanerIds.length +
     (filters.dateFrom ? 1 : 0) +
-    (filters.dateTo ? 1 : 0)
+    (filters.dateTo ? 1 : 0) +
+    (groupFilter ? 1 : 0)
   const thisMonthCount = filteredIncidents.filter((item) =>
     item.date.startsWith(getTodayMadrid().slice(0, 7)),
   ).length
@@ -480,6 +495,7 @@ export function CleaningIncidentsView({
             <p className="card-subtitle">{t('cleaningIncidents.cardSubtitle')}</p>
           </div>
         </div>
+        <PropertyGroupChips value={groupFilter} onChange={setGroupFilter} />
         <div className="table-wrapper">
           <table className="data-table data-table-cleaning-incidents">
             <thead>
@@ -546,7 +562,7 @@ export function CleaningIncidentsView({
 
       {isFilterOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal">
+          <div className="modal modal-scrollable">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{t('common.filters')}</h3>
@@ -564,10 +580,11 @@ export function CleaningIncidentsView({
               </button>
             </div>
             <div className="modal-body">
+              <PropertyGroupChips value={groupFilter} onChange={setGroupFilter} />
               <div className="filter-grid">
                 <div className="filter-group">
                   <p className="filter-title">{t('cleaningIncidents.property')}</p>
-                  <div className="filter-options">
+                  <div className="filter-options filter-options-scroll">
                     {propertyFilterOptions.map((option) => (
                       <label className="filter-option" key={option.id}>
                         <input
@@ -584,7 +601,7 @@ export function CleaningIncidentsView({
                 </div>
                 <div className="filter-group">
                   <p className="filter-title">{t('cleaningIncidents.cleaner')}</p>
-                  <div className="filter-options">
+                  <div className="filter-options filter-options-scroll">
                     {cleaners.map((cleaner) => (
                       <label className="filter-option" key={cleaner.id}>
                         <input

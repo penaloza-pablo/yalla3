@@ -55,6 +55,8 @@ import { getPropertyCleaningDetails } from './functions/get-property-cleaning-de
 import { upsertPropertyCleaningDetails } from './functions/upsert-property-cleaning-details/resource';
 import { getCleaningIncidents } from './functions/get-cleaning-incidents/resource';
 import { upsertCleaningIncident } from './functions/upsert-cleaning-incident/resource';
+import { getCleaningBilling } from './functions/get-cleaning-billing/resource';
+import { upsertCleaningBilling } from './functions/upsert-cleaning-billing/resource';
 
 const backend = defineBackend({
   auth,
@@ -103,6 +105,8 @@ const backend = defineBackend({
   upsertPropertyCleaningDetails,
   getCleaningIncidents,
   upsertCleaningIncident,
+  getCleaningBilling,
+  upsertCleaningBilling,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -151,6 +155,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertPropertyCleaningDetails,
   backend.getCleaningIncidents,
   backend.upsertCleaningIncident,
+  backend.getCleaningBilling,
+  backend.upsertCleaningBilling,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -310,6 +316,7 @@ const activityLogWriters = [
   backend.upsertCleaningPlan,
   backend.upsertPropertyCleaningDetails,
   backend.upsertCleaningIncident,
+  backend.upsertCleaningBilling,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -355,6 +362,11 @@ const propertyCleaningDetailsTable = new Table(
   },
 );
 const cleaningIncidentsTable = new Table(dataStack, 'CleaningIncidentsTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const cleaningBillingTable = new Table(dataStack, 'CleaningBillingTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
   removalPolicy: RemovalPolicy.RETAIN,
@@ -416,6 +428,30 @@ backend.upsertCleaningIncident.addEnvironment(
 backend.upsertCleaningIncident.addEnvironment(
   'CLEANING_PLANS_TABLE',
   cleaningPlansTable.tableName,
+);
+backend.getCleaningBilling.addEnvironment(
+  'TABLE_NAME',
+  cleaningBillingTable.tableName,
+);
+backend.getCleaningBilling.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.getCleaningBilling.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.upsertCleaningBilling.addEnvironment(
+  'TABLE_NAME',
+  cleaningBillingTable.tableName,
+);
+backend.upsertCleaningBilling.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.upsertCleaningBilling.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
 );
 backend.upsertVisit.addEnvironment('CLEANERS_TABLE', cleanersTable.tableName);
 backend.upsertVisit.addEnvironment(
@@ -479,6 +515,23 @@ cleaningIncidentsTable.grantReadData(backend.upsertVisit.resources.lambda);
 cleaningIncidentsTable.grantReadData(
   backend.upsertCleaningPlan.resources.lambda,
 );
+cleaningBillingTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+cleaningBillingTable.grantReadWriteData(
+  backend.upsertCleaningBilling.resources.lambda,
+);
+cleaningBillingTable.grantReadWriteData(
+  backend.getCleaningBilling.resources.lambda,
+);
+visitsTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+visitsTable.grantReadData(backend.upsertCleaningBilling.resources.lambda);
+cleaningPlansTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+cleaningPlansTable.grantReadData(backend.upsertCleaningBilling.resources.lambda);
+propertyCleaningDetailsTable.grantReadData(
+  backend.getCleaningBilling.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.upsertCleaningBilling.resources.lambda,
+);
 const visitsIndexPolicy = new PolicyStatement({
   actions: ['dynamodb:Query', 'dynamodb:Scan'],
   resources: [`${visitsTable.tableArn}/index/*`],
@@ -490,6 +543,8 @@ backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
     resources: [`${visitsTable.tableArn}/index/*`],
   }),
 );
+backend.getCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 
 const syncTaskToGuesty = LambdaFunction.fromFunctionName(
   dataStack,
@@ -649,6 +704,14 @@ const upsertCleaningIncidentUrl =
   backend.upsertCleaningIncident.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getCleaningBillingUrl =
+  backend.getCleaningBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertCleaningBillingUrl =
+  backend.upsertCleaningBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -695,5 +758,7 @@ backend.addOutput({
     upsertPropertyCleaningDetailsUrl: upsertPropertyCleaningDetailsUrl.url,
     getCleaningIncidentsUrl: getCleaningIncidentsUrl.url,
     upsertCleaningIncidentUrl: upsertCleaningIncidentUrl.url,
+    getCleaningBillingUrl: getCleaningBillingUrl.url,
+    upsertCleaningBillingUrl: upsertCleaningBillingUrl.url,
   },
 });

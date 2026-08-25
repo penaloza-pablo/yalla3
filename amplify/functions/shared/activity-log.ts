@@ -19,6 +19,7 @@ export const LOG_FEATURES = {
   CLEANING_PLAN: 'Cleaning Plan',
   CLEANING_SETTINGS: 'Cleaning settings',
   CLEANING_INCIDENTS: 'Cleaning Incidents',
+  CLEANING_BILLING: 'Cleaning Billing',
 } as const;
 
 type HttpHeaders = Record<string, string | string[] | undefined>;

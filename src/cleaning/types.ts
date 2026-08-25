@@ -77,3 +77,39 @@ export type PropertyCleaningDetailsRecord = {
   createdAt?: string
   updatedAt?: string
 }
+
+export type CleaningBillingStatus = 'CURRENT' | 'PENDING_TO_CLOSE' | 'CLOSED'
+export type CleaningBillingWarning = 'open' | 'type' | 'price'
+export type CleaningBillingPropertyGroup = 'p2' | 'apartments' | 'other'
+
+export type CleaningBillingMonth = {
+  id: string
+  status: CleaningBillingStatus
+  lineCount: number
+  completedCount: number
+  warningCount: number
+  total: number
+  canClose: boolean
+  canReopen: boolean
+  canEdit: boolean
+  closedAt?: string
+}
+
+export type CleaningBillingLine = {
+  id: string
+  source: 'visit' | 'manual'
+  visitId: string
+  propertyId: string
+  property: string
+  date: string
+  status: string
+  cleaningTypeId: string
+  cleaningTypeName: string
+  price: number | null
+  isOther: boolean
+  isManual: boolean
+  warnings: CleaningBillingWarning[]
+  cleaningTypes: PropertyCleaningType[]
+}
+
+export const OTHER_CLEANING_TYPE_ID = '__other__'
