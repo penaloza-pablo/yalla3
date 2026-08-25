@@ -282,6 +282,14 @@ tasksTable.grantReadWriteData(backend.getVisits.resources.lambda);
 tasksTable.grantReadWriteData(backend.getTasks.resources.lambda);
 tasksTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
 tasksTable.grantReadWriteData(backend.upsertTask.resources.lambda);
+const tasksIndexPolicy = new PolicyStatement({
+  actions: ['dynamodb:Query', 'dynamodb:Scan'],
+  resources: [`${tasksTable.tableArn}/index/*`],
+});
+backend.getVisits.resources.lambda.addToRolePolicy(tasksIndexPolicy);
+backend.getTasks.resources.lambda.addToRolePolicy(tasksIndexPolicy);
+backend.upsertVisit.resources.lambda.addToRolePolicy(tasksIndexPolicy);
+backend.upsertTask.resources.lambda.addToRolePolicy(tasksIndexPolicy);
 teamsTable.grantReadData(backend.getTeams.resources.lambda);
 usersTable.grantReadData(backend.getUsers.resources.lambda);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);

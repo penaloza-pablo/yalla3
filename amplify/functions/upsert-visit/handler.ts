@@ -175,7 +175,16 @@ export const handler = async (event: {
     }
     const visitIdForTasks = payload.id?.trim();
     if (tasksTable && visitIdForTasks) {
-      const hasOpenTasks = await visitHasOpenTasks(tasksTable, visitIdForTasks);
+      let hasOpenTasks = false;
+      try {
+        hasOpenTasks = await visitHasOpenTasks(tasksTable, visitIdForTasks);
+      } catch (error) {
+        console.error('Failed to check visit tasks', error);
+        return buildHttpResponse(500, {
+          message: 'Failed to save visit.',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
       if (hasOpenTasks) {
         return buildHttpResponse(400, {
           message:
