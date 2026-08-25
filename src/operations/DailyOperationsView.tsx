@@ -24,6 +24,7 @@ import {
 } from './operationsViewHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
+import { requiresCompleteVisitWizard } from './visitTypeIds'
 import { VisitTemplatesPanel } from './VisitTemplatesPanel'
 import {
   mapVisitTemplate,
@@ -819,17 +820,22 @@ export function DailyOperationsView({
   }
 
   const openCompleteVisitModal = () => {
+    if (!selectedVisit) return
     if (visitHasOpenTasks) {
       setError(
         'Complete or dismiss all tasks before completing the visit.',
       )
       return
     }
+    if (!requiresCompleteVisitWizard(selectedVisit.visitTypeId)) {
+      void updateVisitStatus(selectedVisit, 'COMPLETED')
+      return
+    }
     setError(null)
     setCompleteVisitForm({
       hours: '1',
-      poolOfHours: selectedVisit?.appliesToHourBank ?? false,
-      specialHours: selectedVisit?.specialHours ?? false,
+      poolOfHours: selectedVisit.appliesToHourBank ?? false,
+      specialHours: selectedVisit.specialHours ?? false,
     })
     setIsCompleteVisitOpen(true)
   }

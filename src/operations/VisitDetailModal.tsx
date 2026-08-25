@@ -9,6 +9,7 @@ import {
   saveVisit,
 } from './api'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { requiresCompleteVisitWizard } from './visitTypeIds'
 import type {
   PropertyOption,
   TaskRecord,
@@ -455,14 +456,21 @@ export function VisitDetailModal({
   }
 
   const openComplete = () => {
+    if (!visit) {
+      return
+    }
     if (visitHasOpenTasks) {
       setError(t('operations.completeTasksFirst'))
       return
     }
+    if (!requiresCompleteVisitWizard(visit.visitTypeId)) {
+      void updateVisitStatus('COMPLETED', undefined, t('operations.visitCompleted'))
+      return
+    }
     setCompleteForm({
-      hours: visit?.actualDurationHours ? String(visit.actualDurationHours) : '1',
-      poolOfHours: visit?.appliesToHourBank ?? false,
-      specialHours: visit?.specialHours ?? false,
+      hours: visit.actualDurationHours ? String(visit.actualDurationHours) : '1',
+      poolOfHours: visit.appliesToHourBank ?? false,
+      specialHours: visit.specialHours ?? false,
     })
     setIsCompleteOpen(true)
   }

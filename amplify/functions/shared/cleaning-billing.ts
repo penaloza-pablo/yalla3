@@ -11,7 +11,7 @@ import {
 import { docClient, getTodayInMadrid, putItem } from './visit-task-utils';
 
 export const OTHER_CLEANING_TYPE_ID = '__other__';
-export const VISIBLE_PAST_MONTHS = 6;
+export const VISIBLE_PAST_MONTHS = 3;
 
 export type BillingMonthStatus = 'CURRENT' | 'PENDING_TO_CLOSE' | 'CLOSED';
 export type BillingWarning = 'open' | 'type' | 'price';

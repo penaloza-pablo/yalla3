@@ -376,7 +376,14 @@
     "Grow": "Grow",
     "Inventory": "Inventory",
     "Ops": "Ops",
+    "Cleaning": "Cleaning",
     "Tech": "Tech"
+  },
+  "navPages": {
+    "Cleaning Plan": "Plan",
+    "Cleaning Incidents": "Incidents",
+    "Cleaning Billing": "Billing",
+    "Cleaning settings": "Settings"
   },
   "status": {
     "Billed": "Billed",
@@ -598,7 +605,7 @@
   },
   "cleaningPlan": {
     "title": "Cleaning Plan",
-    "eyebrow": "Ops / Cleaning Plan",
+    "eyebrow": "Cleaning / Plan",
     "subtitle": "Assign cleaners, start times, and Quality Checks for the day's cleaning visits.",
     "day": "Day",
     "planStatus": "Plan status",
@@ -649,7 +656,7 @@
   },
   "cleaningSettings": {
     "title": "Cleaning settings",
-    "eyebrow": "Ops / Cleaning settings",
+    "eyebrow": "Cleaning / Settings",
     "subtitle": "Manage cleaners and cleaning types per property.",
     "cleanersCard": "Cleaners",
     "cleanersCardMeta": "People available in the plan",
@@ -709,7 +716,7 @@
     "trendRating": "Trend"
   },
   "cleaningIncidents": {
-    "eyebrow": "Ops / Cleaning Incidents",
+    "eyebrow": "Cleaning / Incidents",
     "subtitle": "Track failures and complaints from cleaning visits.",
     "search": "Search cleaning incidents",
     "add": "Add incident",
@@ -747,13 +754,13 @@
     "saveError": "Unable to save the incident."
   },
   "cleaningBilling": {
-    "eyebrow": "Ops / Cleaning Billing",
+    "eyebrow": "Cleaning / Billing",
     "subtitle": "Monthly costs of cleaning visits, with closeable reports after month end.",
     "monthSubtitle": "Complete missing types and prices before closing the month.",
     "cardTitle": "Cleaning Billing",
-    "cardSubtitle": "Last 6 months plus the current month.",
+    "cardSubtitle": "Last 3 months plus the current month.",
     "monthsCard": "Months",
-    "monthsCardMeta": "Current plus the previous six",
+    "monthsCardMeta": "Current plus the previous three",
     "pendingCard": "Pending to close",
     "pendingCardMeta": "Past months still open",
     "status": "Status",

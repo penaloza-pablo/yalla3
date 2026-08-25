@@ -279,11 +279,16 @@ const navigation = [
       'Properties',
       'Bookings',
       'Reviews',
+      'Daily Operations',
+    ],
+  },
+  {
+    section: 'Cleaning',
+    items: [
       'Cleaning Plan',
       'Cleaning Incidents',
       'Cleaning Billing',
       'Cleaning settings',
-      'Daily Operations',
     ],
   },
   {
@@ -1267,6 +1272,8 @@ const emptySubtractionFormState: SubtractionFormState = {
 function App() {
   const { t, i18n } = useTranslation()
   const pageLabel = (page: string) => translatePage(t, page)
+  const navItemLabel = (page: string) =>
+    t(`navPages.${page}`, { defaultValue: translatePage(t, page) })
   const sectionLabel = (section: string) => translateSection(t, section)
   const statusLabel = (status: string) => translateStatus(t, status)
   const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
@@ -4469,7 +4476,7 @@ function App() {
                       type="button"
                       onClick={() => navigateToPage(item)}
                     >
-                      <span>{pageLabel(item)}</span>
+                      <span>{navItemLabel(item)}</span>
                       {item === 'Alerts' && pendingAlertsCount > 0 ? (
                         <span className="nav-badge">{pendingAlertsCount}</span>
                       ) : null}
@@ -4493,7 +4500,7 @@ function App() {
                         aria-current={isActive ? 'page' : undefined}
                         type="button"
                         onClick={() => navigateToPage(item)}
-                        aria-label={pageLabel(item)}
+                        aria-label={navItemLabel(item)}
                       >
                         {item === 'Alerts' ? (
                           <>
@@ -4572,7 +4579,7 @@ function App() {
                           type="button"
                           onClick={() => navigateToPage(item)}
                         >
-                          {pageLabel(item)}
+                          {navItemLabel(item)}
                         </button>
                       </li>
                     )

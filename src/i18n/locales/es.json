@@ -376,7 +376,14 @@
     "Grow": "Grow",
     "Inventory": "Inventario",
     "Ops": "Ops",
+    "Cleaning": "Cleaning",
     "Tech": "Tech"
+  },
+  "navPages": {
+    "Cleaning Plan": "Plan",
+    "Cleaning Incidents": "Incidencias",
+    "Cleaning Billing": "Billing",
+    "Cleaning settings": "Ajustes"
   },
   "status": {
     "Billed": "Facturada",
@@ -598,7 +605,7 @@
   },
   "cleaningPlan": {
     "title": "Plan de limpieza",
-    "eyebrow": "Ops / Plan de limpieza",
+    "eyebrow": "Cleaning / Plan",
     "subtitle": "Asigna limpiadoras, hora de inicio y Quality Check a las visitas de limpieza del día.",
     "day": "Día",
     "planStatus": "Estado del plan",
@@ -649,7 +656,7 @@
   },
   "cleaningSettings": {
     "title": "Ajustes de limpieza",
-    "eyebrow": "Ops / Ajustes de limpieza",
+    "eyebrow": "Cleaning / Settings",
     "subtitle": "Gestiona las limpiadoras y los tipos de limpieza por propiedad.",
     "cleanersCard": "Cleaners",
     "cleanersCardMeta": "Personas disponibles en el plan",
@@ -709,7 +716,7 @@
     "trendRating": "Tendencia"
   },
   "cleaningIncidents": {
-    "eyebrow": "Ops / Cleaning Incidents",
+    "eyebrow": "Cleaning / Incidents",
     "subtitle": "Registra fallos y reclamos de las visitas de limpieza.",
     "search": "Buscar incidencias de limpieza",
     "add": "Añadir incidencia",
@@ -747,13 +754,13 @@
     "saveError": "No se pudo guardar la incidencia."
   },
   "cleaningBilling": {
-    "eyebrow": "Ops / Cleaning Billing",
+    "eyebrow": "Cleaning / Billing",
     "subtitle": "Costes mensuales de las visitas de limpieza, con cierre del reporte al terminar el mes.",
     "monthSubtitle": "Completa tipos y precios pendientes antes de cerrar el mes.",
     "cardTitle": "Cleaning Billing",
-    "cardSubtitle": "Los últimos 6 meses más el mes en curso.",
+    "cardSubtitle": "Los últimos 3 meses más el mes en curso.",
     "monthsCard": "Meses",
-    "monthsCardMeta": "Actual más los seis anteriores",
+    "monthsCardMeta": "Actual más los tres anteriores",
     "pendingCard": "Pending to close",
     "pendingCardMeta": "Meses pasados aún abiertos",
     "status": "Estado",
