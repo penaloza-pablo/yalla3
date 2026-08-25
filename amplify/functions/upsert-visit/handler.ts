@@ -5,6 +5,7 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import { recordCleaningCompletion } from '../shared/cleaner-stats';
+import { hasGuestyTaskId, invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -372,6 +373,20 @@ export const handler = async (event: {
         await recordCleaningCompletion(item);
       } catch (error) {
         console.error('Failed to record cleaning completion', error);
+      }
+    }
+
+    if (isUpdate && typeof item.id === 'string' && hasGuestyTaskId(item)) {
+      try {
+        const syncResult = await invokeGuestyTaskSync({
+          tableName: visitsTable,
+          id: item.id,
+        });
+        if (!syncResult.ok) {
+          console.error('Failed to sync visit to Guesty', syncResult.error);
+        }
+      } catch (error) {
+        console.error('Failed to sync visit to Guesty', error);
       }
     }
 

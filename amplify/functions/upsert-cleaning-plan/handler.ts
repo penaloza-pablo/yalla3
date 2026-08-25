@@ -1,4 +1,3 @@
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   LOG_FEATURES,
@@ -24,13 +23,12 @@ import {
   parseBody,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
+import { invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
   docClient,
   patchUserOriginatedRecord,
   putItem,
 } from '../shared/visit-task-utils';
-
-const lambdaClient = new LambdaClient({});
 
 type PlanItemInput = {
   visitId?: string;
@@ -71,37 +69,11 @@ const loadCleaner = async (tableName: string | undefined, cleanerId: string) => 
   return (result.Item as Record<string, unknown> | undefined) ?? undefined;
 };
 
-const invokeGuestyStartTimeSync = async (visitId: string) => {
-  const functionName = process.env.SYNC_TASK_TO_GUESTY_FUNCTION;
-  if (!functionName) {
-    return { ok: false, error: 'SYNC_TASK_TO_GUESTY_FUNCTION is not configured.' };
-  }
-
-  const response = await lambdaClient.send(
-    new InvokeCommand({
-      FunctionName: functionName,
-      InvocationType: 'RequestResponse',
-      Payload: Buffer.from(
-        JSON.stringify({
-          tableName: process.env.VISITS_TABLE || 'yalla-visits',
-          id: visitId,
-        }),
-      ),
-    }),
-  );
-
-  const payloadText = response.Payload
-    ? Buffer.from(response.Payload).toString('utf8')
-    : '';
-  if (response.FunctionError) {
-    return {
-      ok: false,
-      error: payloadText || response.FunctionError,
-    };
-  }
-
-  return { ok: true };
-};
+const invokeGuestyStartTimeSync = async (visitId: string) =>
+  invokeGuestyTaskSync({
+    tableName: process.env.VISITS_TABLE || 'yalla-visits',
+    id: visitId,
+  });
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };

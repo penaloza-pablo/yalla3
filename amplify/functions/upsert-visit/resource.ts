@@ -7,6 +7,7 @@ export const upsertVisit = defineFunction({
   environment: {
     TABLE_NAME: 'yalla-visits',
     TASKS_TABLE: 'yalla-tasks',
+    SYNC_TASK_TO_GUESTY_FUNCTION: 'yalla-syncTaskToGuesty',
   },
-  timeoutSeconds: 30,
+  timeoutSeconds: 60,
 });

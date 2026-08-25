@@ -20,6 +20,7 @@ import {
   TERMINAL_VISIT_STATUSES,
   withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
+import { hasGuestyTaskId, invokeGuestyTaskSync } from '../shared/guesty-sync';
 
 type TaskPayload = {
   id?: string;
@@ -334,6 +335,20 @@ export const handler = async (event: {
           : `updated task ${quoted(taskTitle)}`
         : `created task ${quoted(taskTitle)}`,
     });
+
+    if (isUpdate && typeof item.id === 'string' && hasGuestyTaskId(item)) {
+      try {
+        const syncResult = await invokeGuestyTaskSync({
+          tableName: tasksTable,
+          id: item.id,
+        });
+        if (!syncResult.ok) {
+          console.error('Failed to sync task to Guesty', syncResult.error);
+        }
+      } catch (error) {
+        console.error('Failed to sync task to Guesty', error);
+      }
+    }
 
     return buildHttpResponse(200, { item });
   } catch (error) {

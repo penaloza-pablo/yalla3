@@ -560,6 +560,8 @@ const syncTaskToGuesty = LambdaFunction.fromFunctionName(
   'yalla-syncTaskToGuesty',
 );
 syncTaskToGuesty.grantInvoke(backend.upsertCleaningPlan.resources.lambda);
+syncTaskToGuesty.grantInvoke(backend.upsertVisit.resources.lambda);
+syncTaskToGuesty.grantInvoke(backend.upsertTask.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
