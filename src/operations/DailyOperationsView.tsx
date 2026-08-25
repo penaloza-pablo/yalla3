@@ -24,7 +24,7 @@ import {
   getAgendaDateRange,
   isTerminalVisit,
 } from './operationsViewHelpers'
-import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { requiresCompleteVisitWizard } from './visitTypeIds'
 import { VisitTemplatesPanel } from './VisitTemplatesPanel'
@@ -335,6 +335,10 @@ export function DailyOperationsView({
   )
   const sortedPropertyOptions = useMemo(
     () => sortPropertyOptions(propertyOptions),
+    [propertyOptions],
+  )
+  const filterPropertyOptions = useMemo(
+    () => filterPropertySelectOptions(propertyOptions),
     [propertyOptions],
   )
 
@@ -1351,7 +1355,7 @@ export function DailyOperationsView({
                   onChange={(event) => setFilterPropertyId(event.target.value)}
                 >
                   <option value="">{t('operations.allProperties')}</option>
-                  {sortedPropertyOptions.map((property) => (
+                  {filterPropertyOptions.map((property) => (
                     <option key={property.id} value={property.id}>
                       {getPropertyLabel(property)}
                     </option>

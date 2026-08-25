@@ -18,3 +18,16 @@ export const sortPropertiesWithOtherLast = (properties: PropertyOption[]) => {
   const other = properties.filter((property) => isOtherProperty(property))
   return [...sortPropertyOptions(regular), ...other]
 }
+
+export const isMtlPropertyType = (type?: string) => {
+  const normalized = (type ?? '').trim().toUpperCase()
+  return normalized === 'MTL' || normalized.startsWith('MTL_')
+}
+
+export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
+  sortPropertyOptions(
+    properties.filter(
+      (property) =>
+        !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim(),
+    ),
+  )

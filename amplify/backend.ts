@@ -20,6 +20,7 @@ import { upsertAlert } from './functions/upsert-alert/resource';
 import { getInventoryRebuy } from './functions/get-inventory-rebuy/resource';
 import { exportInventory } from './functions/export-inventory/resource';
 import { exportSubtractions } from './functions/export-subtractions/resource';
+import { exportCleaningBilling } from './functions/export-cleaning-billing/resource';
 import { getPurchases } from './functions/get-purchases/resource';
 import { upsertPurchase } from './functions/upsert-purchase/resource';
 import { getSubtractions } from './functions/get-subtractions/resource';
@@ -107,6 +108,7 @@ const backend = defineBackend({
   upsertCleaningIncident,
   getCleaningBilling,
   upsertCleaningBilling,
+  exportCleaningBilling,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -157,6 +159,7 @@ const lambdaFunctionsWithHttp = [
   backend.upsertCleaningIncident,
   backend.getCleaningBilling,
   backend.upsertCleaningBilling,
+  backend.exportCleaningBilling,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -300,6 +303,7 @@ visitTemplatesTable.grantReadWriteData(
 );
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportSubtractions.resources.lambda);
+inventoryBucket.grantPut(backend.exportCleaningBilling.resources.lambda);
 inventoryBucket.grantPut(backend.completeSpotCheck.resources.lambda);
 inventoryTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
 
@@ -449,6 +453,10 @@ backend.getCleaningBilling.addEnvironment(
   'PROPERTY_CLEANING_DETAILS_TABLE',
   propertyCleaningDetailsTable.tableName,
 );
+backend.exportCleaningBilling.addEnvironment(
+  'TABLE_NAME',
+  cleaningBillingTable.tableName,
+);
 backend.upsertCleaningBilling.addEnvironment(
   'TABLE_NAME',
   cleaningBillingTable.tableName,
@@ -524,6 +532,9 @@ cleaningIncidentsTable.grantReadData(
   backend.upsertCleaningPlan.resources.lambda,
 );
 cleaningBillingTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+cleaningBillingTable.grantReadData(
+  backend.exportCleaningBilling.resources.lambda,
+);
 cleaningBillingTable.grantReadWriteData(
   backend.upsertCleaningBilling.resources.lambda,
 );
@@ -722,6 +733,10 @@ const upsertCleaningBillingUrl =
   backend.upsertCleaningBilling.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const exportCleaningBillingUrl =
+  backend.exportCleaningBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -770,5 +785,6 @@ backend.addOutput({
     upsertCleaningIncidentUrl: upsertCleaningIncidentUrl.url,
     getCleaningBillingUrl: getCleaningBillingUrl.url,
     upsertCleaningBillingUrl: upsertCleaningBillingUrl.url,
+    exportCleaningBillingUrl: exportCleaningBillingUrl.url,
   },
 });

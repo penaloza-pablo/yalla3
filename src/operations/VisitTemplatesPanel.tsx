@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getVisitTemplates, saveVisitTemplate } from './api'
-import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import {
   emptyTemplateForm,
@@ -43,6 +43,10 @@ export function VisitTemplatesPanel({
 
   const sortedPropertyOptions = useMemo(
     () => sortPropertyOptions(propertyOptions),
+    [propertyOptions],
+  )
+  const filterPropertyOptions = useMemo(
+    () => filterPropertySelectOptions(propertyOptions),
     [propertyOptions],
   )
 
@@ -307,7 +311,7 @@ export function VisitTemplatesPanel({
               onChange={(event) => setFilterPropertyId(event.target.value)}
             >
               <option value="">All properties</option>
-              {sortedPropertyOptions.map((property) => (
+              {filterPropertyOptions.map((property) => (
                 <option key={property.id} value={property.id}>
                   {getPropertyLabel(property)}
                 </option>

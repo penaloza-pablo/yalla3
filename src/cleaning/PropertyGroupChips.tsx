@@ -5,14 +5,19 @@ import type { CleaningBillingPropertyGroup } from './types'
 type Props = {
   value: CleaningBillingPropertyGroup | ''
   onChange: (value: CleaningBillingPropertyGroup | '') => void
+  groups?: CleaningBillingPropertyGroup[]
 }
 
-export function PropertyGroupChips({ value, onChange }: Props) {
+export function PropertyGroupChips({
+  value,
+  onChange,
+  groups = PROPERTY_GROUP_CHIPS,
+}: Props) {
   const { t } = useTranslation()
 
   return (
     <div className="property-group-chips">
-      {PROPERTY_GROUP_CHIPS.map((group) => {
+      {groups.map((group) => {
         const isActive = value === group
         return (
           <button

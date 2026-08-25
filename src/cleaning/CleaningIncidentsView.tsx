@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
-import { getPropertyLabel } from '../operations/propertyHelpers'
+import { filterPropertySelectOptions, getPropertyLabel } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import { PropertyGroupChips } from './PropertyGroupChips'
 import { propertyGroupOf } from './propertyGroups'
@@ -245,21 +245,14 @@ export function CleaningIncidentsView({
     })
   }, [filters, groupFilter, incidents, propertyById, searchQuery])
 
-  const propertyFilterOptions = useMemo(() => {
-    const ids = new Set(incidents.map((item) => item.propertyId).filter(Boolean))
-    propertyOptions.forEach((property) => ids.add(property.id))
-    return [...ids]
-      .map((id) => ({
-        id,
-        label:
-          propertyById.get(id) ||
-          incidents.find((item) => item.propertyId === id)?.property ||
-          id,
-      }))
-      .sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
-      )
-  }, [incidents, propertyById, propertyOptions])
+  const propertyFilterOptions = useMemo(
+    () =>
+      filterPropertySelectOptions(propertyOptions).map((property) => ({
+        id: property.id,
+        label: getPropertyLabel(property),
+      })),
+    [propertyOptions],
+  )
 
   const activeFilterCount =
     filters.propertyIds.length +

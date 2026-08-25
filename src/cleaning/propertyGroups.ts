@@ -6,6 +6,11 @@ export const PROPERTY_GROUP_CHIPS: CleaningBillingPropertyGroup[] = [
   'other',
 ]
 
+export const BILLING_PROPERTY_GROUP_CHIPS: CleaningBillingPropertyGroup[] = [
+  'p2',
+  'apartments',
+]
+
 const P2_KEYS = new Set([
   'p2',
   '201',
@@ -40,4 +45,12 @@ export const propertyGroupOf = (
     return 'p2'
   }
   return 'apartments'
+}
+
+export const billingPropertyGroupOf = (
+  label: string,
+  propertyId = '',
+): 'p2' | 'apartments' => {
+  const group = propertyGroupOf(label, propertyId)
+  return group === 'p2' ? 'p2' : 'apartments'
 }

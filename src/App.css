@@ -1315,6 +1315,22 @@ th {
   gap: 12px;
 }
 
+.export-scope-modal {
+  width: min(420px, 100%);
+}
+
+.export-scope-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-scope-actions .btn-primary,
+.export-scope-actions .btn-secondary {
+  width: 100%;
+  justify-content: center;
+}
+
 .properties-note {
   background: #eff8ff;
   color: #175cd3;

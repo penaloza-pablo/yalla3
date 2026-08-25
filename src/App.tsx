@@ -36,6 +36,8 @@ import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { MobileBodyPortal } from './MobileBodyPortal'
+import { ExportScopeModal } from './ExportScopeModal'
+import { downloadFromResponse } from './lib/download'
 import './App.css'
 
 type ConsumptionRule = {
@@ -264,7 +266,7 @@ type ExternalPropertiesPayload = {
 
 type PropertyDiff = {
   id: string
-  action: 'add' | 'remove'
+  action: 'add' | 'remove' | 'update'
   row: PropertyRow
 }
 
@@ -581,16 +583,51 @@ const getBooleanValue = (value: unknown) => {
   if (typeof value === 'boolean') {
     return value
   }
+  if (typeof value === 'number') {
+    return value !== 0
+  }
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase()
-    if (normalized === 'true') {
+    if (normalized === 'true' || normalized === '1') {
       return true
     }
-    if (normalized === 'false') {
+    if (normalized === 'false' || normalized === '0') {
       return false
     }
   }
   return false
+}
+
+const hasExplicitBoolean = (value: unknown) => {
+  if (typeof value === 'boolean' || typeof value === 'number') {
+    return true
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return (
+      normalized === 'true' ||
+      normalized === 'false' ||
+      normalized === '1' ||
+      normalized === '0'
+    )
+  }
+  return false
+}
+
+const resolvePropertyActive = (item: Record<string, unknown>) => {
+  const listedValue = getItemValue(item, ['listed', 'isListed', 'Listed'])
+  const activeValue = getItemValue(item, propertyFieldMap.active)
+  const flags: boolean[] = []
+  if (hasExplicitBoolean(listedValue)) {
+    flags.push(getBooleanValue(listedValue))
+  }
+  if (hasExplicitBoolean(activeValue)) {
+    flags.push(getBooleanValue(activeValue))
+  }
+  if (flags.length === 0) {
+    return true
+  }
+  return flags.every(Boolean)
 }
 
 const formatDateForStorage = (value: string) => {
@@ -988,7 +1025,7 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
     title: getStringValue(getItemValue(item, propertyFieldMap.title)) || '—',
     nickname:
       getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
-    active: getBooleanValue(getItemValue(item, propertyFieldMap.active)),
+    active: resolvePropertyActive(item),
     type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
     roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
     accommodates: getNumberValue(
@@ -1282,6 +1319,7 @@ function App() {
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isInventoryExportOpen, setIsInventoryExportOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [alertRows, setAlertRows] = useState<AlertRow[]>([])
   const [isAlertsLoading, setIsAlertsLoading] = useState(false)
@@ -1317,6 +1355,7 @@ function App() {
   const [subtractionRows, setSubtractionRows] = useState<SubtractionRow[]>([])
   const [isSubtractionsLoading, setIsSubtractionsLoading] = useState(false)
   const [isSubtractionsExporting, setIsSubtractionsExporting] = useState(false)
+  const [isSubtractionsExportOpen, setIsSubtractionsExportOpen] = useState(false)
   const [subtractionsError, setSubtractionsError] = useState<string | null>(null)
   const [isSubtractionsFilterOpen, setIsSubtractionsFilterOpen] = useState(false)
   const [subtractionsFilters, setSubtractionsFilters] = useState<{
@@ -1951,6 +1990,20 @@ function App() {
       .slice()
       .sort((a, b) => a.nickname.localeCompare(b.nickname))
   }, [propertyRows])
+
+  const activeManagedPropertyOptions = useMemo(
+    () =>
+      propertyRows
+        .filter((row) => isManagedProperty(row) && row.active)
+        .map((row) => ({
+          id: row.id,
+          nickname: row.nickname,
+          title: row.title,
+          listingNickname: row.nickname,
+          type: row.type && row.type !== '—' ? row.type : undefined,
+        })),
+    [propertyRows],
+  )
 
   const subtractionsFilteredRows = useMemo(() => {
     const fromDate = subtractionsFilters.dateFrom
@@ -2675,11 +2728,23 @@ function App() {
       })
 
       propertyRows.filter(isManagedProperty).forEach((row) => {
-        if (!externalById.has(row.id)) {
+        const external = externalById.get(row.id)
+        if (!external) {
           nextDiffs.push({
             id: `remove:${row.id}`,
             action: 'remove',
             row,
+          })
+          return
+        }
+        if (row.active && !external.active) {
+          nextDiffs.push({
+            id: `update:${row.id}`,
+            action: 'update',
+            row: {
+              ...row,
+              active: false,
+            },
           })
         }
       })
@@ -2736,7 +2801,7 @@ function App() {
 
     try {
       for (const diff of selectedDiffs) {
-        if (diff.action === 'add') {
+        if (diff.action === 'add' || diff.action === 'update') {
           const payload = {
             id: diff.row.id,
             title: diff.row.title,
@@ -2758,7 +2823,7 @@ function App() {
           if (!response.ok) {
             const errorText = await response.text()
             throw new Error(
-              `Failed to add property ${diff.row.id} (${response.status}). ${errorText}`.trim(),
+              `Failed to ${diff.action === 'update' ? 'update' : 'add'} property ${diff.row.id} (${response.status}). ${errorText}`.trim(),
             )
           }
           continue
@@ -2795,7 +2860,7 @@ function App() {
     }
   }
 
-  const exportInventory = useCallback(async () => {
+  const exportInventory = useCallback(async (ids?: string[]) => {
     const endpoint = getEndpoint(
       'exportInventoryUrl',
       import.meta.env.VITE_EXPORT_INVENTORY_URL,
@@ -2804,14 +2869,23 @@ function App() {
       setError(
         'Missing export endpoint. Set VITE_EXPORT_INVENTORY_URL in the environment.',
       )
-      return
+      return false
     }
 
     setIsExporting(true)
     setError(null)
 
     try {
-      const response = await authFetch(endpoint)
+      const response = await authFetch(
+        endpoint,
+        ids
+          ? {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            }
+          : undefined,
+      )
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2819,50 +2893,51 @@ function App() {
         )
       }
 
-      const contentDisposition = response.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="([^"]+)"/)
       const fallbackStamp = new Date()
         .toISOString()
         .replace(/[-:]/g, '')
         .replace(/\.\d{3}Z$/, '')
-      const fileName =
-        match?.[1] ?? `inventory-export-${fallbackStamp}.xlsx`
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      await downloadFromResponse(
+        response,
+        `inventory-export-${fallbackStamp}.xlsx`,
+      )
+      return true
     } catch (requestError) {
       const message =
         requestError instanceof Error
           ? requestError.message
           : 'Unable to export inventory. Please try again.'
       setError(message)
+      return false
     } finally {
       setIsExporting(false)
     }
   }, [])
 
-  const exportSubtractions = useCallback(async () => {
+  const exportSubtractions = useCallback(async (ids?: string[]) => {
     const endpoint = getEndpoint(
       'exportSubtractionsUrl',
       import.meta.env.VITE_EXPORT_SUBTRACTIONS_URL,
     )
     if (!endpoint) {
       setSubtractionsError(t('subtractions.missingExport'))
-      return
+      return false
     }
 
     setIsSubtractionsExporting(true)
     setSubtractionsError(null)
 
     try {
-      const response = await authFetch(endpoint)
+      const response = await authFetch(
+        endpoint,
+        ids
+          ? {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            }
+          : undefined,
+      )
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(
@@ -2870,30 +2945,22 @@ function App() {
         )
       }
 
-      const contentDisposition = response.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="([^"]+)"/)
       const fallbackStamp = new Date()
         .toISOString()
         .replace(/[-:]/g, '')
         .replace(/\.\d{3}Z$/, '')
-      const fileName =
-        match?.[1] ?? `subtractions-export-${fallbackStamp}.xlsx`
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      await downloadFromResponse(
+        response,
+        `subtractions-export-${fallbackStamp}.xlsx`,
+      )
+      return true
     } catch (requestError) {
       const message =
         requestError instanceof Error
           ? requestError.message
           : t('subtractions.exportError')
       setSubtractionsError(message)
+      return false
     } finally {
       setIsSubtractionsExporting(false)
     }
@@ -4716,7 +4783,7 @@ function App() {
                 <button
                   className="btn-ghost"
                   type="button"
-                  onClick={exportInventory}
+                  onClick={() => setIsInventoryExportOpen(true)}
                   disabled={isExporting}
                   aria-label={t('common.export')}
                 >
@@ -4970,6 +5037,25 @@ function App() {
                   </div>
                 </div>
               ) : null}
+
+              <ExportScopeModal
+                isOpen={isInventoryExportOpen}
+                isExporting={isExporting}
+                onClose={() => setIsInventoryExportOpen(false)}
+                onSelect={(scope) => {
+                  const ids =
+                    scope === 'filtered'
+                      ? filteredRows
+                          .map((row) => row.id)
+                          .filter((id) => id && id !== '—')
+                      : undefined
+                  void exportInventory(ids).then((ok) => {
+                    if (ok) {
+                      setIsInventoryExportOpen(false)
+                    }
+                  })
+                }}
+              />
 
               <div className="table-wrapper" aria-busy={isLoading}>
                 <table className="data-table data-table-inventory">
@@ -5858,7 +5944,7 @@ function App() {
                 <button
                   className="btn-ghost"
                   type="button"
-                  onClick={() => void exportSubtractions()}
+                  onClick={() => setIsSubtractionsExportOpen(true)}
                   disabled={isSubtractionsExporting}
                   aria-label={t('common.export')}
                 >
@@ -6106,6 +6192,25 @@ function App() {
                   </div>
                 </div>
               ) : null}
+
+              <ExportScopeModal
+                isOpen={isSubtractionsExportOpen}
+                isExporting={isSubtractionsExporting}
+                onClose={() => setIsSubtractionsExportOpen(false)}
+                onSelect={(scope) => {
+                  const ids =
+                    scope === 'filtered'
+                      ? subtractionsFilteredRows
+                          .map((row) => row.id)
+                          .filter((id) => id && id !== '—')
+                      : undefined
+                  void exportSubtractions(ids).then((ok) => {
+                    if (ok) {
+                      setIsSubtractionsExportOpen(false)
+                    }
+                  })
+                }}
+              />
 
               <div className="table-wrapper" aria-busy={isSubtractionsLoading}>
                 <table className="data-table data-table-subtractions">
@@ -8006,14 +8111,7 @@ function App() {
           <DailyOperationsView
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
-            propertyOptions={propertyRows
-              .filter((row) => isManagedProperty(row) && row.active)
-              .map((row) => ({
-                id: row.id,
-                nickname: row.nickname,
-                title: row.title,
-                listingNickname: row.nickname,
-              }))}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Cleaning Plan' ? (
           <CleaningPlanView
@@ -8022,14 +8120,7 @@ function App() {
             onToggleSummaryInfo={() =>
               setIsSummaryInfoOpen((current) => !current)
             }
-            propertyOptions={propertyRows
-              .filter((row) => isManagedProperty(row) && row.active)
-              .map((row) => ({
-                id: row.id,
-                nickname: row.nickname,
-                title: row.title,
-                listingNickname: row.nickname,
-              }))}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Cleaning Incidents' ? (
           <CleaningIncidentsView
@@ -8040,14 +8131,7 @@ function App() {
             }
             searchQuery={tableSearchQuery}
             onSearchQueryChange={setTableSearchQuery}
-            propertyOptions={propertyRows
-              .filter((row) => isManagedProperty(row) && row.active)
-              .map((row) => ({
-                id: row.id,
-                nickname: row.nickname,
-                title: row.title,
-                listingNickname: row.nickname,
-              }))}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Cleaning Billing' ? (
           <CleaningBillingView
@@ -8056,26 +8140,12 @@ function App() {
             onToggleSummaryInfo={() =>
               setIsSummaryInfoOpen((current) => !current)
             }
-            propertyOptions={propertyRows
-              .filter((row) => isManagedProperty(row) && row.active)
-              .map((row) => ({
-                id: row.id,
-                nickname: row.nickname,
-                title: row.title,
-                listingNickname: row.nickname,
-              }))}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Cleaning settings' ? (
           <CleaningSettingsView
             getEndpoint={getEndpoint}
-            propertyOptions={propertyRows
-              .filter((row) => isManagedProperty(row) && row.active)
-              .map((row) => ({
-                id: row.id,
-                nickname: row.nickname,
-                title: row.title,
-                listingNickname: row.nickname,
-              }))}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Logs' ? (
           <LogsPanel
@@ -8144,7 +8214,11 @@ function App() {
                         />
                         <div className="properties-diff-content">
                           <p className="properties-diff-title">
-                            {diff.action === 'add' ? 'Add' : 'Remove'}{' '}
+                            {diff.action === 'add'
+                              ? t('properties.diffAdd')
+                              : diff.action === 'update'
+                                ? t('properties.diffDeactivate')
+                                : t('properties.diffRemove')}{' '}
                             {diff.row.nickname} ({diff.row.id})
                           </p>
                           <p className="properties-diff-meta">

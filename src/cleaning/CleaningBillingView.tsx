@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
+import { ExportScopeModal } from '../ExportScopeModal'
+import { downloadFromResponse } from '../lib/download'
+import { authFetch } from '../lib/auth-fetch'
 import { fetchJson } from '../operations/api'
 import { formatDateOnlyLabel } from '../operations/dateHelpers'
-import { getPropertyLabel } from '../operations/propertyHelpers'
+import {
+  filterPropertySelectOptions,
+  getPropertyLabel,
+  sortPropertyOptions,
+} from '../operations/propertyHelpers'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
 import type { PropertyOption } from '../operations/types'
 import { PropertyGroupChips } from './PropertyGroupChips'
-import { propertyGroupOf } from './propertyGroups'
+import { BILLING_PROPERTY_GROUP_CHIPS, billingPropertyGroupOf } from './propertyGroups'
 import {
   OTHER_CLEANING_TYPE_ID,
   type CleaningBillingLine,
@@ -114,6 +121,10 @@ export function CleaningBillingView({
         'getPropertyCleaningDetailsUrl',
         import.meta.env.VITE_GET_PROPERTY_CLEANING_DETAILS_URL,
       ),
+      exportBilling: getEndpoint(
+        'exportCleaningBillingUrl',
+        import.meta.env.VITE_EXPORT_CLEANING_BILLING_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -127,6 +138,8 @@ export function CleaningBillingView({
   const [isSaving, setIsSaving] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
   const [groupFilter, setGroupFilter] =
@@ -150,6 +163,14 @@ export function CleaningBillingView({
       new Map(
         propertyOptions.map((property) => [property.id, getPropertyLabel(property)]),
       ),
+    [propertyOptions],
+  )
+  const filterPropertyOptions = useMemo(
+    () => filterPropertySelectOptions(propertyOptions),
+    [propertyOptions],
+  )
+  const formPropertyOptions = useMemo(
+    () => sortPropertyOptions(propertyOptions),
     [propertyOptions],
   )
   const detailsByPropertyId = useMemo(
@@ -269,7 +290,7 @@ export function CleaningBillingView({
   const filteredLines = useMemo(() => {
     return lines.filter((line) => {
       const label = propertyById.get(line.propertyId) || line.property
-      const group = propertyGroupOf(label, line.propertyId)
+      const group = billingPropertyGroupOf(label, line.propertyId)
       if (groupFilter && group !== groupFilter) {
         return false
       }
@@ -294,6 +315,79 @@ export function CleaningBillingView({
       i18n.language.startsWith('es') ? 'es-ES' : 'en-GB',
       { month: 'long', year: 'numeric', timeZone: 'UTC' },
     ).format(new Date(Date.UTC(year, month - 1, 1)))
+  }
+
+  const exportClosedMonth = async (scope: 'filtered' | 'all') => {
+    if (!selectedMonthId || month?.status !== 'CLOSED') {
+      return false
+    }
+    if (!endpoints.exportBilling) {
+      setError(t('cleaningBilling.missingExport'))
+      return false
+    }
+    setIsExporting(true)
+    setError('')
+    try {
+      const sourceLines = scope === 'filtered' ? filteredLines : lines
+      const headers = [
+        t('cleaningBilling.property'),
+        t('cleaningBilling.date'),
+        t('cleaningBilling.visitStatus'),
+        t('cleaningBilling.cleaningType'),
+        t('cleaningBilling.price'),
+        t('cleaningBilling.source'),
+      ]
+      const rows = sourceLines.map((line) => ({
+        [t('cleaningBilling.property')]:
+          propertyById.get(line.propertyId) || line.property,
+        [t('cleaningBilling.date')]: line.date,
+        [t('cleaningBilling.visitStatus')]: line.isManual
+          ? t('cleaningBilling.manualStatus')
+          : line.status,
+        [t('cleaningBilling.cleaningType')]: line.cleaningTypeName || '',
+        [t('cleaningBilling.price')]: line.price ?? '',
+        [t('cleaningBilling.source')]: line.isManual
+          ? t('cleaningBilling.sourceManual')
+          : t('cleaningBilling.sourceVisit'),
+      }))
+      const response = await authFetch(endpoints.exportBilling, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          month: selectedMonthId,
+          filtered: scope === 'filtered',
+          headers,
+          rows,
+        }),
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        let message = errorText || t('cleaningBilling.exportError')
+        try {
+          const parsed = JSON.parse(errorText) as { message?: string }
+          if (parsed.message) {
+            message = parsed.message
+          }
+        } catch {
+          // Keep the raw response text when it is not JSON.
+        }
+        throw new Error(message)
+      }
+      await downloadFromResponse(
+        response,
+        `cleaning-billing-${selectedMonthId}.xlsx`,
+      )
+      return true
+    } catch (exportError) {
+      setError(
+        exportError instanceof Error
+          ? exportError.message
+          : t('cleaningBilling.exportError'),
+      )
+      return false
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const openCreate = () => {
@@ -438,6 +532,30 @@ export function CleaningBillingView({
                       </span>
                     ) : null}
                   </button>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={() => setIsExportOpen(true)}
+                    disabled={month?.status !== 'CLOSED' || isExporting}
+                    aria-label={t('common.export')}
+                    title={
+                      month?.status === 'CLOSED'
+                        ? t('common.export')
+                        : t('cleaningBilling.exportClosedOnly')
+                    }
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
                   {month?.canEdit ? (
                     <button
                       className="btn-ghost"
@@ -546,7 +664,11 @@ export function CleaningBillingView({
               ) : null}
             </div>
           </div>
-          <PropertyGroupChips value={groupFilter} onChange={setGroupFilter} />
+          <PropertyGroupChips
+            value={groupFilter === 'other' ? 'apartments' : groupFilter}
+            onChange={setGroupFilter}
+            groups={BILLING_PROPERTY_GROUP_CHIPS}
+          />
           <div className="table-wrapper">
             <table className="data-table data-table-cleaning-billing">
               <thead>
@@ -706,6 +828,19 @@ export function CleaningBillingView({
         </section>
       )}
 
+      <ExportScopeModal
+        isOpen={isExportOpen}
+        isExporting={isExporting}
+        onClose={() => setIsExportOpen(false)}
+        onSelect={(scope) => {
+          void exportClosedMonth(scope).then((ok) => {
+            if (ok) {
+              setIsExportOpen(false)
+            }
+          })
+        }}
+      />
+
       {isFilterOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal modal-scrollable">
@@ -724,11 +859,10 @@ export function CleaningBillingView({
               </button>
             </div>
             <div className="modal-body">
-              <PropertyGroupChips value={groupFilter} onChange={setGroupFilter} />
               <div className="filter-group">
                 <p className="filter-title">{t('cleaningBilling.property')}</p>
                 <div className="filter-options filter-options-scroll">
-                  {propertyOptions.map((property) => (
+                  {filterPropertyOptions.map((property) => (
                     <label className="filter-option" key={property.id}>
                       <input
                         type="checkbox"
@@ -829,7 +963,7 @@ export function CleaningBillingView({
                         }
                       >
                         <option value="">{t('cleaningBilling.selectProperty')}</option>
-                        {propertyOptions.map((property) => (
+                        {formPropertyOptions.map((property) => (
                           <option key={property.id} value={property.id}>
                             {getPropertyLabel(property)}
                           </option>

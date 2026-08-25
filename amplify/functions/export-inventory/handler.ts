@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
+import { parseRequestedIds } from '../shared/export-ids';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import * as XLSX from 'xlsx';
@@ -10,7 +11,7 @@ const s3Client = new S3Client({});
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type,authorization',
-  'Access-Control-Allow-Methods': 'GET,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Expose-Headers': 'content-disposition',
 };
 
@@ -68,6 +69,8 @@ const buildXlsxBuffer = (items: Record<string, unknown>[]) => {
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
+  body?: string;
+  isBase64Encoded?: boolean;
 }) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return {
@@ -94,6 +97,7 @@ export const handler = async (event: {
   }
 
   try {
+    const requestedIds = parseRequestedIds(event);
     const items: Record<string, unknown>[] = [];
     let lastEvaluatedKey: Record<string, unknown> | undefined;
 
@@ -110,10 +114,19 @@ export const handler = async (event: {
         | undefined;
     } while (lastEvaluatedKey);
 
+    const idSet = requestedIds === null ? null : new Set(requestedIds);
+    const exportedItems =
+      idSet === null
+        ? items
+        : items.filter((item) => idSet.has(String(item.id ?? '')));
+
     const timestamp = formatDateStamp(new Date());
-    const fileName = `inventory-export-${timestamp}.xlsx`;
+    const fileName =
+      requestedIds === null
+        ? `inventory-export-${timestamp}.xlsx`
+        : `inventory-export-filtered-${timestamp}.xlsx`;
     const key = `${prefix}${fileName}`;
-    const body = buildXlsxBuffer(items);
+    const body = buildXlsxBuffer(exportedItems);
 
     await s3Client.send(
       new PutObjectCommand({
