@@ -535,14 +535,17 @@ export function CleaningBillingView({
                   <button
                     className="btn-ghost"
                     type="button"
-                    onClick={() => setIsExportOpen(true)}
-                    disabled={month?.status !== 'CLOSED' || isExporting}
+                    onClick={() => {
+                      if (month?.status !== 'CLOSED') {
+                        setMessage('')
+                        setError(t('cleaningBilling.exportClosedOnly'))
+                        return
+                      }
+                      setError('')
+                      setIsExportOpen(true)
+                    }}
+                    disabled={isExporting}
                     aria-label={t('common.export')}
-                    title={
-                      month?.status === 'CLOSED'
-                        ? t('common.export')
-                        : t('cleaningBilling.exportClosedOnly')
-                    }
                   >
                     <svg
                       aria-hidden="true"

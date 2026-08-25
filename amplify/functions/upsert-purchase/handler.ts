@@ -31,6 +31,17 @@ type PurchasePayload = {
   deliveryDate?: string;
   purchaseDate?: string;
   status?: string;
+  direct?: boolean;
+  Direct?: boolean;
+  propertyId?: string;
+  cost?: number;
+  Cost?: number;
+  billable?: boolean;
+  Billable?: boolean;
+  markup?: boolean;
+  markupApplied?: boolean;
+  note?: string;
+  Note?: string;
   ['Item id']?: string;
   ['Item ID']?: string;
   ['Item name']?: string;
@@ -41,6 +52,9 @@ type PurchasePayload = {
   ['Delivery date']?: string;
   ['Purchase date']?: string;
   Status?: string;
+  ['Property id']?: string;
+  ['Property ID']?: string;
+  ['Markup applied']?: boolean;
 };
 
 const parseBody = (body?: string) => {
@@ -121,6 +135,15 @@ const parseDateOnly = (value?: string) => {
 };
 
 const INVENTORY_WAITING_DELIVERY = 'Waiting Delivery';
+const PURCHASE_CONFIRMED = 'Confirmed';
+const PURCHASE_WAITING_INVOICE = 'Waiting invoice';
+
+const normalizePurchaseStatus = (value?: string) => value?.trim() ?? '';
+
+const isReceivedPurchaseStatus = (value?: string) => {
+  const status = normalizePurchaseStatus(value);
+  return status === PURCHASE_CONFIRMED || status === PURCHASE_WAITING_INVOICE;
+};
 
 const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   if (quantity <= rebuyQty) {
@@ -143,14 +166,18 @@ const hasOpenPurchasesForItem = async (params: {
     const result = await client.send(
       new ScanCommand({
         TableName: params.purchasesTable,
-        FilterExpression: '#itemId = :itemId AND #status <> :confirmed',
+        FilterExpression:
+          '#itemId = :itemId AND #status <> :confirmed AND #status <> :waitingInvoice AND (attribute_not_exists(#direct) OR #direct = :notDirect)',
         ExpressionAttributeNames: {
           '#itemId': 'Item id',
           '#status': 'Status',
+          '#direct': 'Direct',
         },
         ExpressionAttributeValues: {
           ':itemId': params.itemId,
-          ':confirmed': 'Confirmed',
+          ':confirmed': PURCHASE_CONFIRMED,
+          ':waitingInvoice': PURCHASE_WAITING_INVOICE,
+          ':notDirect': false,
         },
         ProjectionExpression: 'id',
         ExclusiveStartKey: lastEvaluatedKey,
@@ -198,9 +225,61 @@ const markInventoryWaitingDelivery = async (params: {
   );
 };
 
+const parseDirect = (payload: PurchasePayload, existing?: Record<string, unknown>) => {
+  if (typeof payload.Direct === 'boolean') {
+    return payload.Direct;
+  }
+  if (typeof payload.direct === 'boolean') {
+    return payload.direct;
+  }
+  return existing?.Direct === true;
+};
+
+const parseBillable = (payload: PurchasePayload) => {
+  if (typeof payload.billable === 'boolean') {
+    return payload.billable;
+  }
+  if (typeof payload.Billable === 'boolean') {
+    return payload.Billable;
+  }
+  return true;
+};
+
+const parseMarkupApplied = (payload: PurchasePayload) => {
+  if (typeof payload.markupApplied === 'boolean') {
+    return payload.markupApplied;
+  }
+  if (typeof payload.markup === 'boolean') {
+    return payload.markup;
+  }
+  if (typeof payload['Markup applied'] === 'boolean') {
+    return payload['Markup applied'];
+  }
+  return false;
+};
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+const computeDirectPurchasePricing = (
+  costInclIva: number,
+  markupApplied: boolean,
+) => {
+  const safeCost = Number.isFinite(costInclIva) ? Math.max(0, costInclIva) : 0;
+  const markup = markupApplied ? roundMoney(safeCost * 0.12) : 0;
+  const ivaMarkup = roundMoney(markup * 0.21);
+  const totalPrice = roundMoney(safeCost + markup + ivaMarkup);
+  const priceExclIva = roundMoney(totalPrice / 1.21);
+  const iva = roundMoney(priceExclIva * 0.21);
+  return { markup, ivaMarkup, priceExclIva, iva, totalPrice };
+};
+
 const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string) => {
-  if (currentStatus?.trim().toLowerCase() === 'confirmed') {
-    return 'Confirmed';
+  const status = normalizePurchaseStatus(currentStatus);
+  if (status.toLowerCase() === PURCHASE_CONFIRMED.toLowerCase()) {
+    return PURCHASE_CONFIRMED;
+  }
+  if (status.toLowerCase() === PURCHASE_WAITING_INVOICE.toLowerCase()) {
+    return PURCHASE_WAITING_INVOICE;
   }
   const deliveryDate = parseDateOnly(deliveryDateValue);
   if (!deliveryDate) {
@@ -342,6 +421,22 @@ export const handler = async (event: {
     throw new Error(message);
   }
 
+  const id = payload.id?.trim() || (await getNextPurchaseId(tableName));
+  let existingItem: Record<string, unknown> | undefined;
+  let previousStatus = '';
+  if (payload.id?.trim()) {
+    const existingPurchase = await client.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { id },
+      }),
+    );
+    existingItem = existingPurchase.Item as Record<string, unknown> | undefined;
+    previousStatus =
+      typeof existingItem?.Status === 'string' ? existingItem.Status : '';
+  }
+
+  const isDirect = parseDirect(payload, existingItem);
   const itemId = payload.itemId ?? payload['Item id'] ?? payload['Item ID'];
   const itemName = payload.itemName ?? payload['Item name'];
   const location = payload.location ?? payload.Location;
@@ -351,92 +446,92 @@ export const handler = async (event: {
   const deliveryDate = payload.deliveryDate ?? payload['Delivery date'];
   const purchaseDate = payload.purchaseDate ?? payload['Purchase date'];
   const status = payload.status ?? payload.Status;
+  const propertyId =
+    payload.propertyId ?? payload['Property id'] ?? payload['Property ID'];
+  const cost = payload.cost ?? payload.Cost;
+  const note = payload.note ?? payload.Note;
 
-  if (!itemId || !String(itemId).trim()) {
-    const message = 'Item id is required.';
+  const fail = (message: string) => {
     if (isHttp) {
       return buildHttpResponse(400, { message });
     }
     throw new Error(message);
+  };
+
+  if (!isDirect && (!itemId || !String(itemId).trim())) {
+    return fail('Item id is required.');
   }
   if (!itemName || !String(itemName).trim()) {
-    const message = 'Item name is required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Item name is required.');
   }
   if (!location || !String(location).trim()) {
-    const message = 'Location is required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Location is required.');
   }
   if (!vendor || !String(vendor).trim()) {
-    const message = 'Vendor is required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Vendor is required.');
   }
   if (units === undefined || units === null || Number.isNaN(Number(units))) {
-    const message = 'Units are required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Units are required.');
+  }
+  if (isDirect && (!propertyId || !String(propertyId).trim())) {
+    return fail('Property id is required.');
   }
   if (
-    totalPrice === undefined ||
-    totalPrice === null ||
-    Number.isNaN(Number(totalPrice))
+    isDirect &&
+    (cost === undefined || cost === null || Number.isNaN(Number(cost)))
   ) {
-    const message = 'Total price is required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Cost is required.');
+  }
+  if (
+    !isDirect &&
+    (totalPrice === undefined ||
+      totalPrice === null ||
+      Number.isNaN(Number(totalPrice)))
+  ) {
+    return fail('Total price is required.');
   }
   if (!deliveryDate || !String(deliveryDate).trim()) {
-    const message = 'Delivery date is required.';
-    if (isHttp) {
-      return buildHttpResponse(400, { message });
-    }
-    throw new Error(message);
+    return fail('Delivery date is required.');
   }
 
-  const id = payload.id?.trim() || (await getNextPurchaseId(tableName));
   const deliveryDateValue = formatDateForStorage(String(deliveryDate));
   const statusValue = computePurchaseStatus(deliveryDateValue, status);
-  const item = {
+  const markupApplied = isDirect
+    ? parseMarkupApplied(payload)
+    : Boolean(existingItem?.['Markup applied']);
+  const billable = isDirect ? parseBillable(payload) : Boolean(existingItem?.Billable);
+  const costValue = Number(cost) || 0;
+  const pricing = computeDirectPurchasePricing(costValue, markupApplied);
+  const totalPriceValue = isDirect ? pricing.totalPrice : Number(totalPrice) || 0;
+
+  const item: Record<string, unknown> = {
+    ...(existingItem ?? {}),
     id,
-    'Item id': String(itemId).trim(),
+    Direct: isDirect,
+    'Item id': isDirect ? '' : String(itemId).trim(),
     'Item name': String(itemName).trim(),
     Location: String(location).trim(),
     Vendor: String(vendor).trim(),
     Units: Number(units) || 0,
-    'Total price': Number(totalPrice) || 0,
+    'Total price': totalPriceValue,
     'Delivery date': deliveryDateValue,
     'Purchase date': formatDateForStorage(purchaseDate),
     Status: statusValue,
   };
 
-  try {
-    let previousStatus = '';
-    if (payload.id?.trim()) {
-      const existingPurchase = await client.send(
-        new GetCommand({
-          TableName: tableName,
-          Key: { id },
-        }),
-      );
-      previousStatus =
-        typeof existingPurchase.Item?.Status === 'string'
-          ? existingPurchase.Item.Status
-          : '';
-    }
+  if (isDirect) {
+    item['Property id'] = String(propertyId).trim();
+    item.Cost = costValue;
+    item.Billable = billable;
+    item['Markup applied'] = markupApplied;
+    item.Markup = pricing.markup;
+    item['IVA Markup'] = pricing.ivaMarkup;
+    item['Price excl. IVA'] = pricing.priceExclIva;
+    item.IVA = pricing.iva;
+    item.Note = typeof note === 'string' ? note.trim() : '';
+  }
 
+  try {
     await client.send(
       new PutCommand({
         TableName: tableName,
@@ -445,43 +540,57 @@ export const handler = async (event: {
     );
 
     const inventoryTable = process.env.INVENTORY_TABLE;
-    const shouldUpdateInventory =
-      statusValue === 'Confirmed' && previousStatus !== 'Confirmed';
-    if (shouldUpdateInventory) {
-      if (!inventoryTable) {
-        throw new Error('INVENTORY_TABLE is not configured.');
+    const becameReceived =
+      isReceivedPurchaseStatus(statusValue) &&
+      !isReceivedPurchaseStatus(previousStatus);
+    if (!isDirect) {
+      if (becameReceived) {
+        if (!inventoryTable) {
+          throw new Error('INVENTORY_TABLE is not configured.');
+        }
+        await updateInventoryOnConfirm({
+          inventoryTable,
+          purchasesTable: tableName,
+          purchaseId: id,
+          itemId: String(itemId).trim(),
+          units: Number(units) || 0,
+          totalPrice: totalPriceValue,
+        });
+      } else if (!isReceivedPurchaseStatus(statusValue)) {
+        if (!inventoryTable) {
+          throw new Error('INVENTORY_TABLE is not configured.');
+        }
+        await markInventoryWaitingDelivery({
+          inventoryTable,
+          itemId: String(itemId).trim(),
+        });
       }
-      await updateInventoryOnConfirm({
-        inventoryTable,
-        purchasesTable: tableName,
-        purchaseId: id,
-        itemId: String(itemId).trim(),
-        units: Number(units) || 0,
-        totalPrice: Number(totalPrice) || 0,
-      });
-    } else if (statusValue !== 'Confirmed') {
-      if (!inventoryTable) {
-        throw new Error('INVENTORY_TABLE is not configured.');
-      }
-      await markInventoryWaitingDelivery({
-        inventoryTable,
-        itemId: String(itemId).trim(),
-      });
     }
 
     const isUpdate = Boolean(payload.id?.trim());
     const purchaseName = String(itemName).trim();
+    const becameConfirmed =
+      statusValue === PURCHASE_CONFIRMED && previousStatus !== PURCHASE_CONFIRMED;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PURCHASES,
-      action: statusValue === 'Confirmed' ? 'confirm' : isUpdate ? 'update' : 'create',
+      action: becameConfirmed
+        ? 'confirm'
+        : becameReceived
+          ? 'receive'
+          : isUpdate
+            ? 'update'
+            : 'create',
       entityId: id,
       entityName: purchaseName,
-      summary:
-        statusValue === 'Confirmed'
-          ? `confirmed delivery of ${quoted(purchaseName)} (${Number(units) || 0} units)`
+      summary: becameConfirmed
+        ? `confirmed invoice for ${quoted(purchaseName)}`
+        : becameReceived
+          ? `received ${quoted(purchaseName)} (${Number(units) || 0} units), waiting invoice`
           : isUpdate
             ? `updated purchase of ${quoted(purchaseName)}`
-            : `created a purchase of ${Number(units) || 0} units of ${quoted(purchaseName)}`,
+            : isDirect
+              ? `created a direct purchase of ${quoted(purchaseName)}`
+              : `created a purchase of ${Number(units) || 0} units of ${quoted(purchaseName)}`,
     });
 
     const response = { item };

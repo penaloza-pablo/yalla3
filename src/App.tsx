@@ -91,6 +91,16 @@ type PurchaseRow = {
   purchaseDate: string
   purchaseDateRaw: string
   status: string
+  direct: boolean
+  propertyId: string
+  cost: number
+  billable: boolean
+  markupApplied: boolean
+  markup: number
+  ivaMarkup: number
+  priceExclIva: number
+  iva: number
+  note: string
 }
 
 type SubtractionRow = {
@@ -140,6 +150,12 @@ type PurchaseFormState = {
   deliveryDate: string
   purchaseDate: string
   status: string
+  direct: boolean
+  propertyId: string
+  cost: string
+  billable: boolean
+  markup: boolean
+  note: string
 }
 
 type SubtractionFormState = {
@@ -355,6 +371,16 @@ const purchaseFieldMap = {
   deliveryDate: ['Delivery date', 'deliveryDate', 'delivery date'],
   purchaseDate: ['Purchase date', 'purchaseDate', 'purchase date'],
   status: ['Status', 'status'],
+  direct: ['Direct', 'direct'],
+  propertyId: ['Property id', 'Property ID', 'propertyId', 'property id'],
+  cost: ['Cost', 'cost', 'Price incl. IVA', 'priceInclIva'],
+  billable: ['Billable', 'billable'],
+  markupApplied: ['Markup applied', 'markupApplied', 'MarkupApplied'],
+  markup: ['Markup', 'markup'],
+  ivaMarkup: ['IVA Markup', 'ivaMarkup', 'Iva Markup'],
+  priceExclIva: ['Price excl. IVA', 'priceExclIva', 'Price excl IVA'],
+  iva: ['IVA', 'iva'],
+  note: ['Note', 'note'],
 }
 
 const subtractionFieldMap = {
@@ -807,7 +833,7 @@ const getRecentPurchasesForItem = (
   limit = 3,
 ) =>
   purchases
-    .filter((purchase) => purchase.itemId === itemId)
+    .filter((purchase) => !purchase.direct && purchase.itemId === itemId)
     .slice()
     .sort((a, b) => getPurchaseSortTime(b) - getPurchaseSortTime(a))
     .slice(0, limit)
@@ -831,6 +857,12 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   }
   return 'Low Stock'
 }
+
+const PURCHASE_WAITING_INVOICE = 'Waiting invoice'
+const isReceivedPurchaseStatus = (status: string) =>
+  status === 'Confirmed' || status === PURCHASE_WAITING_INVOICE
+const isPendingPurchaseStatus = (status: string) =>
+  status === 'Waiting Delivery' || status === PURCHASE_WAITING_INVOICE
 
 const WARNING_STATUSES = ['Reorder', 'Low Stock', 'Skipped'] as const
 
@@ -927,6 +959,15 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
   const purchaseDateRaw = getStringValue(
     getItemValue(item, purchaseFieldMap.purchaseDate),
   )
+  const cost = getNumberValue(getItemValue(item, purchaseFieldMap.cost))
+  const markupApplied = getBooleanValue(
+    getItemValue(item, purchaseFieldMap.markupApplied),
+  )
+  const storedMarkup = getItemValue(item, purchaseFieldMap.markup)
+  const storedIvaMarkup = getItemValue(item, purchaseFieldMap.ivaMarkup)
+  const storedPriceExclIva = getItemValue(item, purchaseFieldMap.priceExclIva)
+  const storedIva = getItemValue(item, purchaseFieldMap.iva)
+  const computed = computeSubtractionPricing(cost, markupApplied)
   return {
     id: getStringValue(getItemValue(item, purchaseFieldMap.id)) || '—',
     itemId: getStringValue(getItemValue(item, purchaseFieldMap.itemId)) || '—',
@@ -944,6 +985,29 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
     status:
       getStringValue(getItemValue(item, purchaseFieldMap.status)) ||
       'To be confirmed',
+    direct: getBooleanValue(getItemValue(item, purchaseFieldMap.direct)),
+    propertyId:
+      getStringValue(getItemValue(item, purchaseFieldMap.propertyId)) || '',
+    cost,
+    billable: getBooleanValue(getItemValue(item, purchaseFieldMap.billable)),
+    markupApplied,
+    markup:
+      storedMarkup === undefined || storedMarkup === null
+        ? computed.markup
+        : getNumberValue(storedMarkup),
+    ivaMarkup:
+      storedIvaMarkup === undefined || storedIvaMarkup === null
+        ? computed.ivaMarkup
+        : getNumberValue(storedIvaMarkup),
+    priceExclIva:
+      storedPriceExclIva === undefined || storedPriceExclIva === null
+        ? computed.priceExclIva
+        : getNumberValue(storedPriceExclIva),
+    iva:
+      storedIva === undefined || storedIva === null
+        ? computed.iva
+        : getNumberValue(storedIva),
+    note: getStringValue(getItemValue(item, purchaseFieldMap.note)),
   }
 }
 
@@ -1233,6 +1297,9 @@ const getStatusClassName = (status: string) => {
   if (status === 'Waiting Delivery') {
     return 'status status-info'
   }
+  if (status === 'Waiting invoice') {
+    return 'status status-warning'
+  }
   if (status === 'Skipped') {
     return 'status status-warning'
   }
@@ -1291,6 +1358,12 @@ const emptyPurchaseFormState: PurchaseFormState = {
   deliveryDate: '',
   purchaseDate: '',
   status: '',
+  direct: false,
+  propertyId: '',
+  cost: '',
+  billable: true,
+  markup: false,
+  note: '',
 }
 
 const emptySubtractionFormState: SubtractionFormState = {
@@ -1337,7 +1410,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed', 'Waiting Delivery'],
+    statuses: ['To be confirmed', 'Waiting Delivery', 'Waiting invoice'],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1348,7 +1421,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed', 'Waiting Delivery'],
+    statuses: ['To be confirmed', 'Waiting Delivery', 'Waiting invoice'],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1853,6 +1926,7 @@ function App() {
   const purchaseStatusOptions = [
     'To be confirmed',
     'Waiting Delivery',
+    'Waiting invoice',
     'Confirmed',
   ]
 
@@ -1896,6 +1970,8 @@ function App() {
             row.totalPrice,
             row.deliveryDate,
             row.purchaseDate,
+            row.note,
+            row.direct ? 'direct directa' : '',
           ])
         ) {
           return false
@@ -1928,9 +2004,8 @@ function App() {
   ])
 
   const pendingPurchasesCount = useMemo(
-    () =>
-      purchasesFilteredRows.filter((row) => row.status !== 'Confirmed').length,
-    [purchasesFilteredRows],
+    () => purchaseRows.filter((row) => isPendingPurchaseStatus(row.status)).length,
+    [purchaseRows],
   )
 
   const purchasesActiveFilterCount = useMemo(() => {
@@ -2983,6 +3058,7 @@ function App() {
     }
     if (activePage === 'Purchases') {
       void fetchPurchases()
+      void fetchProperties()
     }
     if (activePage === 'Subtractions') {
       void fetchSubtractions()
@@ -3045,6 +3121,22 @@ function App() {
       itemName: row.name,
       location: row.location,
       status: '',
+      direct: false,
+    })
+    setPurchaseFormError(null)
+    setIsPurchaseFormOpen(true)
+  }
+
+  const openDirectPurchaseWizard = () => {
+    if (propertyRows.length === 0) {
+      void fetchProperties()
+    }
+    setPurchaseFormValues({
+      ...emptyPurchaseFormState,
+      units: '1',
+      billable: true,
+      markup: false,
+      direct: true,
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
@@ -3070,17 +3162,26 @@ function App() {
   }
 
   const openPurchaseEdit = (row: PurchaseRow) => {
+    if (row.direct && propertyRows.length === 0) {
+      void fetchProperties()
+    }
     setPurchaseFormValues({
       id: row.id,
-      itemId: row.itemId,
-      itemName: row.itemName,
-      location: row.location,
+      itemId: row.itemId === '—' ? '' : row.itemId,
+      itemName: row.itemName === '—' ? '' : row.itemName,
+      location: row.location === '—' ? '' : row.location,
       vendor: row.vendor === '—' ? '' : row.vendor,
       units: row.units ? String(row.units) : '',
       totalPrice: row.totalPrice ? String(row.totalPrice) : '',
       deliveryDate: formatDateForInput(row.deliveryDateRaw),
       purchaseDate: row.purchaseDateRaw,
       status: row.status || '',
+      direct: row.direct,
+      propertyId: row.propertyId,
+      cost: row.cost ? String(row.cost) : '',
+      billable: row.billable,
+      markup: row.markupApplied,
+      note: row.note,
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
@@ -3677,7 +3778,7 @@ function App() {
       return
     }
 
-    if (!purchaseFormValues.itemId.trim()) {
+    if (!purchaseFormValues.direct && !purchaseFormValues.itemId.trim()) {
       setPurchaseFormError('Item ID is required.')
       return
     }
@@ -3685,7 +3786,11 @@ function App() {
       setPurchaseFormError(t('purchases.itemNameRequired'))
       return
     }
-    if (!purchaseFormValues.location.trim()) {
+    if (purchaseFormValues.direct && !purchaseFormValues.propertyId.trim()) {
+      setPurchaseFormError(t('purchases.propertyRequired'))
+      return
+    }
+    if (!purchaseFormValues.direct && !purchaseFormValues.location.trim()) {
       setPurchaseFormError(t('purchases.locationRequired'))
       return
     }
@@ -3697,7 +3802,23 @@ function App() {
       setPurchaseFormError(t('purchases.unitsRequired'))
       return
     }
-    if (!purchaseFormValues.totalPrice.trim()) {
+    const unitsValue = Number(purchaseFormValues.units)
+    if (!Number.isFinite(unitsValue) || unitsValue <= 0) {
+      setPurchaseFormError(t('purchases.unitsPositive'))
+      return
+    }
+    if (purchaseFormValues.direct && !purchaseFormValues.cost.trim()) {
+      setPurchaseFormError(t('purchases.costRequired'))
+      return
+    }
+    if (purchaseFormValues.direct) {
+      const costCheck = Number(purchaseFormValues.cost)
+      if (!Number.isFinite(costCheck) || costCheck < 0) {
+        setPurchaseFormError(t('purchases.costInvalid'))
+        return
+      }
+    }
+    if (!purchaseFormValues.direct && !purchaseFormValues.totalPrice.trim()) {
       setPurchaseFormError(t('purchases.totalPriceRequired'))
       return
     }
@@ -3709,22 +3830,57 @@ function App() {
     setIsPurchaseSaving(true)
     setPurchaseFormError(null)
 
-    const statusValue =
-      purchaseFormValues.status === 'Confirmed' ? 'Confirmed' : undefined
-    const payload = {
-      id: purchaseFormValues.id.trim() || undefined,
-      'Item id': purchaseFormValues.itemId.trim(),
-      'Item name': purchaseFormValues.itemName.trim(),
-      Location: purchaseFormValues.location.trim(),
-      Vendor: purchaseFormValues.vendor.trim(),
-      Units: Number(purchaseFormValues.units) || 0,
-      'Total price': Number(purchaseFormValues.totalPrice) || 0,
-      'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
-      'Purchase date': formatDateForStorage(
-        purchaseFormValues.purchaseDate?.trim() || '',
-      ),
-      ...(statusValue ? { Status: statusValue } : {}),
-    }
+    const statusValue = isReceivedPurchaseStatus(purchaseFormValues.status)
+      ? purchaseFormValues.status
+      : undefined
+    const costValue = Number(purchaseFormValues.cost) || 0
+    const pricing = computeSubtractionPricing(
+      costValue,
+      purchaseFormValues.markup,
+    )
+    const selectedProperty = activePropertyOptions.find(
+      (property) => property.id === purchaseFormValues.propertyId,
+    )
+    const payload = purchaseFormValues.direct
+      ? {
+          id: purchaseFormValues.id.trim() || undefined,
+          Direct: true,
+          'Item id': '',
+          'Item name': purchaseFormValues.itemName.trim(),
+          'Property id': purchaseFormValues.propertyId.trim(),
+          Location: selectedProperty?.nickname || purchaseFormValues.location.trim(),
+          Vendor: purchaseFormValues.vendor.trim(),
+          Units: unitsValue,
+          Cost: costValue,
+          Billable: purchaseFormValues.billable,
+          'Markup applied': purchaseFormValues.markup,
+          Markup: pricing.markup,
+          'IVA Markup': pricing.ivaMarkup,
+          'Price excl. IVA': pricing.priceExclIva,
+          IVA: pricing.iva,
+          'Total price': pricing.totalPrice,
+          Note: purchaseFormValues.note.trim(),
+          'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
+          'Purchase date': formatDateForStorage(
+            purchaseFormValues.purchaseDate?.trim() || '',
+          ),
+          ...(statusValue ? { Status: statusValue } : {}),
+        }
+      : {
+          id: purchaseFormValues.id.trim() || undefined,
+          Direct: false,
+          'Item id': purchaseFormValues.itemId.trim(),
+          'Item name': purchaseFormValues.itemName.trim(),
+          Location: purchaseFormValues.location.trim(),
+          Vendor: purchaseFormValues.vendor.trim(),
+          Units: unitsValue,
+          'Total price': Number(purchaseFormValues.totalPrice) || 0,
+          'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
+          'Purchase date': formatDateForStorage(
+            purchaseFormValues.purchaseDate?.trim() || '',
+          ),
+          ...(statusValue ? { Status: statusValue } : {}),
+        }
 
     try {
       const response = await authFetch(endpoint, {
@@ -3751,14 +3907,16 @@ function App() {
           id: payload.id ?? '',
         })
 
-      const wasAlreadyConfirmed = purchaseRows.some(
-        (entry) => entry.id === updatedRow.id && entry.status === 'Confirmed',
+      const wasAlreadyReceived = purchaseRows.some(
+        (entry) =>
+          entry.id === updatedRow.id && isReceivedPurchaseStatus(entry.status),
       )
       const hasOtherOpenPurchases = purchaseRows.some(
         (entry) =>
+          !entry.direct &&
           entry.itemId === updatedRow.itemId &&
           entry.id !== updatedRow.id &&
-          entry.status !== 'Confirmed',
+          !isReceivedPurchaseStatus(entry.status),
       )
       setPurchaseRows((current) => {
         const existingIndex = current.findIndex(
@@ -3771,20 +3929,22 @@ function App() {
         }
         return [updatedRow, ...current]
       })
-      if (updatedRow.status === 'Confirmed' && !wasAlreadyConfirmed) {
-        setInventoryRows((current) =>
-          applyConfirmedPurchaseToInventory(
-            current,
-            updatedRow.itemId,
-            updatedRow.units,
-            updatedRow.totalPrice,
-            hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
-          ),
-        )
-      } else if (updatedRow.status !== 'Confirmed') {
-        setInventoryRows((current) =>
-          markInventoryWaitingDelivery(current, updatedRow.itemId),
-        )
+      if (!updatedRow.direct) {
+        if (isReceivedPurchaseStatus(updatedRow.status) && !wasAlreadyReceived) {
+          setInventoryRows((current) =>
+            applyConfirmedPurchaseToInventory(
+              current,
+              updatedRow.itemId,
+              updatedRow.units,
+              updatedRow.totalPrice,
+              hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
+            ),
+          )
+        } else if (!isReceivedPurchaseStatus(updatedRow.status)) {
+          setInventoryRows((current) =>
+            markInventoryWaitingDelivery(current, updatedRow.itemId),
+          )
+        }
       }
 
       setIsPurchaseFormOpen(false)
@@ -3803,8 +3963,16 @@ function App() {
     if (row.status === 'Confirmed') {
       return
     }
+    const nextStatus =
+      row.status === PURCHASE_WAITING_INVOICE
+        ? 'Confirmed'
+        : PURCHASE_WAITING_INVOICE
     const shouldConfirm = window.confirm(
-      t('purchases.confirmDeliveryPrompt'),
+      nextStatus === 'Confirmed'
+        ? t('purchases.confirmInvoicePrompt')
+        : row.direct
+          ? t('purchases.confirmDirectDeliveryPrompt')
+          : t('purchases.confirmDeliveryPrompt'),
     )
     if (!shouldConfirm) {
       return
@@ -3823,15 +3991,25 @@ function App() {
     try {
       const payload = {
         id: row.id,
-        'Item id': row.itemId,
+        Direct: row.direct,
+        'Item id': row.direct ? '' : row.itemId,
         'Item name': row.itemName,
+        'Property id': row.propertyId,
         Location: row.location,
         Vendor: row.vendor,
         Units: row.units,
+        Cost: row.cost,
+        Billable: row.billable,
+        'Markup applied': row.markupApplied,
+        Markup: row.markup,
+        'IVA Markup': row.ivaMarkup,
+        'Price excl. IVA': row.priceExclIva,
+        IVA: row.iva,
         'Total price': row.totalPrice,
+        Note: row.note,
         'Delivery date': formatDateForStorage(row.deliveryDateRaw),
         'Purchase date': formatDateForStorage(row.purchaseDateRaw),
-        Status: 'Confirmed',
+        Status: nextStatus,
       }
       const response = await authFetch(endpoint, {
         method: 'POST',
@@ -3845,24 +4023,29 @@ function App() {
       }
       const hasOtherOpenPurchases = purchaseRows.some(
         (entry) =>
+          !entry.direct &&
           entry.itemId === row.itemId &&
           entry.id !== row.id &&
-          entry.status !== 'Confirmed',
+          !isReceivedPurchaseStatus(entry.status),
       )
+      const shouldUpdateInventory =
+        !row.direct && !isReceivedPurchaseStatus(row.status)
       setPurchaseRows((current) =>
         current.map((entry) =>
-          entry.id === row.id ? { ...entry, status: 'Confirmed' } : entry,
+          entry.id === row.id ? { ...entry, status: nextStatus } : entry,
         ),
       )
-      setInventoryRows((current) =>
-        applyConfirmedPurchaseToInventory(
-          current,
-          row.itemId,
-          row.units,
-          row.totalPrice,
-          hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
-        ),
-      )
+      if (shouldUpdateInventory) {
+        setInventoryRows((current) =>
+          applyConfirmedPurchaseToInventory(
+            current,
+            row.itemId,
+            row.units,
+            row.totalPrice,
+            hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
+          ),
+        )
+      }
     } catch (updateError) {
       setPurchasesError(t('purchases.updateStatusError'))
     }
@@ -5437,6 +5620,21 @@ function App() {
                   ) : null}
                 </button>
                 <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={openDirectPurchaseWizard}
+                  aria-label={t('purchases.addDirect')}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
+                  </svg>
+                </button>
+                <button
                   className="btn-primary"
                   onClick={fetchPurchases}
                   type="button"
@@ -5471,9 +5669,9 @@ function App() {
                 <p className="card-meta">{t('purchases.visiblePurchases')}</p>
               </div>
               <div className="card card-compact">
-                <p className="card-label">{t('purchases.pendingDeliveries')}</p>
+                <p className="card-label">{t('purchases.pending')}</p>
                 <p className="card-value">{pendingPurchasesCount}</p>
-                <p className="card-meta">{t('purchases.awaitingConfirmation')}</p>
+                <p className="card-meta">{t('purchases.pendingMeta')}</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">{t('common.lastSync')}</p>
@@ -5729,7 +5927,16 @@ function App() {
                         return (
                           <Fragment key={row.id}>
                             <tr>
-                              <td>{row.itemName}</td>
+                              <td>
+                                <div className="purchase-name-cell">
+                                  <span>{row.itemName}</span>
+                                  {row.direct ? (
+                                    <span className="purchase-direct-tag">
+                                      {t('purchases.directTag')}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
                               <td>{row.location}</td>
                               <td>
                                 <span className={getStatusClassName(row.status)}>
@@ -5742,7 +5949,11 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label={t('common.confirmDelivery')}
+                                    aria-label={
+                                      row.status === PURCHASE_WAITING_INVOICE
+                                        ? t('common.confirmInvoice')
+                                        : t('common.confirmDelivery')
+                                    }
                                     onClick={() => confirmPurchaseDelivery(row)}
                                     disabled={row.status === 'Confirmed'}
                                   >
@@ -5776,10 +5987,12 @@ function App() {
                                       <p className="detail-label">{t('common.purchaseId')}</p>
                                       <p className="detail-value">{row.id}</p>
                                     </div>
-                                    <div>
-                                      <p className="detail-label">{t('common.itemId')}</p>
-                                      <p className="detail-value">{row.itemId}</p>
-                                    </div>
+                                    {row.direct ? null : (
+                                      <div>
+                                        <p className="detail-label">{t('common.itemId')}</p>
+                                        <p className="detail-value">{row.itemId}</p>
+                                      </div>
+                                    )}
                                     <div>
                                       <p className="detail-label">{t('common.vendor')}</p>
                                       <p className="detail-value">{row.vendor}</p>
@@ -5800,6 +6013,74 @@ function App() {
                                         {row.purchaseDate}
                                       </p>
                                     </div>
+                                    {row.direct ? (
+                                      <>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('purchases.directTag')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {t('purchases.directDetail')}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.shouldBeBilled')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {row.billable ? t('common.yes') : t('common.no')}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.priceInclIva')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.cost)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.markup')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.markup)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.ivaMarkup')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.ivaMarkup)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.priceExclIva')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.priceExclIva)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.iva')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.iva)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.note')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {row.note || '—'}
+                                          </p>
+                                        </div>
+                                      </>
+                                    ) : null}
                                   </div>
                                 </td>
                               </tr>
@@ -8512,20 +8793,29 @@ function App() {
             aria-modal="true"
             onClick={closePurchaseForm}
           >
-            <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal modal-scrollable" onClick={(event) => event.stopPropagation()}>
               {(() => {
                 const isEditingPurchase = Boolean(purchaseFormValues.id)
+                const isDirectPurchase = purchaseFormValues.direct
                 return (
                   <div className="modal-header">
                     <div>
                       <h3 className="modal-title">
-                        {isEditingPurchase
-                          ? t('purchases.formTitleShort')
-                          : t('purchases.formTitleNew')}
+                        {isDirectPurchase
+                          ? isEditingPurchase
+                            ? t('purchases.formTitleDirectEdit')
+                            : t('purchases.formTitleDirect')
+                          : isEditingPurchase
+                            ? t('purchases.formTitleShort')
+                            : t('purchases.formTitleNew')}
                       </h3>
-                      {isEditingPurchase ? (
+                      {isDirectPurchase ? (
                         <p className="modal-subtitle">
-                          Update the purchase record.
+                          {t('purchases.formSubtitleDirect')}
+                        </p>
+                      ) : isEditingPurchase ? (
+                        <p className="modal-subtitle">
+                          {t('purchases.formSubtitleEdit')}
                         </p>
                       ) : (
                         <p className="modal-subtitle">
@@ -8547,66 +8837,252 @@ function App() {
                 )
               })()}
               <div className="modal-body">
-                <div className="form-grid">
-                  <label className="form-field">
-                    <span>{t('common.vendor')}</span>
-                    <input
-                      type="text"
-                      value={purchaseFormValues.vendor}
-                      onChange={(event) =>
-                        setPurchaseFormValues((current) => ({
-                          ...current,
-                          vendor: event.target.value,
-                        }))
-                      }
-                      placeholder={t('common.vendorName')}
-                    />
-                  </label>
-                  <label className="form-field">
-                    <span>{t('common.units')}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={purchaseFormValues.units}
-                      onChange={(event) =>
-                        setPurchaseFormValues((current) => ({
-                          ...current,
-                          units: event.target.value,
-                        }))
-                      }
-                      placeholder="0"
-                    />
-                  </label>
-                  <label className="form-field">
-                    <span>{t('common.totalPrice')}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={purchaseFormValues.totalPrice}
-                      onChange={(event) =>
-                        setPurchaseFormValues((current) => ({
-                          ...current,
-                          totalPrice: event.target.value,
-                        }))
-                      }
-                      placeholder="0.00"
-                    />
-                  </label>
-                  <label className="form-field">
-                    <span>{t('common.deliveryDate')}</span>
-                    <input
-                      type="date"
-                      value={purchaseFormValues.deliveryDate}
-                      onChange={(event) =>
-                        setPurchaseFormValues((current) => ({
-                          ...current,
-                          deliveryDate: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
+                {purchaseFormValues.direct ? (
+                  <>
+                    <div className="form-grid">
+                      <label className="form-field form-field-span">
+                        <span>{t('common.itemName')}</span>
+                        <input
+                          type="text"
+                          value={purchaseFormValues.itemName}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              itemName: event.target.value,
+                            }))
+                          }
+                          placeholder={t('common.itemName')}
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('common.vendor')}</span>
+                        <input
+                          type="text"
+                          value={purchaseFormValues.vendor}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              vendor: event.target.value,
+                            }))
+                          }
+                          placeholder={t('common.vendorName')}
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('common.units')}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={purchaseFormValues.units}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              units: event.target.value,
+                            }))
+                          }
+                          placeholder="1"
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('common.receivingProperty')}</span>
+                        <select
+                          value={purchaseFormValues.propertyId}
+                          onChange={(event) => {
+                            const selectedId = event.target.value
+                            const selectedProperty = activePropertyOptions.find(
+                              (property) => property.id === selectedId,
+                            )
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              propertyId: selectedId,
+                              location: selectedProperty?.nickname ?? '',
+                            }))
+                          }}
+                        >
+                          <option value="">{t('common.selectProperty')}</option>
+                          {activePropertyOptions.map((property) => (
+                            <option key={property.id} value={property.id}>
+                              {property.nickname}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="form-field">
+                        <span>{t('common.priceInclIva')}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={purchaseFormValues.cost}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              cost: event.target.value,
+                            }))
+                          }
+                          placeholder="0.00"
+                        />
+                      </label>
+                      <div className="form-field-span subtraction-checkboxes">
+                        <label className="form-field-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={purchaseFormValues.billable}
+                            onChange={(event) =>
+                              setPurchaseFormValues((current) => ({
+                                ...current,
+                                billable: event.target.checked,
+                              }))
+                            }
+                          />
+                          <span>{t('common.shouldBeBilled')}</span>
+                        </label>
+                        <label className="form-field-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={purchaseFormValues.markup}
+                            onChange={(event) =>
+                              setPurchaseFormValues((current) => ({
+                                ...current,
+                                markup: event.target.checked,
+                              }))
+                            }
+                          />
+                          <span>{t('common.markup')}</span>
+                        </label>
+                      </div>
+                      <label className="form-field form-field-span">
+                        <span>{t('common.noteOptional')}</span>
+                        <textarea
+                          value={purchaseFormValues.note}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              note: event.target.value,
+                            }))
+                          }
+                          placeholder={t('common.addNote')}
+                          rows={3}
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>{t('common.deliveryDate')}</span>
+                        <input
+                          type="date"
+                          value={purchaseFormValues.deliveryDate}
+                          onChange={(event) =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              deliveryDate: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    {(() => {
+                      const costValue = Number(purchaseFormValues.cost)
+                      const pricing = computeSubtractionPricing(
+                        Number.isFinite(costValue) ? costValue : 0,
+                        purchaseFormValues.markup,
+                      )
+                      return (
+                        <div className="subtraction-pricing-grid">
+                          <div className="subtraction-pricing-item">
+                            <p className="detail-label">{t('common.markup')}</p>
+                            <p className="detail-value">
+                              {formatUnitPrice(pricing.markup)}
+                            </p>
+                          </div>
+                          <div className="subtraction-pricing-item">
+                            <p className="detail-label">{t('common.ivaMarkup')}</p>
+                            <p className="detail-value">
+                              {formatUnitPrice(pricing.ivaMarkup)}
+                            </p>
+                          </div>
+                          <div className="subtraction-pricing-item">
+                            <p className="detail-label">{t('common.priceExclIva')}</p>
+                            <p className="detail-value">
+                              {formatUnitPrice(pricing.priceExclIva)}
+                            </p>
+                          </div>
+                          <div className="subtraction-pricing-item">
+                            <p className="detail-label">{t('common.iva')}</p>
+                            <p className="detail-value">
+                              {formatUnitPrice(pricing.iva)}
+                            </p>
+                          </div>
+                          <div className="subtraction-pricing-item">
+                            <p className="detail-label">{t('common.totalPrice')}</p>
+                            <p className="detail-value">
+                              {formatUnitPrice(pricing.totalPrice)}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </>
+                ) : (
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>{t('common.vendor')}</span>
+                      <input
+                        type="text"
+                        value={purchaseFormValues.vendor}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            vendor: event.target.value,
+                          }))
+                        }
+                        placeholder={t('common.vendorName')}
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('common.units')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={purchaseFormValues.units}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            units: event.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('common.totalPrice')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={purchaseFormValues.totalPrice}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            totalPrice: event.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('common.deliveryDate')}</span>
+                      <input
+                        type="date"
+                        value={purchaseFormValues.deliveryDate}
+                        onChange={(event) =>
+                          setPurchaseFormValues((current) => ({
+                            ...current,
+                            deliveryDate: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
                 {purchaseFormError ? (
                   <div className="alert">{purchaseFormError}</div>
                 ) : null}

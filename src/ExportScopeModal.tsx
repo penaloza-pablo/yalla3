@@ -59,16 +59,6 @@ export function ExportScopeModal({
             </button>
           </div>
         </div>
-        <div className="modal-footer">
-          <button
-            className="btn-ghost"
-            type="button"
-            onClick={onClose}
-            disabled={isExporting}
-          >
-            {t('common.cancel')}
-          </button>
-        </div>
       </div>
     </div>
   )
