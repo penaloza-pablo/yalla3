@@ -12,7 +12,16 @@ export const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> 
   const response = await authFetch(url, init)
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(text || `Request failed (${response.status})`)
+    let message = text || `Request failed (${response.status})`
+    try {
+      const parsed = JSON.parse(text) as { message?: string }
+      if (parsed.message) {
+        message = parsed.message
+      }
+    } catch {
+      // Keep the raw response text when it is not JSON.
+    }
+    throw new Error(message)
   }
   return (await response.json()) as T
 }
@@ -39,6 +48,18 @@ export const saveVisit = (endpoint: string, payload: Record<string, unknown>) =>
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
+  })
+
+export const canRefreshVisitFromGuesty = (visit: {
+  id: string
+  guestyTaskId?: string
+}) => Boolean(visit.guestyTaskId?.trim()) || visit.id.startsWith('GST-')
+
+export const refreshVisitFromGuesty = (endpoint: string, id: string) =>
+  fetchJson<ListResponse<VisitRecord> & { changed?: boolean }>(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, action: 'refreshFromGuesty' }),
   })
 
 export const getTasksByVisit = (endpoint: string, visitId: string) =>

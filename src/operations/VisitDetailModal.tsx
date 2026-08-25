@@ -6,7 +6,9 @@ import {
   getReferenceList,
   getTasksByVisit,
   getVisitById,
+  refreshVisitFromGuesty,
   saveVisit,
+  canRefreshVisitFromGuesty,
 } from './api'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { requiresCompleteVisitWizard } from './visitTypeIds'
@@ -66,6 +68,8 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   appliesToHourBank: Boolean(item.appliesToHourBank),
   specialHours: Boolean(item.specialHours),
+  guestyTaskId:
+    typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
 })
 
 const mapTask = (item: Record<string, unknown>): TaskRecord => ({
@@ -149,6 +153,7 @@ export function VisitDetailModal({
   const [visitTypes, setVisitTypes] = useState<VisitTypeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -223,6 +228,7 @@ export function VisitDetailModal({
   )
   const canChangeStatus =
     visit && visit.status !== 'COMPLETED' && visit.status !== 'CANCELLED'
+  const canRefreshFromGuesty = visit ? canRefreshVisitFromGuesty(visit) : false
 
   const reloadVisit = async () => {
     if (!endpoints.visits) {
@@ -354,6 +360,41 @@ export function VisitDetailModal({
 
   const notifyChanged = () => {
     onVisitChanged?.()
+  }
+
+  const refreshFromGuesty = async () => {
+    if (!visit) {
+      return
+    }
+    if (!endpoints.upsertVisit) {
+      setError(t('operations.missingWriteVisit'))
+      return
+    }
+    setIsRefreshing(true)
+    setError('')
+    try {
+      const response = await refreshVisitFromGuesty(endpoints.upsertVisit, visit.id)
+      const item = response.item as Record<string, unknown> | undefined
+      if (item) {
+        setVisit(mapVisit(item))
+      } else {
+        await reloadVisit()
+      }
+      setMessage(
+        response.changed
+          ? t('operations.visitRefreshed')
+          : t('operations.visitAlreadyInSync'),
+      )
+      notifyChanged()
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : t('operations.unableRefreshFromGuesty'),
+      )
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   const updateVisitStatus = async (
@@ -607,6 +648,18 @@ export function VisitDetailModal({
         </div>
         {visit ? (
           <div className="modal-footer operations-detail-actions">
+            {canRefreshFromGuesty ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isSaving || isRefreshing}
+                onClick={() => void refreshFromGuesty()}
+              >
+                {isRefreshing
+                  ? t('operations.refreshingFromGuesty')
+                  : t('operations.refreshFromGuesty')}
+              </button>
+            ) : null}
             <button type="button" className="btn-secondary" onClick={openEdit}>
               {t('operations.editVisit')}
             </button>
@@ -615,7 +668,7 @@ export function VisitDetailModal({
                 <button
                   type="button"
                   className="btn-secondary"
-                  disabled={visitHasOpenTasks || isSaving}
+                  disabled={visitHasOpenTasks || isSaving || isRefreshing}
                   title={
                     visitHasOpenTasks ? t('operations.completeTasksFirst') : undefined
                   }
@@ -626,7 +679,7 @@ export function VisitDetailModal({
                 <button
                   type="button"
                   className="btn-secondary"
-                  disabled={isSaving}
+                  disabled={isSaving || isRefreshing}
                   onClick={openCancel}
                 >
                   {t('operations.cancelVisit')}

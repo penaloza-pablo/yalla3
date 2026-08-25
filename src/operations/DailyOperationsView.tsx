@@ -9,6 +9,8 @@ import {
   getVisitById,
   getVisitTemplates,
   getVisitsByDateRange,
+  canRefreshVisitFromGuesty,
+  refreshVisitFromGuesty,
   saveTask,
   saveVisit,
 } from './api'
@@ -168,6 +170,8 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   appliesToHourBank: Boolean(item.appliesToHourBank),
   specialHours: Boolean(item.specialHours),
+  guestyTaskId:
+    typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
   taskCountTotal:
     typeof item.taskCountTotal === 'number'
       ? item.taskCountTotal
@@ -261,6 +265,7 @@ export function DailyOperationsView({
   const [isLoading, setIsLoading] = useState(false)
   const [syncingVisitIds, setSyncingVisitIds] = useState<Set<string>>(new Set())
   const [isSavingVisitWithTasks, setIsSavingVisitWithTasks] = useState(false)
+  const [isRefreshingFromGuesty, setIsRefreshingFromGuesty] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -929,6 +934,44 @@ export function DailyOperationsView({
     }
   }
 
+  const refreshSelectedVisitFromGuesty = async () => {
+    if (!selectedVisit) return
+    if (!endpoints.upsertVisit) {
+      setError(t('operations.missingWriteVisit'))
+      return
+    }
+    setIsRefreshingFromGuesty(true)
+    setError(null)
+    try {
+      const response = await refreshVisitFromGuesty(
+        endpoints.upsertVisit,
+        selectedVisit.id,
+      )
+      const item = response.item as Record<string, unknown> | undefined
+      if (item) {
+        const mapped = mapVisit(item)
+        setVisits((current) =>
+          current.map((entry) => (entry.id === mapped.id ? mapped : entry)),
+        )
+      } else {
+        await loadVisits()
+      }
+      setMessage(
+        response.changed
+          ? t('operations.visitRefreshed')
+          : t('operations.visitAlreadyInSync'),
+      )
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : t('operations.unableRefreshFromGuesty'),
+      )
+    } finally {
+      setIsRefreshingFromGuesty(false)
+    }
+  }
+
   const submitTask = async () => {
     if (!endpoints.upsertTask) return
     const visitDueDate =
@@ -1500,6 +1543,8 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body operations-detail-body">
+              {message ? <p className="notice success">{message}</p> : null}
+              {error ? <p className="notice error">{error}</p> : null}
               <p>
                 <strong>Property:</strong>{' '}
                 {propertyById.get(selectedVisit.propertyId) ?? selectedVisit.propertyId}
@@ -1533,12 +1578,24 @@ export function DailyOperationsView({
               ) : null}
 
               <div className="operations-detail-actions">
+                {canRefreshVisitFromGuesty(selectedVisit) ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={isRefreshingFromGuesty}
+                    onClick={() => void refreshSelectedVisitFromGuesty()}
+                  >
+                    {isRefreshingFromGuesty
+                      ? t('operations.refreshingFromGuesty')
+                      : t('operations.refreshFromGuesty')}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-secondary"
                   onClick={() => openEditVisit(selectedVisit)}
                 >
-                  Edit visit
+                  {t('operations.editVisit')}
                 </button>
                 {selectedVisit.status !== 'COMPLETED' &&
                 selectedVisit.status !== 'CANCELLED' ? (

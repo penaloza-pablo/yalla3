@@ -5,7 +5,7 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import { recordCleaningCompletion } from '../shared/cleaner-stats';
-import { hasGuestyTaskId, invokeGuestyTaskSync } from '../shared/guesty-sync';
+import { hasGuestyTaskId, invokeGuestyTaskRefresh, invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -51,6 +51,7 @@ type VisitPayload = {
   closedBy?: string;
   cancelTaskAction?: 'release' | 'cancel';
   syncTaskDueDates?: boolean;
+  action?: string;
   tasks?: Array<{
     title?: string;
     description?: string;
@@ -99,6 +100,51 @@ export const handler = async (event: {
   const payload = parseBody<VisitPayload>(event.body);
   if (!payload) {
     return buildHttpResponse(400, { message: 'Payload is required.' });
+  }
+
+  if (payload.action === 'refreshFromGuesty') {
+    const visitId = payload.id?.trim();
+    if (!visitId) {
+      return buildHttpResponse(400, { message: 'id is required.' });
+    }
+    const found = await docClient.send(
+      new GetCommand({
+        TableName: visitsTable,
+        Key: { id: visitId },
+      }),
+    );
+    if (!found.Item) {
+      return buildHttpResponse(404, { message: 'Visit not found.' });
+    }
+    const result = await invokeGuestyTaskRefresh({
+      tableName: visitsTable,
+      id: visitId,
+    });
+    if (!result.ok) {
+      return buildHttpResponse(502, {
+        message: result.error || 'Failed to refresh visit from Guesty.',
+      });
+    }
+    const item = (result.item ?? found.Item) as Record<string, unknown>;
+    const visitTitle =
+      typeof item.title === 'string' && item.title.trim()
+        ? item.title
+        : visitId;
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: 'refresh',
+      entityId: visitId,
+      entityName: visitTitle,
+      summary: result.changed
+        ? `refreshed visit ${quoted(visitTitle)} from Guesty (${String(result.guestyStatus ?? '')} → ${String(result.yallaStatus ?? '')})`
+        : `refreshed visit ${quoted(visitTitle)} from Guesty; already in sync`,
+    });
+    return buildHttpResponse(200, {
+      item,
+      changed: Boolean(result.changed),
+      guestyStatus: result.guestyStatus,
+      yallaStatus: result.yallaStatus,
+    });
   }
 
   const isUpdate = Boolean(payload.id?.trim());
