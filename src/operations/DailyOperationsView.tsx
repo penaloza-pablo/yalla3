@@ -9,13 +9,14 @@ import {
   getVisitById,
   getVisitTemplates,
   getVisitsByDateRange,
+  getBookingsForDay,
   canRefreshVisitFromGuesty,
   refreshVisitFromGuesty,
   saveTask,
   saveVisit,
 } from './api'
 import { OperationsAgendaView } from './OperationsAgendaView'
-import { OperationsDayView } from './OperationsDayView'
+import { OperationsDayView, type DayBookingEvent } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
@@ -54,11 +55,14 @@ import type {
 type OpsMode = 'dashboard' | 'unassigned' | 'templates'
 type DashboardViewMode = 'kanban' | 'agenda' | 'day'
 
+type BookingEventKind = 'check-in' | 'check-out'
+
 type OpsFilters = {
   teamIds: string[]
   statuses: VisitStatus[]
   propertyIds: string[]
   userIds: string[]
+  bookingEvents: BookingEventKind[]
 }
 
 type Props = {
@@ -80,11 +84,14 @@ const DEFAULT_STATUS_FILTER: VisitStatus[] = [
   'COMPLETED',
 ]
 
+const DEFAULT_BOOKING_EVENTS: BookingEventKind[] = ['check-in']
+
 const emptyOpsFilters = (): OpsFilters => ({
   teamIds: [],
   statuses: [...DEFAULT_STATUS_FILTER],
   propertyIds: [],
   userIds: [],
+  bookingEvents: [...DEFAULT_BOOKING_EVENTS],
 })
 
 const listsMatch = (left: string[], right: string[]) =>
@@ -157,6 +164,48 @@ const mapProperty = (item: Record<string, unknown>): PropertyOption => {
     type: String(item.type ?? item.Type ?? '').trim() || undefined,
     mtlPrincipalId: mtlPrincipalId || undefined,
   }
+}
+
+const asRecordString = (item: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = item[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
+}
+
+const resolveBookingPropertyId = (
+  listingId: string,
+  listingNickname: string,
+  properties: PropertyOption[],
+) => {
+  if (listingId) {
+    const byId = properties.find((property) => property.id === listingId)
+    if (byId) {
+      return byId.id
+    }
+  }
+  const nick = listingNickname.trim().toLowerCase()
+  if (!nick) {
+    return listingId
+  }
+  const byNickname = properties.find((property) => {
+    const labels = [
+      property.listingNickname,
+      property.nickname,
+      property.title,
+    ]
+      .join(' ')
+      .toLowerCase()
+    return (
+      property.listingNickname.toLowerCase() === nick ||
+      property.nickname.toLowerCase() === nick ||
+      labels.includes(nick)
+    )
+  })
+  return byNickname?.id || listingId
 }
 
 const mapTeam = (item: Record<string, unknown>): TeamRecord => ({
@@ -263,6 +312,7 @@ export function DailyOperationsView({
   const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
 
   const [visits, setVisits] = useState<VisitRecord[]>([])
+  const [dayBookings, setDayBookings] = useState<DayBookingEvent[]>([])
   const [poolTasks, setPoolTasks] = useState<TaskRecord[]>([])
   const [visitTasks, setVisitTasks] = useState<TaskRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -357,6 +407,10 @@ export function DailyOperationsView({
         'upsertVisitTemplateUrl',
         import.meta.env.VITE_UPSERT_VISIT_TEMPLATE_URL,
       ),
+      bookings: getEndpoint(
+        'getBookingsUrl',
+        import.meta.env.VITE_GET_BOOKINGS_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -443,11 +497,15 @@ export function DailyOperationsView({
     const statusCount = listsMatch(filters.statuses, DEFAULT_STATUS_FILTER)
       ? 0
       : 1
+    const bookingCount = listsMatch(filters.bookingEvents, DEFAULT_BOOKING_EVENTS)
+      ? 0
+      : 1
     return (
       filters.teamIds.length +
       filters.propertyIds.length +
       filters.userIds.length +
-      statusCount
+      statusCount +
+      bookingCount
     )
   }, [filters])
 
@@ -540,6 +598,83 @@ export function DailyOperationsView({
     }
   }, [endpoints.visits, visitQueryRange])
 
+  const loadDayBookings = useCallback(async () => {
+    if (!endpoints.bookings || dashboardViewMode !== 'day') {
+      setDayBookings([])
+      return
+    }
+    if (filters.bookingEvents.length === 0) {
+      setDayBookings([])
+      return
+    }
+    try {
+      const payload = await getBookingsForDay(
+        endpoints.bookings,
+        dayViewDate,
+        'confirmed',
+      )
+      const events: DayBookingEvent[] = []
+      for (const item of payload.items ?? []) {
+        const record = item as Record<string, unknown>
+        const reservationId = asRecordString(record, [
+          'ReservationID',
+          'reservationId',
+          'id',
+        ])
+        const listingId = asRecordString(record, ['ListingID', 'listingId'])
+        const listingNickname = asRecordString(record, [
+          'ListingNickname',
+          'listingNickname',
+        ])
+        const guestName = asRecordString(record, ['GuestName', 'guestName'])
+        const checkInDate = asRecordString(record, ['CheckInDate', 'checkInDate'])
+        const checkOutDate = asRecordString(record, [
+          'CheckOutDate',
+          'checkOutDate',
+        ])
+        const propertyId = resolveBookingPropertyId(
+          listingId,
+          listingNickname,
+          propertyOptions,
+        )
+        if (!propertyId) {
+          continue
+        }
+        if (
+          filters.bookingEvents.includes('check-in') &&
+          checkInDate === dayViewDate
+        ) {
+          events.push({
+            id: `${reservationId || listingId}-in`,
+            kind: 'check-in',
+            propertyId,
+            guestName: guestName || listingNickname || reservationId,
+          })
+        }
+        if (
+          filters.bookingEvents.includes('check-out') &&
+          checkOutDate === dayViewDate
+        ) {
+          events.push({
+            id: `${reservationId || listingId}-out`,
+            kind: 'check-out',
+            propertyId,
+            guestName: guestName || listingNickname || reservationId,
+          })
+        }
+      }
+      setDayBookings(events)
+    } catch {
+      setDayBookings([])
+    }
+  }, [
+    dashboardViewMode,
+    dayViewDate,
+    endpoints.bookings,
+    filters.bookingEvents,
+    propertyOptions,
+  ])
+
   const applyTodayRange = () => {
     const today = getTodayMadrid()
     setFilterDateFrom(today)
@@ -589,6 +724,14 @@ export function DailyOperationsView({
       void loadPool()
     }
   }, [mode, loadVisits, loadPool, dashboardViewMode, dayViewDate])
+
+  useEffect(() => {
+    if (mode === 'dashboard') {
+      void loadDayBookings()
+    } else {
+      setDayBookings([])
+    }
+  }, [mode, loadDayBookings])
 
   useEffect(() => {
     if (selectedVisitId) {
@@ -1230,6 +1373,7 @@ export function DailyOperationsView({
                         statuses: [...filters.statuses],
                         propertyIds: [...filters.propertyIds],
                         userIds: [...filters.userIds],
+                        bookingEvents: [...filters.bookingEvents],
                       })
                       setIsFilterOpen(true)
                     }}
@@ -1342,6 +1486,7 @@ export function DailyOperationsView({
 
       {mode === 'dashboard' ? (
         <>
+          {dashboardViewMode !== 'day' ? (
           <section className="card filters-card">
             {dashboardViewMode === 'kanban' ? (
               <div className="operations-date-presets">
@@ -1370,24 +1515,13 @@ export function DailyOperationsView({
                   {t('operations.tomorrow')}
                 </button>
               </div>
-            ) : dashboardViewMode === 'agenda' ? (
+            ) : (
               <p className="subtitle operations-view-hint">
                 {t('operations.agendaHint', {
                   from: formatAgendaDayLabel(visitQueryRange.from),
                   to: formatAgendaDayLabel(visitQueryRange.to),
                 })}
               </p>
-            ) : (
-              <div className="filters-grid operations-day-date-filter">
-                <label>
-                  {t('operations.dayLabel')}
-                  <input
-                    type="date"
-                    value={dayViewDate}
-                    onChange={(event) => setDayViewDate(event.target.value)}
-                  />
-                </label>
-              </div>
             )}
 
             {dashboardViewMode === 'kanban' ? (
@@ -1413,6 +1547,7 @@ export function DailyOperationsView({
               </div>
             ) : null}
           </section>
+          ) : null}
 
           {isLoading ? <p className="subtitle">Loading visits…</p> : null}
 
@@ -1449,9 +1584,11 @@ export function DailyOperationsView({
               visits={filteredVisits.filter(
                 (visit) => visit.scheduledDate === dayViewDate,
               )}
+              bookings={dayBookings}
               propertyById={propertyById}
               teamById={teamById}
               syncingVisitIds={syncingVisitIds}
+              onDayDateChange={setDayViewDate}
               onVisitClick={setSelectedVisitId}
               onVisitTimeChange={handleVisitTimeChange}
             />
@@ -1736,6 +1873,47 @@ export function DailyOperationsView({
                     })}
                   </div>
                 </div>
+                {dashboardViewMode === 'day' ? (
+                  <div className="filter-group">
+                    <p className="filter-title">{t('operations.bookings')}</p>
+                    <div className="filter-options">
+                      {(
+                        [
+                          {
+                            id: 'check-in' as const,
+                            label: t('operations.checkIns'),
+                          },
+                          {
+                            id: 'check-out' as const,
+                            label: t('operations.checkOuts'),
+                          },
+                        ]
+                      ).map((option) => {
+                        const isChecked = filterDraft.bookingEvents.includes(
+                          option.id,
+                        )
+                        return (
+                          <label className="filter-option" key={option.id}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() =>
+                                setFilterDraft((current) => ({
+                                  ...current,
+                                  bookingEvents: toggleListValue(
+                                    current.bookingEvents,
+                                    option.id,
+                                  ) as BookingEventKind[],
+                                }))
+                              }
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="modal-footer">
@@ -1755,6 +1933,7 @@ export function DailyOperationsView({
                     statuses: [...filterDraft.statuses],
                     propertyIds: [...filterDraft.propertyIds],
                     userIds: [...filterDraft.userIds],
+                    bookingEvents: [...filterDraft.bookingEvents],
                   })
                   setIsFilterOpen(false)
                 }}

@@ -113,6 +113,16 @@ export const buildMtlDisplayRows = (
 export const rowHasVisits = (row: MtlDisplayRow, visits: VisitRecord[]) =>
   getVisitsForPropertyIds(visits, row.propertyIds).length > 0
 
+export const getBookingsForPropertyIds = <T extends { propertyId: string }>(
+  bookings: T[],
+  propertyIds: string[],
+) => bookings.filter((booking) => propertyIds.includes(booking.propertyId))
+
+export const rowHasBookings = <T extends { propertyId: string }>(
+  row: MtlDisplayRow,
+  bookings: T[],
+) => getBookingsForPropertyIds(bookings, row.propertyIds).length > 0
+
 export const getMtlGroupLabel = (row: MtlGroupRow) => {
   const roomCount = row.children.length
   const suffix =

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getPropertyLabel } from './propertyHelpers'
 import {
   getMtlGroupLabel,
+  getBookingsForPropertyIds,
   getVisitsForPropertyIds,
+  rowHasBookings,
   rowHasVisits,
   type MtlDisplayRow,
 } from './mtlPropertyHelpers'
@@ -35,6 +38,9 @@ import {
 import type { VisitRecord } from './types'
 
 const DAY_LANE_HEIGHT = 34
+const BOOKING_CHECK_IN_START = 15 * 60
+const BOOKING_CHECK_OUT_END = 11 * 60
+const BOOKING_DURATION_MINUTES = 30
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
 
@@ -47,13 +53,22 @@ type ActiveDrag = {
   trackWidth: number
 }
 
+export type DayBookingEvent = {
+  id: string
+  kind: 'check-in' | 'check-out'
+  propertyId: string
+  guestName: string
+}
+
 type Props = {
   dayViewDate: string
   displayRows: MtlDisplayRow[]
   visits: VisitRecord[]
+  bookings: DayBookingEvent[]
   propertyById: Map<string, string>
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
+  onDayDateChange: (date: string) => void
   onVisitClick: (visitId: string) => void
   onVisitTimeChange: (
     visitId: string,
@@ -66,6 +81,7 @@ type DayTableRow = {
   key: string
   propertyLabel: string
   propertyVisits: VisitRecord[]
+  propertyBookings: DayBookingEvent[]
   showRoomLabel: boolean
   isChildRow: boolean
   canExpand: boolean
@@ -79,12 +95,16 @@ export function OperationsDayView({
   dayViewDate,
   displayRows,
   visits,
+  bookings,
   propertyById,
   teamById,
   syncingVisitIds,
+  onDayDateChange,
   onVisitClick,
   onVisitTimeChange,
 }: Props) {
+  const { t } = useTranslation()
+  const dateInputRef = useRef<HTMLInputElement>(null)
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
   const [windowStartMinutes, setWindowStartMinutes] = useState(
     DAY_VIEW_DEFAULT_START_MINUTES,
@@ -107,7 +127,9 @@ export function OperationsDayView({
     setWindowStartMinutes((current) => shiftDayWindowStart(current, deltaMinutes))
   }
 
-  const visibleRows = displayRows.filter((row) => rowHasVisits(row, visits))
+  const visibleRows = displayRows.filter(
+    (row) => rowHasVisits(row, visits) || rowHasBookings(row, bookings),
+  )
 
   const tableRows = useMemo(() => {
     const rows: DayTableRow[] = []
@@ -120,6 +142,7 @@ export function OperationsDayView({
           propertyVisits: getVisitsForPropertyIds(visits, row.propertyIds).sort(
             (a, b) => a.scheduledStartTime.localeCompare(b.scheduledStartTime),
           ),
+          propertyBookings: getBookingsForPropertyIds(bookings, row.propertyIds),
           showRoomLabel: false,
           isChildRow: false,
           canExpand: false,
@@ -141,6 +164,9 @@ export function OperationsDayView({
           : getVisitsForPropertyIds(visits, row.propertyIds).sort((a, b) =>
               a.scheduledStartTime.localeCompare(b.scheduledStartTime),
             ),
+        propertyBookings: isExpanded
+          ? getBookingsForPropertyIds(bookings, [row.principal.id])
+          : getBookingsForPropertyIds(bookings, row.propertyIds),
         showRoomLabel: !isExpanded,
         isChildRow: false,
         canExpand: true,
@@ -155,13 +181,15 @@ export function OperationsDayView({
             .sort((a, b) =>
               a.scheduledStartTime.localeCompare(b.scheduledStartTime),
             )
-          if (childVisits.length === 0) {
+          const childBookings = getBookingsForPropertyIds(bookings, [child.id])
+          if (childVisits.length === 0 && childBookings.length === 0) {
             return
           }
           rows.push({
             key: `${row.principal.id}:${child.id}`,
             propertyLabel: getPropertyLabel(child),
             propertyVisits: childVisits,
+            propertyBookings: childBookings,
             showRoomLabel: false,
             isChildRow: true,
             canExpand: false,
@@ -173,17 +201,7 @@ export function OperationsDayView({
     })
 
     return rows
-  }, [visibleRows, visits, expandedMtlIds])
-
-  if (tableRows.length === 0) {
-    return (
-      <section className="card">
-        <p className="subtitle">
-          No visits scheduled for {formatAgendaDayLabel(dayViewDate)}.
-        </p>
-      </section>
-    )
-  }
+  }, [visibleRows, visits, bookings, expandedMtlIds])
 
   const toggleMtlGroup = (principalId: string) => {
     setExpandedMtlIds((current) => {
@@ -197,18 +215,53 @@ export function OperationsDayView({
     })
   }
 
+  const openDayPicker = () => {
+    const input = dateInputRef.current
+    if (!input) {
+      return
+    }
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+    input.focus()
+    input.click()
+  }
+
   return (
     <section className="card operations-day-card">
       <div className="operations-day-header">
-        <h2 className="section-title">{formatAgendaDayLabel(dayViewDate)}</h2>
-        <p className="subtitle">
-          Timeline {formatMinutesAsTime(startMinutes)}–
-          {formatMinutesAsTime(endMinutes)}. One line per property; overlapping
-          visits are highlighted so you can reschedule them. Drag to move; drag edges
-          to resize (30 min snap).
-        </p>
+        <div className="operations-day-title-row">
+          <h2 className="section-title">{formatAgendaDayLabel(dayViewDate)}</h2>
+          <button
+            type="button"
+            className="btn-ghost operations-day-calendar-btn"
+            aria-label={t('operations.chooseDate')}
+            onClick={openDayPicker}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
+              <path
+                d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          <input
+            ref={dateInputRef}
+            className="operations-day-date-input"
+            type="date"
+            value={dayViewDate}
+            onChange={(event) => onDayDateChange(event.target.value)}
+            aria-label={t('operations.chooseDate')}
+          />
+        </div>
       </div>
 
+      {tableRows.length === 0 ? (
+        <p className="subtitle operations-day-empty">
+          No visits scheduled for {formatAgendaDayLabel(dayViewDate)}.
+        </p>
+      ) : (
       <div className="operations-day-scroll">
         <table className="operations-day-table">
           <thead>
@@ -285,6 +338,7 @@ export function OperationsDayView({
                 <td className="operations-day-timeline-cell">
                   <DayTimelineTrack
                     propertyVisits={row.propertyVisits}
+                    propertyBookings={row.propertyBookings}
                     timelineWindow={timelineWindow}
                     propertyById={propertyById}
                     teamById={teamById}
@@ -299,12 +353,14 @@ export function OperationsDayView({
           </tbody>
         </table>
       </div>
+      )}
     </section>
   )
 }
 
 type DayTimelineTrackProps = {
   propertyVisits: VisitRecord[]
+  propertyBookings: DayBookingEvent[]
   timelineWindow: DayTimelineWindow
   propertyById: Map<string, string>
   teamById: Map<string, string>
@@ -320,6 +376,7 @@ type DayTimelineTrackProps = {
 
 function DayTimelineTrack({
   propertyVisits,
+  propertyBookings,
   timelineWindow,
   propertyById,
   teamById,
@@ -514,6 +571,13 @@ function DayTimelineTrack({
             handleBlockClick={handleBlockClick}
           />
         ))}
+        {propertyBookings.map((booking) => (
+          <DayBookingBlock
+            key={booking.id}
+            booking={booking}
+            timelineWindow={timelineWindow}
+          />
+        ))}
       </div>
     </div>
   )
@@ -651,6 +715,95 @@ function DayVisitBlock({
           {visit.status === 'COMPLETED' ? '✓' : '✕'}
         </span>
       ) : null}
+    </div>
+  )
+}
+
+function DayBookingIcon({ kind }: { kind: DayBookingEvent['kind'] }) {
+  if (kind === 'check-in') {
+    return (
+      <svg
+        className="operations-day-booking-icon"
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        aria-hidden="true"
+      >
+        <path
+          d="M7 3.5H4.5A1.5 1.5 0 0 0 3 5v6a1.5 1.5 0 0 0 1.5 1.5H7M8.5 8H14m0 0-2.2-2.2M14 8l-2.2 2.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg
+      className="operations-day-booking-icon"
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      aria-hidden="true"
+    >
+      <path
+        d="M9 3.5h2.5A1.5 1.5 0 0 1 13 5v6a1.5 1.5 0 0 1-1.5 1.5H9M2 8h5.5M2 8l2.2-2.2M2 8l2.2 2.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function DayBookingBlock({
+  booking,
+  timelineWindow,
+}: {
+  booking: DayBookingEvent
+  timelineWindow: DayTimelineWindow
+}) {
+  const start =
+    booking.kind === 'check-in'
+      ? BOOKING_CHECK_IN_START
+      : BOOKING_CHECK_OUT_END - BOOKING_DURATION_MINUTES
+  const end =
+    booking.kind === 'check-in'
+      ? start + BOOKING_DURATION_MINUTES
+      : BOOKING_CHECK_OUT_END
+  const clipped = clipVisitToDayWindow(start, end, timelineWindow)
+  if (clipped.visualEnd <= clipped.visualStart) {
+    return null
+  }
+  const left = minutesToPositionPercent(clipped.visualStart, timelineWindow)
+  const width = Math.max(
+    2,
+    minutesToPositionPercent(clipped.visualEnd, timelineWindow) -
+      minutesToPositionPercent(clipped.visualStart, timelineWindow),
+  )
+  const label =
+    booking.kind === 'check-in'
+      ? `Check-in · ${booking.guestName}`
+      : `Check-out · ${booking.guestName}`
+
+  return (
+    <div
+      className={`operations-day-booking-block ${
+        booking.kind === 'check-in' ? 'is-check-in' : 'is-check-out'
+      }`}
+      style={{
+        left: `${left}%`,
+        width: `${width}%`,
+      }}
+      title={label}
+      aria-label={label}
+    >
+      <DayBookingIcon kind={booking.kind} />
     </div>
   )
 }

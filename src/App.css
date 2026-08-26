@@ -2588,6 +2588,67 @@ th {
   padding: 0 16px;
 }
 
+.operations-day-title-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.operations-day-title-row .section-title {
+  margin: 0;
+}
+
+.operations-day-calendar-btn {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.operations-day-date-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.operations-day-empty {
+  padding: 0 16px 16px;
+}
+
+.operations-day-booking-block {
+  position: absolute;
+  min-height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.operations-day-booking-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+.operations-day-booking-block.is-check-in {
+  background: #12b76a;
+  color: #ffffff;
+}
+
+.operations-day-booking-block.is-check-out {
+  background: #667085;
+  color: #ffffff;
+}
+
 .operations-day-scroll {
   overflow: auto;
   max-width: 100%;

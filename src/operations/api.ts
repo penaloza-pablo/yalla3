@@ -77,6 +77,22 @@ export const saveTask = (endpoint: string, payload: Record<string, unknown>) =>
     body: JSON.stringify(payload),
   })
 
+export const getBookingsForDay = (
+  endpoint: string,
+  date: string,
+  status = 'confirmed',
+) => {
+  const params = new URLSearchParams()
+  params.set('onDate', date)
+  if (status) {
+    params.set('status', status)
+  }
+  params.set('limit', '200')
+  return fetchJson<ListResponse<Record<string, unknown>>>(
+    `${endpoint}?${params.toString()}`,
+  )
+}
+
 export const getReferenceList = (endpoint: string, teamId?: string) => {
   const url = teamId
     ? `${endpoint}?teamId=${encodeURIComponent(teamId)}`

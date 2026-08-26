@@ -552,7 +552,11 @@
     "subtitleUnassigned": "Tasks that are not attached to a visit.",
     "eyebrowTemplates": "Ops / Visit templates",
     "subtitleTemplates": "Reusable visit and task presets per property.",
-    "createTemplate": "Create template"
+    "createTemplate": "Create template",
+    "bookings": "Bookings",
+    "checkIns": "Check-ins",
+    "checkOuts": "Check-outs",
+    "chooseDate": "Choose date"
   },
   "reviewWorkflow": {
     "progress": "Review workflow progress",

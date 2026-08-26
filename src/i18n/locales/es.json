@@ -552,7 +552,11 @@
     "subtitleUnassigned": "Tareas que no están asociadas a una visita.",
     "eyebrowTemplates": "Ops / Plantillas de visita",
     "subtitleTemplates": "Plantillas reutilizables de visita y tareas por propiedad.",
-    "createTemplate": "Crear plantilla"
+    "createTemplate": "Crear plantilla",
+    "bookings": "Reservas",
+    "checkIns": "Check-ins",
+    "checkOuts": "Check-outs",
+    "chooseDate": "Elegir fecha"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",

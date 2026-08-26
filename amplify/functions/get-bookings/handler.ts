@@ -155,6 +155,76 @@ const compareCheckIn = (
   );
 };
 
+const matchesStatus = (item: Record<string, unknown>, status: string | null) => {
+  if (!status) {
+    return true;
+  }
+  return String(item.Status ?? '').trim().toLowerCase() === status;
+};
+
+const scanCheckOutDate = async (
+  tableName: string,
+  checkOutDate: string,
+  status: string | null,
+) => {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  let scannedCount = 0;
+  const values: Record<string, string> = {
+    ':checkOutDate': checkOutDate,
+  };
+  const filters = ['CheckOutDate = :checkOutDate'];
+  if (status) {
+    values[':status'] = status;
+    filters.push('#status = :status');
+  }
+
+  do {
+    const result = await client.send(
+      new ScanCommand({
+        TableName: tableName,
+        ExclusiveStartKey: exclusiveStartKey,
+        ExpressionAttributeNames: EXPRESSION_NAMES,
+        ProjectionExpression: PROJECTED_FIELDS,
+        FilterExpression: filters.join(' AND '),
+        ExpressionAttributeValues: values,
+      }),
+    );
+    const page = (result.Items as Record<string, unknown>[] | undefined) ?? [];
+    scannedCount += result.ScannedCount ?? page.length;
+    items.push(...page);
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+
+  return { items, scannedCount };
+};
+
+const collectBookingsOnDate = async (
+  tableName: string,
+  dateIso: string,
+  status: string | null,
+) => {
+  const checkIns = await queryCheckInDate(tableName, dateIso);
+  const checkOuts = await scanCheckOutDate(tableName, dateIso, status);
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const item of checkIns.items) {
+    if (!matchesStatus(item, status)) {
+      continue;
+    }
+    byId.set(String(item.ReservationID ?? ''), item);
+  }
+  for (const item of checkOuts.items) {
+    byId.set(String(item.ReservationID ?? ''), item);
+  }
+  const items = [...byId.values()].sort(compareCheckIn);
+  return {
+    items,
+    scannedCount: checkIns.scannedCount + checkOuts.scannedCount,
+  };
+};
+
 const queryCheckInDate = async (tableName: string, checkInDate: string) => {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
@@ -342,12 +412,33 @@ export const handler = async (event: HttpEvent) => {
 
   const limit = parseLimit(event.queryStringParameters?.limit);
   const cursor = parseCursor(event.queryStringParameters?.cursor);
+  const onDate = parseIsoDate(event.queryStringParameters?.onDate);
+  const statusFilter = String(event.queryStringParameters?.status ?? '')
+    .trim()
+    .toLowerCase();
+  const status = statusFilter || null;
   const checkInFrom = parseIsoDate(event.queryStringParameters?.checkInFrom);
   const checkInTo = parseIsoDate(event.queryStringParameters?.checkInTo);
   const fromIso = checkInFrom ? toIsoDate(checkInFrom) : null;
   const toIso = checkInTo ? toIsoDate(checkInTo) : null;
 
   try {
+    if (onDate) {
+      const collected = await collectBookingsOnDate(
+        tableName,
+        toIsoDate(onDate),
+        status,
+      );
+      const payload = {
+        items: collected.items,
+        count: collected.items.length,
+        scannedCount: collected.scannedCount,
+        nextCursor: null,
+        pageSize: collected.items.length,
+      };
+      return isHttp ? jsonResponse(200, payload) : payload;
+    }
+
     if (fromIso || toIso) {
       let collected: { items: Record<string, unknown>[]; scannedCount: number };
       try {

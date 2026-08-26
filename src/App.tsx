@@ -1145,6 +1145,19 @@ const defaultBookingsCheckInRange = () => {
   }
 }
 
+const DEFAULT_BOOKING_STATUSES = ['confirmed']
+
+const listsMatchBookingStatuses = (left: string[], right: string[]) =>
+  left.length === right.length &&
+  left.every((value) =>
+    right.some((entry) => entry.toLowerCase() === value.toLowerCase()),
+  )
+
+const defaultBookingsFilters = () => ({
+  statuses: [...DEFAULT_BOOKING_STATUSES],
+  ...defaultBookingsCheckInRange(),
+})
+
 const getCalendarMonthRange = (monthOffset: number) => {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
@@ -1512,18 +1525,12 @@ function App() {
     statuses: string[]
     checkInFrom: string
     checkInTo: string
-  }>({
-    statuses: [],
-    ...defaultBookingsCheckInRange(),
-  })
+  }>(defaultBookingsFilters)
   const [bookingsFilterDraft, setBookingsFilterDraft] = useState<{
     statuses: string[]
     checkInFrom: string
     checkInTo: string
-  }>({
-    statuses: [],
-    ...defaultBookingsCheckInRange(),
-  })
+  }>(defaultBookingsFilters)
   const [bookingsSortDirection, setBookingsSortDirection] = useState<'asc' | 'desc'>(
     'asc',
   )
@@ -1535,6 +1542,9 @@ function App() {
     Array<string | null>
   >([])
   const [bookingsNextCursor, setBookingsNextCursor] = useState<string | null>(null)
+  const [bookingsAvailableStatuses, setBookingsAvailableStatuses] = useState<
+    string[]
+  >([...DEFAULT_BOOKING_STATUSES])
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([])
   const [isReviewsLoading, setIsReviewsLoading] = useState(false)
   const [isReviewsSyncing, setIsReviewsSyncing] = useState(false)
@@ -2523,15 +2533,22 @@ function App() {
 
         const payload = (await response.json()) as BookingsApiResponse
         const items = Array.isArray(payload.items) ? payload.items : []
-        const mappedRows = items
-          .map((entry) => mapBookingRow(normalizeInventoryItem(entry)))
-          .filter((row) => {
-            if (bookingsFilters.statuses.length === 0) {
-              return true
-            }
-            return bookingsFilters.statuses.includes(row.status)
-          })
-        setBookingRows(mappedRows)
+        const mappedRows = items.map((entry) =>
+          mapBookingRow(normalizeInventoryItem(entry)),
+        )
+        const uniqueStatuses = Array.from(
+          new Set(mappedRows.map((row) => row.status).filter(Boolean)),
+        )
+        setBookingsAvailableStatuses(uniqueStatuses)
+        const filteredRows = mappedRows.filter((row) => {
+          if (bookingsFilters.statuses.length === 0) {
+            return true
+          }
+          return bookingsFilters.statuses.some(
+            (status) => status.toLowerCase() === row.status.toLowerCase(),
+          )
+        })
+        setBookingRows(filteredRows)
         setBookingsNextCursor(payload.nextCursor ?? null)
         setBookingsLastUpdated(
           new Date().toLocaleString('en-US', {
@@ -3587,20 +3604,30 @@ function App() {
   }, [propertyRows])
 
   const bookingsStatusOptions = useMemo(() => {
-    const unique = new Set(bookingRows.map((row) => row.status).filter(Boolean))
+    const unique = new Set([
+      ...DEFAULT_BOOKING_STATUSES,
+      ...bookingsAvailableStatuses,
+      ...bookingRows.map((row) => row.status).filter(Boolean),
+    ])
     return Array.from(unique).sort((a, b) => a.localeCompare(b))
-  }, [bookingRows])
+  }, [bookingRows, bookingsAvailableStatuses])
 
   const bookingsActiveFilterCount = useMemo(() => {
+    const statusCount = listsMatchBookingStatuses(
+      bookingsFilters.statuses,
+      DEFAULT_BOOKING_STATUSES,
+    )
+      ? 0
+      : 1
     return (
-      bookingsFilters.statuses.length +
+      statusCount +
       (bookingsFilters.checkInFrom ? 1 : 0) +
       (bookingsFilters.checkInTo ? 1 : 0)
     )
   }, [
     bookingsFilters.checkInFrom,
     bookingsFilters.checkInTo,
-    bookingsFilters.statuses.length,
+    bookingsFilters.statuses,
   ])
 
   const sortedBookingsRows = useMemo(() => {
@@ -7250,8 +7277,10 @@ function App() {
                           <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
                             {bookingsStatusOptions.map((option) => {
-                              const isChecked =
-                                bookingsFilterDraft.statuses.includes(option)
+                              const isChecked = bookingsFilterDraft.statuses.some(
+                                (status) =>
+                                  status.toLowerCase() === option.toLowerCase(),
+                              )
                               return (
                                 <label className="filter-option" key={option}>
                                   <input
@@ -7318,13 +7347,7 @@ function App() {
                       <button
                         className="btn-secondary"
                         type="button"
-                        onClick={() =>
-                          setBookingsFilterDraft({
-                            statuses: [],
-                            checkInFrom: '',
-                            checkInTo: '',
-                          })
-                        }
+                        onClick={() => setBookingsFilterDraft(defaultBookingsFilters())}
                       >
                         {t('common.clear')}
                       </button>
