@@ -125,7 +125,17 @@ export const handler = async (event: {
         message: result.error || 'Failed to refresh visit from Guesty.',
       });
     }
-    const item = (result.item ?? found.Item) as Record<string, unknown>;
+    const previousStatus = normalizeStatus(
+      typeof found.Item.status === 'string' ? found.Item.status : '',
+    );
+    const item = {
+      ...(found.Item as Record<string, unknown>),
+      ...((result.item ?? {}) as Record<string, unknown>),
+    };
+    const nextStatus = normalizeStatus(
+      result.yallaStatus ||
+        (typeof item.status === 'string' ? item.status : ''),
+    );
     const visitTitle =
       typeof item.title === 'string' && item.title.trim()
         ? item.title
@@ -139,8 +149,15 @@ export const handler = async (event: {
         ? `refreshed visit ${quoted(visitTitle)} from Guesty (${String(result.guestyStatus ?? '')} → ${String(result.yallaStatus ?? '')})`
         : `refreshed visit ${quoted(visitTitle)} from Guesty; already in sync`,
     });
+    if (nextStatus === 'COMPLETED' && previousStatus !== 'COMPLETED') {
+      try {
+        await recordCleaningCompletion({ ...item, status: 'COMPLETED' });
+      } catch (error) {
+        console.error('Failed to record cleaning completion', error);
+      }
+    }
     return buildHttpResponse(200, {
-      item,
+      item: nextStatus ? { ...item, status: nextStatus } : item,
       changed: Boolean(result.changed),
       guestyStatus: result.guestyStatus,
       yallaStatus: result.yallaStatus,

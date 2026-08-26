@@ -8,6 +8,7 @@ export const upsertVisit = defineFunction({
     TABLE_NAME: 'yalla-visits',
     TASKS_TABLE: 'yalla-tasks',
     SYNC_TASK_TO_GUESTY_FUNCTION: 'yalla-syncTaskToGuesty',
+    CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
   },
   timeoutSeconds: 60,
 });

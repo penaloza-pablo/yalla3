@@ -183,11 +183,22 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
       setError(t('cleaningSettings.missingEndpoint'))
       return
     }
+    if (endpoints.upsertCleaner) {
+      try {
+        await fetchJson(endpoints.upsertCleaner, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'reconcileStats' }),
+        })
+      } catch {
+        // Keep loading cleaners even if the backfill has not been deployed yet.
+      }
+    }
     const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
       `${endpoints.getCleaners}?includeInactive=true`,
     )
     setCleaners((payload.items ?? []).map(mapCleaner))
-  }, [endpoints.getCleaners, t])
+  }, [endpoints.getCleaners, endpoints.upsertCleaner, t])
 
   const loadDetails = useCallback(async () => {
     if (!endpoints.getDetails) {

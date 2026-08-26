@@ -392,6 +392,15 @@ cleaningIncidentsTable.addGlobalSecondaryIndex({
 
 backend.getCleaners.addEnvironment('TABLE_NAME', cleanersTable.tableName);
 backend.upsertCleaner.addEnvironment('TABLE_NAME', cleanersTable.tableName);
+backend.upsertCleaner.addEnvironment('CLEANERS_TABLE', cleanersTable.tableName);
+backend.upsertCleaner.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.upsertCleaner.addEnvironment(
+  'CLEANING_INCIDENTS_TABLE',
+  cleaningIncidentsTable.tableName,
+);
 backend.getCleaningPlan.addEnvironment('TABLE_NAME', cleaningPlansTable.tableName);
 backend.upsertCleaningPlan.addEnvironment(
   'TABLE_NAME',
@@ -489,6 +498,15 @@ backend.upsertCleaningPlan.addEnvironment(
 
 cleanersTable.grantReadData(backend.getCleaners.resources.lambda);
 cleanersTable.grantReadWriteData(backend.upsertCleaner.resources.lambda);
+visitsTable.grantReadData(backend.upsertCleaner.resources.lambda);
+cleaningPlansTable.grantReadData(backend.upsertCleaner.resources.lambda);
+cleaningIncidentsTable.grantReadData(backend.upsertCleaner.resources.lambda);
+backend.upsertCleaner.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${cleaningIncidentsTable.tableArn}/index/*`],
+  }),
+);
 cleanersTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
 cleanersTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
 cleanersTable.grantReadWriteData(

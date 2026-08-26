@@ -4,5 +4,9 @@ export const upsertCleaner = defineFunction({
   runtime: 22,
   name: 'UpsertCleaner',
   entry: './handler.ts',
-  timeoutSeconds: 20,
+  environment: {
+    VISITS_TABLE: 'yalla-visits',
+    CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
+  },
+  timeoutSeconds: 60,
 });

@@ -4,6 +4,7 @@ import {
   quoted,
   recordActivityLog,
 } from '../shared/activity-log';
+import { reconcileCleanerStatsFromPlans } from '../shared/cleaner-stats';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -22,6 +23,7 @@ type CleanerPayload = {
   id?: string;
   name?: string;
   active?: boolean;
+  action?: string;
 };
 
 export const handler = async (event: {
@@ -47,6 +49,23 @@ export const handler = async (event: {
   const payload = parseBody<CleanerPayload>(event.body);
   if (!payload) {
     return buildHttpResponse(400, { message: 'Payload is required.' });
+  }
+
+  if (payload.action?.trim() === 'reconcileStats') {
+    try {
+      const summary = await reconcileCleanerStatsFromPlans();
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.CLEANING_SETTINGS,
+        action: 'update',
+        summary: `reconciled cleaner stats from ${summary.completedAssignments} completed plan visits`,
+      });
+      return buildHttpResponse(200, summary);
+    } catch (error) {
+      return buildHttpResponse(500, {
+        message: 'Failed to reconcile cleaner stats.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   const isUpdate = Boolean(payload.id?.trim());
