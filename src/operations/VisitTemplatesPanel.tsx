@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+  type Ref,
+} from 'react'
 import { getVisitTemplates, saveVisitTemplate } from './api'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
@@ -23,18 +31,28 @@ type Props = {
   visitTypes: VisitTypeRecord[]
   onMessage: (message: string) => void
   onError: (message: string) => void
+  hideSectionHeader?: boolean
 }
 
-export function VisitTemplatesPanel({
-  getVisitTemplatesEndpoint,
-  upsertVisitTemplateEndpoint,
-  propertyOptions,
-  teams,
-  users,
-  visitTypes,
-  onMessage,
-  onError,
-}: Props) {
+export type VisitTemplatesPanelHandle = {
+  refresh: () => Promise<void>
+  openCreate: () => void
+}
+
+export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
+  {
+    getVisitTemplatesEndpoint,
+    upsertVisitTemplateEndpoint,
+    propertyOptions,
+    teams,
+    users,
+    visitTypes,
+    onMessage,
+    onError,
+    hideSectionHeader = false,
+  }: Props,
+  ref: Ref<VisitTemplatesPanelHandle>,
+) {
   const [filterPropertyId, setFilterPropertyId] = useState('')
   const [templates, setTemplates] = useState<VisitTemplateRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -112,6 +130,11 @@ export function VisitTemplatesPanel({
     })
     setIsFormOpen(true)
   }
+
+  useImperativeHandle(ref, () => ({
+    refresh: loadTemplates,
+    openCreate: openCreateTemplate,
+  }))
 
   const openEditTemplate = (template: VisitTemplateRecord) => {
     setTemplateForm({
@@ -281,27 +304,29 @@ export function VisitTemplatesPanel({
   return (
     <>
       <section className="card">
-        <div className="page-header">
-          <div>
-            <h2 className="section-title">Visit templates</h2>
-            <p className="subtitle">
-              Reusable visit and task presets per property. Applying a template
-              pre-fills a new visit; you still choose the date before saving.
-            </p>
+        {hideSectionHeader ? null : (
+          <div className="page-header">
+            <div>
+              <h2 className="section-title">Visit templates</h2>
+              <p className="subtitle">
+                Reusable visit and task presets per property. Applying a template
+                pre-fills a new visit; you still choose the date before saving.
+              </p>
+            </div>
+            <div className="header-actions">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => void loadTemplates()}
+              >
+                Refresh
+              </button>
+              <button className="btn-primary" type="button" onClick={openCreateTemplate}>
+                Create template
+              </button>
+            </div>
           </div>
-          <div className="header-actions">
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => void loadTemplates()}
-            >
-              Refresh
-            </button>
-            <button className="btn-primary" type="button" onClick={openCreateTemplate}>
-              Create template
-            </button>
-          </div>
-        </div>
+        )}
 
         <div className="filters-row">
           <label>
@@ -664,4 +689,4 @@ export function VisitTemplatesPanel({
       ) : null}
     </>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import {
@@ -27,7 +27,7 @@ import {
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { requiresCompleteVisitWizard } from './visitTypeIds'
-import { VisitTemplatesPanel } from './VisitTemplatesPanel'
+import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import {
   mapVisitTemplate,
   templateTasksToDrafts,
@@ -51,11 +51,49 @@ import type {
   VisitTypeRecord,
 } from './types'
 
+type OpsMode = 'dashboard' | 'unassigned' | 'templates'
+type DashboardViewMode = 'kanban' | 'agenda' | 'day'
+
+type OpsFilters = {
+  teamIds: string[]
+  statuses: VisitStatus[]
+  propertyIds: string[]
+  userIds: string[]
+}
+
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
   getCurrentUserEmail: () => Promise<string>
   propertyOptions: PropertyOption[]
+  mode?: OpsMode
 }
+
+const ALL_VISIT_STATUSES: VisitStatus[] = [
+  'SCHEDULED',
+  'OVERDUE',
+  'COMPLETED',
+  'CANCELLED',
+]
+const DEFAULT_STATUS_FILTER: VisitStatus[] = [
+  'SCHEDULED',
+  'OVERDUE',
+  'COMPLETED',
+]
+
+const emptyOpsFilters = (): OpsFilters => ({
+  teamIds: [],
+  statuses: [...DEFAULT_STATUS_FILTER],
+  propertyIds: [],
+  userIds: [],
+})
+
+const listsMatch = (left: string[], right: string[]) =>
+  left.length === right.length && left.every((value) => right.includes(value))
+
+const toggleListValue = (values: string[], value: string) =>
+  values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value]
 
 const VISIT_COLUMN_DEFS: {
   key: VisitStatus | 'DONE'
@@ -201,6 +239,7 @@ export function DailyOperationsView({
   getEndpoint,
   getCurrentUserEmail,
   propertyOptions: propertyOptionsProp,
+  mode = 'dashboard',
 }: Props) {
   const { t } = useTranslation()
   const visitColumns = useMemo(
@@ -211,20 +250,17 @@ export function DailyOperationsView({
       })),
     [t],
   )
-  const [opsTab, setOpsTab] = useState<'dashboard' | 'pool' | 'templates'>(
-    'dashboard',
-  )
-  const [dashboardViewMode, setDashboardViewMode] = useState<
-    'kanban' | 'agenda' | 'day'
-  >('kanban')
+  const templatesPanelRef = useRef<VisitTemplatesPanelHandle>(null)
+  const [dashboardViewMode, setDashboardViewMode] =
+    useState<DashboardViewMode>('day')
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [filters, setFilters] = useState<OpsFilters>(emptyOpsFilters)
+  const [filterDraft, setFilterDraft] = useState<OpsFilters>(emptyOpsFilters)
   const [dayViewDate, setDayViewDate] = useState(getTodayMadrid())
   const [agendaAnchorDate, setAgendaAnchorDate] = useState(getTodayMadrid())
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayMadrid())
   const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
-  const [filterTeamId, setFilterTeamId] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterPropertyId, setFilterPropertyId] = useState('')
-  const [filterUserId, setFilterUserId] = useState('')
 
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [poolTasks, setPoolTasks] = useState<TaskRecord[]>([])
@@ -378,13 +414,42 @@ export function DailyOperationsView({
 
   const filteredVisits = useMemo(() => {
     return visits.filter((visit) => {
-      if (filterTeamId && visit.teamId !== filterTeamId) return false
-      if (filterStatus && visit.status !== filterStatus) return false
-      if (filterPropertyId && visit.propertyId !== filterPropertyId) return false
-      if (filterUserId && visit.assignedUserId !== filterUserId) return false
+      if (filters.teamIds.length > 0 && !filters.teamIds.includes(visit.teamId)) {
+        return false
+      }
+      if (
+        filters.statuses.length > 0 &&
+        !filters.statuses.includes(visit.status)
+      ) {
+        return false
+      }
+      if (
+        filters.propertyIds.length > 0 &&
+        !filters.propertyIds.includes(visit.propertyId)
+      ) {
+        return false
+      }
+      if (
+        filters.userIds.length > 0 &&
+        !filters.userIds.includes(visit.assignedUserId ?? '')
+      ) {
+        return false
+      }
       return true
     })
-  }, [visits, filterTeamId, filterStatus, filterPropertyId, filterUserId])
+  }, [visits, filters])
+
+  const activeFilterCount = useMemo(() => {
+    const statusCount = listsMatch(filters.statuses, DEFAULT_STATUS_FILTER)
+      ? 0
+      : 1
+    return (
+      filters.teamIds.length +
+      filters.propertyIds.length +
+      filters.userIds.length +
+      statusCount
+    )
+  }, [filters])
 
   const isMultiDayRange = filterDateFrom !== filterDateTo
 
@@ -517,12 +582,13 @@ export function DailyOperationsView({
   }, [propertyOptionsProp])
 
   useEffect(() => {
-    if (opsTab === 'dashboard') {
+    if (mode === 'dashboard') {
       void loadVisits()
-    } else {
+    }
+    if (mode === 'unassigned') {
       void loadPool()
     }
-  }, [opsTab, loadVisits, loadPool, dashboardViewMode, dayViewDate])
+  }, [mode, loadVisits, loadPool, dashboardViewMode, dayViewDate])
 
   useEffect(() => {
     if (selectedVisitId) {
@@ -1112,65 +1178,145 @@ export function DailyOperationsView({
       .catch(() => setAssignVisitOptions([]))
   }, [isAssignVisitOpen, assignTaskId, endpoints.visits, poolTasks])
 
+  const pageTitle =
+    mode === 'unassigned'
+      ? t('pages.Unassigned tasks')
+      : mode === 'templates'
+        ? t('pages.Visit templates')
+        : t('pages.Daily Operations')
+  const pageEyebrow =
+    mode === 'unassigned'
+      ? t('operations.eyebrowUnassigned')
+      : mode === 'templates'
+        ? t('operations.eyebrowTemplates')
+        : t('operations.eyebrow')
+  const pageSubtitle =
+    mode === 'unassigned'
+      ? t('operations.subtitleUnassigned')
+      : mode === 'templates'
+        ? t('operations.subtitleTemplates')
+        : t('operations.subtitlePage')
+  const statusLabel = (status: VisitStatus) => {
+    if (status === 'SCHEDULED') return t('operations.scheduled')
+    if (status === 'OVERDUE') return t('operations.overdue')
+    if (status === 'COMPLETED') return t('operations.completed')
+    return t('operations.cancelled')
+  }
+
   return (
     <>
       <header className="page-header">
         <div className="page-header-leading">
-          <p className="eyebrow">{t('operations.eyebrow')}</p>
+          <p className="eyebrow">{pageEyebrow}</p>
           <div className="page-title-row">
-            <h1 className="page-title">{t('pages.Daily Operations')}</h1>
+            <h1 className="page-title">{pageTitle}</h1>
           </div>
-          <p className="subtitle">{t('operations.subtitlePage')}</p>
+          <p className="subtitle">{pageSubtitle}</p>
         </div>
         <MobileBodyPortal>
           <div className="page-action-bar">
             <div className="header-actions">
-              {opsTab === 'pool' ? (
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={() => {
+              {mode === 'dashboard' ? (
+                <>
+                  <button
+                    className={`btn-ghost btn-filter ${
+                      isFilterOpen ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-label={t('common.filters')}
+                    onClick={() => {
+                      setFilterDraft({
+                        teamIds: [...filters.teamIds],
+                        statuses: [...filters.statuses],
+                        propertyIds: [...filters.propertyIds],
+                        userIds: [...filters.userIds],
+                      })
+                      setIsFilterOpen(true)
+                    }}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    {activeFilterCount > 0 ? (
+                      <span className="filter-badge">{activeFilterCount}</span>
+                    ) : null}
+                  </button>
+                  <button
+                    className={`btn-ghost ${
+                      isViewMenuOpen || dashboardViewMode !== 'day' ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-label={t('operations.changeView')}
+                    aria-expanded={isViewMenuOpen}
+                    onClick={() => setIsViewMenuOpen(true)}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M10 4C5.2 4 1.4 7.4.5 10c.9 2.6 4.7 6 9.5 6s8.6-3.4 9.5-6c-.9-2.6-4.7-6-9.5-6zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
+                </>
+              ) : null}
+              <button
+                className="btn-ghost"
+                type="button"
+                onClick={() => {
+                  if (mode === 'unassigned') {
                     setTaskForm({ ...emptyTaskForm(), propertyId: '', visitId: '' })
                     setIsTaskFormOpen(true)
-                  }}
-                  aria-label={t('operations.createTask')}
+                    return
+                  }
+                  if (mode === 'templates') {
+                    templatesPanelRef.current?.openCreate()
+                    return
+                  }
+                  openCreateVisit()
+                }}
+                aria-label={
+                  mode === 'unassigned'
+                    ? t('operations.createTask')
+                    : mode === 'templates'
+                      ? t('operations.createTemplate')
+                      : t('operations.createVisit')
+                }
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="16"
+                  height="16"
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                  </svg>
-                </button>
-              ) : opsTab === 'dashboard' ? (
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={openCreateVisit}
-                  aria-label={t('operations.createVisit')}
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                  </svg>
-                </button>
-              ) : null}
+                  <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
+                </svg>
+              </button>
               <button
                 className="btn-primary"
                 type="button"
                 onClick={() => {
-                  if (opsTab === 'pool') {
+                  if (mode === 'unassigned') {
                     void loadPool()
-                  } else {
-                    setOpsTab('dashboard')
-                    void loadVisits()
+                    return
                   }
+                  if (mode === 'templates') {
+                    void templatesPanelRef.current?.refresh()
+                    return
+                  }
+                  void loadVisits()
                 }}
                 aria-label={t('operations.refresh')}
               >
@@ -1194,63 +1340,9 @@ export function DailyOperationsView({
       {message ? <p className="notice success">{message}</p> : null}
       {error ? <p className="notice error">{error}</p> : null}
 
-      <div className="operations-tabs">
-        <button
-          type="button"
-          className={opsTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setOpsTab('dashboard')}
-        >
-          {t('operations.dashboard')}
-        </button>
-        <button
-          type="button"
-          className={opsTab === 'pool' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setOpsTab('pool')}
-        >
-          {t('operations.unassigned')}
-        </button>
-        <button
-          type="button"
-          className={opsTab === 'templates' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setOpsTab('templates')}
-        >
-          {t('operations.templates')}
-        </button>
-      </div>
-
-      {opsTab === 'dashboard' ? (
+      {mode === 'dashboard' ? (
         <>
           <section className="card filters-card">
-            <div className="operations-dashboard-views">
-              <button
-                type="button"
-                className={
-                  dashboardViewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'
-                }
-                onClick={() => setDashboardViewMode('kanban')}
-              >
-                Kanban
-              </button>
-              <button
-                type="button"
-                className={
-                  dashboardViewMode === 'agenda' ? 'btn-primary' : 'btn-secondary'
-                }
-                onClick={() => setDashboardViewMode('agenda')}
-              >
-                Agenda
-              </button>
-              <button
-                type="button"
-                className={
-                  dashboardViewMode === 'day' ? 'btn-primary' : 'btn-secondary'
-                }
-                onClick={() => setDashboardViewMode('day')}
-              >
-                Day
-              </button>
-            </div>
-
             {dashboardViewMode === 'kanban' ? (
               <div className="operations-date-presets">
                 <button
@@ -1298,85 +1390,28 @@ export function DailyOperationsView({
               </div>
             )}
 
-            <div className="filters-grid">
-              {dashboardViewMode === 'kanban' ? (
-                <>
-                  <label>
-                    {t('operations.from')}
-                    <input
-                      type="date"
-                      value={filterDateFrom}
-                      max={filterDateTo}
-                      onChange={(event) => setFilterDateFrom(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {t('operations.to')}
-                    <input
-                      type="date"
-                      value={filterDateTo}
-                      min={filterDateFrom}
-                      onChange={(event) => setFilterDateTo(event.target.value)}
-                    />
-                  </label>
-                </>
-              ) : null}
-              <label>
-                {t('operations.team')}
-                <select
-                  value={filterTeamId}
-                  onChange={(event) => setFilterTeamId(event.target.value)}
-                >
-                  <option value="">{t('operations.allTeams')}</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t('operations.status')}
-                <select
-                  value={filterStatus}
-                  onChange={(event) => setFilterStatus(event.target.value)}
-                >
-                  <option value="">{t('operations.allStatuses')}</option>
-                  <option value="SCHEDULED">{t('operations.scheduled')}</option>
-                  <option value="OVERDUE">{t('operations.overdue')}</option>
-                  <option value="COMPLETED">{t('operations.completed')}</option>
-                  <option value="CANCELLED">{t('operations.cancelled')}</option>
-                </select>
-              </label>
-              <label>
-                {t('operations.property')}
-                <select
-                  value={filterPropertyId}
-                  onChange={(event) => setFilterPropertyId(event.target.value)}
-                >
-                  <option value="">{t('operations.allProperties')}</option>
-                  {filterPropertyOptions.map((property) => (
-                    <option key={property.id} value={property.id}>
-                      {getPropertyLabel(property)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t('operations.assignedUser')}
-                <select
-                  value={filterUserId}
-                  onChange={(event) => setFilterUserId(event.target.value)}
-                >
-                  <option value="">{t('operations.allUsers')}</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            {dashboardViewMode === 'kanban' ? (
+              <div className="filters-grid">
+                <label>
+                  {t('operations.from')}
+                  <input
+                    type="date"
+                    value={filterDateFrom}
+                    max={filterDateTo}
+                    onChange={(event) => setFilterDateFrom(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {t('operations.to')}
+                  <input
+                    type="date"
+                    value={filterDateTo}
+                    min={filterDateFrom}
+                    onChange={(event) => setFilterDateTo(event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
           </section>
 
           {isLoading ? <p className="subtitle">Loading visits…</p> : null}
@@ -1422,10 +1457,10 @@ export function DailyOperationsView({
             />
           )}
         </>
-      ) : opsTab === 'pool' ? (
+      ) : mode === 'unassigned' ? (
         <section className="card">
           <div className="page-header">
-            <h2 className="section-title">Tasks not on a visit</h2>
+            <h2 className="section-title">{t('operations.tasksNotOnVisit')}</h2>
           </div>
           <div className="table-wrapper">
             <table>
@@ -1512,6 +1547,8 @@ export function DailyOperationsView({
         </section>
       ) : (
         <VisitTemplatesPanel
+          ref={templatesPanelRef}
+          hideSectionHeader
           getVisitTemplatesEndpoint={endpoints.visitTemplates}
           upsertVisitTemplateEndpoint={endpoints.upsertVisitTemplate}
           propertyOptions={propertyOptions}
@@ -1529,7 +1566,207 @@ export function DailyOperationsView({
         />
       )}
 
-      {selectedVisit && opsTab === 'dashboard' ? (
+      {isViewMenuOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setIsViewMenuOpen(false)}
+        >
+          <div
+            className="modal operations-view-picker-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('operations.changeView')}</h3>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsViewMenuOpen(false)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body operations-view-picker">
+              {(
+                [
+                  { id: 'day', label: t('operations.day') },
+                  { id: 'kanban', label: t('operations.kanban') },
+                  { id: 'agenda', label: t('operations.agenda') },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={
+                    dashboardViewMode === option.id ? 'btn-primary' : 'btn-secondary'
+                  }
+                  onClick={() => {
+                    setDashboardViewMode(option.id)
+                    setIsViewMenuOpen(false)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isFilterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">{t('operations.filterSubtitle')}</p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                aria-label={t('common.closeFilters')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.team')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {teams.map((team) => {
+                      const isChecked = filterDraft.teamIds.includes(team.id)
+                      return (
+                        <label className="filter-option" key={team.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                teamIds: toggleListValue(current.teamIds, team.id),
+                              }))
+                            }
+                          />
+                          <span>{team.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.status')}</p>
+                  <div className="filter-options">
+                    {ALL_VISIT_STATUSES.map((status) => {
+                      const isChecked = filterDraft.statuses.includes(status)
+                      return (
+                        <label className="filter-option" key={status}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                statuses: toggleListValue(
+                                  current.statuses,
+                                  status,
+                                ) as VisitStatus[],
+                              }))
+                            }
+                          />
+                          <span>{statusLabel(status)}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.property')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {filterPropertyOptions.map((property) => {
+                      const isChecked = filterDraft.propertyIds.includes(
+                        property.id,
+                      )
+                      return (
+                        <label className="filter-option" key={property.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                propertyIds: toggleListValue(
+                                  current.propertyIds,
+                                  property.id,
+                                ),
+                              }))
+                            }
+                          />
+                          <span>{getPropertyLabel(property)}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.assignedUser')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {users.map((user) => {
+                      const isChecked = filterDraft.userIds.includes(user.id)
+                      return (
+                        <label className="filter-option" key={user.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                userIds: toggleListValue(current.userIds, user.id),
+                              }))
+                            }
+                          />
+                          <span>{user.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setFilterDraft(emptyOpsFilters())}
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setFilters({
+                    teamIds: [...filterDraft.teamIds],
+                    statuses: [...filterDraft.statuses],
+                    propertyIds: [...filterDraft.propertyIds],
+                    userIds: [...filterDraft.userIds],
+                  })
+                  setIsFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedVisit && mode === 'dashboard' ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal operations-detail-modal modal-scrollable">
             <div className="modal-header">

@@ -273,6 +273,8 @@
     "Cleaning Billing": "Cleaning Billing",
     "Cleaning settings": "Ajustes de limpieza",
     "Daily Operations": "Daily Ops",
+    "Unassigned tasks": "Tareas sin asignar",
+    "Visit templates": "Plantillas de visita",
     "Finance solution 1": "Solución Finance 1",
     "Finance solution 2": "Solución Finance 2",
     "Finance solution 3": "Solución Finance 3",
@@ -406,7 +408,9 @@
     "Cleaning Plan": "Plan",
     "Cleaning Incidents": "Incidencias",
     "Cleaning Billing": "Billing",
-    "Cleaning settings": "Ajustes"
+    "Cleaning settings": "Ajustes",
+    "Unassigned tasks": "Sin asignar",
+    "Visit templates": "Plantillas"
   },
   "status": {
     "Billed": "Facturada",
@@ -541,7 +545,14 @@
     "subtitlePage": "Programa visitas, controla trabajo atrasado y gestiona tareas.",
     "dashboard": "Panel",
     "unassigned": "Sin asignar",
-    "visitSavedWithTasks": "Visita guardada con {{count}} tareas."
+    "visitSavedWithTasks": "Visita guardada con {{count}} tareas.",
+    "changeView": "Cambiar vista",
+    "filterSubtitle": "Selecciona uno o más valores para filtrar las visitas.",
+    "eyebrowUnassigned": "Ops / Tareas sin asignar",
+    "subtitleUnassigned": "Tareas que no están asociadas a una visita.",
+    "eyebrowTemplates": "Ops / Plantillas de visita",
+    "subtitleTemplates": "Plantillas reutilizables de visita y tareas por propiedad.",
+    "createTemplate": "Crear plantilla"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",

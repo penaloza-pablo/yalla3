@@ -298,6 +298,8 @@ const navigation = [
       'Bookings',
       'Reviews',
       'Daily Operations',
+      'Unassigned tasks',
+      'Visit templates',
     ],
   },
   {
@@ -3072,7 +3074,7 @@ function App() {
     if (activePage === 'Reviews') {
       void fetchReviews()
     }
-    if (activePage === 'Daily Operations') {
+    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates') {
       void fetchProperties()
     }
     if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing') {
@@ -8390,6 +8392,21 @@ function App() {
           </>
         ) : activePage === 'Daily Operations' ? (
           <DailyOperationsView
+            mode="dashboard"
+            getEndpoint={getEndpoint}
+            getCurrentUserEmail={getCurrentUserEmail}
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Unassigned tasks' ? (
+          <DailyOperationsView
+            mode="unassigned"
+            getEndpoint={getEndpoint}
+            getCurrentUserEmail={getCurrentUserEmail}
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Visit templates' ? (
+          <DailyOperationsView
+            mode="templates"
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}

@@ -273,6 +273,8 @@
     "Cleaning Billing": "Cleaning Billing",
     "Cleaning settings": "Cleaning settings",
     "Daily Operations": "Daily Ops",
+    "Unassigned tasks": "Unassigned tasks",
+    "Visit templates": "Visit templates",
     "Finance solution 1": "Finance solution 1",
     "Finance solution 2": "Finance solution 2",
     "Finance solution 3": "Finance solution 3",
@@ -406,7 +408,9 @@
     "Cleaning Plan": "Plan",
     "Cleaning Incidents": "Incidents",
     "Cleaning Billing": "Billing",
-    "Cleaning settings": "Settings"
+    "Cleaning settings": "Settings",
+    "Unassigned tasks": "Unassigned",
+    "Visit templates": "Templates"
   },
   "status": {
     "Billed": "Billed",
@@ -541,7 +545,14 @@
     "subtitlePage": "Schedule visits, track overdue work, and manage tasks.",
     "dashboard": "Dashboard",
     "unassigned": "Unassigned",
-    "visitSavedWithTasks": "Visit saved with {{count}} tasks."
+    "visitSavedWithTasks": "Visit saved with {{count}} tasks.",
+    "changeView": "Change view",
+    "filterSubtitle": "Select one or more values to filter visits.",
+    "eyebrowUnassigned": "Ops / Unassigned tasks",
+    "subtitleUnassigned": "Tasks that are not attached to a visit.",
+    "eyebrowTemplates": "Ops / Visit templates",
+    "subtitleTemplates": "Reusable visit and task presets per property.",
+    "createTemplate": "Create template"
   },
   "reviewWorkflow": {
     "progress": "Review workflow progress",
