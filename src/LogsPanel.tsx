@@ -45,6 +45,9 @@ const FEATURE_OPTIONS = [
   'Cleaning Incidents',
   'Cleaning Billing',
   'Cleaning settings',
+  'Maintenance Incidents',
+  'Maintenance Billing',
+  'Maintenance settings',
 ] as const
 
 const formatLogDate = (value: string, locale: string) => {

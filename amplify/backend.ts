@@ -58,6 +58,15 @@ import { getCleaningIncidents } from './functions/get-cleaning-incidents/resourc
 import { upsertCleaningIncident } from './functions/upsert-cleaning-incident/resource';
 import { getCleaningBilling } from './functions/get-cleaning-billing/resource';
 import { upsertCleaningBilling } from './functions/upsert-cleaning-billing/resource';
+import { getMaintenanceProviders } from './functions/get-maintenance-providers/resource';
+import { upsertMaintenanceProvider } from './functions/upsert-maintenance-provider/resource';
+import { getMaintenanceIncidents } from './functions/get-maintenance-incidents/resource';
+import { upsertMaintenanceIncident } from './functions/upsert-maintenance-incident/resource';
+import { getMaintenanceBillingDetails } from './functions/get-maintenance-billing-details/resource';
+import { upsertMaintenanceBillingDetails } from './functions/upsert-maintenance-billing-details/resource';
+import { getMaintenanceBilling } from './functions/get-maintenance-billing/resource';
+import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing/resource';
+import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
 
 const backend = defineBackend({
   auth,
@@ -109,6 +118,15 @@ const backend = defineBackend({
   getCleaningBilling,
   upsertCleaningBilling,
   exportCleaningBilling,
+  getMaintenanceProviders,
+  upsertMaintenanceProvider,
+  getMaintenanceIncidents,
+  upsertMaintenanceIncident,
+  getMaintenanceBillingDetails,
+  upsertMaintenanceBillingDetails,
+  getMaintenanceBilling,
+  upsertMaintenanceBilling,
+  exportMaintenanceBilling,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -160,6 +178,15 @@ const lambdaFunctionsWithHttp = [
   backend.getCleaningBilling,
   backend.upsertCleaningBilling,
   backend.exportCleaningBilling,
+  backend.getMaintenanceProviders,
+  backend.upsertMaintenanceProvider,
+  backend.getMaintenanceIncidents,
+  backend.upsertMaintenanceIncident,
+  backend.getMaintenanceBillingDetails,
+  backend.upsertMaintenanceBillingDetails,
+  backend.getMaintenanceBilling,
+  backend.upsertMaintenanceBilling,
+  backend.exportMaintenanceBilling,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -304,6 +331,7 @@ visitTemplatesTable.grantReadWriteData(
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportSubtractions.resources.lambda);
 inventoryBucket.grantPut(backend.exportCleaningBilling.resources.lambda);
+inventoryBucket.grantPut(backend.exportMaintenanceBilling.resources.lambda);
 inventoryBucket.grantPut(backend.completeSpotCheck.resources.lambda);
 inventoryTable.grantReadWriteData(backend.completeSpotCheck.resources.lambda);
 
@@ -329,6 +357,10 @@ const activityLogWriters = [
   backend.upsertPropertyCleaningDetails,
   backend.upsertCleaningIncident,
   backend.upsertCleaningBilling,
+  backend.upsertMaintenanceProvider,
+  backend.upsertMaintenanceIncident,
+  backend.upsertMaintenanceBillingDetails,
+  backend.upsertMaintenanceBilling,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -583,6 +615,219 @@ backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
 backend.getCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 
+const maintenanceProvidersTable = new Table(
+  dataStack,
+  'MaintenanceProvidersTable',
+  {
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
+const maintenanceIncidentsTable = new Table(
+  dataStack,
+  'MaintenanceIncidentsTable',
+  {
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
+const maintenanceBillingDetailsTable = new Table(
+  dataStack,
+  'MaintenanceBillingDetailsTable',
+  {
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
+const maintenanceBillingTable = new Table(dataStack, 'MaintenanceBillingTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+maintenanceIncidentsTable.addGlobalSecondaryIndex({
+  indexName: 'providerId-createdAt-index',
+  partitionKey: { name: 'providerId', type: AttributeType.STRING },
+  sortKey: { name: 'createdAtKey', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+
+backend.getMaintenanceProviders.addEnvironment(
+  'TABLE_NAME',
+  maintenanceProvidersTable.tableName,
+);
+backend.getMaintenanceProviders.addEnvironment(
+  'INCIDENTS_TABLE',
+  maintenanceIncidentsTable.tableName,
+);
+backend.getMaintenanceProviders.addEnvironment(
+  'BILLING_TABLE',
+  maintenanceBillingTable.tableName,
+);
+backend.getMaintenanceProviders.addEnvironment(
+  'SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.getMaintenanceProviders.addEnvironment('VISITS_TABLE', 'yalla-visits');
+backend.getMaintenanceProviders.addEnvironment(
+  'VISIT_TYPES_TABLE',
+  'yalla-visit_types',
+);
+backend.getMaintenanceProviders.addEnvironment(
+  'PROPERTIES_TABLE',
+  'yalla-properties',
+);
+backend.upsertMaintenanceProvider.addEnvironment(
+  'TABLE_NAME',
+  maintenanceProvidersTable.tableName,
+);
+backend.getMaintenanceIncidents.addEnvironment(
+  'TABLE_NAME',
+  maintenanceIncidentsTable.tableName,
+);
+backend.upsertMaintenanceIncident.addEnvironment(
+  'TABLE_NAME',
+  maintenanceIncidentsTable.tableName,
+);
+backend.upsertMaintenanceIncident.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.getMaintenanceBillingDetails.addEnvironment(
+  'TABLE_NAME',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.getMaintenanceBillingDetails.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.upsertMaintenanceBillingDetails.addEnvironment(
+  'TABLE_NAME',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.upsertMaintenanceBillingDetails.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.getMaintenanceBilling.addEnvironment(
+  'TABLE_NAME',
+  maintenanceBillingTable.tableName,
+);
+backend.getMaintenanceBilling.addEnvironment(
+  'SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.getMaintenanceBilling.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.upsertMaintenanceBilling.addEnvironment(
+  'TABLE_NAME',
+  maintenanceBillingTable.tableName,
+);
+backend.upsertMaintenanceBilling.addEnvironment(
+  'SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.upsertMaintenanceBilling.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.exportMaintenanceBilling.addEnvironment(
+  'TABLE_NAME',
+  maintenanceBillingTable.tableName,
+);
+
+maintenanceProvidersTable.grantReadWriteData(
+  backend.getMaintenanceProviders.resources.lambda,
+);
+maintenanceProvidersTable.grantReadWriteData(
+  backend.upsertMaintenanceProvider.resources.lambda,
+);
+maintenanceProvidersTable.grantReadWriteData(
+  backend.getMaintenanceBillingDetails.resources.lambda,
+);
+maintenanceProvidersTable.grantReadWriteData(
+  backend.upsertMaintenanceBillingDetails.resources.lambda,
+);
+maintenanceProvidersTable.grantReadWriteData(
+  backend.getMaintenanceBilling.resources.lambda,
+);
+maintenanceProvidersTable.grantReadWriteData(
+  backend.upsertMaintenanceBilling.resources.lambda,
+);
+maintenanceProvidersTable.grantReadData(
+  backend.upsertMaintenanceIncident.resources.lambda,
+);
+maintenanceIncidentsTable.grantReadData(
+  backend.getMaintenanceIncidents.resources.lambda,
+);
+maintenanceIncidentsTable.grantReadWriteData(
+  backend.upsertMaintenanceIncident.resources.lambda,
+);
+maintenanceIncidentsTable.grantReadData(
+  backend.getMaintenanceProviders.resources.lambda,
+);
+backend.getMaintenanceProviders.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${maintenanceIncidentsTable.tableArn}/index/*`],
+  }),
+);
+maintenanceBillingDetailsTable.grantReadWriteData(
+  backend.getMaintenanceBillingDetails.resources.lambda,
+);
+maintenanceBillingDetailsTable.grantReadWriteData(
+  backend.upsertMaintenanceBillingDetails.resources.lambda,
+);
+maintenanceBillingDetailsTable.grantReadWriteData(
+  backend.getMaintenanceBilling.resources.lambda,
+);
+maintenanceBillingDetailsTable.grantReadWriteData(
+  backend.upsertMaintenanceBilling.resources.lambda,
+);
+maintenanceBillingDetailsTable.grantReadWriteData(
+  backend.getMaintenanceProviders.resources.lambda,
+);
+maintenanceBillingTable.grantReadWriteData(
+  backend.getMaintenanceBilling.resources.lambda,
+);
+maintenanceBillingTable.grantReadWriteData(
+  backend.upsertMaintenanceBilling.resources.lambda,
+);
+maintenanceBillingTable.grantReadData(
+  backend.exportMaintenanceBilling.resources.lambda,
+);
+maintenanceBillingTable.grantReadData(
+  backend.getMaintenanceProviders.resources.lambda,
+);
+visitsTable.grantReadData(backend.getMaintenanceProviders.resources.lambda);
+visitsTable.grantReadData(backend.upsertMaintenanceIncident.resources.lambda);
+visitsTable.grantReadData(backend.getMaintenanceBilling.resources.lambda);
+visitsTable.grantReadData(backend.upsertMaintenanceBilling.resources.lambda);
+propertiesTable.grantReadData(backend.upsertMaintenanceIncident.resources.lambda);
+propertiesTable.grantReadData(backend.getMaintenanceBilling.resources.lambda);
+propertiesTable.grantReadData(backend.upsertMaintenanceBilling.resources.lambda);
+propertiesTable.grantReadData(backend.getMaintenanceProviders.resources.lambda);
+visitTypesTable.grantReadData(
+  backend.getMaintenanceBillingDetails.resources.lambda,
+);
+visitTypesTable.grantReadData(
+  backend.upsertMaintenanceBillingDetails.resources.lambda,
+);
+visitTypesTable.grantReadData(backend.getMaintenanceBilling.resources.lambda);
+visitTypesTable.grantReadData(backend.upsertMaintenanceBilling.resources.lambda);
+visitTypesTable.grantReadData(backend.getMaintenanceProviders.resources.lambda);
+backend.getMaintenanceProviders.resources.lambda.addToRolePolicy(
+  visitsIndexPolicy,
+);
+backend.getMaintenanceBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.upsertMaintenanceBilling.resources.lambda.addToRolePolicy(
+  visitsIndexPolicy,
+);
+
 const syncTaskToGuesty = LambdaFunction.fromFunctionName(
   dataStack,
   'SyncTaskToGuesty',
@@ -755,6 +1000,42 @@ const exportCleaningBillingUrl =
   backend.exportCleaningBilling.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getMaintenanceProvidersUrl =
+  backend.getMaintenanceProviders.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenanceProviderUrl =
+  backend.upsertMaintenanceProvider.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const getMaintenanceIncidentsUrl =
+  backend.getMaintenanceIncidents.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenanceIncidentUrl =
+  backend.upsertMaintenanceIncident.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const getMaintenanceBillingDetailsUrl =
+  backend.getMaintenanceBillingDetails.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenanceBillingDetailsUrl =
+  backend.upsertMaintenanceBillingDetails.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const getMaintenanceBillingUrl =
+  backend.getMaintenanceBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenanceBillingUrl =
+  backend.upsertMaintenanceBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const exportMaintenanceBillingUrl =
+  backend.exportMaintenanceBilling.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -804,5 +1085,14 @@ backend.addOutput({
     getCleaningBillingUrl: getCleaningBillingUrl.url,
     upsertCleaningBillingUrl: upsertCleaningBillingUrl.url,
     exportCleaningBillingUrl: exportCleaningBillingUrl.url,
+    getMaintenanceProvidersUrl: getMaintenanceProvidersUrl.url,
+    upsertMaintenanceProviderUrl: upsertMaintenanceProviderUrl.url,
+    getMaintenanceIncidentsUrl: getMaintenanceIncidentsUrl.url,
+    upsertMaintenanceIncidentUrl: upsertMaintenanceIncidentUrl.url,
+    getMaintenanceBillingDetailsUrl: getMaintenanceBillingDetailsUrl.url,
+    upsertMaintenanceBillingDetailsUrl: upsertMaintenanceBillingDetailsUrl.url,
+    getMaintenanceBillingUrl: getMaintenanceBillingUrl.url,
+    upsertMaintenanceBillingUrl: upsertMaintenanceBillingUrl.url,
+    exportMaintenanceBillingUrl: exportMaintenanceBillingUrl.url,
   },
 });

@@ -68,7 +68,6 @@ const VALID_VISIT_STATUSES = new Set([
   'COMPLETED',
   'CANCELLED',
 ]);
-const MAINTENANCE_VISIT_TYPE_ID = 'visit_type_maintenance';
 
 const normalizePriority = (value?: string) => {
   const normalized = normalizeStatus(value);
@@ -222,21 +221,6 @@ export const handler = async (event: {
   }
 
   if (status === 'COMPLETED') {
-    const resolvedVisitTypeId =
-      visitTypeId ||
-      (typeof existing?.visitTypeId === 'string' ? existing.visitTypeId : '');
-    if (resolvedVisitTypeId === MAINTENANCE_VISIT_TYPE_ID) {
-      const hours =
-        payload.actualDurationHours ??
-        (typeof existing?.actualDurationHours === 'number'
-          ? existing.actualDurationHours
-          : undefined);
-      if (hours === undefined || hours === null || Number.isNaN(Number(hours))) {
-        return buildHttpResponse(400, {
-          message: 'actualDurationHours is required when completing a visit.',
-        });
-      }
-    }
     const visitIdForTasks = payload.id?.trim();
     if (tasksTable && visitIdForTasks) {
       let hasOpenTasks = false;

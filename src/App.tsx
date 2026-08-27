@@ -33,6 +33,9 @@ import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
+import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView'
+import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
+import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { MobileBodyPortal } from './MobileBodyPortal'
@@ -312,6 +315,14 @@ const navigation = [
     ],
   },
   {
+    section: 'Maintenance',
+    items: [
+      'Maintenance Incidents',
+      'Maintenance Billing',
+      'Maintenance settings',
+    ],
+  },
+  {
     section: 'Tech',
     items: ['Logs'],
   },
@@ -333,6 +344,7 @@ const pagesWithMobileSearch = new Set([
   'Alerts',
   'Logs',
   'Cleaning Incidents',
+  'Maintenance Incidents',
 ])
 const MOBILE_TITLE_COLLAPSE_DISTANCE = 56
 const OTHER_OPTION = '__other__'
@@ -3094,7 +3106,7 @@ function App() {
     if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates') {
       void fetchProperties()
     }
-    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing') {
+    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings') {
       void fetchProperties()
     }
   }, [
@@ -4598,6 +4610,8 @@ function App() {
         return t('logs.search')
       case 'Cleaning Incidents':
         return t('cleaningIncidents.search')
+      case 'Maintenance Incidents':
+        return t('maintenanceIncidents.search')
       default:
         return t('common.showSearch')
     }
@@ -8468,6 +8482,28 @@ function App() {
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
           />
+        ) : activePage === 'Maintenance Incidents' ? (
+          <MaintenanceIncidentsView
+            getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Maintenance Billing' ? (
+          <MaintenanceBillingView
+            getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Maintenance settings' ? (
+          <MaintenanceSettingsView getEndpoint={getEndpoint} />
         ) : activePage === 'Logs' ? (
           <LogsPanel
             getEndpoint={getEndpoint}

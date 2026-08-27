@@ -20,6 +20,9 @@ export const LOG_FEATURES = {
   CLEANING_SETTINGS: 'Cleaning settings',
   CLEANING_INCIDENTS: 'Cleaning Incidents',
   CLEANING_BILLING: 'Cleaning Billing',
+  MAINTENANCE_SETTINGS: 'Maintenance settings',
+  MAINTENANCE_INCIDENTS: 'Maintenance Incidents',
+  MAINTENANCE_BILLING: 'Maintenance Billing',
 } as const;
 
 type HttpHeaders = Record<string, string | string[] | undefined>;
