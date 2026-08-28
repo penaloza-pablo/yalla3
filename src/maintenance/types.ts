@@ -80,6 +80,7 @@ export type MaintenanceBillingLine = {
   id: string
   source: 'visit' | 'manual'
   visitId: string
+  title: string
   visitTypeId: string
   visitTypeName: string
   propertyId: string

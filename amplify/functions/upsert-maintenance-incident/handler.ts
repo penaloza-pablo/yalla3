@@ -13,9 +13,9 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import {
-  MAINTENANCE_VISIT_TYPE_ID,
   OTHER_PROVIDER_ID,
   asString,
+  isMaintenanceVisitType,
 } from '../shared/maintenance-billing';
 import {
   docClient,
@@ -153,7 +153,7 @@ export const handler = async (event: {
     if (!visit) {
       return buildHttpResponse(404, { message: 'Visit not found.' });
     }
-    if (asString(visit.visitTypeId) !== MAINTENANCE_VISIT_TYPE_ID) {
+    if (!isMaintenanceVisitType(asString(visit.visitTypeId))) {
       return buildHttpResponse(400, {
         message: 'Incidents can only be created for maintenance visits.',
       });

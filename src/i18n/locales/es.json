@@ -993,6 +993,8 @@
     "closeConfirm": "¿Cerrar este mes? Todas las líneas deben estar Approved, Billed o Paid. El reporte quedará congelado hasta que lo reabras.",
     "linesTitle": "Costes de mantenimiento",
     "linesSubtitle": "Visitas de mantenimiento del mes más las líneas manuales.",
+    "visitTitle": "Título",
+    "visitType": "Tipo de visita",
     "property": "Propiedad",
     "date": "Fecha",
     "visitStatus": "Estado",
@@ -1033,7 +1035,8 @@
       "PAID": "Pagado"
     },
     "warning": {
-      "price": "Falta el precio"
+      "price": "Falta el precio",
+      "provider": "Falta el proveedor"
     }
   }
 }

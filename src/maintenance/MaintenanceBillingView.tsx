@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { ExportScopeModal } from '../ExportScopeModal'
@@ -92,6 +92,7 @@ const mapLine = (item: Record<string, unknown>): MaintenanceBillingLine => ({
   id: String(item.id ?? ''),
   source: item.source === 'manual' ? 'manual' : 'visit',
   visitId: String(item.visitId ?? ''),
+  title: String(item.title ?? item.property ?? item.propertyId ?? ''),
   visitTypeId: String(item.visitTypeId ?? ''),
   visitTypeName: String(item.visitTypeName ?? ''),
   propertyId: String(item.propertyId ?? ''),
@@ -183,6 +184,10 @@ export function MaintenanceBillingView({
     useState<CleaningBillingPropertyGroup | ''>('')
   const [draft, setDraft] = useState<LineDraft>(emptyDraft(''))
   const [openVisitId, setOpenVisitId] = useState('')
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
+  const [inlineById, setInlineById] = useState<
+    Record<string, { hours: string; price: string; hoursDisabled: boolean }>
+  >({})
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -211,6 +216,21 @@ export function MaintenanceBillingView({
     [propertyOptions],
   )
   const hourlyCost = settings?.hourlyCost ?? 24
+
+  useEffect(() => {
+    setInlineById(
+      Object.fromEntries(
+        lines.map((line) => [
+          line.id,
+          {
+            hours: line.hours === null ? '' : String(line.hours),
+            price: line.price === null ? '' : String(line.price),
+            hoursDisabled: line.isManual || line.hoursDisabled,
+          },
+        ]),
+      ),
+    )
+  }, [lines])
 
   const loadMonths = useCallback(async () => {
     if (!endpoints.getBilling) {
@@ -375,6 +395,7 @@ export function MaintenanceBillingView({
     try {
       const sourceLines = scope === 'filtered' ? filteredLines : lines
       const headers = [
+        t('maintenanceBilling.visitTitle'),
         t('maintenanceBilling.property'),
         t('maintenanceBilling.date'),
         t('maintenanceBilling.visitStatus'),
@@ -385,6 +406,8 @@ export function MaintenanceBillingView({
         t('maintenanceBilling.source'),
       ]
       const rows = sourceLines.map((line) => ({
+        [t('maintenanceBilling.visitTitle')]:
+          line.title || propertyById.get(line.propertyId) || line.property,
         [t('maintenanceBilling.property')]:
           propertyById.get(line.propertyId) || line.property,
         [t('maintenanceBilling.date')]: line.date,
@@ -536,6 +559,101 @@ export function MaintenanceBillingView({
       return '—'
     }
     return String(value).replace('.', ',')
+  }
+
+  const toggleRow = (lineId: string) => {
+    setExpandedRowIds((current) => {
+      const next = new Set(current)
+      if (next.has(lineId)) {
+        next.delete(lineId)
+      } else {
+        next.add(lineId)
+      }
+      return next
+    })
+  }
+
+  const updateInline = (
+    lineId: string,
+    patch: Partial<{ hours: string; price: string; hoursDisabled: boolean }>,
+  ) => {
+    setInlineById((current) => ({
+      ...current,
+      [lineId]: {
+        hours: current[lineId]?.hours ?? '',
+        price: current[lineId]?.price ?? '',
+        hoursDisabled: current[lineId]?.hoursDisabled ?? false,
+        ...patch,
+      },
+    }))
+  }
+
+  const persistInline = async (
+    line: MaintenanceBillingLine,
+    values?: { hours: string; price: string; hoursDisabled: boolean },
+  ) => {
+    if (!month?.canEdit) {
+      return
+    }
+    const draftValues = values ?? inlineById[line.id]
+    if (!draftValues) {
+      return
+    }
+    const hoursDisabled = line.isManual || draftValues.hoursDisabled
+    const hours = hoursDisabled
+      ? 0
+      : Number(String(draftValues.hours).replace(',', '.'))
+    const price = Number(String(draftValues.price).replace(',', '.'))
+    if (line.isManual && !Number.isFinite(price)) {
+      setError(t('maintenanceBilling.lineRequired'))
+      return
+    }
+    const originalHours = line.hours ?? 0
+    const originalPrice = line.price
+    const nextHours = hoursDisabled ? 0 : hours
+    const nextPrice = Number.isFinite(price) ? price : null
+    if (
+      (hoursDisabled || Number.isFinite(hours)) &&
+      nextHours === originalHours &&
+      nextPrice === originalPrice &&
+      hoursDisabled === (line.isManual || line.hoursDisabled)
+    ) {
+      return
+    }
+    if (!hoursDisabled && !Number.isFinite(hours)) {
+      updateInline(line.id, {
+        hours: line.hours === null ? '' : String(line.hours),
+        price: line.price === null ? '' : String(line.price),
+        hoursDisabled: line.hoursDisabled,
+      })
+      return
+    }
+    await save({
+      month: selectedMonthId,
+      action: line.isManual ? 'update-manual' : 'override',
+      visitId: line.visitId || undefined,
+      lineId: line.isManual ? line.id : undefined,
+      date: line.date,
+      propertyId: line.propertyId,
+      property: line.property,
+      providerId: line.providerId,
+      providerName: line.providerName,
+      hours: hoursDisabled ? 0 : hours,
+      hoursDisabled,
+      price: Number.isFinite(price) ? price : null,
+      billingStatus: line.billingStatus,
+    })
+  }
+
+  const lineWarnings = (line: MaintenanceBillingLine) => {
+    const warnings: string[] = []
+    if (line.price === null) {
+      warnings.push(t('maintenanceBilling.warning.price'))
+    }
+    if (!line.providerId) {
+      warnings.push(t('maintenanceBilling.warning.provider'))
+    }
+    return warnings
   }
 
   return (
@@ -763,13 +881,12 @@ export function MaintenanceBillingView({
             groups={BILLING_PROPERTY_GROUP_CHIPS}
           />
           <div className="table-wrapper">
-            <table className="data-table data-table-cleaning-billing">
+            <table className="data-table data-table-maintenance-billing">
               <thead>
                 <tr>
-                  <th>{t('maintenanceBilling.property')}</th>
+                  <th>{t('maintenanceBilling.visitTitle')}</th>
                   <th>{t('maintenanceBilling.date')}</th>
                   <th>{t('maintenanceBilling.visitStatus')}</th>
-                  <th>{t('maintenanceBilling.provider')}</th>
                   <th>{t('maintenanceBilling.hours')}</th>
                   <th>{t('maintenanceBilling.price')}</th>
                   <th>{t('maintenanceBilling.billingStatus')}</th>
@@ -779,105 +896,295 @@ export function MaintenanceBillingView({
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8}>{t('common.loading')}</td>
+                    <td colSpan={7}>{t('common.loading')}</td>
                   </tr>
                 ) : filteredLines.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>{t('maintenanceBilling.emptyLines')}</td>
+                    <td colSpan={7}>{t('maintenanceBilling.emptyLines')}</td>
                   </tr>
                 ) : (
-                  filteredLines.map((line) => (
-                    <tr
-                      key={line.id}
-                      className={line.price === null ? 'billing-warning-row' : ''}
-                    >
-                      <td>
-                        {line.visitId ? (
-                          <button
-                            type="button"
-                            className="cleaning-visit-title-btn"
-                            aria-label={t('cleaningPlan.openVisit')}
-                            onClick={() => setOpenVisitId(line.visitId)}
-                          >
-                            {propertyById.get(line.propertyId) || line.property}
-                          </button>
-                        ) : (
-                          propertyById.get(line.propertyId) || line.property
-                        )}
-                        {line.price === null ? (
-                          <p className="card-meta billing-warning-text">
-                            {t('maintenanceBilling.warning.price')}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td>{formatDateOnlyLabel(line.date, i18n.language)}</td>
-                      <td>
-                        {line.isManual
-                          ? t('maintenanceBilling.manualStatus')
-                          : line.status}
-                      </td>
-                      <td>{line.providerName || '—'}</td>
-                      <td>{formatHours(line.hours)}</td>
-                      <td>
-                        {line.price === null ? '—' : money.format(line.price)}
-                      </td>
-                      <td>
-                        <span className="tag">
-                          {lineStatusLabel(line.billingStatus)}
-                        </span>
-                      </td>
-                      <td>
-                        {month?.canEdit ? (
-                          <div className="table-actions">
-                            <button
-                              className="btn-secondary"
-                              type="button"
-                              disabled={isSaving || !canCheck(line)}
-                              onClick={() =>
-                                void save({
-                                  month: selectedMonthId,
-                                  action: line.isManual ? 'advance-manual' : 'advance',
-                                  visitId: line.visitId || undefined,
-                                  lineId: line.isManual ? line.id : undefined,
-                                })
-                              }
-                            >
-                              {t('maintenanceBilling.check')}
-                            </button>
-                            <button
-                              className="btn-secondary"
-                              type="button"
-                              onClick={() => openEdit(line)}
-                            >
-                              {t('maintenanceSettings.edit')}
-                            </button>
-                            {line.isManual ? (
+                  filteredLines.map((line) => {
+                    const isExpanded = expandedRowIds.has(line.id)
+                    const inline = inlineById[line.id] ?? {
+                      hours: line.hours === null ? '' : String(line.hours),
+                      price: line.price === null ? '' : String(line.price),
+                      hoursDisabled: line.isManual || line.hoursDisabled,
+                    }
+                    const warnings = lineWarnings(line)
+                    const propertyLabel =
+                      propertyById.get(line.propertyId) || line.property || '—'
+                    const titleLabel =
+                      line.title || propertyLabel
+                    return (
+                      <Fragment key={line.id}>
+                        <tr className={line.price === null ? 'billing-warning-row' : ''}>
+                          <td>
+                            {line.visitId ? (
                               <button
-                                className="btn-secondary"
                                 type="button"
+                                className="cleaning-visit-title-btn"
+                                aria-label={t('cleaningPlan.openVisit')}
+                                onClick={() => setOpenVisitId(line.visitId)}
+                              >
+                                {titleLabel}
+                              </button>
+                            ) : (
+                              titleLabel
+                            )}
+                            <p className="card-meta billing-line-property">
+                              {propertyLabel}
+                            </p>
+                          </td>
+                          <td>{formatDateOnlyLabel(line.date, i18n.language)}</td>
+                          <td>
+                            {line.isManual
+                              ? t('maintenanceBilling.manualStatus')
+                              : line.status}
+                          </td>
+                          <td>
+                            {month?.canEdit ? (
+                              <input
+                                className="billing-inline-input"
+                                type="number"
+                                min="0"
+                                step="0.25"
+                                value={inline.hours}
+                                disabled={isSaving || line.isManual}
+                                aria-label={t('maintenanceBilling.hours')}
+                                onChange={(event) => {
+                                  const hoursValue = event.target.value
+                                  const numeric = Number(
+                                    String(hoursValue).replace(',', '.'),
+                                  )
+                                  updateInline(line.id, {
+                                    hours: hoursValue,
+                                    hoursDisabled: false,
+                                    price:
+                                      Number.isFinite(numeric) && numeric > 0
+                                        ? String(roundMoney(numeric * hourlyCost))
+                                        : inline.price,
+                                  })
+                                }}
+                                onBlur={(event) => {
+                                  if (line.isManual) {
+                                    return
+                                  }
+                                  const hoursValue = event.currentTarget.value
+                                  const numeric = Number(
+                                    String(hoursValue).replace(',', '.'),
+                                  )
+                                  const next = {
+                                    hours: hoursValue,
+                                    hoursDisabled: false,
+                                    price:
+                                      Number.isFinite(numeric) && numeric > 0
+                                        ? String(roundMoney(numeric * hourlyCost))
+                                        : inline.price,
+                                  }
+                                  void persistInline(line, next)
+                                }}
+                              />
+                            ) : (
+                              formatHours(line.hours)
+                            )}
+                          </td>
+                          <td>
+                            {month?.canEdit ? (
+                              <input
+                                className="billing-inline-input"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={inline.price}
                                 disabled={isSaving}
-                                onClick={() => {
-                                  if (
-                                    window.confirm(t('maintenanceBilling.deleteConfirm'))
-                                  ) {
+                                aria-label={t('maintenanceBilling.price')}
+                                onChange={(event) => {
+                                  updateInline(line.id, {
+                                    price: event.target.value,
+                                    hoursDisabled: true,
+                                    hours: '0',
+                                  })
+                                }}
+                                onBlur={(event) => {
+                                  const priceValue = event.currentTarget.value
+                                  const original =
+                                    line.price === null ? '' : String(line.price)
+                                  if (priceValue === original) {
+                                    updateInline(line.id, {
+                                      hours:
+                                        line.hours === null ? '' : String(line.hours),
+                                      price: original,
+                                      hoursDisabled: line.isManual || line.hoursDisabled,
+                                    })
+                                    return
+                                  }
+                                  void persistInline(line, {
+                                    hours: '0',
+                                    price: priceValue,
+                                    hoursDisabled: true,
+                                  })
+                                }}
+                              />
+                            ) : line.price === null ? (
+                              '—'
+                            ) : (
+                              money.format(line.price)
+                            )}
+                          </td>
+                          <td>
+                            <span className="tag">
+                              {lineStatusLabel(line.billingStatus)}
+                            </span>
+                          </td>
+                          <td>
+                            {month?.canEdit ? (
+                              <div className="action-buttons">
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  disabled={isSaving || !canCheck(line)}
+                                  aria-label={t('maintenanceBilling.check')}
+                                  title={t('maintenanceBilling.check')}
+                                  onClick={() =>
                                     void save({
                                       month: selectedMonthId,
-                                      action: 'delete-manual',
-                                      lineId: line.id,
+                                      action: line.isManual
+                                        ? 'advance-manual'
+                                        : 'advance',
+                                      visitId: line.visitId || undefined,
+                                      lineId: line.isManual ? line.id : undefined,
                                     })
                                   }
-                                }}
-                              >
-                                {t('common.delete')}
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 20 20"
+                                    width="16"
+                                    height="16"
+                                  >
+                                    <path
+                                      d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
+                                      fill="currentColor"
+                                    />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-label={t('maintenanceSettings.edit')}
+                                  title={t('maintenanceSettings.edit')}
+                                  onClick={() => openEdit(line)}
+                                >
+                                  ✎
+                                </button>
+                                {line.isManual ? (
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    disabled={isSaving}
+                                    aria-label={t('common.delete')}
+                                    title={t('common.delete')}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          t('maintenanceBilling.deleteConfirm'),
+                                        )
+                                      ) {
+                                        void save({
+                                          month: selectedMonthId,
+                                          action: 'delete-manual',
+                                          lineId: line.id,
+                                        })
+                                      }
+                                    }}
+                                  >
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 20 20"
+                                      width="16"
+                                      height="16"
+                                    >
+                                      <path
+                                        d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
+                                        fill="currentColor"
+                                      />
+                                    </svg>
+                                  </button>
+                                ) : null}
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  onClick={() => toggleRow(line.id)}
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="action-buttons">
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  onClick={() => toggleRow(line.id)}
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded ? (
+                          <tr className="detail-row">
+                            <td colSpan={7}>
+                              <div className="detail-grid">
+                                <div>
+                                  <p className="detail-label">
+                                    {t('maintenanceBilling.provider')}
+                                  </p>
+                                  <p className="detail-value">
+                                    {line.providerName || '—'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="detail-label">
+                                    {t('maintenanceBilling.visitType')}
+                                  </p>
+                                  <p className="detail-value">
+                                    {line.visitTypeName || '—'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="detail-label">
+                                    {t('maintenanceBilling.source')}
+                                  </p>
+                                  <p className="detail-value">
+                                    {line.isManual
+                                      ? t('maintenanceBilling.sourceManual')
+                                      : t('maintenanceBilling.sourceVisit')}
+                                  </p>
+                                </div>
+                                <div className="detail-span">
+                                  <p className="detail-label">
+                                    {t('maintenanceBilling.warnings')}
+                                  </p>
+                                  {warnings.length > 0 ? (
+                                    <p className="detail-value billing-warning-text">
+                                      {warnings.join(' · ')}
+                                    </p>
+                                  ) : (
+                                    <p className="detail-value detail-muted">—</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    )
+                  })
                 )}
               </tbody>
             </table>

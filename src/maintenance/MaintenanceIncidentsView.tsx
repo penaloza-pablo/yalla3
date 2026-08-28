@@ -8,7 +8,7 @@ import {
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
-import { MAINTENANCE_VISIT_TYPE_ID } from '../operations/visitTypeIds'
+import { isMaintenanceVisitType } from '../operations/visitTypeIds'
 import { PropertyGroupChips } from '../cleaning/PropertyGroupChips'
 import { propertyGroupOf } from '../cleaning/propertyGroups'
 import type { CleaningBillingPropertyGroup } from '../cleaning/types'
@@ -184,7 +184,7 @@ export function MaintenanceIncidentsView({
         (payload.items ?? [])
           .filter(
             (visit) =>
-              visit.visitTypeId === MAINTENANCE_VISIT_TYPE_ID &&
+              isMaintenanceVisitType(visit.visitTypeId) &&
               String(visit.status).toUpperCase() !== 'CANCELLED',
           )
           .map((visit) => ({

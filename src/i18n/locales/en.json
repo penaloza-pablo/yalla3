@@ -993,6 +993,8 @@
     "closeConfirm": "Close this month? Every line must be Approved, Billed, or Paid. The report will be frozen until you reopen it.",
     "linesTitle": "Maintenance costs",
     "linesSubtitle": "Maintenance visits of the month plus any manual billing lines.",
+    "visitTitle": "Title",
+    "visitType": "Visit type",
     "property": "Property",
     "date": "Date",
     "visitStatus": "Status",
@@ -1033,7 +1035,8 @@
       "PAID": "Paid"
     },
     "warning": {
-      "price": "Missing price"
+      "price": "Missing price",
+      "provider": "Missing provider"
     }
   }
 }

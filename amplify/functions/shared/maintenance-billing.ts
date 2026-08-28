@@ -7,8 +7,27 @@ import {
   putItem,
 } from './visit-task-utils';
 
+export const DEFAULT_MAINTENANCE_VISIT_TYPE_IDS = [
+  'visit_type_maintenance',
+  'visit_type_deep_property_check',
+  'visit_type_property_check',
+  'visit_type_fixings',
+  'visit_type_emergency',
+];
+
+const parseVisitTypeIds = (value?: string) =>
+  (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+export const MAINTENANCE_VISIT_TYPE_IDS =
+  parseVisitTypeIds(process.env.MAINTENANCE_VISIT_TYPE_IDS).length > 0
+    ? parseVisitTypeIds(process.env.MAINTENANCE_VISIT_TYPE_IDS)
+    : DEFAULT_MAINTENANCE_VISIT_TYPE_IDS;
+
 export const MAINTENANCE_VISIT_TYPE_ID =
-  process.env.MAINTENANCE_VISIT_TYPE_ID || 'visit_type_maintenance';
+  process.env.MAINTENANCE_VISIT_TYPE_ID || MAINTENANCE_VISIT_TYPE_IDS[0];
 export const SETTINGS_ID = 'GLOBAL';
 export const VISIBLE_PAST_MONTHS = 3;
 export const DEFAULT_HOURS_POOL = 100;
@@ -16,8 +35,8 @@ export const DEFAULT_HOURLY_COST = 24;
 export const DEFAULT_PROVIDER_NAME = 'Sebas Aular';
 export const OTHER_PROVIDER_ID = '__other__';
 export const DEFAULT_VISIT_TYPE_HOURS = [
-  { name: 'Deep property check', hours: 1 },
-  { name: 'Property check', hours: 1 },
+  { id: 'visit_type_deep_property_check', name: 'Deep property check', hours: 1 },
+  { id: 'visit_type_property_check', name: 'Property check', hours: 1 },
 ];
 
 export const BILLING_STATUSES = [
@@ -73,6 +92,7 @@ export type MaintenanceBillingLine = {
   id: string;
   source: BillingLineSource;
   visitId: string;
+  title: string;
   visitTypeId: string;
   visitTypeName: string;
   propertyId: string;
@@ -90,6 +110,11 @@ export type MaintenanceBillingLine = {
 
 export const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+
+export const isMaintenanceVisitType = (visitTypeId?: string) => {
+  const id = asString(visitTypeId);
+  return Boolean(id) && MAINTENANCE_VISIT_TYPE_IDS.includes(id);
+};
 
 export const asNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') {
@@ -248,7 +273,7 @@ const queryVisitsForDate = async (visitsTable: string, scheduledDate: string) =>
   return items.filter((visit) => {
     const visitTypeId =
       asString(visit.visitTypeId) || asString(visit.visit_type_id);
-    return visitTypeId === MAINTENANCE_VISIT_TYPE_ID;
+    return isMaintenanceVisitType(visitTypeId);
   });
 };
 
@@ -350,7 +375,9 @@ export const matchVisitTypeHours = (visitTypes: Record<string, unknown>[]) => {
   for (const seed of DEFAULT_VISIT_TYPE_HOURS) {
     const target = seed.name.toLowerCase();
     const match = visitTypes.find(
-      (item) => asString(item.name).toLowerCase() === target,
+      (item) =>
+        asString(item.id) === seed.id ||
+        asString(item.name).toLowerCase() === target,
     );
     if (match) {
       mappings.push({
@@ -438,6 +465,13 @@ const resolveVisitLine = (
       asString(visit.Property) ||
       asString(visit.property) ||
       propertyId,
+    title:
+      asString(visit.title) ||
+      asString(visit.Title) ||
+      propertyById.get(propertyId) ||
+      asString(visit.Property) ||
+      asString(visit.property) ||
+      visitId,
     date: asString(visit.scheduledDate).slice(0, 10),
     status: asString(visit.status).toUpperCase(),
     providerId,
@@ -530,6 +564,7 @@ export const buildMonthDetail = async (params: {
     id: item.id,
     source: 'manual' as const,
     visitId: '',
+    title: item.property || item.propertyId,
     visitTypeId: '',
     visitTypeName: '',
     propertyId: item.propertyId,
