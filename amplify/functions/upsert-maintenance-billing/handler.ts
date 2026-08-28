@@ -13,20 +13,24 @@ import {
 } from '../shared/dynamo-http';
 import {
   asManualLines,
+  asMergedGroups,
   asNumber,
   asOverrides,
   asString,
   buildMonthDetail,
   currentMonthId,
   deriveMonthStatus,
+  flattenMergeSelection,
   getMonthRecord,
   isApprovedOrAbove,
   isBillingStatus,
   isMonthId,
+  newMergedGroupId,
   nextBillingStatus,
   roundMoney,
   type LineOverride,
   type ManualBillingLine,
+  type MergedBillingGroup,
 } from '../shared/maintenance-billing';
 import { putItem } from '../shared/visit-task-utils';
 
@@ -35,9 +39,13 @@ type Payload = {
   month?: string;
   visitId?: string;
   lineId?: string;
+  lineIds?: unknown;
+  title?: string;
   date?: string;
   propertyId?: string;
   property?: string;
+  visitTypeId?: string;
+  visitTypeName?: string;
   providerId?: string;
   providerName?: string;
   hours?: number | null;
@@ -86,6 +94,7 @@ const persistRecord = async (
     id: monthId,
     overrides: patch.overrides ?? asOverrides(existing.overrides),
     manualLines: patch.manualLines ?? asManualLines(existing.manualLines),
+    mergedGroups: patch.mergedGroups ?? asMergedGroups(existing.mergedGroups),
     createdAt: asString(existing.createdAt) || timestamp,
     updatedAt: timestamp,
   };
@@ -324,12 +333,206 @@ export const handler = async (event: {
         entityName: monthId,
         summary: `${action} maintenance billing line in ${quoted(monthId)}`,
       });
+    } else if (action === 'merge') {
+      const lineIds = Array.isArray(payload.lineIds)
+        ? payload.lineIds.map((entry) => asString(entry)).filter(Boolean)
+        : [];
+      const detail = await buildMonthDetail({ monthId, ...context });
+      const selected = lineIds
+        .map((id) => detail.lines.find((line) => line.id === id))
+        .filter((line): line is NonNullable<typeof line> => Boolean(line));
+      if (selected.length !== lineIds.length || selected.length < 2) {
+        return buildHttpResponse(400, {
+          message: 'Select at least two billing lines from this month.',
+        });
+      }
+      if (selected.some((line) => line.billingStatus !== 'TO_ESTIMATE')) {
+        return buildHttpResponse(400, {
+          message: 'Only To Estimate lines can be grouped.',
+        });
+      }
+      const propertyId = asString(selected[0].propertyId);
+      if (!propertyId || selected.some((line) => line.propertyId !== propertyId)) {
+        return buildHttpResponse(400, {
+          message: 'Grouped lines must belong to the same property.',
+        });
+      }
+      const flattened = flattenMergeSelection(selected);
+      if (flattened.visitIds.length + flattened.manualLineIds.length < 2) {
+        return buildHttpResponse(400, {
+          message: 'A group needs at least two visits or manual lines.',
+        });
+      }
+      const date = asString(payload.date).slice(0, 10) || selected[0].date;
+      if (!date.startsWith(`${monthId}-`)) {
+        return buildHttpResponse(400, {
+          message: 'The grouped date must stay inside the selected month.',
+        });
+      }
+      const title = asString(payload.title) || selected[0].title;
+      if (!title) {
+        return buildHttpResponse(400, { message: 'title is required.' });
+      }
+      const hoursDisabled = Boolean(payload.hoursDisabled);
+      const hours = hoursDisabled ? 0 : asNumber(payload.hours);
+      const price = hoursDisabled
+        ? asNumber(payload.price)
+        : hours !== null && hours > 0
+          ? roundMoney(hours * detail.settings.hourlyCost)
+          : asNumber(payload.price);
+      const existingGroups = asMergedGroups(stored?.mergedGroups).filter(
+        (group) => !flattened.groupIds.includes(group.id),
+      );
+      const memberAlreadyGrouped = existingGroups.some(
+        (group) =>
+          group.visitIds.some((id) => flattened.visitIds.includes(id)) ||
+          group.manualLineIds.some((id) => flattened.manualLineIds.includes(id)),
+      );
+      if (memberAlreadyGrouped) {
+        return buildHttpResponse(400, {
+          message: 'One of the selected lines already belongs to another group.',
+        });
+      }
+      const keepId = flattened.groupIds[0] || newMergedGroupId();
+      const first = selected[0];
+      const group: MergedBillingGroup = {
+        id: keepId,
+        title,
+        date,
+        propertyId,
+        property:
+          asString(payload.property) || first.property || propertyId,
+        visitTypeId: asString(payload.visitTypeId) || first.visitTypeId,
+        visitTypeName: asString(payload.visitTypeName) || first.visitTypeName,
+        providerId:
+          asString(payload.providerId) ||
+          first.providerId ||
+          detail.settings.defaultProviderId,
+        providerName:
+          asString(payload.providerName) ||
+          first.providerName ||
+          detail.settings.defaultProviderName,
+        hours,
+        hoursDisabled,
+        price,
+        billingStatus: 'TO_ESTIMATE',
+        visitIds: flattened.visitIds,
+        manualLineIds: flattened.manualLineIds,
+      };
+      await persistRecord(context.billingTable, monthId, {
+        mergedGroups: [...existingGroups, group],
+      });
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.MAINTENANCE_BILLING,
+        action: 'update',
+        entityId: group.id,
+        entityName: monthId,
+        summary: `merged maintenance billing group ${quoted(group.id)} in ${quoted(monthId)}`,
+      });
+    } else if (action === 'unmerge') {
+      const lineId = asString(payload.lineId);
+      const mergedGroups = asMergedGroups(stored?.mergedGroups);
+      if (!mergedGroups.some((group) => group.id === lineId)) {
+        return buildHttpResponse(404, { message: 'Grouped line not found.' });
+      }
+      await persistRecord(context.billingTable, monthId, {
+        mergedGroups: mergedGroups.filter((group) => group.id !== lineId),
+      });
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.MAINTENANCE_BILLING,
+        action: 'update',
+        entityId: lineId,
+        entityName: monthId,
+        summary: `ungrouped maintenance billing ${quoted(lineId)} in ${quoted(monthId)}`,
+      });
+    } else if (action === 'advance-group' || action === 'override-group') {
+      const lineId = asString(payload.lineId);
+      const detail = await buildMonthDetail({ monthId, ...context });
+      const line = detail.lines.find(
+        (entry) => entry.source === 'group' && entry.id === lineId,
+      );
+      if (!line) {
+        return buildHttpResponse(404, { message: 'Grouped line not found.' });
+      }
+      const mergedGroups = asMergedGroups(stored?.mergedGroups);
+      const index = mergedGroups.findIndex((group) => group.id === lineId);
+      if (index < 0) {
+        return buildHttpResponse(404, { message: 'Grouped line not found.' });
+      }
+      const current = mergedGroups[index];
+      if (action === 'advance-group') {
+        if (line.price === null) {
+          return buildHttpResponse(400, {
+            message: 'Set a price before advancing billing status.',
+          });
+        }
+        const next = nextBillingStatus(line.billingStatus);
+        if (!next) {
+          return buildHttpResponse(400, {
+            message: 'Paid is the final billing status.',
+          });
+        }
+        mergedGroups[index] = {
+          ...current,
+          providerId: line.providerId,
+          providerName: line.providerName,
+          hours: line.hours,
+          hoursDisabled: line.hoursDisabled,
+          price: line.price,
+          billingStatus: next,
+        };
+      } else {
+        const date = asString(payload.date).slice(0, 10) || current.date;
+        if (!date.startsWith(`${monthId}-`)) {
+          return buildHttpResponse(400, {
+            message: 'The grouped date must stay inside the selected month.',
+          });
+        }
+        const hoursDisabled = Boolean(payload.hoursDisabled);
+        const hours = hoursDisabled ? 0 : asNumber(payload.hours);
+        const price = hoursDisabled
+          ? asNumber(payload.price)
+          : hours !== null && hours > 0
+            ? roundMoney(hours * detail.settings.hourlyCost)
+            : asNumber(payload.price);
+        mergedGroups[index] = {
+          ...current,
+          title: asString(payload.title) || current.title,
+          date,
+          providerId: asString(payload.providerId) || current.providerId,
+          providerName:
+            asString(payload.providerName) || current.providerName,
+          hours,
+          hoursDisabled,
+          price,
+          billingStatus: isBillingStatus(payload.billingStatus)
+            ? payload.billingStatus
+            : current.billingStatus,
+        };
+      }
+      await persistRecord(context.billingTable, monthId, { mergedGroups });
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.MAINTENANCE_BILLING,
+        action: 'update',
+        entityId: lineId,
+        entityName: monthId,
+        summary: `updated grouped maintenance billing ${quoted(lineId)} in ${quoted(monthId)}`,
+      });
     } else if (action === 'delete-manual') {
       const lineId = asString(payload.lineId);
       const manualLines = asManualLines(stored?.manualLines).filter(
         (item) => item.id !== lineId,
       );
-      await persistRecord(context.billingTable, monthId, { manualLines });
+      const mergedGroups = asMergedGroups(stored?.mergedGroups)
+        .map((group) => ({
+          ...group,
+          manualLineIds: group.manualLineIds.filter((id) => id !== lineId),
+        }))
+        .filter((group) => group.visitIds.length + group.manualLineIds.length > 0);
+      await persistRecord(context.billingTable, monthId, {
+        manualLines,
+        mergedGroups,
+      });
       await recordActivityLog(event, {
         feature: LOG_FEATURES.MAINTENANCE_BILLING,
         action: 'delete',

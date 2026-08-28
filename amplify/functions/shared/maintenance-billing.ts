@@ -49,7 +49,7 @@ export const BILLING_STATUSES = [
 
 export type MaintenanceBillingStatus = (typeof BILLING_STATUSES)[number];
 export type BillingMonthStatus = 'CURRENT' | 'PENDING_TO_CLOSE' | 'CLOSED';
-export type BillingLineSource = 'visit' | 'manual';
+export type BillingLineSource = 'visit' | 'manual' | 'group';
 
 export type VisitTypeHours = {
   visitTypeId: string;
@@ -88,6 +88,36 @@ export type ManualBillingLine = {
   billingStatus: MaintenanceBillingStatus;
 };
 
+export type MergedBillingGroup = {
+  id: string;
+  title: string;
+  date: string;
+  propertyId: string;
+  property: string;
+  visitTypeId: string;
+  visitTypeName: string;
+  providerId: string;
+  providerName: string;
+  hours: number | null;
+  hoursDisabled: boolean;
+  price: number | null;
+  billingStatus: MaintenanceBillingStatus;
+  visitIds: string[];
+  manualLineIds: string[];
+};
+
+export type MaintenanceBillingMember = {
+  id: string;
+  source: 'visit' | 'manual';
+  visitId: string;
+  title: string;
+  date: string;
+  status: string;
+  propertyId: string;
+  visitTypeName: string;
+  billingStatus: MaintenanceBillingStatus;
+};
+
 export type MaintenanceBillingLine = {
   id: string;
   source: BillingLineSource;
@@ -106,6 +136,7 @@ export type MaintenanceBillingLine = {
   price: number | null;
   billingStatus: MaintenanceBillingStatus;
   isManual: boolean;
+  members?: MaintenanceBillingMember[];
 };
 
 export const asString = (value: unknown) =>
@@ -228,6 +259,56 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
       };
     })
     .filter((entry): entry is ManualBillingLine => entry !== null);
+};
+
+const uniqueIds = (values: string[]) =>
+  [...new Set(values.map((value) => asString(value)).filter(Boolean))];
+
+export const newMergedGroupId = () =>
+  `MBG-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export const asMergedGroups = (value: unknown): MergedBillingGroup[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry): MergedBillingGroup | null => {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      const id = asString(item.id);
+      const date = asString(item.date).slice(0, 10);
+      const propertyId = asString(item.propertyId);
+      const visitIds = uniqueIds(
+        Array.isArray(item.visitIds) ? (item.visitIds as unknown[]).map(asString) : [],
+      );
+      const manualLineIds = uniqueIds(
+        Array.isArray(item.manualLineIds)
+          ? (item.manualLineIds as unknown[]).map(asString)
+          : [],
+      );
+      if (!id || !date || !propertyId || visitIds.length + manualLineIds.length < 1) {
+        return null;
+      }
+      return {
+        id,
+        title: asString(item.title) || asString(item.property) || propertyId,
+        date,
+        propertyId,
+        property: asString(item.property) || propertyId,
+        visitTypeId: asString(item.visitTypeId),
+        visitTypeName: asString(item.visitTypeName),
+        providerId: asString(item.providerId),
+        providerName: asString(item.providerName) || asString(item.providerId),
+        hours: asNumber(item.hours),
+        hoursDisabled: Boolean(item.hoursDisabled),
+        price: asNumber(item.price),
+        billingStatus: isBillingStatus(item.billingStatus)
+          ? item.billingStatus
+          : 'TO_ESTIMATE',
+        visitIds,
+        manualLineIds,
+      };
+    })
+    .filter((entry): entry is MergedBillingGroup => entry !== null);
 };
 
 export const asVisitTypeHours = (value: unknown): VisitTypeHours[] => {
@@ -486,6 +567,100 @@ const resolveVisitLine = (
   };
 };
 
+const toBillingMember = (
+  line: MaintenanceBillingLine,
+): MaintenanceBillingMember => ({
+  id: line.id,
+  source: line.source === 'manual' ? 'manual' : 'visit',
+  visitId: line.visitId,
+  title: line.title,
+  date: line.date,
+  status: line.status,
+  propertyId: line.propertyId,
+  visitTypeName: line.visitTypeName,
+  billingStatus: line.billingStatus,
+});
+
+const resolveGroupLine = (
+  group: MergedBillingGroup,
+  members: MaintenanceBillingLine[],
+  settings: MaintenanceSettings,
+): MaintenanceBillingLine => {
+  const hoursDisabled = Boolean(group.hoursDisabled);
+  const hours = hoursDisabled
+    ? 0
+    : group.hours === undefined
+      ? null
+      : group.hours;
+  const computedPrice =
+    hours !== null && hours > 0 ? roundMoney(hours * settings.hourlyCost) : null;
+  const price = hoursDisabled
+    ? asNumber(group.price)
+    : (asNumber(group.price) ?? computedPrice);
+  const providerId = asString(group.providerId) || settings.defaultProviderId;
+  const providerName =
+    asString(group.providerName) ||
+    settings.defaultProviderName ||
+    providerId;
+  return {
+    id: group.id,
+    source: 'group',
+    visitId: '',
+    title: asString(group.title) || group.property || group.propertyId,
+    visitTypeId: asString(group.visitTypeId),
+    visitTypeName: asString(group.visitTypeName) || asString(group.visitTypeId),
+    propertyId: group.propertyId,
+    property: group.property || group.propertyId,
+    date: group.date,
+    status: 'GROUPED',
+    providerId,
+    providerName,
+    hours,
+    hoursDisabled,
+    price,
+    billingStatus: isBillingStatus(group.billingStatus)
+      ? group.billingStatus
+      : 'TO_ESTIMATE',
+    isManual: false,
+    members: members
+      .slice()
+      .sort((a, b) => {
+        if (a.date !== b.date) {
+          return a.date.localeCompare(b.date);
+        }
+        return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      })
+      .map(toBillingMember),
+  };
+};
+
+export const flattenMergeSelection = (selected: MaintenanceBillingLine[]) => {
+  const visitIds: string[] = [];
+  const manualLineIds: string[] = [];
+  const groupIds: string[] = [];
+  for (const line of selected) {
+    if (line.source === 'group') {
+      groupIds.push(line.id);
+      for (const member of line.members ?? []) {
+        if (member.source === 'manual') {
+          manualLineIds.push(member.id);
+        } else {
+          visitIds.push(member.visitId || member.id);
+        }
+      }
+    } else if (line.source === 'manual') {
+      manualLineIds.push(line.id);
+    } else {
+      visitIds.push(line.visitId || line.id);
+    }
+  }
+  return {
+    visitIds: uniqueIds(visitIds),
+    manualLineIds: uniqueIds(manualLineIds),
+    groupIds: uniqueIds(groupIds),
+  };
+};
+
 const summarizeLines = (lines: MaintenanceBillingLine[]) => {
   const approved = lines.filter((line) => isApprovedOrAbove(line.billingStatus));
   const total = approved.reduce((sum, line) => sum + (line.price ?? 0), 0);
@@ -579,8 +754,30 @@ export const buildMonthDetail = async (params: {
     billingStatus: item.billingStatus,
     isManual: true,
   }));
+  const mergedGroups = asMergedGroups(stored?.mergedGroups);
+  const groupedVisitIds = new Set(mergedGroups.flatMap((group) => group.visitIds));
+  const groupedManualIds = new Set(
+    mergedGroups.flatMap((group) => group.manualLineIds),
+  );
+  const visitById = new Map(visitLines.map((line) => [line.visitId, line]));
+  const manualById = new Map(manualLines.map((line) => [line.id, line]));
+  const groupLines = mergedGroups.map((group) => {
+    const members = [
+      ...group.visitIds
+        .map((id) => visitById.get(id))
+        .filter((line): line is MaintenanceBillingLine => Boolean(line)),
+      ...group.manualLineIds
+        .map((id) => manualById.get(id))
+        .filter((line): line is MaintenanceBillingLine => Boolean(line)),
+    ];
+    return resolveGroupLine(group, members, settings);
+  });
 
-  const lines = [...visitLines, ...manualLines].sort((a, b) => {
+  const lines = [
+    ...visitLines.filter((line) => !groupedVisitIds.has(line.visitId)),
+    ...manualLines.filter((line) => !groupedManualIds.has(line.id)),
+    ...groupLines,
+  ].sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
     }
@@ -610,6 +807,7 @@ export const buildMonthDetail = async (params: {
       id: params.monthId,
       overrides: asOverrides(stored?.overrides),
       manualLines: asManualLines(stored?.manualLines),
+      mergedGroups: asMergedGroups(stored?.mergedGroups),
       summary,
       createdAt: asString(stored?.createdAt) || timestamp,
       updatedAt: timestamp,

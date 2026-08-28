@@ -76,9 +76,20 @@ export type MaintenanceBillingMonth = {
   closedAt?: string
 }
 
-export type MaintenanceBillingLine = {
+export type MaintenanceBillingMember = {
   id: string
   source: 'visit' | 'manual'
+  visitId: string
+  title: string
+  date: string
+  status: string
+  propertyId: string
+  visitTypeName: string
+}
+
+export type MaintenanceBillingLine = {
+  id: string
+  source: 'visit' | 'manual' | 'group'
   visitId: string
   title: string
   visitTypeId: string
@@ -94,6 +105,7 @@ export type MaintenanceBillingLine = {
   price: number | null
   billingStatus: MaintenanceBillingLineStatus
   isManual: boolean
+  members?: MaintenanceBillingMember[]
 }
 
 export const nextBillingLineStatus = (status: MaintenanceBillingLineStatus) => {

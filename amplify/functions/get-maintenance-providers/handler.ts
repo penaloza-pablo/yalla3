@@ -72,7 +72,10 @@ export const handler = async (event: HttpEvent) => {
           propertiesTable,
         });
         for (const line of detail.lines) {
-          if (line.source !== 'visit' || !line.providerId) {
+          if (
+            (line.source !== 'visit' && line.source !== 'group') ||
+            !line.providerId
+          ) {
             continue;
           }
           jobCounts.set(

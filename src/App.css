@@ -4670,6 +4670,43 @@ th {
   color: #667085;
 }
 
+.billing-title-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.billing-row-checkbox {
+  margin-top: 5px;
+}
+
+.billing-row-selected td {
+  background: #f8fafc;
+}
+
+.billing-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.billing-group-members {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.billing-group-members li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .billing-inline-input {
   width: 5.75rem;
   max-width: 100%;
