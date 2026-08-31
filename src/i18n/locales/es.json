@@ -503,6 +503,7 @@
     "cancelVisitNoTasks": "Esta visita no tiene tareas para mover o cancelar.",
     "keepVisit": "Keep visit",
     "createTask": "Crear tarea",
+    "moreInfo": "More info",
     "editTask": "Editar tarea",
     "saveVisit": "Guardar visita",
     "saving": "Guardando…",
@@ -563,7 +564,9 @@
     "bookings": "Reservas",
     "checkIns": "Check-ins",
     "checkOuts": "Check-outs",
-    "chooseDate": "Elegir fecha"
+    "chooseDate": "Elegir fecha",
+    "emptyTasksHint": "No hay específicos pendientes. Ejecutar según título",
+    "cleaningTypePending": "Pendiente de definir"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",

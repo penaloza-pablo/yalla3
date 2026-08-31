@@ -503,6 +503,7 @@
     "cancelVisitNoTasks": "This visit has no tasks to move or cancel.",
     "keepVisit": "Keep visit",
     "createTask": "Create task",
+    "moreInfo": "More info",
     "editTask": "Edit task",
     "saveVisit": "Save visit",
     "saving": "Saving…",
@@ -563,7 +564,9 @@
     "bookings": "Bookings",
     "checkIns": "Check-ins",
     "checkOuts": "Check-outs",
-    "chooseDate": "Choose date"
+    "chooseDate": "Choose date",
+    "emptyTasksHint": "No pending specifics. Execute according to the title.",
+    "cleaningTypePending": "Waiting to define"
   },
   "reviewWorkflow": {
     "progress": "Review workflow progress",

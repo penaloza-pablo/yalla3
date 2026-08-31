@@ -68,6 +68,16 @@ export const getMadridMonthRange = (monthOffset = 0) => {
   }
 }
 
+export const formatDayMonthLabel = (value: string) => {
+  const parsed = parseDateOnly(value)
+  if (!parsed) {
+    return value
+  }
+  const day = String(parsed.getUTCDate()).padStart(2, '0')
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0')
+  return `${day}/${month}`
+}
+
 export const formatDateOnlyLabel = (value: string, locale = 'en') => {
   const parsed = parseDateOnly(value)
   if (!parsed) {

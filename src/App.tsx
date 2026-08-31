@@ -200,6 +200,7 @@ type PropertyRow = {
   nickname: string
   active: boolean
   type: string
+  mtlPrincipalId?: string
   roomType: string
   accommodates: number
   bedrooms: number
@@ -444,6 +445,7 @@ const propertyFieldMap = {
   nickname: ['nickname', 'Nickname', 'ListingNickname', 'listingNickname'],
   active: ['active', 'Active'],
   type: ['type', 'Type'],
+  mtlPrincipalId: ['MTL_PRINCIPALID', 'mtlPrincipalId', 'MTL_PRINCIPAL_ID'],
   roomType: ['roomType', 'Room Type', 'room type'],
   accommodates: ['accommodates', 'Accommodates'],
   bedrooms: ['bedrooms', 'Bedrooms'],
@@ -1105,6 +1107,10 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
       getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
     active: resolvePropertyActive(item),
     type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
+    mtlPrincipalId:
+      getStringValue(
+        getItemValue(item, propertyFieldMap.mtlPrincipalId),
+      ).trim() || undefined,
     roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
     accommodates: getNumberValue(
       getItemValue(item, propertyFieldMap.accommodates),
@@ -2100,6 +2106,7 @@ function App() {
           title: row.title,
           listingNickname: row.nickname,
           type: row.type && row.type !== '—' ? row.type : undefined,
+          mtlPrincipalId: row.mtlPrincipalId,
         })),
     [propertyRows],
   )

@@ -2044,6 +2044,7 @@ th {
 
 .operations-detail-modal {
   max-width: 720px;
+  gap: 10px;
 }
 
 .operations-detail-modal.modal-scrollable {
@@ -2054,14 +2055,118 @@ th {
 .operations-detail-body {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+.operations-detail-body .notice {
+  margin: 0;
+}
+
+.operations-visit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.operations-visit-status {
+  display: inline-flex;
+  margin-top: 0;
+}
+
+.operations-cleaning-type-badge {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
+.operations-cleaning-type-badge.is-pending {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.operations-detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.operations-detail-field {
+  display: grid;
+  grid-template-columns: 7.25rem minmax(0, 1fr);
   gap: 8px;
+  align-items: baseline;
+  line-height: 1.25;
+}
+
+.operations-detail-label {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.operations-detail-value {
+  color: #101828;
+  font-size: 0.92rem;
+  min-width: 0;
+}
+
+.operations-detail-plain {
+  color: #101828;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.operations-empty-tasks {
+  margin: 0;
+  color: #667085;
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 .operations-detail-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 4px;
+}
+
+.operations-more-info-btn {
+  font-style: italic;
+  font-weight: 700;
+}
+
+.operations-more-info-btn.is-active,
+.btn-icon-ghost.operations-more-info-btn.is-active {
+  background: #eff8ff;
+  border-color: #84caff;
+  color: #175cd3;
+}
+
+.operations-more-info {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.operations-detail-body .section-title {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+}
+
+.operations-more-info .section-title {
+  margin: 0;
+}
+
+.operations-more-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .modal-footer.operations-detail-actions {
@@ -3984,6 +4089,54 @@ th {
 
   .operations-detail-modal.modal-scrollable {
     height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px)));
+  }
+
+  .operations-detail-modal {
+    gap: 8px;
+    padding: 14px 16px 16px;
+  }
+
+  .operations-detail-modal .modal-header {
+    gap: 8px;
+    margin: 0;
+  }
+
+  .operations-detail-modal .modal-title {
+    line-height: 1.25;
+  }
+
+  .operations-detail-body {
+    gap: 8px;
+  }
+
+  .operations-detail-field {
+    grid-template-columns: 5.75rem minmax(0, 1fr);
+    gap: 6px;
+    line-height: 1.2;
+  }
+
+  .operations-detail-label,
+  .operations-detail-value {
+    line-height: 1.2;
+  }
+
+  .operations-detail-actions {
+    margin: 16px 0 0;
+  }
+
+  .operations-detail-actions .btn-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .operations-visit-badges {
+    margin-top: 4px;
+  }
+
+  .operations-visit-status {
+    margin-top: 0;
   }
 
   .filter-options-scroll {

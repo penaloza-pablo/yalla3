@@ -27,7 +27,7 @@ import {
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
-import { requiresCompleteVisitWizard } from './visitTypeIds'
+import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import {
   mapVisitTemplate,
@@ -35,6 +35,7 @@ import {
 } from './visitTemplateHelpers'
 import {
   addDaysToDateString,
+  formatDayMonthLabel,
   formatTaskCreatedDate,
   getTodayMadrid,
   getTomorrowMadrid,
@@ -117,6 +118,25 @@ const VISIT_COLUMN_DEFS: {
 ]
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
+
+type CleaningPlanDayLookup = {
+  status: 'READY' | 'DRAFT'
+  typeNameByVisitId: Record<string, string>
+}
+
+const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
+  const types = Array.isArray(item.cleaningTypes) ? item.cleaningTypes : []
+  const typeId = String(item.cleaningTypeId ?? '').trim()
+  const matched = types.find((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>
+    return String(row.id ?? '').trim() === typeId
+  }) as Record<string, unknown> | undefined
+  const fromTypes = String(matched?.name ?? '').trim()
+  if (fromTypes) {
+    return fromTypes
+  }
+  return String(item.cleaningTypeName ?? '').trim()
+}
 
 const emptyVisitForm = () => ({
   id: '',
@@ -300,6 +320,10 @@ export function DailyOperationsView({
     [t],
   )
   const templatesPanelRef = useRef<VisitTemplatesPanelHandle>(null)
+  const cleaningPlanInflight = useRef(new Set<string>())
+  const [cleaningPlansByDate, setCleaningPlansByDate] = useState<
+    Record<string, CleaningPlanDayLookup>
+  >({})
   const [dashboardViewMode, setDashboardViewMode] =
     useState<DashboardViewMode>('day')
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
@@ -323,6 +347,7 @@ export function DailyOperationsView({
   )
 
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
+  const [isVisitMoreInfoOpen, setIsVisitMoreInfoOpen] = useState(false)
   const [isVisitFormOpen, setIsVisitFormOpen] = useState(false)
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [isAssignVisitOpen, setIsAssignVisitOpen] = useState(false)
@@ -410,6 +435,10 @@ export function DailyOperationsView({
       bookings: getEndpoint(
         'getBookingsUrl',
         import.meta.env.VITE_GET_BOOKINGS_URL,
+      ),
+      cleaningPlan: getEndpoint(
+        'getCleaningPlanUrl',
+        import.meta.env.VITE_GET_CLEANING_PLAN_URL,
       ),
     }),
     [getEndpoint],
@@ -539,6 +568,29 @@ export function DailyOperationsView({
     () => visits.find((visit) => visit.id === selectedVisitId) ?? null,
     [visits, selectedVisitId],
   )
+
+  const cleaningTypeBadge = useMemo(() => {
+    if (
+      !selectedVisit ||
+      selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID
+    ) {
+      return null
+    }
+    const plan = cleaningPlansByDate[selectedVisit.scheduledDate]
+    if (!plan) {
+      return null
+    }
+    if (plan.status === 'READY') {
+      const assignedName = plan.typeNameByVisitId[selectedVisit.id]?.trim()
+      if (assignedName) {
+        return { pending: false, label: assignedName }
+      }
+    }
+    return {
+      pending: true,
+      label: t('operations.cleaningTypePending'),
+    }
+  }, [cleaningPlansByDate, selectedVisit, t])
 
   const teamUsers = useMemo(() => {
     if (!visitForm.teamId) return users
@@ -713,7 +765,15 @@ export function DailyOperationsView({
   }, [loadReferenceData])
 
   useEffect(() => {
-    setPropertyOptions(propertyOptionsProp)
+    setPropertyOptions((current) => {
+      const previousById = new Map(current.map((item) => [item.id, item]))
+      return propertyOptionsProp.map((property) => ({
+        ...property,
+        mtlPrincipalId:
+          property.mtlPrincipalId?.trim() ||
+          previousById.get(property.id)?.mtlPrincipalId,
+      }))
+    })
   }, [propertyOptionsProp])
 
   useEffect(() => {
@@ -734,12 +794,69 @@ export function DailyOperationsView({
   }, [mode, loadDayBookings])
 
   useEffect(() => {
+    setIsVisitMoreInfoOpen(false)
     if (selectedVisitId) {
       void loadVisitTasks(selectedVisitId)
     } else {
       setVisitTasks([])
     }
   }, [selectedVisitId, loadVisitTasks])
+
+  useEffect(() => {
+    if (mode !== 'dashboard' || !selectedVisit) {
+      return
+    }
+    if (selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
+      return
+    }
+    const date = selectedVisit.scheduledDate.trim()
+    const endpoint = endpoints.cleaningPlan
+    if (!date || !endpoint) {
+      return
+    }
+    if (cleaningPlansByDate[date] || cleaningPlanInflight.current.has(date)) {
+      return
+    }
+    cleaningPlanInflight.current.add(date)
+    void fetchJson<{
+      status?: string
+      rows?: Record<string, unknown>[]
+    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
+      .then((payload) => {
+        const typeNameByVisitId: Record<string, string> = {}
+        for (const row of payload.rows ?? []) {
+          const visitId = String(row.visitId ?? '').trim()
+          const name = cleaningTypeNameFromPlanRow(row)
+          if (visitId && name) {
+            typeNameByVisitId[visitId] = name
+          }
+        }
+        setCleaningPlansByDate((current) => ({
+          ...current,
+          [date]: {
+            status:
+              String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+                ? 'READY'
+                : 'DRAFT',
+            typeNameByVisitId,
+          },
+        }))
+      })
+      .catch(() => {
+        setCleaningPlansByDate((current) => ({
+          ...current,
+          [date]: { status: 'DRAFT', typeNameByVisitId: {} },
+        }))
+      })
+      .finally(() => {
+        cleaningPlanInflight.current.delete(date)
+      })
+  }, [
+    cleaningPlansByDate,
+    endpoints.cleaningPlan,
+    mode,
+    selectedVisit,
+  ])
 
   const openCreateVisit = () => {
     setVisitForm(emptyVisitForm())
@@ -1951,6 +2068,30 @@ export function DailyOperationsView({
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{selectedVisit.title}</h3>
+                <div className="operations-visit-badges">
+                  <span
+                    className={`status operations-visit-status ${
+                      selectedVisit.status === 'OVERDUE'
+                        ? 'status-warning'
+                        : selectedVisit.status === 'COMPLETED'
+                          ? 'status-success'
+                          : selectedVisit.status === 'CANCELLED'
+                            ? 'status-neutral'
+                            : 'status-info'
+                    }`}
+                  >
+                    {statusLabel(selectedVisit.status)}
+                  </span>
+                  {cleaningTypeBadge ? (
+                    <span
+                      className={`status operations-visit-status operations-cleaning-type-badge${
+                        cleaningTypeBadge.pending ? ' is-pending' : ''
+                      }`}
+                    >
+                      {cleaningTypeBadge.label}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="modal-subtitle">{selectedVisit.id}</p>
               </div>
               <button
@@ -1965,110 +2106,190 @@ export function DailyOperationsView({
             <div className="modal-body operations-detail-body">
               {message ? <p className="notice success">{message}</p> : null}
               {error ? <p className="notice error">{error}</p> : null}
-              <p>
-                <strong>Property:</strong>{' '}
-                {propertyById.get(selectedVisit.propertyId) ?? selectedVisit.propertyId}
-              </p>
-              <p>
-                <strong>Visit type:</strong>{' '}
-                {visitTypeById.get(selectedVisit.visitTypeId) ??
-                  selectedVisit.visitTypeId}
-              </p>
-              <p>
-                <strong>Schedule:</strong> {selectedVisit.scheduledDate}{' '}
-                {selectedVisit.scheduledStartTime} – {selectedVisit.scheduledEndTime}
-              </p>
-              <p>
-                <strong>Team:</strong>{' '}
-                {teamById.get(selectedVisit.teamId) ?? selectedVisit.teamId}
-              </p>
-              <p>
-                <strong>Assigned:</strong>{' '}
-                {userById.get(selectedVisit.assignedUserId) ||
-                  selectedVisit.assignedUserId ||
-                  '—'}
-              </p>
-              <p>
-                <strong>Status:</strong> {selectedVisit.status}
-              </p>
-              {selectedVisit.description ? (
-                <p>
-                  <strong>Description:</strong> {selectedVisit.description}
-                </p>
-              ) : null}
+              <div className="operations-detail-fields">
+                <span className="operations-detail-plain">
+                  {propertyById.get(selectedVisit.propertyId) ??
+                    selectedVisit.propertyId}
+                </span>
+                <span className="operations-detail-plain">
+                  {formatDayMonthLabel(selectedVisit.scheduledDate)}{' '}
+                  {selectedVisit.scheduledStartTime} –{' '}
+                  {selectedVisit.scheduledEndTime}
+                </span>
+                {selectedVisit.description ? (
+                  <div className="operations-detail-field">
+                    <span className="operations-detail-label">
+                      {t('operations.description')}
+                    </span>
+                    <span className="operations-detail-value">
+                      {selectedVisit.description}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
 
               <div className="operations-detail-actions">
-                {canRefreshVisitFromGuesty(selectedVisit) ? (
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={isRefreshingFromGuesty}
-                    onClick={() => void refreshSelectedVisitFromGuesty()}
-                  >
-                    {isRefreshingFromGuesty
-                      ? t('operations.refreshingFromGuesty')
-                      : t('operations.refreshFromGuesty')}
-                  </button>
-                ) : null}
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className={`btn-icon btn-icon-ghost operations-more-info-btn${
+                    isVisitMoreInfoOpen ? ' is-active' : ''
+                  }`}
+                  aria-label={t('operations.moreInfo')}
+                  aria-expanded={isVisitMoreInfoOpen}
+                  title={t('operations.moreInfo')}
+                  onClick={() => setIsVisitMoreInfoOpen((current) => !current)}
+                >
+                  i
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-icon-ghost"
+                  aria-label={t('operations.editVisit')}
+                  title={t('operations.editVisit')}
                   onClick={() => openEditVisit(selectedVisit)}
                 >
-                  {t('operations.editVisit')}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M4 13.5V16h2.5L14.9 7.6l-2.5-2.5L4 13.5zm11.7-8.2a.7.7 0 0 0 0-1l-1.5-1.5a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.2-1.2z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
                 {selectedVisit.status !== 'COMPLETED' &&
                 selectedVisit.status !== 'CANCELLED' ? (
                   <>
                     <button
                       type="button"
-                      className="btn-secondary"
+                      className="btn-icon btn-icon-ghost"
                       disabled={visitHasOpenTasks}
+                      aria-label={t('operations.completeVisit')}
                       title={
                         visitHasOpenTasks
                           ? t('operations.completeTasksFirst')
-                          : undefined
+                          : t('operations.completeVisit')
                       }
                       onClick={openCompleteVisitModal}
                     >
-                      Complete visit
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        width="16"
+                        height="16"
+                      >
+                        <path
+                          d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </button>
                     <button
                       type="button"
-                      className="btn-secondary"
-                      onClick={openCancelVisitModal}
+                      className="btn-icon btn-icon-ghost"
+                      aria-label={t('operations.createTask')}
+                      title={t('operations.createTask')}
+                      onClick={() => {
+                        setTaskForm({
+                          ...emptyTaskForm(),
+                          visitId: selectedVisit.id,
+                          propertyId: selectedVisit.propertyId,
+                          teamId: selectedVisit.teamId,
+                          assignedUserId: selectedVisit.assignedUserId,
+                          dueDate: selectedVisit.scheduledDate,
+                        })
+                        setIsTaskFormOpen(true)
+                      }}
                     >
-                      Cancel visit
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        width="16"
+                        height="16"
+                      >
+                        <path
+                          d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </button>
                   </>
                 ) : null}
               </div>
 
-              <h4 className="section-title">Tasks</h4>
-              {selectedVisit.status !== 'COMPLETED' &&
-              selectedVisit.status !== 'CANCELLED' ? (
-                <div className="header-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => {
-                      setTaskForm({
-                        ...emptyTaskForm(),
-                        visitId: selectedVisit.id,
-                        propertyId: selectedVisit.propertyId,
-                        teamId: selectedVisit.teamId,
-                        assignedUserId: selectedVisit.assignedUserId,
-                        dueDate: selectedVisit.scheduledDate,
-                      })
-                      setIsTaskFormOpen(true)
-                    }}
-                  >
-                    Create task
-                  </button>
-                </div>
+              {isVisitMoreInfoOpen ? (
+                <section
+                  className="operations-more-info"
+                  aria-label={t('operations.moreInfo')}
+                >
+                  <h4 className="section-title">{t('operations.moreInfo')}</h4>
+                  <div className="operations-detail-fields">
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.assignedUser')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {userById.get(selectedVisit.assignedUserId) ||
+                          selectedVisit.assignedUserId ||
+                          '—'}
+                      </span>
+                    </div>
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.team')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {teamById.get(selectedVisit.teamId) ?? selectedVisit.teamId}
+                      </span>
+                    </div>
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.visitType')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {visitTypeById.get(selectedVisit.visitTypeId) ??
+                          selectedVisit.visitTypeId}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="operations-more-info-actions">
+                    {canRefreshVisitFromGuesty(selectedVisit) ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={isRefreshingFromGuesty}
+                        onClick={() => void refreshSelectedVisitFromGuesty()}
+                      >
+                        {isRefreshingFromGuesty
+                          ? t('operations.refreshingFromGuesty')
+                          : t('operations.refreshFromGuesty')}
+                      </button>
+                    ) : null}
+                    {selectedVisit.status !== 'COMPLETED' &&
+                    selectedVisit.status !== 'CANCELLED' ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={openCancelVisitModal}
+                      >
+                        {t('operations.cancelVisit')}
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
               ) : null}
-              <ul className="operations-task-list">
-                {visitTasks.map((task) => {
+
+              <h4 className="section-title">{t('operations.tasks')}</h4>
+              {visitTasks.length === 0 ? (
+                <p className="operations-empty-tasks">
+                  {t('operations.emptyTasksHint')}
+                </p>
+              ) : (
+                <ul className="operations-task-list">
+                  {visitTasks.map((task) => {
                   const isCompleted = task.status === 'COMPLETED'
                   const isCancelled = task.status === 'CANCELLED'
                   const canActOnTask =
@@ -2119,8 +2340,9 @@ export function DailyOperationsView({
                       </div>
                     </li>
                   )
-                })}
-              </ul>
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>
