@@ -66,6 +66,7 @@ import { getMaintenanceBillingDetails } from './functions/get-maintenance-billin
 import { upsertMaintenanceBillingDetails } from './functions/upsert-maintenance-billing-details/resource';
 import { getMaintenanceBilling } from './functions/get-maintenance-billing/resource';
 import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing/resource';
+import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
 import { getTodaySummary } from './functions/get-today-summary/resource';
 
 const backend = defineBackend({
