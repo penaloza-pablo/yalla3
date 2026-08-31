@@ -32,7 +32,7 @@
     "currentCleanings": "Current cleanings",
     "previousCleanings": "Previous cleanings",
     "currentMaintenance": "Current maintenance",
-    "toEstimate": "To estimate",
+    "toEstimate": "Assign hours",
     "reviewsNeedAttention": "{{count}} reviews need attention",
     "reviewsNeedAttention_one": "{{count}} review needs attention",
     "reviewsNeedAttention_other": "{{count}} reviews need attention",
@@ -40,7 +40,7 @@
     "reorder": "Reorder",
     "lowStock": "Low stock",
     "ratio": "{{done}} of {{total}}",
-    "goodJob": "Good job! All task completed"
+    "goodJob": "Yalla! All task completed"
   },
   "bookings": {
     "eyebrow": "Ops / Bookings",

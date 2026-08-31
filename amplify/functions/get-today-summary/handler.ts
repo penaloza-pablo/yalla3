@@ -17,8 +17,13 @@ type HttpEvent = {
 
 const CLEANING_VISIT_TYPE_ID =
   process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
-const MAINTENANCE_VISIT_TYPE_ID =
-  process.env.MAINTENANCE_VISIT_TYPE_ID || 'visit_type_maintenance';
+const MAINTENANCE_VISIT_TYPE_IDS = (
+  process.env.MAINTENANCE_VISIT_TYPE_IDS ||
+  'visit_type_maintenance,visit_type_deep_property_check,visit_type_property_check,visit_type_fixings,visit_type_emergency'
+)
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
@@ -72,20 +77,26 @@ const emptyVisitCounts = (): VisitCounts => ({
   previousOpen: 0,
 });
 
-const countVisitsForType = (
+const toDateOnly = (value: unknown) => asString(value).slice(0, 10);
+
+const countVisitsForTypes = (
   items: Record<string, unknown>[],
-  visitTypeId: string,
+  visitTypeIds: Set<string>,
   today: string,
 ): VisitCounts => {
   const counts = emptyVisitCounts();
   for (const item of items) {
-    const typeId = asString(item.visitTypeId);
-    if (typeId !== visitTypeId) {
+    const typeId = asString(
+      itemField(item, ['visitTypeId', 'visit_type_id', 'VisitTypeId']),
+    );
+    if (!visitTypeIds.has(typeId)) {
       continue;
     }
-    const scheduledDate = asString(item.scheduledDate);
+    const scheduledDate = toDateOnly(
+      itemField(item, ['scheduledDate', 'scheduled_date']),
+    );
     const status = resolveVisitStatus({
-      status: asString(item.status),
+      status: asString(itemField(item, ['status', 'Status'])),
       scheduledDate,
     });
     if (status === 'CANCELLED') {
@@ -142,10 +153,14 @@ export const handler = async (event: HttpEvent) => {
         scanAllItems(inventoryTable),
       ]);
 
-    const cleaning = countVisitsForType(visits, CLEANING_VISIT_TYPE_ID, today);
-    const maintenance = countVisitsForType(
+    const cleaning = countVisitsForTypes(
       visits,
-      MAINTENANCE_VISIT_TYPE_ID,
+      new Set([CLEANING_VISIT_TYPE_ID]),
+      today,
+    );
+    const maintenance = countVisitsForTypes(
+      visits,
+      new Set(MAINTENANCE_VISIT_TYPE_IDS),
       today,
     );
 

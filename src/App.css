@@ -707,6 +707,15 @@
 .today-metrics strong {
   color: #101828;
   font-size: 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.today-metric-check {
+  color: #027a48;
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .today-good-job {

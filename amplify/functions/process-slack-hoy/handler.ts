@@ -76,25 +76,13 @@ const formatDayMonth = (date?: string) => {
 
 const ratio = (done: number, total: number) => `${done} de ${total}`;
 
-const ratioLine = (
-  label: string,
-  done: number,
-  total: number,
-  incompletePrefix?: string,
-) => {
-  const complete = done === total;
-  const value = complete
-    ? ratio(done, total)
-    : `${incompletePrefix ?? ''}${ratio(done, total)}`;
-  return complete
-    ? `:white_check_mark: ${label}: ${value}`
-    : `${label}: ${value}`;
+const ratioLine = (label: string, done: number, total: number) => {
+  const base = `${label}: ${ratio(done, total)}`;
+  return total > 0 && done === total ? `${base} :white_check_mark:` : base;
 };
 
 const countLine = (label: string, count: number) =>
-  count === 0
-    ? `:white_check_mark: ${label}: 0`
-    : `${label}: ${count}`;
+  count > 0 ? `${label}: ${count}` : null;
 
 const section = (title: string, lines: string[]) => ({
   type: 'section',
@@ -105,35 +93,44 @@ const section = (title: string, lines: string[]) => ({
 });
 
 const todayBlocks = (summary: TodaySummary) => {
-  const cleaningClear =
-    summary.cleaning.planningReady === summary.cleaning.planningTotal &&
-    summary.cleaning.currentCompleted === summary.cleaning.currentTotal &&
-    summary.cleaning.previousOpen === 0;
-  const maintenanceClear =
-    summary.maintenance.currentCompleted === summary.maintenance.currentTotal &&
-    summary.maintenance.previousOpen === 0;
+  const cleaningLines = [
+    ratioLine(
+      'Planificación pendiente',
+      summary.cleaning.planningReady,
+      summary.cleaning.planningTotal,
+    ),
+    summary.cleaning.currentTotal > 0
+      ? ratioLine(
+          'Limpiezas del día',
+          summary.cleaning.currentCompleted,
+          summary.cleaning.currentTotal,
+        )
+      : null,
+    countLine('Retrasadas por cerrar', summary.cleaning.previousOpen),
+  ].filter((line): line is string => Boolean(line));
+
+  const maintenanceLines = [
+    summary.maintenance.currentTotal > 0
+      ? ratioLine(
+          'Mantenimientos del día',
+          summary.maintenance.currentCompleted,
+          summary.maintenance.currentTotal,
+        )
+      : null,
+    countLine('Pendientes de estimar', summary.maintenance.previousOpen),
+  ].filter((line): line is string => Boolean(line));
+
   const reviewsClear = summary.reviews.needsAttention === 0;
-  const inventoryClear =
-    summary.inventory.waitingDelivery === 0 &&
-    summary.inventory.reorder === 0 &&
-    summary.inventory.lowStock === 0;
+  const inventoryLines = [
+    countLine('Esperando entrega', summary.inventory.waitingDelivery),
+    countLine('Reordenar', summary.inventory.reorder),
+    countLine('Stock bajo', summary.inventory.lowStock),
+  ].filter((line): line is string => Boolean(line));
 
   const dayMonth = formatDayMonth(summary.date);
   const heading = dayMonth
     ? `:spiral_calendar_pad: ${dayMonth} Resumen`
     : ':spiral_calendar_pad: Resumen';
-
-  const inventoryLines = [
-    summary.inventory.waitingDelivery > 0
-      ? `Esperando entrega: ${summary.inventory.waitingDelivery}`
-      : null,
-    summary.inventory.reorder > 0
-      ? `Reordenar: ${summary.inventory.reorder}`
-      : null,
-    summary.inventory.lowStock > 0
-      ? `Stock bajo: ${summary.inventory.lowStock}`
-      : null,
-  ].filter((line): line is string => Boolean(line));
 
   return [
     {
@@ -142,39 +139,15 @@ const todayBlocks = (summary: TodaySummary) => {
     },
     section(
       'Limpieza',
-      cleaningClear
-        ? ['Yalla! No hay ninguna advertencia de limpieza']
-        : [
-            ratioLine(
-              'Planificación',
-              summary.cleaning.planningReady,
-              summary.cleaning.planningTotal,
-              'pendiente ',
-            ),
-            ratioLine(
-              'Limpiezas del día',
-              summary.cleaning.currentCompleted,
-              summary.cleaning.currentTotal,
-            ),
-            countLine('Retrasadas por cerrar', summary.cleaning.previousOpen),
-          ],
+      cleaningLines.length
+        ? cleaningLines
+        : ['Yalla! No hay ninguna advertencia de limpieza'],
     ),
     section(
       'Mantenimiento',
-      maintenanceClear
-        ? ['Yalla! No hay ninguna advertencia de mantenimiento']
-        : [
-            ratioLine(
-              'Mantenimientos del día',
-              summary.maintenance.currentCompleted,
-              summary.maintenance.currentTotal,
-              'pendiente ',
-            ),
-            countLine(
-              'Pendientes de estimar',
-              summary.maintenance.previousOpen,
-            ),
-          ],
+      maintenanceLines.length
+        ? maintenanceLines
+        : ['Yalla! No hay ninguna advertencia de mantenimiento'],
     ),
     section(
       'Reseñas',
@@ -188,9 +161,9 @@ const todayBlocks = (summary: TodaySummary) => {
     ),
     section(
       'Inventario',
-      inventoryClear
-        ? ['Yalla! No hay ninguna advertencia de inventario']
-        : inventoryLines,
+      inventoryLines.length
+        ? inventoryLines
+        : ['Yalla! No hay ninguna advertencia de inventario'],
     ),
   ];
 };
