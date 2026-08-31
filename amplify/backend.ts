@@ -8,6 +8,7 @@ import {
   Table,
 } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -68,6 +69,7 @@ import { getMaintenanceBilling } from './functions/get-maintenance-billing/resou
 import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing/resource';
 import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
 import { getTodaySummary } from './functions/get-today-summary/resource';
+import { handleSlackCommand } from './functions/handle-slack-command/resource';
 
 const backend = defineBackend({
   auth,
@@ -129,6 +131,7 @@ const backend = defineBackend({
   upsertMaintenanceBilling,
   exportMaintenanceBilling,
   getTodaySummary,
+  handleSlackCommand,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -555,6 +558,22 @@ cleaningPlansTable.grantReadData(backend.getTodaySummary.resources.lambda);
 backend.getTodaySummary.addEnvironment(
   'CLEANING_PLANS_TABLE',
   cleaningPlansTable.tableName,
+);
+const slackSecret = Secret.fromSecretNameV2(
+  dataStack,
+  'YallaSlackSecret',
+  'yalla/slack',
+);
+slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
+backend.getTodaySummary.resources.lambda.grantInvoke(
+  backend.handleSlackCommand.resources.lambda,
+);
+backend.handleSlackCommand.resources.lambda.grantInvoke(
+  backend.handleSlackCommand.resources.lambda,
+);
+backend.handleSlackCommand.addEnvironment(
+  'GET_TODAY_SUMMARY_FUNCTION_NAME',
+  backend.getTodaySummary.resources.lambda.functionName,
 );
 cleaningPlansTable.grantReadWriteData(
   backend.upsertCleaningPlan.resources.lambda,
@@ -1050,6 +1069,10 @@ const exportMaintenanceBillingUrl =
 const getTodaySummaryUrl = backend.getTodaySummary.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const handleSlackCommandUrl =
+  backend.handleSlackCommand.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -1109,5 +1132,6 @@ backend.addOutput({
     upsertMaintenanceBillingUrl: upsertMaintenanceBillingUrl.url,
     exportMaintenanceBillingUrl: exportMaintenanceBillingUrl.url,
     getTodaySummaryUrl: getTodaySummaryUrl.url,
+    handleSlackCommandUrl: handleSlackCommandUrl.url,
   },
 });
