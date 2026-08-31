@@ -28,8 +28,6 @@ type TodaySummary = {
   };
 };
 
-const GOOD_JOB = 'Good job! All task completed';
-
 const parseLambdaJson = (payloadText: string) => {
   const parsed = JSON.parse(payloadText) as {
     body?: string;
@@ -68,73 +66,131 @@ const loadTodaySummary = async (): Promise<TodaySummary> => {
   return body as TodaySummary;
 };
 
+const formatDayMonth = (date?: string) => {
+  const match = date?.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return date?.trim() || '';
+  }
+  return `${match[3]}/${match[2]}`;
+};
+
 const ratio = (done: number, total: number) => `${done} de ${total}`;
 
+const ratioLine = (
+  label: string,
+  done: number,
+  total: number,
+  incompletePrefix?: string,
+) => {
+  const complete = done === total;
+  const value = complete
+    ? ratio(done, total)
+    : `${incompletePrefix ?? ''}${ratio(done, total)}`;
+  return complete
+    ? `:white_check_mark: ${label}: ${value}`
+    : `${label}: ${value}`;
+};
+
+const countLine = (label: string, count: number) =>
+  count === 0
+    ? `:white_check_mark: ${label}: 0`
+    : `${label}: ${count}`;
+
+const section = (title: string, lines: string[]) => ({
+  type: 'section',
+  text: {
+    type: 'mrkdwn',
+    text: `*${title}*\n${lines.join('\n')}`,
+  },
+});
+
 const todayBlocks = (summary: TodaySummary) => {
-  const cleaningDone =
+  const cleaningClear =
     summary.cleaning.planningReady === summary.cleaning.planningTotal &&
     summary.cleaning.currentCompleted === summary.cleaning.currentTotal &&
     summary.cleaning.previousOpen === 0;
-  const maintenanceDone =
+  const maintenanceClear =
     summary.maintenance.currentCompleted === summary.maintenance.currentTotal &&
     summary.maintenance.previousOpen === 0;
-  const reviewsDone = summary.reviews.needsAttention === 0;
-  const inventoryDone =
+  const reviewsClear = summary.reviews.needsAttention === 0;
+  const inventoryClear =
     summary.inventory.waitingDelivery === 0 &&
     summary.inventory.reorder === 0 &&
     summary.inventory.lowStock === 0;
 
-  const section = (title: string, lines: string[]) => ({
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: `*${title}*\n${lines.join('\n')}`,
-    },
-  });
+  const dayMonth = formatDayMonth(summary.date);
+  const heading = dayMonth
+    ? `:spiral_calendar_pad: ${dayMonth} Resumen`
+    : ':spiral_calendar_pad: Resumen';
+
+  const inventoryLines = [
+    summary.inventory.waitingDelivery > 0
+      ? `Esperando entrega: ${summary.inventory.waitingDelivery}`
+      : null,
+    summary.inventory.reorder > 0
+      ? `Reordenar: ${summary.inventory.reorder}`
+      : null,
+    summary.inventory.lowStock > 0
+      ? `Stock bajo: ${summary.inventory.lowStock}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
 
   return [
     {
-      type: 'header',
-      text: { type: 'plain_text', text: `Hoy ${summary.date ?? ''}`.trim() },
+      type: 'section',
+      text: { type: 'mrkdwn', text: heading },
     },
     section(
-      'Cleaning',
-      cleaningDone
-        ? [GOOD_JOB]
+      'Limpieza',
+      cleaningClear
+        ? ['Yalla! No hay ninguna advertencia de limpieza']
         : [
-            `Planning: ${ratio(summary.cleaning.planningReady, summary.cleaning.planningTotal)}`,
-            `Current cleanings: ${ratio(summary.cleaning.currentCompleted, summary.cleaning.currentTotal)}`,
-            `Previous cleanings: ${summary.cleaning.previousOpen}`,
+            ratioLine(
+              'Planificación',
+              summary.cleaning.planningReady,
+              summary.cleaning.planningTotal,
+              'pendiente ',
+            ),
+            ratioLine(
+              'Limpiezas del día',
+              summary.cleaning.currentCompleted,
+              summary.cleaning.currentTotal,
+            ),
+            countLine('Retrasadas por cerrar', summary.cleaning.previousOpen),
           ],
     ),
     section(
-      'Maintenance',
-      maintenanceDone
-        ? [GOOD_JOB]
+      'Mantenimiento',
+      maintenanceClear
+        ? ['Yalla! No hay ninguna advertencia de mantenimiento']
         : [
-            `Current maintenance: ${ratio(summary.maintenance.currentCompleted, summary.maintenance.currentTotal)}`,
-            `To estimate: ${summary.maintenance.previousOpen}`,
+            ratioLine(
+              'Mantenimientos del día',
+              summary.maintenance.currentCompleted,
+              summary.maintenance.currentTotal,
+              'pendiente ',
+            ),
+            countLine(
+              'Pendientes de estimar',
+              summary.maintenance.previousOpen,
+            ),
           ],
     ),
     section(
-      'Reviews',
-      reviewsDone
-        ? [GOOD_JOB]
+      'Reseñas',
+      reviewsClear
+        ? ['Yalla! No hay ninguna reseña que atender']
         : [
             summary.reviews.needsAttention === 1
-              ? '1 review needs attention'
-              : `${summary.reviews.needsAttention} reviews need attention`,
+              ? '1 reseña necesita atención'
+              : `${summary.reviews.needsAttention} reseñas necesitan atención`,
           ],
     ),
     section(
-      'Inventory',
-      inventoryDone
-        ? [GOOD_JOB]
-        : [
-            `Waiting delivery: ${summary.inventory.waitingDelivery}`,
-            `Reorder: ${summary.inventory.reorder}`,
-            `Low stock: ${summary.inventory.lowStock}`,
-          ],
+      'Inventario',
+      inventoryClear
+        ? ['Yalla! No hay ninguna advertencia de inventario']
+        : inventoryLines,
     ),
   ];
 };
@@ -165,7 +221,7 @@ export const handler = async (event: SlackHoyEvent) => {
     await postToResponseUrl(responseUrl, {
       response_type: 'in_channel',
       replace_original: false,
-      text: `Resumen de hoy ${summary.date ?? ''}`.trim(),
+      text: `:spiral_calendar_pad: ${formatDayMonth(summary.date)} Resumen`.trim(),
       blocks: todayBlocks(summary),
     });
   } catch (error) {
