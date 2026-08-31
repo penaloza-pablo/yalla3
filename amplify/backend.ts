@@ -66,7 +66,7 @@ import { getMaintenanceBillingDetails } from './functions/get-maintenance-billin
 import { upsertMaintenanceBillingDetails } from './functions/upsert-maintenance-billing-details/resource';
 import { getMaintenanceBilling } from './functions/get-maintenance-billing/resource';
 import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing/resource';
-import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
+import { getTodaySummary } from './functions/get-today-summary/resource';
 
 const backend = defineBackend({
   auth,
@@ -127,6 +127,7 @@ const backend = defineBackend({
   getMaintenanceBilling,
   upsertMaintenanceBilling,
   exportMaintenanceBilling,
+  getTodaySummary,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -187,6 +188,7 @@ const lambdaFunctionsWithHttp = [
   backend.getMaintenanceBilling,
   backend.upsertMaintenanceBilling,
   backend.exportMaintenanceBilling,
+  backend.getTodaySummary,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -267,6 +269,7 @@ activityLogsTable.addGlobalSecondaryIndex({
 });
 
 inventoryTable.grantReadData(backend.getInventory.resources.lambda);
+inventoryTable.grantReadData(backend.getTodaySummary.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 inventoryTable.grantReadWriteData(backend.deleteInventory.resources.lambda);
 inventoryTable.grantReadData(backend.getInventoryRebuy.resources.lambda);
@@ -303,9 +306,11 @@ backend.getBookings.resources.lambda.addToRolePolicy(
   }),
 );
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
+reviewsTable.grantReadData(backend.getTodaySummary.resources.lambda);
 reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
 reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
 visitsTable.grantReadWriteData(backend.getVisits.resources.lambda);
+visitsTable.grantReadData(backend.getTodaySummary.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
 visitsTable.grantReadData(backend.upsertTask.resources.lambda);
 tasksTable.grantReadWriteData(backend.getVisits.resources.lambda);
@@ -545,6 +550,11 @@ cleanersTable.grantReadWriteData(
   backend.upsertCleaningIncident.resources.lambda,
 );
 cleaningPlansTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+cleaningPlansTable.grantReadData(backend.getTodaySummary.resources.lambda);
+backend.getTodaySummary.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
 cleaningPlansTable.grantReadWriteData(
   backend.upsertCleaningPlan.resources.lambda,
 );
@@ -1036,6 +1046,9 @@ const exportMaintenanceBillingUrl =
   backend.exportMaintenanceBilling.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getTodaySummaryUrl = backend.getTodaySummary.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.addOutput({
   custom: {
@@ -1094,5 +1107,6 @@ backend.addOutput({
     getMaintenanceBillingUrl: getMaintenanceBillingUrl.url,
     upsertMaintenanceBillingUrl: upsertMaintenanceBillingUrl.url,
     exportMaintenanceBillingUrl: exportMaintenanceBillingUrl.url,
+    getTodaySummaryUrl: getTodaySummaryUrl.url,
   },
 });

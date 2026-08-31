@@ -29,6 +29,7 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { TodayView } from './today/TodayView'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
@@ -68,17 +69,6 @@ type InventoryRow = {
   unitPrice: number
   tolerance: number
   consumptionRules: ConsumptionRules | null
-}
-
-type AlertRow = {
-  id: string
-  name: string
-  description: string
-  date: string
-  status: string
-  origin: string
-  createdBy: string
-  snoozeUntil?: string
 }
 
 type PurchaseRow = {
@@ -175,11 +165,6 @@ type SubtractionFormState = {
 }
 
 type InventoryApiResponse = {
-  items?: Record<string, unknown>[]
-  count?: number
-}
-
-type AlertsApiResponse = {
   items?: Record<string, unknown>[]
   count?: number
 }
@@ -337,12 +322,11 @@ const navigation = [
   },
 ]
 
-const coreItems = ['Chatbot', 'Alerts']
+const coreItems = ['Chatbot', 'Today']
 const pagesWithMobileSearch = new Set([
   'Inventory',
   'Purchases',
   'Subtractions',
-  'Alerts',
   'Logs',
   'Cleaning Incidents',
   'Maintenance Incidents',
@@ -362,17 +346,6 @@ const inventoryFieldMap = {
   unitPrice: ['unitPrice', 'unitprice', 'Unit Price'],
   tolerance: ['Tolerance', 'tolerance'],
   consumptionRules: ['consumptionRules', 'Consumption Rules'],
-}
-
-const alertFieldMap = {
-  id: ['id', 'ID'],
-  name: ['Name ', 'Name', 'name'],
-  description: ['Description', 'description'],
-  date: ['Date', 'date'],
-  status: ['Status', 'status'],
-  origin: ['Origin', 'origin'],
-  createdBy: ['Create by', 'Created by', 'createdBy'],
-  snoozeUntil: ['SnoozeUntil', 'snoozeUntil'],
 }
 
 const purchaseFieldMap = {
@@ -798,17 +771,6 @@ const formatUnitPrice = (value: number) => {
   })}`
 }
 
-const formatSnoozeUntil = (dateValue: string) => {
-  if (!dateValue) {
-    return ''
-  }
-  const parsed = new Date(`${dateValue}T09:00:00`)
-  if (Number.isNaN(parsed.getTime())) {
-    return ''
-  }
-  return parsed.toISOString()
-}
-
 const formatDateForInput = (value: string) => {
   if (!value) {
     return ''
@@ -953,19 +915,6 @@ const mapInventoryRow = (item: Record<string, unknown>): InventoryRow => ({
     (getItemValue(item, inventoryFieldMap.consumptionRules) as
       | ConsumptionRules
       | undefined) ?? null,
-})
-
-const mapAlertRow = (item: Record<string, unknown>): AlertRow => ({
-  id: getStringValue(getItemValue(item, alertFieldMap.id)) || '—',
-  name: getStringValue(getItemValue(item, alertFieldMap.name)) || '—',
-  description:
-    getStringValue(getItemValue(item, alertFieldMap.description)) || '—',
-  date: formatAlertDate(getItemValue(item, alertFieldMap.date)),
-  status: getStringValue(getItemValue(item, alertFieldMap.status)) || 'Pending',
-  origin: getStringValue(getItemValue(item, alertFieldMap.origin)) || '—',
-  createdBy:
-    getStringValue(getItemValue(item, alertFieldMap.createdBy)) || '—',
-  snoozeUntil: getStringValue(getItemValue(item, alertFieldMap.snoozeUntil)),
 })
 
 const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
@@ -1427,11 +1376,6 @@ function App() {
   const [isExporting, setIsExporting] = useState(false)
   const [isInventoryExportOpen, setIsInventoryExportOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [alertRows, setAlertRows] = useState<AlertRow[]>([])
-  const [isAlertsLoading, setIsAlertsLoading] = useState(false)
-  const [alertsError, setAlertsError] = useState<string | null>(null)
-  const [alertsLastUpdated, setAlertsLastUpdated] = useState<string | null>(null)
-  const [expandedAlertIds, setExpandedAlertIds] = useState<Set<string>>(new Set())
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([])
   const [isPurchasesLoading, setIsPurchasesLoading] = useState(false)
   const [purchasesError, setPurchasesError] = useState<string | null>(null)
@@ -1611,25 +1555,6 @@ function App() {
   const [expandedPurchaseIds, setExpandedPurchaseIds] = useState<Set<string>>(
     new Set(),
   )
-  const [isAlertsFilterOpen, setIsAlertsFilterOpen] = useState(false)
-  const [isSnoozeOpen, setIsSnoozeOpen] = useState(false)
-  const [snoozeTargetId, setSnoozeTargetId] = useState<string | null>(null)
-  const [snoozeDate, setSnoozeDate] = useState('')
-  const [snoozeError, setSnoozeError] = useState<string | null>(null)
-  const [alertsFilters, setAlertsFilters] = useState<{
-    statuses: string[]
-    origins: string[]
-  }>({
-    statuses: ['Pending'],
-    origins: [],
-  })
-  const [alertsFilterDraft, setAlertsFilterDraft] = useState<{
-    statuses: string[]
-    origins: string[]
-  }>({
-    statuses: ['Pending'],
-    origins: [],
-  })
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formStep, setFormStep] = useState<'details' | 'restock'>('details')
   const [formValues, setFormValues] = useState<InventoryFormState>(emptyFormState)
@@ -1731,7 +1656,7 @@ function App() {
     const isAiConfigured = debugInfo.configHasData || debugInfo.outputsHasData
     const quickPrompts = [
       'Show low stock items and locations.',
-      'Summarize pending alerts from the last 7 days.',
+      'What still needs attention today?',
       'Which items need reorder this week?',
     ]
 
@@ -1946,11 +1871,6 @@ function App() {
         AI configured: {debugInfo.outputsHasData ? 'Yes' : 'No'}
       </p>
     </div>
-  )
-
-  const pendingAlertsCount = useMemo(
-    () => alertRows.filter((row) => row.status === 'Pending').length,
-    [alertRows],
   )
 
   const purchaseStatusOptions = [
@@ -2314,55 +2234,6 @@ function App() {
       setError(message)
     } finally {
       setIsLoading(false)
-    }
-  }, [])
-
-  const fetchAlerts = useCallback(async () => {
-    const endpoint = getEndpoint(
-      'getAlertsUrl',
-      import.meta.env.VITE_GET_ALERTS_URL,
-    )
-    if (!endpoint) {
-      setAlertsError(
-        'Missing alerts endpoint. Set VITE_GET_ALERTS_URL in the environment.',
-      )
-      return
-    }
-
-    setIsAlertsLoading(true)
-    setAlertsError(null)
-
-    try {
-      const response = await authFetch(endpoint)
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(
-          `Alerts request failed (${response.status}). ${errorText}`.trim(),
-        )
-      }
-      const payload = (await response.json()) as AlertsApiResponse
-      const items = Array.isArray(payload.items) ? payload.items : []
-      const mappedRows = items.map((entry) =>
-        mapAlertRow(normalizeInventoryItem(entry)),
-      )
-      setAlertRows(mappedRows)
-      setAlertsLastUpdated(
-        new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      )
-    } catch (requestError) {
-      const message =
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to load alerts. Please try again.'
-      setAlertsError(message)
-    } finally {
-      setIsAlertsLoading(false)
     }
   }, [])
 
@@ -3079,20 +2950,10 @@ function App() {
     }
   }, [t])
 
-  const openSnoozeModal = (id: string) => {
-    setSnoozeTargetId(id)
-    setSnoozeDate('')
-    setSnoozeError(null)
-    setIsSnoozeOpen(true)
-  }
-
   useEffect(() => {
     if (activePage === 'Inventory') {
       void fetchInventory()
       void fetchPurchases()
-    }
-    if (activePage === 'Alerts') {
-      void fetchAlerts()
     }
     if (activePage === 'Purchases') {
       void fetchPurchases()
@@ -3119,7 +2980,6 @@ function App() {
   }, [
     activePage,
     bookingsCurrentCursor,
-    fetchAlerts,
     fetchBookings,
     fetchInventory,
     fetchProperties,
@@ -3137,10 +2997,6 @@ function App() {
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [activePage, fetchInventory])
-
-  useEffect(() => {
-    void fetchAlerts()
-  }, [fetchAlerts])
 
   const openNewItem = () => {
     setFormValues({
@@ -3297,18 +3153,6 @@ function App() {
     })
   }
 
-  const toggleAlertRow = (rowId: string) => {
-    setExpandedAlertIds((current) => {
-      const next = new Set(current)
-      if (next.has(rowId)) {
-        next.delete(rowId)
-      } else {
-        next.add(rowId)
-      }
-      return next
-    })
-  }
-
   const togglePurchaseRow = (rowId: string) => {
     setExpandedPurchaseIds((current) => {
       const next = new Set(current)
@@ -3408,41 +3252,6 @@ function App() {
       return (left - right) * direction
     })
   }
-
-  const alertsFilteredRows = useMemo(() => {
-    return alertRows.filter((row) => {
-      const statusMatch =
-        alertsFilters.statuses.length === 0 ||
-        alertsFilters.statuses.includes(row.status)
-      const originMatch =
-        alertsFilters.origins.length === 0 ||
-        alertsFilters.origins.includes(row.origin)
-      if (!statusMatch || !originMatch) {
-        return false
-      }
-      return matchesTableSearch(tableSearchQuery, [
-        row.id,
-        row.name,
-        row.description,
-        row.status,
-        row.origin,
-        row.createdBy,
-        row.date,
-      ])
-    })
-  }, [
-    alertRows,
-    alertsFilters.origins,
-    alertsFilters.statuses,
-    tableSearchQuery,
-  ])
-
-  const alertsOriginOptions = useMemo(() => {
-    const unique = new Set(alertRows.map((row) => row.origin).filter(Boolean))
-    return Array.from(unique).sort((a, b) => a.localeCompare(b))
-  }, [alertRows])
-
-  const alertsStatusOptions = ['Pending', 'Snoozed', 'Done']
 
   const filteredRows = useMemo(() => {
     return inventoryRows.filter((row) => {
@@ -4451,49 +4260,6 @@ function App() {
     }
   }
 
-  const updateAlertStatus = async (
-    id: string,
-    status: 'Done' | 'Snoozed',
-    snoozeUntil?: string,
-  ) => {
-    const endpoint = getEndpoint(
-      'updateAlertStatusUrl',
-      import.meta.env.VITE_UPDATE_ALERT_STATUS_URL,
-    )
-    if (!endpoint) {
-      setAlertsError(
-        'Missing alerts update endpoint. Set VITE_UPDATE_ALERT_STATUS_URL in the environment.',
-      )
-      return
-    }
-
-    try {
-      const response = await authFetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ id, status, snoozeUntil }),
-      })
-      if (!response.ok) {
-        throw new Error('Failed to update alert.')
-      }
-      setAlertRows((current) =>
-        current.map((row) =>
-          row.id === id
-            ? {
-                ...row,
-                status,
-                snoozeUntil,
-              }
-            : row,
-        ),
-      )
-    } catch (updateError) {
-      setAlertsError(t('alerts.updateError'))
-    }
-  }
-
   const toggleSection = (section: string) => {
     setCollapsedSections((current) => {
       const next = new Set(current)
@@ -4611,8 +4377,6 @@ function App() {
         return t('purchases.search')
       case 'Subtractions':
         return t('subtractions.search')
-      case 'Alerts':
-        return t('alerts.search')
       case 'Logs':
         return t('logs.search')
       case 'Cleaning Incidents':
@@ -4777,9 +4541,6 @@ function App() {
                       onClick={() => navigateToPage(item)}
                     >
                       <span>{navItemLabel(item)}</span>
-                      {item === 'Alerts' && pendingAlertsCount > 0 ? (
-                        <span className="nav-badge">{pendingAlertsCount}</span>
-                      ) : null}
                     </button>
                   </li>
                 )
@@ -4802,7 +4563,7 @@ function App() {
                         onClick={() => navigateToPage(item)}
                         aria-label={navItemLabel(item)}
                       >
-                        {item === 'Alerts' ? (
+                        {item === 'Today' ? (
                           <>
                             <svg
                               aria-hidden="true"
@@ -4811,7 +4572,7 @@ function App() {
                               height="16"
                             >
                               <path
-                                d="M10 3a4 4 0 0 1 4 4v2.4l1.2 2.4H4.8L6 9.4V7a4 4 0 0 1 4-4zm-2.2 12a2.2 2.2 0 0 0 4.4 0h-4.4z"
+                                d="M6 3h2v2h4V3h2v2h1.5A1.5 1.5 0 0 1 17 6.5v10A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-10A1.5 1.5 0 0 1 4.5 5H6V3zm9 6H5v7h10V9z"
                                 fill="currentColor"
                               />
                             </svg>
@@ -8060,380 +7821,11 @@ function App() {
               </div>
             </section>
           </>
-        ) : activePage === 'Alerts' ? (
-          <>
-            <header className="page-header">
-              <div className="page-header-leading">
-                <p className="eyebrow">{t('alerts.eyebrow')}</p>
-                <div className="page-title-row">
-                  <h1 className="page-title">
-                    {pageLabel('Alerts')}
-                  </h1>
-                  <button
-                    type="button"
-                    className={`btn-page-info ${
-                      isSummaryInfoOpen ? 'is-active' : ''
-                    }`}
-                    aria-label={
-                      isSummaryInfoOpen
-                        ? t('common.hideSummaryInfo')
-                        : t('common.showSummaryInfo')
-                    }
-                    aria-expanded={isSummaryInfoOpen}
-                    onClick={() => setIsSummaryInfoOpen((current) => !current)}
-                  >
-                    i
-                  </button>
-                </div>
-                <p className="subtitle">{t('alerts.subtitle')}</p>
-              </div>
-              <MobileBodyPortal>
-              <div
-                className={`page-action-bar ${
-                  isMobileSearchOpen ? 'is-search-open' : ''
-                }`}
-              >
-                <input
-                  className="search-input"
-                  placeholder={t('alerts.search')}
-                  type="search"
-                  aria-label={t('alerts.search')}
-                  value={tableSearchQuery}
-                  onChange={(event) => setTableSearchQuery(event.target.value)}
-                />
-                <div className="header-actions">
-                <button
-                  className={`btn-ghost btn-search-toggle ${
-                    isMobileSearchOpen ? 'is-active' : ''
-                  }`}
-                  type="button"
-                  aria-label={
-                    isMobileSearchOpen
-                      ? t('common.hideSearch')
-                      : t('common.showSearch')
-                  }
-                  aria-expanded={isMobileSearchOpen}
-                  onClick={() =>
-                    setIsMobileSearchOpen((current) => !current)
-                  }
-                >
-                  {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
-                  ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  className={`btn-ghost btn-filter ${
-                    isAlertsFilterOpen ? 'is-active' : ''
-                  }`}
-                  type="button"
-                  aria-label={t('common.filters')}
-                  onClick={() => {
-                    setAlertsFilterDraft({
-                      statuses: [...alertsFilters.statuses],
-                      origins: [...alertsFilters.origins],
-                    })
-                    setIsAlertsFilterOpen(true)
-                  }}
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  {alertsFilters.statuses.length + alertsFilters.origins.length >
-                  0 ? (
-                    <span className="filter-badge">
-                      {alertsFilters.statuses.length +
-                        alertsFilters.origins.length}
-                    </span>
-                  ) : null}
-                </button>
-                <button className="btn-ghost" type="button" onClick={fetchAlerts}>
-                  Refresh
-                </button>
-                </div>
-              </div>
-              </MobileBodyPortal>
-            </header>
-
-            {alertsError ? <div className="alert">{alertsError}</div> : null}
-
-            <section
-              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
-            >
-              <div className="card card-compact">
-                <p className="card-label">{t('alerts.totalAlerts')}</p>
-                <p className="card-value">{alertRows.length}</p>
-                <p className="card-meta">{t('common.allOrigins')}</p>
-              </div>
-              <div className="card card-compact">
-                <p className="card-label">{t('common.pending')}</p>
-                <p className="card-value">{pendingAlertsCount}</p>
-                <p className="card-meta">{t('common.needsAction')}</p>
-              </div>
-              <div className="card card-compact">
-                <p className="card-label">{t('common.lastSync')}</p>
-                <p className="card-value">
-                  {alertsLastUpdated ?? t('common.notSyncedYet')}
-                </p>
-                <p className="card-meta">{t('common.productionDynamoDb')}</p>
-              </div>
-            </section>
-
-            <section className="card">
-              <div className="card-header">
-                <div>
-                  <h2 className="card-title">{t('alerts.cardTitle')}</h2>
-                  <p className="card-subtitle">{t('alerts.cardSubtitle')}</p>
-                </div>
-              </div>
-
-              {isAlertsFilterOpen ? (
-                <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
-                    <div className="modal-header">
-                      <div>
-                        <h3 className="modal-title">{t('common.filters')}</h3>
-                        <p className="modal-subtitle">
-                          {t('alerts.filterSubtitle')}
-                        </p>
-                      </div>
-                      <button
-                        className="btn-icon"
-                        type="button"
-                        onClick={() => setIsAlertsFilterOpen(false)}
-                        aria-label={t('common.closeFilters')}
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="modal-body">
-                      <div className="filter-grid">
-                        <div className="filter-group">
-                          <p className="filter-title">{t('common.origin')}</p>
-                          <div className="filter-options">
-                            {alertsOriginOptions.map((option) => {
-                              const isChecked =
-                                alertsFilterDraft.origins.includes(option)
-                              return (
-                                <label className="filter-option" key={option}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={(event) => {
-                                      setAlertsFilterDraft((current) => {
-                                        if (event.target.checked) {
-                                          return {
-                                            ...current,
-                                            origins: [
-                                              ...current.origins,
-                                              option,
-                                            ],
-                                          }
-                                        }
-                                        return {
-                                          ...current,
-                                          origins: current.origins.filter(
-                                            (value) => value !== option,
-                                          ),
-                                        }
-                                      })
-                                    }}
-                                  />
-                                  <span>{option}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div className="filter-group">
-                          <p className="filter-title">{t('common.status')}</p>
-                          <div className="filter-options">
-                            {alertsStatusOptions.map((option) => {
-                              const isChecked =
-                                alertsFilterDraft.statuses.includes(option)
-                              return (
-                                <label className="filter-option" key={option}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={(event) => {
-                                      setAlertsFilterDraft((current) => {
-                                        if (event.target.checked) {
-                                          return {
-                                            ...current,
-                                            statuses: [
-                                              ...current.statuses,
-                                              option,
-                                            ],
-                                          }
-                                        }
-                                        return {
-                                          ...current,
-                                          statuses: current.statuses.filter(
-                                            (value) => value !== option,
-                                          ),
-                                        }
-                                      })
-                                    }}
-                                  />
-                                  <span>{option}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="modal-footer">
-                      <button
-                        className="btn-secondary"
-                        type="button"
-                        onClick={() =>
-                          setAlertsFilterDraft({ origins: [], statuses: [] })
-                        }
-                      >
-                        {t('common.clear')}
-                      </button>
-                      <button
-                        className="btn-primary"
-                        type="button"
-                        onClick={() => {
-                          setAlertsFilters({
-                            origins: [...alertsFilterDraft.origins],
-                            statuses: [...alertsFilterDraft.statuses],
-                          })
-                          setIsAlertsFilterOpen(false)
-                        }}
-                      >
-                        {t('common.applyFilters')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="table-wrapper" aria-busy={isAlertsLoading}>
-                <table className="data-table data-table-alerts">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('common.name')}</th>
-                      <th scope="col">{t('common.description')}</th>
-                      <th scope="col">{t('common.date')}</th>
-                      <th scope="col">{t('common.status')}</th>
-                      <th scope="col">{t('common.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isAlertsLoading ? (
-                      <tr>
-                        <td className="table-empty" colSpan={5}>
-                          {t('alerts.loading')}
-                        </td>
-                      </tr>
-                    ) : alertsFilteredRows.length === 0 ? (
-                      <tr>
-                        <td className="table-empty" colSpan={5}>
-                          {t('alerts.empty')}
-                        </td>
-                      </tr>
-                    ) : (
-                      alertsFilteredRows.map((row) => {
-                        const isExpanded = expandedAlertIds.has(row.id)
-                        return (
-                          <Fragment key={row.id}>
-                            <tr>
-                              <td>{row.name}</td>
-                              <td>{row.description}</td>
-                              <td>{row.date}</td>
-                              <td>
-                                <span className={getStatusClassName(row.status)}>
-                                  {statusLabel(row.status)}
-                                </span>
-                              </td>
-                              <td>
-                                <div className="action-buttons">
-                                  <button
-                                    className="btn-icon btn-icon-ghost"
-                                    type="button"
-                                    aria-label={t('common.markDone')}
-                                    onClick={() =>
-                                      updateAlertStatus(row.id, 'Done')
-                                    }
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    className="btn-icon btn-icon-ghost"
-                                    type="button"
-                                    aria-label={t('alerts.snoozeTitle')}
-                                    onClick={() => openSnoozeModal(row.id)}
-                                  >
-                                    ⏲
-                                  </button>
-                                  <button
-                                    className="btn-icon btn-icon-ghost"
-                                    type="button"
-                                    onClick={() => toggleAlertRow(row.id)}
-                                    aria-expanded={isExpanded}
-                                    aria-label={t('common.toggleDetails')}
-                                  >
-                                    {isExpanded ? '▾' : '▸'}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                            {isExpanded ? (
-                              <tr className="detail-row">
-                                <td colSpan={5}>
-                                  <div className="detail-grid">
-                                    <div>
-                                      <p className="detail-label">{t('common.alertId')}</p>
-                                      <p className="detail-value">{row.id}</p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">{t('common.origin')}</p>
-                                      <p className="detail-value">{row.origin}</p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">{t('common.createdBy')}</p>
-                                      <p className="detail-value">
-                                        {row.createdBy}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            ) : null}
-                          </Fragment>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
+        ) : activePage === 'Today' ? (
+          <TodayView
+            getEndpoint={getEndpoint}
+            onNavigate={navigateToPage}
+          />
         ) : activePage === 'Daily Operations' ? (
           <DailyOperationsView
             mode="dashboard"
@@ -9384,76 +8776,6 @@ function App() {
                   disabled={isSubtractionSaving}
                 >
                   {isSubtractionSaving ? 'Saving...' : 'Save subtraction'}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isSnoozeOpen ? (
-          <div className="modal-overlay" role="dialog" aria-modal="true">
-            <div className="modal">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">{t('alerts.snoozeTitle')}</h3>
-                  <p className="modal-subtitle">
-                    Select the date to be reminded.
-                  </p>
-                </div>
-                <button
-                  className="btn-icon"
-                  type="button"
-                  onClick={() => setIsSnoozeOpen(false)}
-                  aria-label={t('common.closeSnooze')}
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="modal-body">
-                <label className="form-field">
-                  <span>{t('common.reminderDate')}</span>
-                  <input
-                    type="date"
-                    value={snoozeDate}
-                    onChange={(event) => setSnoozeDate(event.target.value)}
-                  />
-                </label>
-                {snoozeError ? <div className="alert">{snoozeError}</div> : null}
-              </div>
-              <div className="modal-footer">
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  onClick={() => setIsSnoozeOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={() => {
-                    if (!snoozeDate) {
-                      setSnoozeError(t('alerts.selectReminderDate'))
-                      return
-                    }
-                    if (!snoozeTargetId) {
-                      setSnoozeError(t('alerts.missingId'))
-                      return
-                    }
-                    const snoozeUntil = formatSnoozeUntil(snoozeDate)
-                    if (!snoozeUntil) {
-                      setSnoozeError(t('alerts.selectValidDate'))
-                      return
-                    }
-                    void updateAlertStatus(
-                      snoozeTargetId,
-                      'Snoozed',
-                      snoozeUntil,
-                    )
-                    setIsSnoozeOpen(false)
-                  }}
-                >
-                  Snooze
                 </button>
               </div>
             </div>

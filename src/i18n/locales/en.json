@@ -18,6 +18,30 @@
     "filterSubtitle": "Select one or more values to filter the alerts.",
     "emptyFiltered": "No alerts match the current filters."
   },
+  "today": {
+    "eyebrow": "Today",
+    "subtitle": "A snapshot of Cleaning, Maintenance, Reviews, and Inventory for today.",
+    "loading": "Loading today's snapshot...",
+    "missingEndpoint": "Missing today summary endpoint. Redeploy the backend or set VITE_GET_TODAY_SUMMARY_URL.",
+    "loadError": "Unable to load today's snapshot.",
+    "cleaning": "Cleaning",
+    "maintenance": "Maintenance",
+    "reviews": "Reviews",
+    "inventory": "Inventory",
+    "planning": "Planning",
+    "currentCleanings": "Current cleanings",
+    "previousCleanings": "Previous cleanings",
+    "currentMaintenance": "Current maintenance",
+    "toEstimate": "To estimate",
+    "reviewsNeedAttention": "{{count}} reviews need attention",
+    "reviewsNeedAttention_one": "{{count}} review needs attention",
+    "reviewsNeedAttention_other": "{{count}} reviews need attention",
+    "waitingDelivery": "Waiting delivery",
+    "reorder": "Reorder",
+    "lowStock": "Low stock",
+    "ratio": "{{done}} of {{total}}",
+    "goodJob": "Good job! All task completed"
+  },
   "bookings": {
     "eyebrow": "Ops / Bookings",
     "subtitle": "Booking data is read from the production DynamoDB table via Lambda access.",
@@ -39,7 +63,7 @@
   },
   "chatbot": {
     "clear": "Clear",
-    "placeholder": "Ask about inventory or alerts...",
+    "placeholder": "Ask about inventory or today's work...",
     "quickPrompts": "Quick prompts",
     "quickPromptsSubtitle": "Try a starter prompt to validate the AI route.",
     "send": "Send",
@@ -266,6 +290,7 @@
   },
   "pages": {
     "Alerts": "Alerts",
+    "Today": "Today",
     "Bookings": "Bookings",
     "Chatbot": "Chatbot",
     "Cleaning Plan": "Cleaning Plan",

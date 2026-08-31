@@ -16,6 +16,15 @@ const formatDateOnly = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+export const addDaysToDateString = (value: string, days: number) => {
+  const parsed = parseDateOnly(value);
+  if (!parsed) {
+    return value;
+  }
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return formatDateOnly(parsed);
+};
+
 export const getInclusiveDayCount = (from: string, to: string) => {
   const start = parseDateOnly(from);
   const end = parseDateOnly(to);
