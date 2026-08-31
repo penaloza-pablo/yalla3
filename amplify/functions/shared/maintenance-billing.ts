@@ -77,6 +77,7 @@ export type LineOverride = {
 
 export type ManualBillingLine = {
   id: string;
+  title: string;
   date: string;
   propertyId: string;
   property: string;
@@ -243,15 +244,20 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
       if (!id || !date || price === null) {
         return null;
       }
+      const hoursDisabled =
+        item.hoursDisabled === undefined ? true : Boolean(item.hoursDisabled);
+      const hours = hoursDisabled ? 0 : (asNumber(item.hours) ?? 0);
+      const property = asString(item.property) || asString(item.propertyId);
       return {
         id,
+        title: asString(item.title) || property,
         date,
         propertyId: asString(item.propertyId),
-        property: asString(item.property) || asString(item.propertyId),
+        property,
         providerId: asString(item.providerId),
         providerName: asString(item.providerName) || asString(item.providerId),
-        hours: 0,
-        hoursDisabled: true,
+        hours,
+        hoursDisabled,
         price,
         billingStatus: isBillingStatus(item.billingStatus)
           ? item.billingStatus
@@ -739,7 +745,7 @@ export const buildMonthDetail = async (params: {
     id: item.id,
     source: 'manual' as const,
     visitId: '',
-    title: item.property || item.propertyId,
+    title: item.title || item.property || item.propertyId,
     visitTypeId: '',
     visitTypeName: '',
     propertyId: item.propertyId,
@@ -748,8 +754,8 @@ export const buildMonthDetail = async (params: {
     status: 'COMPLETED',
     providerId: item.providerId,
     providerName: item.providerName,
-    hours: 0,
-    hoursDisabled: true,
+    hours: item.hoursDisabled ? 0 : item.hours,
+    hoursDisabled: item.hoursDisabled,
     price: item.price,
     billingStatus: item.billingStatus,
     isManual: true,

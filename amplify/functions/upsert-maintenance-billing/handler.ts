@@ -294,22 +294,28 @@ export const handler = async (event: {
         const price = asNumber(payload.price);
         const providerId = asString(payload.providerId);
         const providerName = asString(payload.providerName) || providerId;
-        if (!asString(payload.propertyId) || !providerId || price === null) {
+        const title = asString(payload.title);
+        const propertyId = asString(payload.propertyId);
+        const property = asString(payload.property) || propertyId;
+        if (!title || !propertyId || !providerId || price === null) {
           return buildHttpResponse(400, {
-            message: 'propertyId, provider, and price are required.',
+            message: 'title, propertyId, provider, and price are required.',
           });
         }
+        const hoursDisabled = Boolean(payload.hoursDisabled);
+        const hours = hoursDisabled ? 0 : (asNumber(payload.hours) ?? 0);
         const line: ManualBillingLine = {
           id:
             asString(payload.lineId) ||
             `ML-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          title,
           date,
-          propertyId: asString(payload.propertyId),
-          property: asString(payload.property) || asString(payload.propertyId),
+          propertyId,
+          property,
           providerId,
           providerName,
-          hours: 0,
-          hoursDisabled: true,
+          hours,
+          hoursDisabled,
           price,
           billingStatus: isBillingStatus(payload.billingStatus)
             ? payload.billingStatus

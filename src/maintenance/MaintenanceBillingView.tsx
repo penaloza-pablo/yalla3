@@ -66,7 +66,7 @@ const emptyDraft = (monthId: string): LineDraft => ({
   providerName: '',
   hours: '0',
   price: '',
-  hoursDisabled: true,
+  hoursDisabled: false,
   billingStatus: 'WAITING_APPROVAL',
 })
 
@@ -264,7 +264,7 @@ export function MaintenanceBillingView({
           {
             hours: line.hours === null ? '' : String(line.hours),
             price: line.price === null ? '' : String(line.price),
-            hoursDisabled: line.isManual || line.hoursDisabled,
+            hoursDisabled: line.hoursDisabled,
           },
         ]),
       ),
@@ -542,7 +542,7 @@ export function MaintenanceBillingView({
       providerName: line.providerName,
       hours: line.hours === null ? '' : String(line.hours),
       price: line.price === null ? '' : String(line.price),
-      hoursDisabled: line.isManual || line.hoursDisabled,
+      hoursDisabled: line.hoursDisabled,
       billingStatus: line.billingStatus,
     })
     setIsFormOpen(true)
@@ -563,11 +563,11 @@ export function MaintenanceBillingView({
       setError(t('maintenanceBilling.propertyRequired'))
       return
     }
-    if (draft.isGroup && !draft.title.trim()) {
+    if ((draft.isManual || draft.isGroup) && !draft.title.trim()) {
       setError(t('maintenanceBilling.titleRequired'))
       return
     }
-    const hoursDisabled = draft.isManual || draft.hoursDisabled
+    const hoursDisabled = draft.hoursDisabled
     const hours = hoursDisabled
       ? 0
       : Number(String(draft.hours).replace(',', '.'))
@@ -777,7 +777,7 @@ export function MaintenanceBillingView({
     if (!draftValues) {
       return
     }
-    const hoursDisabled = line.isManual || draftValues.hoursDisabled
+    const hoursDisabled = draftValues.hoursDisabled
     const hours = hoursDisabled
       ? 0
       : Number(String(draftValues.hours).replace(',', '.'))
@@ -794,7 +794,7 @@ export function MaintenanceBillingView({
       (hoursDisabled || Number.isFinite(hours)) &&
       nextHours === originalHours &&
       nextPrice === originalPrice &&
-      hoursDisabled === (line.isManual || line.hoursDisabled)
+      hoursDisabled === line.hoursDisabled
     ) {
       return
     }
@@ -1138,7 +1138,7 @@ export function MaintenanceBillingView({
                     const inline = inlineById[line.id] ?? {
                       hours: line.hours === null ? '' : String(line.hours),
                       price: line.price === null ? '' : String(line.price),
-                      hoursDisabled: line.isManual || line.hoursDisabled,
+                      hoursDisabled: line.hoursDisabled,
                     }
                     const warnings = lineWarnings(line)
                     const propertyLabel =
@@ -1204,7 +1204,7 @@ export function MaintenanceBillingView({
                                 min="0"
                                 step="0.25"
                                 value={inline.hours}
-                                disabled={isSaving || line.isManual || isSelecting}
+                                disabled={isSaving || isSelecting}
                                 aria-label={t('maintenanceBilling.hours')}
                                 onChange={(event) => {
                                   const hoursValue = event.target.value
@@ -1221,9 +1221,6 @@ export function MaintenanceBillingView({
                                   })
                                 }}
                                 onBlur={(event) => {
-                                  if (line.isManual) {
-                                    return
-                                  }
                                   const hoursValue = event.currentTarget.value
                                   const numeric = Number(
                                     String(hoursValue).replace(',', '.'),
@@ -1269,7 +1266,7 @@ export function MaintenanceBillingView({
                                       hours:
                                         line.hours === null ? '' : String(line.hours),
                                       price: original,
-                                      hoursDisabled: line.isManual || line.hoursDisabled,
+                                      hoursDisabled: line.hoursDisabled,
                                     })
                                     return
                                   }
@@ -1730,6 +1727,19 @@ export function MaintenanceBillingView({
                 ) : null}
                 {draft.isManual ? (
                   <>
+                    <label>
+                      {t('maintenanceBilling.visitTitle')}
+                      <input
+                        type="text"
+                        value={draft.title}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
                     <label>
                       {t('maintenanceBilling.date')}
                       <input
