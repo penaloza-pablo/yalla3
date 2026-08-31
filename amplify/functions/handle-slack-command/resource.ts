@@ -7,5 +7,5 @@ export const handleSlackCommand = defineFunction({
   environment: {
     SLACK_SECRET_ID: 'yalla/slack',
   },
-  timeoutSeconds: 30,
+  timeoutSeconds: 10,
 });

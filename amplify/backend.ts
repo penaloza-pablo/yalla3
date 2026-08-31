@@ -70,6 +70,7 @@ import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing
 import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
 import { getTodaySummary } from './functions/get-today-summary/resource';
 import { handleSlackCommand } from './functions/handle-slack-command/resource';
+import { processSlackHoy } from './functions/process-slack-hoy/resource';
 
 const backend = defineBackend({
   auth,
@@ -132,6 +133,7 @@ const backend = defineBackend({
   exportMaintenanceBilling,
   getTodaySummary,
   handleSlackCommand,
+  processSlackHoy,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -565,13 +567,17 @@ const slackSecret = Secret.fromSecretNameV2(
   'yalla/slack',
 );
 slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
-backend.getTodaySummary.resources.lambda.grantInvoke(
+backend.processSlackHoy.resources.lambda.grantInvoke(
   backend.handleSlackCommand.resources.lambda,
 );
-backend.handleSlackCommand.resources.lambda.grantInvoke(
-  backend.handleSlackCommand.resources.lambda,
+backend.getTodaySummary.resources.lambda.grantInvoke(
+  backend.processSlackHoy.resources.lambda,
 );
 backend.handleSlackCommand.addEnvironment(
+  'PROCESS_SLACK_HOY_FUNCTION_NAME',
+  backend.processSlackHoy.resources.lambda.functionName,
+);
+backend.processSlackHoy.addEnvironment(
   'GET_TODAY_SUMMARY_FUNCTION_NAME',
   backend.getTodaySummary.resources.lambda.functionName,
 );
