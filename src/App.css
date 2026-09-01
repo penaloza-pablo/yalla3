@@ -667,12 +667,16 @@
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   border: 1px solid #e4e7ec;
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 180px;
+}
+
+button.today-card {
+  cursor: pointer;
 }
 
 .today-card:hover {
@@ -686,25 +690,65 @@
   color: #101828;
 }
 
+.today-card-title-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #101828;
+  text-align: left;
+  cursor: pointer;
+}
+
+.today-card-title-btn:hover {
+  color: #175cd3;
+}
+
 .today-metrics {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .today-metrics li {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
+  display: block;
   color: #344054;
   font-size: 0.95rem;
 }
 
-.today-metrics strong {
+.today-metric-btn {
+  appearance: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.today-metric-btn:hover {
+  background: #f2f4f7;
+}
+
+.today-metrics strong,
+.today-metric-btn strong {
   color: #101828;
   font-size: 1.05rem;
   display: inline-flex;
@@ -725,6 +769,18 @@
   font-size: 1rem;
 }
 
+.today-good-job-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .today-attention {
   margin: 0;
   color: #101828;
@@ -736,6 +792,10 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.summary-cards.summary-cards-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .alert {
@@ -1239,12 +1299,19 @@ th {
   padding-top: 8px;
 }
 
+@media (max-width: 1200px) {
+  .summary-cards.summary-cards-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .review-value-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .summary-cards {
+  .summary-cards,
+  .summary-cards.summary-cards-4 {
     grid-template-columns: 1fr;
   }
 

@@ -28,10 +28,20 @@ type TodaySummary = {
   }
 }
 
+type NavigateOptions = {
+  inventoryStatuses?: string[]
+}
+
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
-  onNavigate: (page: string) => void
+  onNavigate: (page: string, options?: NavigateOptions) => void
 }
+
+const TODAY_INVENTORY_STATUSES = [
+  'Waiting Delivery',
+  'Low Stock',
+  'Reorder',
+]
 
 const formatRatio = (t: TFunction, done: number, total: number) =>
   t('today.ratio', { done, total })
@@ -44,38 +54,52 @@ const RatioMetric = ({
   done,
   total,
   t,
+  onClick,
 }: {
   label: string
   done: number
   total: number
   t: TFunction
+  onClick: () => void
 }) => {
   if (total <= 0) {
     return null
   }
   return (
     <li>
-      <span>{label}</span>
-      <strong>
-        {formatRatio(t, done, total)}
-        {isRatioComplete(done, total) ? (
-          <span className="today-metric-check" aria-hidden="true">
-            ✓
-          </span>
-        ) : null}
-      </strong>
+      <button type="button" className="today-metric-btn" onClick={onClick}>
+        <span>{label}</span>
+        <strong>
+          {formatRatio(t, done, total)}
+          {isRatioComplete(done, total) ? (
+            <span className="today-metric-check" aria-hidden="true">
+              ✓
+            </span>
+          ) : null}
+        </strong>
+      </button>
     </li>
   )
 }
 
-const CountMetric = ({ label, value }: { label: string; value: number }) => {
+const CountMetric = ({
+  label,
+  value,
+  onClick,
+}: {
+  label: string
+  value: number
+  onClick: () => void
+}) => {
   if (value <= 0) {
     return null
   }
   return (
     <li>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <button type="button" className="today-metric-btn" onClick={onClick}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </button>
     </li>
   )
 }
@@ -83,13 +107,22 @@ const CountMetric = ({ label, value }: { label: string; value: number }) => {
 const MetricsOrDone = ({
   done,
   doneLabel,
+  onDoneClick,
   children,
 }: {
   done: boolean
   doneLabel: string
+  onDoneClick?: () => void
   children: ReactNode
 }) => {
   if (done) {
+    if (onDoneClick) {
+      return (
+        <button type="button" className="today-good-job today-good-job-btn" onClick={onDoneClick}>
+          {doneLabel}
+        </button>
+      )
+    }
     return <p className="today-good-job">{doneLabel}</p>
   }
   return <ul className="today-metrics">{children}</ul>
@@ -166,8 +199,19 @@ export function TodayView({
         <MobileBodyPortal>
           <div className="page-action-bar">
             <div className="header-actions">
-              <button className="btn-ghost" type="button" onClick={() => void loadSummary()}>
-                {t('common.refresh')}
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void loadSummary()}
+                disabled={isLoading}
+                aria-label={t('common.refresh')}
+              >
+                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
+                  <path
+                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                    fill="currentColor"
+                  />
+                </svg>
               </button>
             </div>
           </div>
@@ -179,11 +223,7 @@ export function TodayView({
 
       {summary ? (
         <section className="today-cards" aria-label={t('pages.Today')}>
-          <button
-            type="button"
-            className="card today-card"
-            onClick={() => onNavigate('Cleaning Plan')}
-          >
+          <article className="card today-card">
             <h2 className="today-card-title">{t('today.cleaning')}</h2>
             <MetricsOrDone done={cleaningDone} doneLabel={t('today.goodJob')}>
               <RatioMetric
@@ -191,25 +231,24 @@ export function TodayView({
                 done={summary.cleaning.planningReady}
                 total={summary.cleaning.planningTotal}
                 t={t}
+                onClick={() => onNavigate('Cleaning Plan')}
               />
               <RatioMetric
                 label={t('today.currentCleanings')}
                 done={summary.cleaning.currentCompleted}
                 total={summary.cleaning.currentTotal}
                 t={t}
+                onClick={() => onNavigate('Daily Operations')}
               />
               <CountMetric
                 label={t('today.previousCleanings')}
                 value={summary.cleaning.previousOpen}
+                onClick={() => onNavigate('Cleaning Billing')}
               />
             </MetricsOrDone>
-          </button>
+          </article>
 
-          <button
-            type="button"
-            className="card today-card"
-            onClick={() => onNavigate('Daily Operations')}
-          >
+          <article className="card today-card">
             <h2 className="today-card-title">{t('today.maintenance')}</h2>
             <MetricsOrDone done={maintenanceDone} doneLabel={t('today.goodJob')}>
               <RatioMetric
@@ -217,13 +256,15 @@ export function TodayView({
                 done={summary.maintenance.currentCompleted}
                 total={summary.maintenance.currentTotal}
                 t={t}
+                onClick={() => onNavigate('Daily Operations')}
               />
               <CountMetric
                 label={t('today.toEstimate')}
                 value={summary.maintenance.previousOpen}
+                onClick={() => onNavigate('Maintenance Billing')}
               />
             </MetricsOrDone>
-          </button>
+          </article>
 
           <button
             type="button"
@@ -242,27 +283,56 @@ export function TodayView({
             )}
           </button>
 
-          <button
-            type="button"
-            className="card today-card"
-            onClick={() => onNavigate('Inventory')}
-          >
-            <h2 className="today-card-title">{t('today.inventory')}</h2>
-            <MetricsOrDone done={inventoryDone} doneLabel={t('today.goodJob')}>
+          <article className="card today-card">
+            <button
+              type="button"
+              className="today-card-title-btn"
+              onClick={() =>
+                onNavigate('Inventory', {
+                  inventoryStatuses: TODAY_INVENTORY_STATUSES,
+                })
+              }
+            >
+              {t('today.inventory')}
+            </button>
+            <MetricsOrDone
+              done={inventoryDone}
+              doneLabel={t('today.goodJob')}
+              onDoneClick={() =>
+                onNavigate('Inventory', {
+                  inventoryStatuses: TODAY_INVENTORY_STATUSES,
+                })
+              }
+            >
               <CountMetric
                 label={t('today.waitingDelivery')}
                 value={summary.inventory.waitingDelivery}
+                onClick={() =>
+                  onNavigate('Inventory', {
+                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
+                  })
+                }
               />
               <CountMetric
                 label={t('today.reorder')}
                 value={summary.inventory.reorder}
+                onClick={() =>
+                  onNavigate('Inventory', {
+                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
+                  })
+                }
               />
               <CountMetric
                 label={t('today.lowStock')}
                 value={summary.inventory.lowStock}
+                onClick={() =>
+                  onNavigate('Inventory', {
+                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
+                  })
+                }
               />
             </MetricsOrDone>
-          </button>
+          </article>
         </section>
       ) : null}
     </>

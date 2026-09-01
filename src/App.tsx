@@ -30,6 +30,7 @@ import {
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
 import { TodayView } from './today/TodayView'
+import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
@@ -323,6 +324,12 @@ const navigation = [
 ]
 
 const coreItems = ['Chatbot', 'Today']
+const validPages = new Set([
+  ...coreItems,
+  ...navigation.flatMap((group) => group.items),
+])
+const sectionForPage = (page: string) =>
+  navigation.find((group) => group.items.includes(page))?.section
 const pagesWithMobileSearch = new Set([
   'Inventory',
   'Purchases',
@@ -1572,7 +1579,9 @@ function App() {
     null,
   )
   const [isSubtractionSaving, setIsSubtractionSaving] = useState(false)
-  const [activePage, setActivePage] = useState('Inventory')
+  const [activePage, setActivePage] = useState(() =>
+    readRememberedPage(validPages),
+  )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
@@ -1582,7 +1591,14 @@ function App() {
   const [titleProgress, setTitleProgress] = useState(0)
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(navigation.map((group) => group.section)),
+    () => {
+      const collapsed = new Set(navigation.map((group) => group.section))
+      const section = sectionForPage(readRememberedPage(validPages))
+      if (section) {
+        collapsed.delete(section)
+      }
+      return collapsed
+    },
   )
   const [sortConfig, setSortConfig] = useState<{
     key: 'name' | 'status' | null
@@ -2998,6 +3014,28 @@ function App() {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [activePage, fetchInventory])
 
+  useEffect(() => {
+    const persist = () => rememberActivePage(activePage)
+    persist()
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        persist()
+      }
+    }, 60_000)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') {
+        persist()
+      }
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', persist)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', persist)
+    }
+  }, [activePage])
+
   const openNewItem = () => {
     setFormValues({
       ...emptyFormState,
@@ -4281,12 +4319,32 @@ function App() {
     })
   }
 
-  const navigateToPage = (page: string) => {
+  const navigateToPage = (
+    page: string,
+    options?: { inventoryStatuses?: string[] },
+  ) => {
     setActivePage(page)
+    rememberActivePage(page)
     setIsMobileNavOpen(false)
     setIsSummaryInfoOpen(false)
     setIsMobileSearchOpen(false)
     setTableSearchQuery('')
+    const section = sectionForPage(page)
+    if (section) {
+      setCollapsedSections((current) => {
+        if (!current.has(section)) {
+          return current
+        }
+        const next = new Set(current)
+        next.delete(section)
+        return next
+      })
+    }
+    if (page === 'Inventory' && options?.inventoryStatuses?.length) {
+      const statuses = [...options.inventoryStatuses]
+      setFilters((current) => ({ ...current, statuses }))
+      setFilterDraft((current) => ({ ...current, statuses }))
+    }
   }
 
   const openMobileNav = () => {
