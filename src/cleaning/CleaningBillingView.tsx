@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { isHiddenBillingMonth } from '../lib/hiddenBillingMonths'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { ExportScopeModal } from '../ExportScopeModal'
 import { downloadFromResponse } from '../lib/download'
@@ -91,6 +92,8 @@ const mapLine = (item: Record<string, unknown>): CleaningBillingLine => ({
     : [],
 })
 
+const MISSING_CLEANING_TYPE_KEY = '__missing__'
+
 const monthBounds = (monthId: string) => {
   const [year, month] = monthId.split('-').map(Number)
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
@@ -98,6 +101,11 @@ const monthBounds = (monthId: string) => {
     min: `${monthId}-01`,
     max: `${monthId}-${String(lastDay).padStart(2, '0')}`,
   }
+}
+
+const cleaningTypeKeyOf = (line: CleaningBillingLine) => {
+  const name = line.cleaningTypeName.trim()
+  return name ? name.toLowerCase() : MISSING_CLEANING_TYPE_KEY
 }
 
 export function CleaningBillingView({
@@ -142,6 +150,8 @@ export function CleaningBillingView({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
+  const [cleaningTypeKeys, setCleaningTypeKeys] = useState<string[]>([])
+  const [cleaningTypeDraft, setCleaningTypeDraft] = useState<string[]>([])
   const [groupFilter, setGroupFilter] =
     useState<CleaningBillingPropertyGroup | ''>('')
   const [draft, setDraft] = useState<LineDraft>(emptyDraft(''))
@@ -186,12 +196,16 @@ export function CleaningBillingView({
     const payload = await fetchJson<{ months?: Record<string, unknown>[] }>(
       endpoints.getBilling,
     )
-    setMonths((payload.months ?? []).map(mapMonth))
+    setMonths(
+      (payload.months ?? [])
+        .map(mapMonth)
+        .filter((month) => !isHiddenBillingMonth(month.id)),
+    )
   }, [endpoints.getBilling, t])
 
   const loadMonth = useCallback(
     async (monthId: string) => {
-      if (!endpoints.getBilling || !monthId) {
+      if (!endpoints.getBilling || !monthId || isHiddenBillingMonth(monthId)) {
         return
       }
       const payload = await fetchJson<{
@@ -287,6 +301,29 @@ export function CleaningBillingView({
     }
   }
 
+  const cleaningTypeOptions = useMemo(() => {
+    const labels = new Map<string, string>()
+    for (const line of lines) {
+      const key = cleaningTypeKeyOf(line)
+      if (labels.has(key)) {
+        continue
+      }
+      labels.set(
+        key,
+        key === MISSING_CLEANING_TYPE_KEY
+          ? t('cleaningBilling.warning.type')
+          : line.cleaningTypeName.trim(),
+      )
+    }
+    return [...labels.entries()]
+      .sort((left, right) => {
+        if (left[0] === MISSING_CLEANING_TYPE_KEY) return 1
+        if (right[0] === MISSING_CLEANING_TYPE_KEY) return -1
+        return left[1].localeCompare(right[1], i18n.language)
+      })
+      .map(([key, label]) => ({ key, label }))
+  }, [i18n.language, lines, t])
+
   const filteredLines = useMemo(() => {
     return lines.filter((line) => {
       const label = propertyById.get(line.propertyId) || line.property
@@ -297,9 +334,18 @@ export function CleaningBillingView({
       if (propertyIds.length > 0 && !propertyIds.includes(line.propertyId)) {
         return false
       }
+      if (
+        cleaningTypeKeys.length > 0 &&
+        !cleaningTypeKeys.includes(cleaningTypeKeyOf(line))
+      ) {
+        return false
+      }
       return true
     })
-  }, [groupFilter, lines, propertyById, propertyIds])
+  }, [cleaningTypeKeys, groupFilter, lines, propertyById, propertyIds])
+
+  const activeFilterCount =
+    propertyIds.length + (groupFilter ? 1 : 0) + cleaningTypeKeys.length
 
   const filteredTotal = filteredLines
     .filter((line) => line.warnings.length === 0)
@@ -475,6 +521,7 @@ export function CleaningBillingView({
                   setLines([])
                   setGroupFilter('')
                   setPropertyIds([])
+                  setCleaningTypeKeys([])
                   void refreshList()
                 }}
               >
@@ -517,6 +564,7 @@ export function CleaningBillingView({
                     aria-label={t('common.filters')}
                     onClick={() => {
                       setPropertyDraft(propertyIds)
+                      setCleaningTypeDraft(cleaningTypeKeys)
                       setIsFilterOpen(true)
                     }}
                   >
@@ -526,10 +574,8 @@ export function CleaningBillingView({
                         fill="currentColor"
                       />
                     </svg>
-                    {propertyIds.length + (groupFilter ? 1 : 0) > 0 ? (
-                      <span className="filter-badge">
-                        {propertyIds.length + (groupFilter ? 1 : 0)}
-                      </span>
+                    {activeFilterCount > 0 ? (
+                      <span className="filter-badge">{activeFilterCount}</span>
                     ) : null}
                   </button>
                   <button
@@ -597,7 +643,9 @@ export function CleaningBillingView({
       {error ? <p className="notice error">{error}</p> : null}
 
       {selectedMonthId && month ? (
-        <section className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}>
+        <section
+          className={`summary-cards summary-cards-4 ${isSummaryInfoOpen ? 'is-open' : ''}`}
+        >
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.status')}</p>
             <p className="card-value">{statusLabel(month.status)}</p>
@@ -607,6 +655,11 @@ export function CleaningBillingView({
             <p className="card-label">{t('cleaningBilling.totalCard')}</p>
             <p className="card-value">{money.format(filteredTotal)}</p>
             <p className="card-meta">{t('cleaningBilling.totalCardMeta')}</p>
+          </div>
+          <div className="card card-compact">
+            <p className="card-label">{t('cleaningBilling.recordsCard')}</p>
+            <p className="card-value">{filteredLines.length}</p>
+            <p className="card-meta">{t('cleaningBilling.recordsCardMeta')}</p>
           </div>
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.warningsCard')}</p>
@@ -862,26 +915,51 @@ export function CleaningBillingView({
               </button>
             </div>
             <div className="modal-body">
-              <div className="filter-group">
-                <p className="filter-title">{t('cleaningBilling.property')}</p>
-                <div className="filter-options filter-options-scroll">
-                  {filterPropertyOptions.map((property) => (
-                    <label className="filter-option" key={property.id}>
-                      <input
-                        type="checkbox"
-                        checked={propertyDraft.includes(property.id)}
-                        onChange={() =>
-                          setPropertyDraft((current) =>
-                            current.includes(property.id)
-                              ? current.filter((id) => id !== property.id)
-                              : [...current, property.id],
-                          )
-                        }
-                      />
-                      <span>{getPropertyLabel(property)}</span>
-                    </label>
-                  ))}
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('cleaningBilling.property')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {filterPropertyOptions.map((property) => (
+                      <label className="filter-option" key={property.id}>
+                        <input
+                          type="checkbox"
+                          checked={propertyDraft.includes(property.id)}
+                          onChange={() =>
+                            setPropertyDraft((current) =>
+                              current.includes(property.id)
+                                ? current.filter((id) => id !== property.id)
+                                : [...current, property.id],
+                            )
+                          }
+                        />
+                        <span>{getPropertyLabel(property)}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
+                {cleaningTypeOptions.length > 0 ? (
+                  <div className="filter-group">
+                    <p className="filter-title">{t('cleaningBilling.cleaningType')}</p>
+                    <div className="filter-options filter-options-scroll">
+                      {cleaningTypeOptions.map((option) => (
+                        <label className="filter-option" key={option.key}>
+                          <input
+                            type="checkbox"
+                            checked={cleaningTypeDraft.includes(option.key)}
+                            onChange={() =>
+                              setCleaningTypeDraft((current) =>
+                                current.includes(option.key)
+                                  ? current.filter((item) => item !== option.key)
+                                  : [...current, option.key],
+                              )
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="modal-footer">
@@ -891,6 +969,8 @@ export function CleaningBillingView({
                 onClick={() => {
                   setPropertyDraft([])
                   setPropertyIds([])
+                  setCleaningTypeDraft([])
+                  setCleaningTypeKeys([])
                   setIsFilterOpen(false)
                 }}
               >
@@ -901,6 +981,7 @@ export function CleaningBillingView({
                 type="button"
                 onClick={() => {
                   setPropertyIds(propertyDraft)
+                  setCleaningTypeKeys(cleaningTypeDraft)
                   setIsFilterOpen(false)
                 }}
               >

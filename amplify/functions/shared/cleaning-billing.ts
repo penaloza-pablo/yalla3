@@ -8,6 +8,7 @@ import {
   scanAllItems,
   type CleaningTypeRecord,
 } from './cleaning-plan';
+import { isHiddenBillingMonth } from './billing-months';
 import { docClient, getTodayInMadrid, putItem } from './visit-task-utils';
 
 export const OTHER_CLEANING_TYPE_ID = '__other__';
@@ -76,9 +77,20 @@ export const shiftMonthId = (monthId: string, offset: number) => {
 
 export const listVisibleMonthIds = () => {
   const current = currentMonthId();
-  const ids = [current];
-  for (let offset = 1; offset <= VISIBLE_PAST_MONTHS; offset += 1) {
-    ids.push(shiftMonthId(current, -offset));
+  const ids: string[] = [];
+  if (!isHiddenBillingMonth(current)) {
+    ids.push(current);
+  }
+  let offset = 1;
+  let pastCount = 0;
+  while (pastCount < VISIBLE_PAST_MONTHS && offset < 36) {
+    const id = shiftMonthId(current, -offset);
+    offset += 1;
+    if (isHiddenBillingMonth(id)) {
+      continue;
+    }
+    ids.push(id);
+    pastCount += 1;
   }
   return ids;
 };

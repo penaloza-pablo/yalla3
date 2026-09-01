@@ -4,6 +4,7 @@ import {
   isHttpRequest,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
+import { isHiddenBillingMonth } from '../shared/billing-months';
 import {
   buildMonthDetail,
   deriveMonthStatus,
@@ -43,6 +44,9 @@ export const handler = async (event: HttpEvent) => {
     if (monthId) {
       if (!isMonthId(monthId)) {
         return buildHttpResponse(400, { message: 'month must be YYYY-MM.' });
+      }
+      if (isHiddenBillingMonth(monthId)) {
+        return buildHttpResponse(404, { message: 'Month is not available.' });
       }
       const detail = await buildMonthDetail({
         monthId,

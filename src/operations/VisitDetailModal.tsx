@@ -3,23 +3,35 @@ import { createPortal } from 'react-dom'
 import { fetchUserAttributes } from 'aws-amplify/auth'
 import { useTranslation } from 'react-i18next'
 import {
+  fetchJson,
   getReferenceList,
   getTasksByVisit,
   getVisitById,
   refreshVisitFromGuesty,
+  saveTask,
   saveVisit,
   canRefreshVisitFromGuesty,
 } from './api'
+import { formatDayMonthLabel } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
-import { requiresCompleteVisitWizard } from './visitTypeIds'
+import {
+  CLEANING_VISIT_TYPE_ID,
+  requiresCompleteVisitWizard,
+} from './visitTypeIds'
 import type {
   PropertyOption,
   TaskRecord,
   TeamRecord,
   UserRecord,
   VisitRecord,
+  VisitStatus,
   VisitTypeRecord,
 } from './types'
+
+type CleaningTypeBadge = {
+  pending: boolean
+  label: string
+}
 
 type Props = {
   visitId: string
@@ -27,6 +39,20 @@ type Props = {
   propertyOptions: PropertyOption[]
   onClose: () => void
   onVisitChanged?: () => void
+}
+
+const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
+  const types = Array.isArray(item.cleaningTypes) ? item.cleaningTypes : []
+  const typeId = String(item.cleaningTypeId ?? '').trim()
+  const matched = types.find((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>
+    return String(row.id ?? '').trim() === typeId
+  }) as Record<string, unknown> | undefined
+  const fromTypes = String(matched?.name ?? '').trim()
+  if (fromTypes) {
+    return fromTypes
+  }
+  return String(item.cleaningTypeName ?? '').trim()
 }
 
 type VisitForm = {
@@ -159,6 +185,10 @@ export function VisitDetailModal({
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isCompleteOpen, setIsCompleteOpen] = useState(false)
   const [isCancelOpen, setIsCancelOpen] = useState(false)
+  const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false)
+  const [cleaningTypeBadge, setCleaningTypeBadge] =
+    useState<CleaningTypeBadge | null>(null)
+  const [dismissingTaskId, setDismissingTaskId] = useState('')
   const [visitForm, setVisitForm] = useState<VisitForm | null>(null)
   const [completeForm, setCompleteForm] = useState({
     hours: '1',
@@ -183,6 +213,14 @@ export function VisitDetailModal({
       visitTypes: getEndpoint(
         'getVisitTypesUrl',
         import.meta.env.VITE_GET_VISIT_TYPES_URL,
+      ),
+      upsertTask: getEndpoint(
+        'upsertTaskUrl',
+        import.meta.env.VITE_UPSERT_TASK_URL,
+      ),
+      cleaningPlan: getEndpoint(
+        'getCleaningPlanUrl',
+        import.meta.env.VITE_GET_CLEANING_PLAN_URL,
       ),
     }),
     [getEndpoint],
@@ -229,6 +267,53 @@ export function VisitDetailModal({
   const canChangeStatus =
     visit && visit.status !== 'COMPLETED' && visit.status !== 'CANCELLED'
   const canRefreshFromGuesty = visit ? canRefreshVisitFromGuesty(visit) : false
+
+  const statusLabel = (status: VisitStatus) => {
+    if (status === 'SCHEDULED') return t('operations.scheduled')
+    if (status === 'OVERDUE') return t('operations.overdue')
+    if (status === 'COMPLETED') return t('operations.completed')
+    return t('operations.cancelled')
+  }
+
+  const reloadTasks = async () => {
+    if (!endpoints.tasks) {
+      return
+    }
+    const tasksPayload = await getTasksByVisit(endpoints.tasks, visitId).catch(
+      () => ({ items: [] as TaskRecord[] }),
+    )
+    setTasks(((tasksPayload.items ?? []) as Record<string, unknown>[]).map(mapTask))
+  }
+
+  const completeTask = async (task: TaskRecord) => {
+    if (!endpoints.upsertTask) {
+      return
+    }
+    const closedBy = await getCurrentUserEmail()
+    await saveTask(endpoints.upsertTask, {
+      id: task.id,
+      status: 'COMPLETED',
+      closedBy,
+    })
+    setMessage(t('operations.taskCompleted'))
+    await reloadTasks()
+    notifyChanged()
+  }
+
+  const handleDismissTask = async (task: TaskRecord) => {
+    if (!endpoints.upsertTask) {
+      return
+    }
+    setDismissingTaskId(task.id)
+    try {
+      await saveTask(endpoints.upsertTask, { id: task.id, action: 'dismiss' })
+      setMessage(t('operations.taskDismissed'))
+      await reloadTasks()
+      notifyChanged()
+    } finally {
+      setDismissingTaskId('')
+    }
+  }
 
   const reloadVisit = async () => {
     if (!endpoints.visits) {
@@ -320,6 +405,60 @@ export function VisitDetailModal({
       cancelled = true
     }
   }, [endpoints, t, visitId])
+
+  useEffect(() => {
+    setIsMoreInfoOpen(false)
+    setCleaningTypeBadge(null)
+    setMessage('')
+  }, [visitId])
+
+  useEffect(() => {
+    if (!visit || visit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
+      setCleaningTypeBadge(null)
+      return
+    }
+    const date = visit.scheduledDate.trim()
+    const endpoint = endpoints.cleaningPlan
+    if (!date || !endpoint) {
+      setCleaningTypeBadge(null)
+      return
+    }
+    let cancelled = false
+    void fetchJson<{
+      status?: string
+      rows?: Record<string, unknown>[]
+    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
+      .then((payload) => {
+        if (cancelled) {
+          return
+        }
+        const isReady =
+          String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+        const row = (payload.rows ?? []).find(
+          (item) => String(item.visitId ?? '').trim() === visit.id,
+        )
+        const name = row ? cleaningTypeNameFromPlanRow(row) : ''
+        if (isReady && name) {
+          setCleaningTypeBadge({ pending: false, label: name })
+          return
+        }
+        setCleaningTypeBadge({
+          pending: true,
+          label: t('operations.cleaningTypePending'),
+        })
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCleaningTypeBadge({
+            pending: true,
+            label: t('operations.cleaningTypePending'),
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [endpoints.cleaningPlan, t, visit])
 
   useEffect(() => {
     const { body } = document
@@ -577,6 +716,32 @@ export function VisitDetailModal({
             <h3 className="modal-title" id="visit-detail-title">
               {visit?.title || t('cleaningPlan.visit')}
             </h3>
+            {visit ? (
+              <div className="operations-visit-badges">
+                <span
+                  className={`status operations-visit-status ${
+                    visit.status === 'OVERDUE'
+                      ? 'status-warning'
+                      : visit.status === 'COMPLETED'
+                        ? 'status-success'
+                        : visit.status === 'CANCELLED'
+                          ? 'status-neutral'
+                          : 'status-info'
+                  }`}
+                >
+                  {statusLabel(visit.status)}
+                </span>
+                {cleaningTypeBadge ? (
+                  <span
+                    className={`status operations-visit-status operations-cleaning-type-badge${
+                      cleaningTypeBadge.pending ? ' is-pending' : ''
+                    }`}
+                  >
+                    {cleaningTypeBadge.label}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             <p className="modal-subtitle">{visit?.id || visitId}</p>
           </div>
           <button
@@ -594,100 +759,219 @@ export function VisitDetailModal({
           {error ? <p className="notice error">{error}</p> : null}
           {visit ? (
             <>
-              <p>
-                <strong>{t('operations.property')}:</strong>{' '}
-                {propertyById.get(visit.propertyId) ?? visit.propertyId}
-              </p>
-              <p>
-                <strong>{t('operations.visitType')}:</strong>{' '}
-                {visitTypeById.get(visit.visitTypeId) ?? visit.visitTypeId}
-              </p>
-              <p>
-                <strong>{t('operations.schedule')}:</strong> {visit.scheduledDate}{' '}
-                {visit.scheduledStartTime} – {visit.scheduledEndTime}
-              </p>
-              <p>
-                <strong>{t('operations.team')}:</strong>{' '}
-                {teamById.get(visit.teamId) ?? visit.teamId}
-              </p>
-              <p>
-                <strong>{t('operations.assignedUser')}:</strong>{' '}
-                {userById.get(visit.assignedUserId) || visit.assignedUserId || '—'}
-              </p>
-              <p>
-                <strong>{t('operations.status')}:</strong> {visit.status}
-              </p>
-              {visit.description ? (
-                <p>
-                  <strong>{t('operations.description')}:</strong> {visit.description}
-                </p>
+              <div className="operations-detail-fields">
+                <span className="operations-detail-plain">
+                  {propertyById.get(visit.propertyId) ?? visit.propertyId}
+                </span>
+                <span className="operations-detail-plain">
+                  {formatDayMonthLabel(visit.scheduledDate)}{' '}
+                  {visit.scheduledStartTime} – {visit.scheduledEndTime}
+                </span>
+                {visit.description ? (
+                  <div className="operations-detail-field">
+                    <span className="operations-detail-label">
+                      {t('operations.description')}
+                    </span>
+                    <span className="operations-detail-value">
+                      {visit.description}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="operations-detail-actions">
+                <button
+                  type="button"
+                  className={`btn-icon btn-icon-ghost operations-more-info-btn${
+                    isMoreInfoOpen ? ' is-active' : ''
+                  }`}
+                  aria-label={t('operations.moreInfo')}
+                  aria-expanded={isMoreInfoOpen}
+                  title={t('operations.moreInfo')}
+                  onClick={() => setIsMoreInfoOpen((current) => !current)}
+                >
+                  i
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-icon-ghost"
+                  aria-label={t('operations.editVisit')}
+                  title={t('operations.editVisit')}
+                  onClick={openEdit}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M4 13.5V16h2.5L14.9 7.6l-2.5-2.5L4 13.5zm11.7-8.2a.7.7 0 0 0 0-1l-1.5-1.5a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.2-1.2z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+                {canChangeStatus ? (
+                  <button
+                    type="button"
+                    className="btn-icon btn-icon-ghost"
+                    disabled={visitHasOpenTasks || isSaving || isRefreshing}
+                    aria-label={t('operations.completeVisit')}
+                    title={
+                      visitHasOpenTasks
+                        ? t('operations.completeTasksFirst')
+                        : t('operations.completeVisit')
+                    }
+                    onClick={openComplete}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+
+              {isMoreInfoOpen ? (
+                <section
+                  className="operations-more-info"
+                  aria-label={t('operations.moreInfo')}
+                >
+                  <h4 className="section-title">{t('operations.moreInfo')}</h4>
+                  <div className="operations-detail-fields">
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.assignedUser')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {userById.get(visit.assignedUserId) ||
+                          visit.assignedUserId ||
+                          '—'}
+                      </span>
+                    </div>
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.team')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {teamById.get(visit.teamId) ?? visit.teamId}
+                      </span>
+                    </div>
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.visitType')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {visitTypeById.get(visit.visitTypeId) ?? visit.visitTypeId}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="operations-more-info-actions">
+                    {canRefreshFromGuesty ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={isSaving || isRefreshing}
+                        onClick={() => void refreshFromGuesty()}
+                      >
+                        {isRefreshing
+                          ? t('operations.refreshingFromGuesty')
+                          : t('operations.refreshFromGuesty')}
+                      </button>
+                    ) : null}
+                    {canChangeStatus ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={isSaving || isRefreshing}
+                        onClick={openCancel}
+                      >
+                        {t('operations.cancelVisit')}
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
               ) : null}
 
               <h4 className="section-title">{t('operations.tasks')}</h4>
               {tasks.length === 0 ? (
-                <p className="card-meta">{t('cleaningPlan.emptyVisitTasks')}</p>
+                <p className="operations-empty-tasks">
+                  {t('operations.emptyTasksHint')}
+                </p>
               ) : (
                 <ul className="operations-task-list">
-                  {tasks.map((task) => (
-                    <li key={task.id}>
-                      <div className="operations-task-content">
-                        <span className="operations-task-title">{task.title}</span>
-                        {task.priority === 'URGENT' ? (
-                          <span className="status status-danger">
-                            {t('operations.priorityUrgent')}
-                          </span>
-                        ) : null}
-                        <span className="card-meta">{task.status}</span>
-                      </div>
-                    </li>
-                  ))}
+                  {tasks.map((task) => {
+                    const isCompleted = task.status === 'COMPLETED'
+                    const isCancelled = task.status === 'CANCELLED'
+                    const canActOnTask =
+                      task.status === 'PENDING' || task.status === 'BLOCKED'
+                    const isDismissing = dismissingTaskId === task.id
+                    return (
+                      <li key={task.id}>
+                        <div className="operations-task-content">
+                          <span className="operations-task-title">{task.title}</span>
+                          {task.priority === 'URGENT' ? (
+                            <span className="status status-danger">
+                              {t('operations.priorityUrgent')}
+                            </span>
+                          ) : null}
+                          {isCancelled ? (
+                            <span className="status status-neutral">
+                              {t('operations.cancelled')}
+                            </span>
+                          ) : null}
+                          {visit.status === 'OVERDUE' && canActOnTask ? (
+                            <span className="status status-warning">
+                              {t('operations.overdue')}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className={`btn-icon btn-icon-ghost${
+                              isCompleted ? ' is-task-complete' : ''
+                            }`}
+                            aria-label={t('operations.completeTask')}
+                            disabled={
+                              isCompleted ||
+                              isCancelled ||
+                              !canActOnTask ||
+                              !endpoints.upsertTask
+                            }
+                            onClick={() => void completeTask(task)}
+                          >
+                            ✓
+                          </button>
+                          {canActOnTask ? (
+                            <button
+                              type="button"
+                              className={`btn-icon btn-icon-ghost${
+                                isDismissing ? ' is-task-dismiss-active' : ''
+                              }`}
+                              aria-label={t('operations.dismissTask')}
+                              disabled={isDismissing || !endpoints.upsertTask}
+                              onClick={() => void handleDismissTask(task)}
+                            >
+                              ✕
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </>
           ) : null}
         </div>
-        {visit ? (
-          <div className="modal-footer operations-detail-actions">
-            {canRefreshFromGuesty ? (
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={isSaving || isRefreshing}
-                onClick={() => void refreshFromGuesty()}
-              >
-                {isRefreshing
-                  ? t('operations.refreshingFromGuesty')
-                  : t('operations.refreshFromGuesty')}
-              </button>
-            ) : null}
-            <button type="button" className="btn-secondary" onClick={openEdit}>
-              {t('operations.editVisit')}
-            </button>
-            {canChangeStatus ? (
-              <>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={visitHasOpenTasks || isSaving || isRefreshing}
-                  title={
-                    visitHasOpenTasks ? t('operations.completeTasksFirst') : undefined
-                  }
-                  onClick={openComplete}
-                >
-                  {t('operations.completeVisit')}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={isSaving || isRefreshing}
-                  onClick={openCancel}
-                >
-                  {t('operations.cancelVisit')}
-                </button>
-              </>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </div>
   )

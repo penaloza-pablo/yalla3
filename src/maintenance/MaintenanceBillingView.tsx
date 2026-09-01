@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { isHiddenBillingMonth } from '../lib/hiddenBillingMonths'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { ExportScopeModal } from '../ExportScopeModal'
 import { downloadFromResponse } from '../lib/download'
@@ -280,7 +281,11 @@ export function MaintenanceBillingView({
       months?: Record<string, unknown>[]
       remainingHours?: number
     }>(endpoints.getBilling)
-    setMonths((payload.months ?? []).map(mapMonth))
+    setMonths(
+      (payload.months ?? [])
+        .map(mapMonth)
+        .filter((month) => !isHiddenBillingMonth(month.id)),
+    )
     setRemainingHours(
       typeof payload.remainingHours === 'number' ? payload.remainingHours : null,
     )
@@ -288,7 +293,7 @@ export function MaintenanceBillingView({
 
   const loadMonth = useCallback(
     async (monthId: string) => {
-      if (!endpoints.getBilling || !monthId) {
+      if (!endpoints.getBilling || !monthId || isHiddenBillingMonth(monthId)) {
         return
       }
       const payload = await fetchJson<{
