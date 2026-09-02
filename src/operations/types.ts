@@ -80,6 +80,7 @@ export type VisitTemplateRecord = {
   id: string
   name: string
   propertyId: string
+  propertyIds?: string[]
   visitTypeId: string
   teamId: string
   title: string

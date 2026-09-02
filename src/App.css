@@ -2313,6 +2313,41 @@ th {
   gap: 8px;
 }
 
+.operations-use-template {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.operations-use-template label {
+  flex: 1 1 180px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #344054;
+  font-size: 0.9rem;
+}
+
+.operations-use-template select {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+}
+
+.operations-use-template .btn-secondary {
+  flex: 0 0 auto;
+}
+
+.operations-use-template-empty {
+  margin: 0;
+  color: #667085;
+  font-size: 0.9rem;
+}
+
 .modal-footer.operations-detail-actions {
   justify-content: flex-start;
   margin: 0;

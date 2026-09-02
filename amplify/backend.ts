@@ -345,6 +345,12 @@ visitTemplatesTable.grantReadWriteData(backend.getVisitTemplates.resources.lambd
 visitTemplatesTable.grantReadWriteData(
   backend.upsertVisitTemplate.resources.lambda,
 );
+backend.getVisitTemplates.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${visitTemplatesTable.tableArn}/index/*`],
+  }),
+);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportSubtractions.resources.lambda);
 inventoryBucket.grantPut(backend.exportCleaningBilling.resources.lambda);

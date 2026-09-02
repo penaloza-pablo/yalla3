@@ -7,6 +7,7 @@ import {
   getReferenceList,
   getTasksByVisit,
   getVisitById,
+  getVisitTemplatesForProperty,
   refreshVisitFromGuesty,
   saveTask,
   saveVisit,
@@ -14,6 +15,8 @@ import {
 } from './api'
 import { formatDayMonthLabel } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import { VisitUseTemplateControls } from './VisitUseTemplateControls'
+import { buildApplyTemplateVisitPayload } from './visitTemplateHelpers'
 import {
   CLEANING_VISIT_TYPE_ID,
   requiresCompleteVisitWizard,
@@ -25,6 +28,7 @@ import type {
   UserRecord,
   VisitRecord,
   VisitStatus,
+  VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
 
@@ -186,6 +190,11 @@ export function VisitDetailModal({
   const [isCompleteOpen, setIsCompleteOpen] = useState(false)
   const [isCancelOpen, setIsCancelOpen] = useState(false)
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false)
+  const [openVisitTemplates, setOpenVisitTemplates] = useState<VisitTemplateRecord[]>(
+    [],
+  )
+  const [openVisitTemplateId, setOpenVisitTemplateId] = useState('')
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false)
   const [cleaningTypeBadge, setCleaningTypeBadge] =
     useState<CleaningTypeBadge | null>(null)
   const [dismissingTaskId, setDismissingTaskId] = useState('')
@@ -221,6 +230,10 @@ export function VisitDetailModal({
       cleaningPlan: getEndpoint(
         'getCleaningPlanUrl',
         import.meta.env.VITE_GET_CLEANING_PLAN_URL,
+      ),
+      visitTemplates: getEndpoint(
+        'getVisitTemplatesUrl',
+        import.meta.env.VITE_GET_VISIT_TEMPLATES_URL,
       ),
     }),
     [getEndpoint],
@@ -410,7 +423,55 @@ export function VisitDetailModal({
     setIsMoreInfoOpen(false)
     setCleaningTypeBadge(null)
     setMessage('')
+    setOpenVisitTemplates([])
+    setOpenVisitTemplateId('')
   }, [visitId])
+
+  useEffect(() => {
+    const propertyId = visit?.propertyId
+    const templatesEndpoint = endpoints.visitTemplates
+    const canApply =
+      isMoreInfoOpen &&
+      Boolean(propertyId) &&
+      visit?.status !== 'COMPLETED' &&
+      visit?.status !== 'CANCELLED' &&
+      Boolean(templatesEndpoint)
+
+    if (!canApply || !propertyId || !templatesEndpoint) {
+      setOpenVisitTemplates([])
+      setOpenVisitTemplateId('')
+      return
+    }
+
+    let cancelled = false
+    void getVisitTemplatesForProperty(templatesEndpoint, propertyId)
+      .then((items) => {
+        if (!cancelled) {
+          setOpenVisitTemplates(items)
+        }
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return
+        }
+        setOpenVisitTemplates([])
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t('operations.unableLoadTemplates'),
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    endpoints.visitTemplates,
+    isMoreInfoOpen,
+    t,
+    visit?.propertyId,
+    visit?.status,
+  ])
 
   useEffect(() => {
     if (!visit || visit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
@@ -499,6 +560,52 @@ export function VisitDetailModal({
 
   const notifyChanged = () => {
     onVisitChanged?.()
+  }
+
+  const applyTemplateToVisit = async () => {
+    if (!visit || !openVisitTemplateId || !endpoints.upsertVisit) {
+      return
+    }
+    if (visit.status === 'COMPLETED' || visit.status === 'CANCELLED') {
+      return
+    }
+    const template = openVisitTemplates.find(
+      (entry) => entry.id === openVisitTemplateId,
+    )
+    if (!template) {
+      return
+    }
+    setIsApplyingTemplate(true)
+    setError('')
+    try {
+      const response = await saveVisit(
+        endpoints.upsertVisit,
+        buildApplyTemplateVisitPayload(visit, template),
+      )
+      const savedItem = response.item as Record<string, unknown> | undefined
+      if (savedItem) {
+        setVisit(mapVisit(savedItem))
+      } else {
+        await reloadVisit()
+      }
+      await reloadTasks()
+      setOpenVisitTemplateId('')
+      const createdCount = Array.isArray(
+        (response as { createdTasks?: unknown[] }).createdTasks,
+      )
+        ? (response as { createdTasks: unknown[] }).createdTasks.length
+        : template.tasks.length
+      setMessage(t('operations.templateApplied', { count: createdCount }))
+      notifyChanged()
+    } catch (applyError) {
+      setError(
+        applyError instanceof Error
+          ? applyError.message
+          : t('operations.unableApplyTemplate'),
+      )
+    } finally {
+      setIsApplyingTemplate(false)
+    }
   }
 
   const refreshFromGuesty = async () => {
@@ -873,6 +980,16 @@ export function VisitDetailModal({
                       </span>
                     </div>
                   </div>
+                  {canChangeStatus ? (
+                    <VisitUseTemplateControls
+                      templates={openVisitTemplates}
+                      selectedId={openVisitTemplateId}
+                      onSelectId={setOpenVisitTemplateId}
+                      onApply={() => void applyTemplateToVisit()}
+                      disabled={isSaving || isRefreshing}
+                      applying={isApplyingTemplate}
+                    />
+                  ) : null}
                   <div className="operations-more-info-actions">
                     {canRefreshFromGuesty ? (
                       <button

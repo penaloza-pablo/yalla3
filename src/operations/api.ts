@@ -5,6 +5,10 @@ import type {
   VisitTypeRecord,
 } from './types'
 import { authFetch } from '../lib/auth-fetch'
+import {
+  activeTemplatesForProperty,
+  mapVisitTemplate,
+} from './visitTemplateHelpers'
 
 type ListResponse<T> = { items?: T[]; item?: T; count?: number; message?: string }
 
@@ -118,6 +122,32 @@ export const getVisitTemplates = (
   return fetchJson<ListResponse<VisitTemplateRecord>>(
     query ? `${endpoint}?${query}` : endpoint,
   )
+}
+
+export const getVisitTemplatesForProperty = async (
+  endpoint: string,
+  propertyId: string,
+) => {
+  const mapItems = (items: VisitTemplateRecord[] | undefined) =>
+    activeTemplatesForProperty(
+      (items ?? []).map((entry) =>
+        mapVisitTemplate(entry as unknown as Record<string, unknown>),
+      ),
+      propertyId,
+    )
+
+  try {
+    const payload = await getVisitTemplates(endpoint, { propertyId })
+    const matched = mapItems(payload.items)
+    if (matched.length > 0) {
+      return matched
+    }
+  } catch {
+    // The property filter uses a GSI; fall back to a full list + client filter.
+  }
+
+  const all = await getVisitTemplates(endpoint)
+  return mapItems(all.items)
 }
 
 export const saveVisitTemplate = (

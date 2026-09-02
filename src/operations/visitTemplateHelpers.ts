@@ -1,4 +1,9 @@
-import type { VisitDraftTask, VisitTemplateRecord, VisitTemplateTask } from './types'
+import type {
+  VisitDraftTask,
+  VisitRecord,
+  VisitTemplateRecord,
+  VisitTemplateTask,
+} from './types'
 
 export const mapVisitTemplate = (
   item: Record<string, unknown>,
@@ -29,10 +34,15 @@ export const mapVisitTemplate = (
     return [mapped]
   })
 
+  const propertyIds = Array.isArray(item.propertyIds)
+    ? item.propertyIds.map((value) => String(value)).filter(Boolean)
+    : undefined
+
   return {
     id: String(item.id ?? ''),
     name: String(item.name ?? ''),
     propertyId: String(item.propertyId ?? ''),
+    propertyIds,
     visitTypeId: String(item.visitTypeId ?? ''),
     teamId: String(item.teamId ?? ''),
     title: String(item.title ?? ''),
@@ -50,6 +60,28 @@ export const mapVisitTemplate = (
   }
 }
 
+export const templateMatchesProperty = (
+  template: Pick<VisitTemplateRecord, 'propertyId' | 'propertyIds'>,
+  propertyId: string,
+) => {
+  const id = propertyId.trim()
+  if (!id) {
+    return false
+  }
+  if (template.propertyId === id) {
+    return true
+  }
+  return Boolean(template.propertyIds?.includes(id))
+}
+
+export const activeTemplatesForProperty = (
+  templates: VisitTemplateRecord[],
+  propertyId: string,
+) =>
+  templates.filter(
+    (template) => template.active && templateMatchesProperty(template, propertyId),
+  )
+
 export const templateTasksToDrafts = (
   template: VisitTemplateRecord,
 ): VisitDraftTask[] =>
@@ -59,6 +91,48 @@ export const templateTasksToDrafts = (
     priority: task.priority,
     urgent: Boolean(task.urgent),
   }))
+
+export const templateTasksPayload = (template: VisitTemplateRecord) =>
+  template.tasks
+    .filter((task) => task.title.trim())
+    .map((task) => ({
+      title: task.title.trim(),
+      description: task.description,
+      priority: task.urgent ? 'URGENT' : task.priority || 'MEDIUM',
+    }))
+
+export const buildApplyTemplateVisitPayload = (
+  visit: Pick<
+    VisitRecord,
+    | 'id'
+    | 'propertyId'
+    | 'scheduledDate'
+    | 'visitTypeId'
+    | 'teamId'
+    | 'assignedUserId'
+    | 'scheduledStartTime'
+    | 'scheduledEndTime'
+    | 'title'
+    | 'description'
+    | 'estimatedDurationMinutes'
+  >,
+  template: VisitTemplateRecord,
+) => ({
+  id: visit.id,
+  propertyId: visit.propertyId,
+  scheduledDate: visit.scheduledDate,
+  visitTypeId: template.visitTypeId || visit.visitTypeId,
+  teamId: template.teamId || visit.teamId,
+  assignedUserId: template.assignedUserId || visit.assignedUserId,
+  scheduledStartTime: template.scheduledStartTime || visit.scheduledStartTime,
+  scheduledEndTime: template.scheduledEndTime || visit.scheduledEndTime,
+  title: template.title || visit.title,
+  description: template.description || visit.description,
+  estimatedDurationMinutes:
+    template.estimatedDurationMinutes ?? visit.estimatedDurationMinutes,
+  appendTasks: true,
+  tasks: templateTasksPayload(template),
+})
 
 export const emptyTemplateForm = () => ({
   id: '',

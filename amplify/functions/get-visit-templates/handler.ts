@@ -14,6 +14,38 @@ const filterActive = (items: Record<string, unknown>[], includeInactive: boolean
   return items.filter((item) => item.active !== false);
 };
 
+const itemMatchesProperty = (
+  item: Record<string, unknown>,
+  propertyId: string,
+) => {
+  if (String(item.propertyId ?? '') === propertyId) {
+    return true;
+  }
+  const propertyIds = item.propertyIds;
+  return (
+    Array.isArray(propertyIds) &&
+    propertyIds.some((value) => String(value) === propertyId)
+  );
+};
+
+const scanAllTemplates = async (tableName: string) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  const items: Record<string, unknown>[] = [];
+  do {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+  return items;
+};
+
 export const handler = async (event: HttpEvent) => {
   const isHttp = isHttpRequest(event);
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
@@ -48,24 +80,37 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (propertyId) {
-      let lastEvaluatedKey: Record<string, unknown> | undefined;
-      const items: Record<string, unknown>[] = [];
-      do {
-        const result = await docClient.send(
-          new QueryCommand({
-            TableName: tableName,
-            IndexName: 'propertyId-createdAt-index',
-            KeyConditionExpression: '#propertyId = :propertyId',
-            ExpressionAttributeNames: { '#propertyId': 'propertyId' },
-            ExpressionAttributeValues: { ':propertyId': propertyId },
-            ExclusiveStartKey: lastEvaluatedKey,
-          }),
+      let items: Record<string, unknown>[] = [];
+      try {
+        let lastEvaluatedKey: Record<string, unknown> | undefined;
+        do {
+          const result = await docClient.send(
+            new QueryCommand({
+              TableName: tableName,
+              IndexName: 'propertyId-createdAt-index',
+              KeyConditionExpression: '#propertyId = :propertyId',
+              ExpressionAttributeNames: { '#propertyId': 'propertyId' },
+              ExpressionAttributeValues: { ':propertyId': propertyId },
+              ExclusiveStartKey: lastEvaluatedKey,
+            }),
+          );
+          items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+          lastEvaluatedKey = result.LastEvaluatedKey as
+            | Record<string, unknown>
+            | undefined;
+        } while (lastEvaluatedKey);
+      } catch (error) {
+        console.error(
+          'Visit templates GSI query failed; falling back to scan',
+          error,
         );
-        items.push(...((result.Items as Record<string, unknown>[]) ?? []));
-        lastEvaluatedKey = result.LastEvaluatedKey as
-          | Record<string, unknown>
-          | undefined;
-      } while (lastEvaluatedKey);
+      }
+
+      if (items.length === 0) {
+        items = (await scanAllTemplates(tableName)).filter((item) =>
+          itemMatchesProperty(item, propertyId),
+        );
+      }
 
       const activeItems = filterActive(items, includeInactive);
       return buildHttpResponse(200, {
@@ -75,21 +120,7 @@ export const handler = async (event: HttpEvent) => {
       });
     }
 
-    let lastEvaluatedKey: Record<string, unknown> | undefined;
-    const items: Record<string, unknown>[] = [];
-    do {
-      const result = await docClient.send(
-        new ScanCommand({
-          TableName: tableName,
-          ExclusiveStartKey: lastEvaluatedKey,
-        }),
-      );
-      items.push(...((result.Items as Record<string, unknown>[]) ?? []));
-      lastEvaluatedKey = result.LastEvaluatedKey as
-        | Record<string, unknown>
-        | undefined;
-    } while (lastEvaluatedKey);
-
+    const items = await scanAllTemplates(tableName);
     const activeItems = filterActive(items, includeInactive);
     return buildHttpResponse(200, { items: activeItems, count: activeItems.length });
   } catch (error) {

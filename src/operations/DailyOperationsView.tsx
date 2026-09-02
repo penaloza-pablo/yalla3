@@ -7,7 +7,7 @@ import {
   getTasksByVisit,
   getUnassignedPool,
   getVisitById,
-  getVisitTemplates,
+  getVisitTemplatesForProperty,
   getVisitsByDateRange,
   getBookingsForDay,
   canRefreshVisitFromGuesty,
@@ -29,8 +29,9 @@ import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } fr
 import { sortVisitTypes } from './visitTypeHelpers'
 import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
+import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import {
-  mapVisitTemplate,
+  buildApplyTemplateVisitPayload,
   templateTasksToDrafts,
 } from './visitTemplateHelpers'
 import {
@@ -360,6 +361,11 @@ export function DailyOperationsView({
   )
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [draftVisitTasks, setDraftVisitTasks] = useState<VisitDraftTask[]>([])
+  const [openVisitTemplates, setOpenVisitTemplates] = useState<VisitTemplateRecord[]>(
+    [],
+  )
+  const [openVisitTemplateId, setOpenVisitTemplateId] = useState('')
+  const [isApplyingVisitTemplate, setIsApplyingVisitTemplate] = useState(false)
 
   const [isCompleteVisitOpen, setIsCompleteVisitOpen] = useState(false)
   const [completeVisitForm, setCompleteVisitForm] = useState({
@@ -906,6 +912,55 @@ export function DailyOperationsView({
     setDraftVisitTasks(templateTasksToDrafts(template))
   }
 
+  const applyTemplateToSelectedVisit = async () => {
+    if (!selectedVisit || !openVisitTemplateId || !endpoints.upsertVisit) {
+      return
+    }
+    if (
+      selectedVisit.status === 'COMPLETED' ||
+      selectedVisit.status === 'CANCELLED'
+    ) {
+      return
+    }
+    const template = openVisitTemplates.find(
+      (entry) => entry.id === openVisitTemplateId,
+    )
+    if (!template) {
+      return
+    }
+    setIsApplyingVisitTemplate(true)
+    setError(null)
+    try {
+      const response = await saveVisit(
+        endpoints.upsertVisit,
+        buildApplyTemplateVisitPayload(selectedVisit, template),
+      )
+      const savedItem = response.item as Record<string, unknown> | undefined
+      if (savedItem) {
+        const mapped = mapVisit(savedItem)
+        setVisits((current) =>
+          current.map((visit) => (visit.id === mapped.id ? mapped : visit)),
+        )
+      }
+      await loadVisitTasks(selectedVisit.id)
+      setOpenVisitTemplateId('')
+      const createdCount = Array.isArray(
+        (response as { createdTasks?: unknown[] }).createdTasks,
+      )
+        ? (response as { createdTasks: unknown[] }).createdTasks.length
+        : template.tasks.length
+      setMessage(t('operations.templateApplied', { count: createdCount }))
+    } catch (applyError) {
+      setError(
+        applyError instanceof Error
+          ? applyError.message
+          : t('operations.unableApplyTemplate'),
+      )
+    } finally {
+      setIsApplyingVisitTemplate(false)
+    }
+  }
+
   const openEditVisit = (visit: VisitRecord) => {
     setVisitForm({
       id: visit.id,
@@ -1380,30 +1435,80 @@ export function DailyOperationsView({
   const [assignVisitOptions, setAssignVisitOptions] = useState<VisitRecord[]>([])
 
   useEffect(() => {
+    const templatesEndpoint = endpoints.visitTemplates
     if (
       !isVisitFormOpen ||
       !isCreatingVisit ||
       !visitForm.propertyId ||
-      !endpoints.visitTemplates
+      !templatesEndpoint
     ) {
       setPropertyTemplates([])
       return
     }
-    void getVisitTemplates(endpoints.visitTemplates, {
-      propertyId: visitForm.propertyId,
-    })
-      .then((payload) => {
-        const items = (payload.items ?? []).map((entry) =>
-          mapVisitTemplate(entry as unknown as Record<string, unknown>),
-        )
-        setPropertyTemplates(items.filter((template) => template.active))
+    void getVisitTemplatesForProperty(templatesEndpoint, visitForm.propertyId)
+      .then((items) => {
+        setPropertyTemplates(items)
       })
-      .catch(() => setPropertyTemplates([]))
+      .catch((loadError) => {
+        setPropertyTemplates([])
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t('operations.unableLoadTemplates'),
+        )
+      })
   }, [
     endpoints.visitTemplates,
     isCreatingVisit,
     isVisitFormOpen,
+    t,
     visitForm.propertyId,
+  ])
+
+  useEffect(() => {
+    const propertyId = selectedVisit?.propertyId
+    const templatesEndpoint = endpoints.visitTemplates
+    const canApply =
+      Boolean(propertyId) &&
+      isVisitMoreInfoOpen &&
+      selectedVisit?.status !== 'COMPLETED' &&
+      selectedVisit?.status !== 'CANCELLED' &&
+      Boolean(templatesEndpoint)
+
+    if (!canApply || !propertyId || !templatesEndpoint) {
+      setOpenVisitTemplates([])
+      setOpenVisitTemplateId('')
+      return
+    }
+
+    let cancelled = false
+    void getVisitTemplatesForProperty(templatesEndpoint, propertyId)
+      .then((items) => {
+        if (!cancelled) {
+          setOpenVisitTemplates(items)
+        }
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return
+        }
+        setOpenVisitTemplates([])
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t('operations.unableLoadTemplates'),
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    endpoints.visitTemplates,
+    isVisitMoreInfoOpen,
+    selectedVisit?.propertyId,
+    selectedVisit?.status,
+    t,
   ])
 
   useEffect(() => {
@@ -2255,6 +2360,16 @@ export function DailyOperationsView({
                       </span>
                     </div>
                   </div>
+                  {selectedVisit.status !== 'COMPLETED' &&
+                  selectedVisit.status !== 'CANCELLED' ? (
+                    <VisitUseTemplateControls
+                      templates={openVisitTemplates}
+                      selectedId={openVisitTemplateId}
+                      onSelectId={setOpenVisitTemplateId}
+                      onApply={() => void applyTemplateToSelectedVisit()}
+                      applying={isApplyingVisitTemplate}
+                    />
+                  ) : null}
                   <div className="operations-more-info-actions">
                     {canRefreshVisitFromGuesty(selectedVisit) ? (
                       <button
@@ -2389,7 +2504,7 @@ export function DailyOperationsView({
               </label>
               {isCreatingVisit && visitForm.propertyId ? (
                 <label>
-                  Use template
+                  {t('operations.useTemplate')}
                   <select
                     value={selectedTemplateId}
                     onChange={(event) => {
@@ -2405,7 +2520,7 @@ export function DailyOperationsView({
                       }
                     }}
                   >
-                    <option value="">No template</option>
+                    <option value="">{t('operations.noTemplate')}</option>
                     {propertyTemplates.map((template) => (
                       <option key={template.id} value={template.id}>
                         {template.name}

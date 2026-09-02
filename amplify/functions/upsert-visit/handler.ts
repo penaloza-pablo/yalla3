@@ -51,6 +51,7 @@ type VisitPayload = {
   closedBy?: string;
   cancelTaskAction?: 'release' | 'cancel';
   syncTaskDueDates?: boolean;
+  appendTasks?: boolean;
   action?: string;
   tasks?: Array<{
     title?: string;
@@ -386,7 +387,11 @@ export const handler = async (event: {
         );
       }
 
-      if (!isUpdate && Array.isArray(payload.tasks) && payload.tasks.length > 0) {
+      const shouldCreateTasks =
+        Array.isArray(payload.tasks) &&
+        payload.tasks.length > 0 &&
+        (!isUpdate || payload.appendTasks === true);
+      if (shouldCreateTasks) {
         createdTasks = await createVisitTasksBulk(
           tasksTable,
           item,
