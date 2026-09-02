@@ -51,6 +51,31 @@
   gap: 12px;
 }
 
+.brand-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.brand-logo-full {
+  width: 100%;
+  max-width: 94px;
+  height: auto;
+}
+
+.brand-logo-icon {
+  display: none;
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar.is-collapsed .brand-logo-full {
+  display: none;
+}
+
+.sidebar.is-collapsed .brand-logo-icon {
+  display: block;
+}
+
 .brand-title {
   font-size: 1.35rem;
   font-weight: 700;
@@ -3612,6 +3637,17 @@ th {
     align-items: center;
     justify-content: space-between;
     width: 100%;
+  }
+
+  .sidebar .brand-logo-full,
+  .sidebar.is-collapsed .brand-logo-full {
+    display: block;
+    max-width: 74px;
+  }
+
+  .sidebar .brand-logo-icon,
+  .sidebar.is-collapsed .brand-logo-icon {
+    display: none;
   }
 
   .sidebar .brand-title {

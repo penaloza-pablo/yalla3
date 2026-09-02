@@ -4311,9 +4311,16 @@ function App() {
         }`}
       >
         <div className="brand">
-          <span className="brand-title">
-            {isSidebarCollapsed ? 'Y!' : 'Yalla!'}
-          </span>
+          <img
+            className="brand-logo brand-logo-full"
+            src="/Yalla_logo/full_logo.png"
+            alt="Yalla!"
+          />
+          <img
+            className="brand-logo brand-logo-icon"
+            src="/Yalla_logo/icon.png"
+            alt="Yalla!"
+          />
           <button
             className="btn-icon btn-icon-ghost mobile-nav-close"
             type="button"

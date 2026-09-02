@@ -8,6 +8,14 @@ import './i18n'
 import './index.css'
 import App from './App.tsx'
 
+function AuthHeader() {
+  return (
+    <div className="auth-brand">
+      <img src="/Yalla_logo/full_logo.png" alt="Yalla!" />
+    </div>
+  )
+}
+
 const loadAmplifyOutputs = async () => {
   // Prefer runtime file when present (Amplify Hosting copies it into dist).
   // Fall back to the build-time import so auth still works if the file 404s.
@@ -52,7 +60,7 @@ const startApp = async () => {
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Authenticator>
+      <Authenticator components={{ Header: AuthHeader }}>
         <App />
       </Authenticator>
     </StrictMode>,
