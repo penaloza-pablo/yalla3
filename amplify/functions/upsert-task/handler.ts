@@ -29,6 +29,7 @@ type TaskPayload = {
   teamId?: string;
   assignedUserId?: string;
   title?: string;
+  titleEs?: string;
   description?: string;
   status?: string;
   priority?: string;
@@ -231,6 +232,9 @@ export const handler = async (event: {
         ? existing.assignedUserId
         : undefined),
     title: title ?? (typeof existing?.title === 'string' ? existing.title : ''),
+    titleEs:
+      payload.titleEs?.trim() ??
+      (typeof existing?.titleEs === 'string' ? existing.titleEs : ''),
     description:
       payload.description?.trim() ??
       (typeof existing?.description === 'string' ? existing.description : ''),

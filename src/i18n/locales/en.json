@@ -541,6 +541,8 @@
     "saveVisit": "Save visit",
     "saving": "Saving…",
     "taskTitle": "Task title",
+    "taskTitleEs": "Task title (Spanish)",
+    "templateTaskTitleEsHint": "English is required. Spanish is optional: the DEEP PC checklist already has a built-in translation, and this field overrides it for custom tasks.",
     "closeVisitDetail": "Close visit detail",
     "completeTask": "Complete task",
     "dismissTask": "Dismiss task",

@@ -37,6 +37,7 @@ export type TaskRecord = {
   teamId: string
   assignedUserId?: string
   title: string
+  titleEs?: string
   description: string
   status: TaskStatus
   priority: string
@@ -70,6 +71,7 @@ export type PropertyOption = {
 
 export type VisitTemplateTask = {
   title: string
+  titleEs?: string
   description: string
   priority: string
   urgent?: boolean
@@ -96,6 +98,7 @@ export type VisitTemplateRecord = {
 
 export type VisitDraftTask = {
   title: string
+  titleEs?: string
   description: string
   priority: string
   urgent: boolean

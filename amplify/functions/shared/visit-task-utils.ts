@@ -471,6 +471,7 @@ export const syncVisitTaskDueDates = async (
 
 export type BulkVisitTaskInput = {
   title?: string;
+  titleEs?: string;
   description?: string;
   priority?: string;
 };
@@ -504,6 +505,7 @@ export const createVisitTasksBulk = async (
       teamId,
       assignedUserId: assignedUserId || undefined,
       title,
+      titleEs: draft.titleEs?.trim() || undefined,
       description: draft.description?.trim() ?? '',
       status: 'PENDING',
       priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority)

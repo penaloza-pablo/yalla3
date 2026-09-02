@@ -12,13 +12,19 @@ export const translateSection = (t: TFunction, section: string) =>
 export const translateStatus = (t: TFunction, status: string) =>
   t(`status.${status}`, { defaultValue: status })
 
+export const displayLocalizedText = (
+  language: string | undefined,
+  english: string,
+  localized?: string | null,
+) => {
+  if (isSpanishLocale(language) && localized?.trim()) {
+    return localized.trim()
+  }
+  return english
+}
+
 export const displayInventoryName = (
   language: string | undefined,
   name: string,
   nameEs?: string | null,
-) => {
-  if (isSpanishLocale(language) && nameEs?.trim()) {
-    return nameEs.trim()
-  }
-  return name
-}
+) => displayLocalizedText(language, name, nameEs)

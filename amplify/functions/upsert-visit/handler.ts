@@ -55,6 +55,7 @@ type VisitPayload = {
   action?: string;
   tasks?: Array<{
     title?: string;
+    titleEs?: string;
     description?: string;
     priority?: string;
   }>;

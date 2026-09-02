@@ -2460,7 +2460,7 @@ th {
 
 .template-task-row {
   display: grid;
-  grid-template-columns: 1.2fr 1.4fr auto auto;
+  grid-template-columns: 1.1fr 1.1fr 1.3fr auto auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;

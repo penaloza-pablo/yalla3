@@ -19,8 +19,10 @@ export const mapVisitTemplate = (
       return []
     }
     const urgent = Boolean(task.urgent)
+    const titleEs = String(task.titleEs ?? '').trim()
     const mapped: VisitTemplateTask = {
       title,
+      titleEs: titleEs || undefined,
       description: String(task.description ?? ''),
       priority: urgent
         ? 'URGENT'
@@ -87,6 +89,7 @@ export const templateTasksToDrafts = (
 ): VisitDraftTask[] =>
   template.tasks.map((task) => ({
     title: task.title,
+    titleEs: task.titleEs,
     description: task.description,
     priority: task.priority,
     urgent: Boolean(task.urgent),
@@ -97,6 +100,7 @@ export const templateTasksPayload = (template: VisitTemplateRecord) =>
     .filter((task) => task.title.trim())
     .map((task) => ({
       title: task.title.trim(),
+      titleEs: task.titleEs?.trim() || undefined,
       description: task.description,
       priority: task.urgent ? 'URGENT' : task.priority || 'MEDIUM',
     }))
@@ -146,5 +150,5 @@ export const emptyTemplateForm = () => ({
   scheduledStartTime: '09:00',
   scheduledEndTime: '10:00',
   estimatedDurationMinutes: '',
-  tasks: [{ title: '', description: '', urgent: false }],
+  tasks: [{ title: '', titleEs: '', description: '', urgent: false }],
 })

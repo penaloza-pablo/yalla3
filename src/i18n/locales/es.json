@@ -541,6 +541,8 @@
     "saveVisit": "Guardar visita",
     "saving": "Guardando…",
     "taskTitle": "Título de la tarea",
+    "taskTitleEs": "Título de la tarea (español)",
+    "templateTaskTitleEsHint": "El inglés es obligatorio. El español es opcional: la lista DEEP PC ya tiene traducción, y este campo la sustituye en tareas a medida.",
     "closeVisitDetail": "Cerrar detalle de visita",
     "completeTask": "Completar tarea",
     "dismissTask": "Descartar tarea",

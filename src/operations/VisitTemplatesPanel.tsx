@@ -7,6 +7,7 @@ import {
   useState,
   type Ref,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getVisitTemplates, saveVisitTemplate } from './api'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
@@ -53,6 +54,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   }: Props,
   ref: Ref<VisitTemplatesPanelHandle>,
 ) {
+  const { t } = useTranslation()
   const [filterPropertyId, setFilterPropertyId] = useState('')
   const [templates, setTemplates] = useState<VisitTemplateRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -155,10 +157,11 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         template.tasks.length > 0
           ? template.tasks.map((task) => ({
               title: task.title,
+              titleEs: task.titleEs ?? '',
               description: task.description,
               urgent: Boolean(task.urgent || task.priority === 'URGENT'),
             }))
-          : [{ title: '', description: '', urgent: false }],
+          : [{ title: '', titleEs: '', description: '', urgent: false }],
     })
     setIsFormOpen(true)
   }
@@ -182,10 +185,11 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         template.tasks.length > 0
           ? template.tasks.map((task) => ({
               title: task.title,
+              titleEs: task.titleEs ?? '',
               description: task.description,
               urgent: Boolean(task.urgent || task.priority === 'URGENT'),
             }))
-          : [{ title: '', description: '', urgent: false }],
+          : [{ title: '', titleEs: '', description: '', urgent: false }],
     })
     setIsFormOpen(true)
   }
@@ -233,6 +237,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         .filter((task) => task.title.trim())
         .map((task, index) => ({
           title: task.title.trim(),
+          titleEs: task.titleEs?.trim() || undefined,
           description: task.description,
           priority: task.urgent ? 'URGENT' : 'MEDIUM',
           urgent: task.urgent,
@@ -591,10 +596,11 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
 
               <div className="full-width template-tasks-editor">
                 <h4>Template tasks</h4>
+                <p className="subtitle">{t('operations.templateTaskTitleEsHint')}</p>
                 {templateForm.tasks.map((task, index) => (
                   <div key={`task-${index}`} className="template-task-row">
                     <input
-                      placeholder="Task title"
+                      placeholder={t('operations.taskTitle')}
                       value={task.title}
                       onChange={(event) =>
                         setTemplateForm((current) => ({
@@ -608,7 +614,21 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                       }
                     />
                     <input
-                      placeholder="Description"
+                      placeholder={t('operations.taskTitleEs')}
+                      value={task.titleEs ?? ''}
+                      onChange={(event) =>
+                        setTemplateForm((current) => ({
+                          ...current,
+                          tasks: current.tasks.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, titleEs: event.target.value }
+                              : entry,
+                          ),
+                        }))
+                      }
+                    />
+                    <input
+                      placeholder={t('operations.description')}
                       value={task.description}
                       onChange={(event) =>
                         setTemplateForm((current) => ({
@@ -664,6 +684,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                         ...current.tasks,
                         {
                           title: '',
+                          titleEs: '',
                           description: '',
                           urgent: false,
                         },

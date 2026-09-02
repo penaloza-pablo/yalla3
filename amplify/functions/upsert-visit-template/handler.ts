@@ -18,6 +18,7 @@ import {
 
 type TemplateTask = {
   title?: string;
+  titleEs?: string;
   description?: string;
   priority?: string;
   urgent?: boolean;
@@ -55,8 +56,10 @@ const normalizeTasks = (tasks?: TemplateTask[]) => {
       const priority = urgent
         ? 'URGENT'
         : (task.priority?.trim().toUpperCase() || 'MEDIUM');
+      const titleEs = task.titleEs?.trim() ?? '';
       return {
         title,
+        titleEs,
         description: task.description?.trim() ?? '',
         priority,
         urgent,

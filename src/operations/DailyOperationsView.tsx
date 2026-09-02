@@ -30,6 +30,8 @@ import { sortVisitTypes } from './visitTypeHelpers'
 import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
+import { displayTaskTitle } from './taskTitleDisplay'
+import { isSpanishLocale } from '../i18n/display'
 import {
   buildApplyTemplateVisitPayload,
   templateTasksToDrafts,
@@ -298,6 +300,10 @@ const mapTask = (item: Record<string, unknown>): TaskRecord => ({
   assignedUserId:
     typeof item.assignedUserId === 'string' ? item.assignedUserId : undefined,
   title: String(item.title ?? ''),
+  titleEs:
+    typeof item.titleEs === 'string' && item.titleEs.trim()
+      ? item.titleEs
+      : undefined,
   description: String(item.description ?? ''),
   status: String(item.status ?? 'UNASSIGNED').toUpperCase() as TaskRecord['status'],
   priority: String(item.priority ?? 'MEDIUM').toUpperCase(),
@@ -311,7 +317,7 @@ export function DailyOperationsView({
   propertyOptions: propertyOptionsProp,
   mode = 'dashboard',
 }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const visitColumns = useMemo(
     () =>
       VISIT_COLUMN_DEFS.map((column) => ({
@@ -1040,6 +1046,7 @@ export function DailyOperationsView({
       .filter((draft) => draft.title.trim())
       .map((draft) => ({
         title: draft.title.trim(),
+        titleEs: draft.titleEs?.trim() || undefined,
         description: draft.description,
         priority: draft.urgent ? 'URGENT' : 'MEDIUM',
       }))
@@ -1842,7 +1849,7 @@ export function DailyOperationsView({
                 ) : (
                   poolTasks.map((task) => (
                     <tr key={task.id}>
-                      <td>{task.title}</td>
+                      <td>{displayTaskTitle(i18n.language, task.title, task.titleEs)}</td>
                       <td>{task.status}</td>
                       <td>{propertyById.get(task.propertyId) ?? task.propertyId}</td>
                       <td>{teamById.get(task.teamId) ?? task.teamId}</td>
@@ -2414,7 +2421,13 @@ export function DailyOperationsView({
                   return (
                     <li key={task.id}>
                       <div className="operations-task-content">
-                        <span className="operations-task-title">{task.title}</span>
+                        <span className="operations-task-title">
+                          {displayTaskTitle(
+                            i18n.language,
+                            task.title,
+                            task.titleEs,
+                          )}
+                        </span>
                         {task.priority === 'URGENT' ? (
                           <span className="status status-danger">Urgent</span>
                         ) : null}
@@ -2702,16 +2715,24 @@ export function DailyOperationsView({
                     <div key={`draft-${index}`} className="template-task-row">
                       <input
                         placeholder={t('operations.taskTitle')}
-                        value={task.title}
-                        onChange={(event) =>
+                        value={displayTaskTitle(
+                          i18n.language,
+                          task.title,
+                          task.titleEs,
+                        )}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          const spanish = isSpanishLocale(i18n.language)
                           setDraftVisitTasks((current) =>
                             current.map((entry, entryIndex) =>
                               entryIndex === index
-                                ? { ...entry, title: event.target.value }
+                                ? spanish
+                                  ? { ...entry, titleEs: value }
+                                  : { ...entry, title: value }
                                 : entry,
                             ),
                           )
-                        }
+                        }}
                       />
                       <input
                         placeholder={t('operations.description')}

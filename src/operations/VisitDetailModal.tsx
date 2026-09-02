@@ -16,6 +16,7 @@ import {
 import { formatDayMonthLabel } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
+import { displayTaskTitle } from './taskTitleDisplay'
 import { buildApplyTemplateVisitPayload } from './visitTemplateHelpers'
 import {
   CLEANING_VISIT_TYPE_ID,
@@ -110,6 +111,10 @@ const mapTask = (item: Record<string, unknown>): TaskRecord => ({
   assignedUserId:
     typeof item.assignedUserId === 'string' ? item.assignedUserId : undefined,
   title: String(item.title ?? ''),
+  titleEs:
+    typeof item.titleEs === 'string' && item.titleEs.trim()
+      ? item.titleEs
+      : undefined,
   description: String(item.description ?? ''),
   status: String(item.status ?? 'UNASSIGNED').toUpperCase() as TaskRecord['status'],
   priority: String(item.priority ?? 'MEDIUM').toUpperCase(),
@@ -175,7 +180,7 @@ export function VisitDetailModal({
   onClose,
   onVisitChanged,
 }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [visit, setVisit] = useState<VisitRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -1033,7 +1038,9 @@ export function VisitDetailModal({
                     return (
                       <li key={task.id}>
                         <div className="operations-task-content">
-                          <span className="operations-task-title">{task.title}</span>
+                          <span className="operations-task-title">
+                            {displayTaskTitle(i18n.language, task.title, task.titleEs)}
+                          </span>
                           {task.priority === 'URGENT' ? (
                             <span className="status status-danger">
                               {t('operations.priorityUrgent')}
