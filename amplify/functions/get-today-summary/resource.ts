@@ -12,5 +12,5 @@ export const getTodaySummary = defineFunction({
     MAINTENANCE_VISIT_TYPE_IDS:
       'visit_type_maintenance,visit_type_deep_property_check,visit_type_property_check,visit_type_fixings,visit_type_emergency',
   },
-  timeoutSeconds: 30,
+  timeoutSeconds: 45,
 });

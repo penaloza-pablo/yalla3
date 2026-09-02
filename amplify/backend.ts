@@ -561,6 +561,14 @@ backend.getTodaySummary.addEnvironment(
   'CLEANING_PLANS_TABLE',
   cleaningPlansTable.tableName,
 );
+backend.getTodaySummary.addEnvironment(
+  'CLEANING_BILLING_TABLE',
+  cleaningBillingTable.tableName,
+);
+backend.getTodaySummary.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
 const slackSecret = Secret.fromSecretNameV2(
   dataStack,
   'YallaSlackSecret',
@@ -621,6 +629,10 @@ cleaningBillingTable.grantReadData(backend.getCleaningBilling.resources.lambda);
 cleaningBillingTable.grantReadData(
   backend.exportCleaningBilling.resources.lambda,
 );
+cleaningBillingTable.grantReadData(backend.getTodaySummary.resources.lambda);
+propertyCleaningDetailsTable.grantReadData(
+  backend.getTodaySummary.resources.lambda,
+);
 cleaningBillingTable.grantReadWriteData(
   backend.upsertCleaningBilling.resources.lambda,
 );
@@ -650,6 +662,7 @@ backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
 );
 backend.getCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.getTodaySummary.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 
 const maintenanceProvidersTable = new Table(
   dataStack,

@@ -1,12 +1,15 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { isHiddenBillingMonth } from '../lib/hiddenBillingMonths'
+import {
+  isBeforeHiddenBillingGap,
+  isHiddenBillingMonth,
+} from '../lib/hiddenBillingMonths'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { ExportScopeModal } from '../ExportScopeModal'
 import { downloadFromResponse } from '../lib/download'
 import { authFetch } from '../lib/auth-fetch'
 import { fetchJson } from '../operations/api'
-import { formatDateOnlyLabel } from '../operations/dateHelpers'
+import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
 import {
   filterPropertySelectOptions,
   getPropertyLabel,
@@ -284,7 +287,13 @@ export function MaintenanceBillingView({
     setMonths(
       (payload.months ?? [])
         .map(mapMonth)
-        .filter((month) => !isHiddenBillingMonth(month.id)),
+        .filter((month) => {
+          const currentMonthId = getTodayMadrid().slice(0, 7)
+          return (
+            !isHiddenBillingMonth(month.id) &&
+            !isBeforeHiddenBillingGap(month.id, currentMonthId)
+          )
+        }),
     )
     setRemainingHours(
       typeof payload.remainingHours === 'number' ? payload.remainingHours : null,
@@ -293,7 +302,12 @@ export function MaintenanceBillingView({
 
   const loadMonth = useCallback(
     async (monthId: string) => {
-      if (!endpoints.getBilling || !monthId || isHiddenBillingMonth(monthId)) {
+      if (
+        !endpoints.getBilling ||
+        !monthId ||
+        isHiddenBillingMonth(monthId) ||
+        isBeforeHiddenBillingGap(monthId, getTodayMadrid().slice(0, 7))
+      ) {
         return
       }
       const payload = await fetchJson<{

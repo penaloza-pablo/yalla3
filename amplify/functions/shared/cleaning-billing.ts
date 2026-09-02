@@ -81,16 +81,12 @@ export const listVisibleMonthIds = () => {
   if (!isHiddenBillingMonth(current)) {
     ids.push(current);
   }
-  let offset = 1;
-  let pastCount = 0;
-  while (pastCount < VISIBLE_PAST_MONTHS && offset < 36) {
+  for (let offset = 1; offset <= VISIBLE_PAST_MONTHS; offset += 1) {
     const id = shiftMonthId(current, -offset);
-    offset += 1;
     if (isHiddenBillingMonth(id)) {
-      continue;
+      break;
     }
     ids.push(id);
-    pastCount += 1;
   }
   return ids;
 };
@@ -412,4 +408,22 @@ export const buildMonthDetail = async (params: {
   }
 
   return { month, lines, stored };
+};
+
+export const sumVisibleWarningCounts = async (params: {
+  billingTable: string;
+  visitsTable: string;
+  plansTable: string;
+  detailsTable: string;
+}) => {
+  const details = await Promise.all(
+    listVisibleMonthIds().map((monthId) =>
+      buildMonthDetail({
+        ...params,
+        monthId,
+        persistSummary: false,
+      }),
+    ),
+  );
+  return details.reduce((sum, detail) => sum + detail.month.warningCount, 0);
 };

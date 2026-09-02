@@ -6,6 +6,7 @@ import {
 } from '../shared/dynamo-http';
 import { addDaysToDateString } from '../shared/date-range';
 import { getPlanByDate, scanAllItems } from '../shared/cleaning-plan';
+import { sumVisibleWarningCounts } from '../shared/cleaning-billing';
 import {
   getTodayInMadrid,
   resolveVisitStatus,
@@ -133,10 +134,18 @@ export const handler = async (event: HttpEvent) => {
   const plansTable = process.env.CLEANING_PLANS_TABLE;
   const reviewsTable = process.env.REVIEWS_TABLE;
   const inventoryTable = process.env.INVENTORY_TABLE;
-  if (!visitsTable || !plansTable || !reviewsTable || !inventoryTable) {
+  const cleaningBillingTable = process.env.CLEANING_BILLING_TABLE;
+  const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
+  if (
+    !visitsTable ||
+    !plansTable ||
+    !reviewsTable ||
+    !inventoryTable ||
+    !cleaningBillingTable
+  ) {
     return buildHttpResponse(500, {
       message:
-        'VISITS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, or INVENTORY_TABLE is not configured.',
+        'VISITS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, INVENTORY_TABLE, or CLEANING_BILLING_TABLE is not configured.',
     });
   }
 
@@ -144,13 +153,19 @@ export const handler = async (event: HttpEvent) => {
   const tomorrow = addDaysToDateString(today, 1);
 
   try {
-    const [visits, todayPlan, tomorrowPlan, reviews, inventory] =
+    const [visits, todayPlan, tomorrowPlan, reviews, inventory, previousOpen] =
       await Promise.all([
         scanAllItems(visitsTable),
         getPlanByDate(plansTable, today),
         getPlanByDate(plansTable, tomorrow),
         scanAllItems(reviewsTable),
         scanAllItems(inventoryTable),
+        sumVisibleWarningCounts({
+          billingTable: cleaningBillingTable,
+          visitsTable,
+          plansTable,
+          detailsTable,
+        }),
       ]);
 
     const cleaning = countVisitsForTypes(
@@ -197,7 +212,7 @@ export const handler = async (event: HttpEvent) => {
         planningTotal: 2,
         currentCompleted: cleaning.currentCompleted,
         currentTotal: cleaning.currentTotal,
-        previousOpen: cleaning.previousOpen,
+        previousOpen,
       },
       maintenance: {
         currentCompleted: maintenance.currentCompleted,

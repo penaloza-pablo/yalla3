@@ -176,16 +176,12 @@ export const listVisibleMonthIds = () => {
   if (!isHiddenBillingMonth(current)) {
     ids.push(current);
   }
-  let offset = 1;
-  let pastCount = 0;
-  while (pastCount < VISIBLE_PAST_MONTHS && offset < 36) {
+  for (let offset = 1; offset <= VISIBLE_PAST_MONTHS; offset += 1) {
     const id = shiftMonthId(current, -offset);
-    offset += 1;
     if (isHiddenBillingMonth(id)) {
-      continue;
+      break;
     }
     ids.push(id);
-    pastCount += 1;
   }
   return ids;
 };

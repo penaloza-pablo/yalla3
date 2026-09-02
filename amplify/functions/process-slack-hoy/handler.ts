@@ -106,7 +106,7 @@ const todayBlocks = (summary: TodaySummary) => {
           summary.cleaning.currentTotal,
         )
       : null,
-    countLine('Retrasadas por cerrar', summary.cleaning.previousOpen),
+    countLine('Limpiezas anteriores', summary.cleaning.previousOpen),
   ].filter((line): line is string => Boolean(line));
 
   const maintenanceLines = [
