@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   isBeforeHiddenBillingGap,
   isHiddenBillingMonth,
@@ -118,6 +120,7 @@ export function CleaningBillingView({
   onToggleSummaryInfo,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -708,7 +711,7 @@ export function CleaningBillingView({
               <p className="card-subtitle">{t('cleaningBilling.linesSubtitle')}</p>
             </div>
             <div className="table-actions">
-              {month?.canClose ? (
+              {month?.canClose && can(ACTION_KEYS.cleaningCloseMonth) ? (
                 <button
                   className="btn-primary"
                   type="button"

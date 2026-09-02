@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   isBeforeHiddenBillingGap,
   isHiddenBillingMonth,
@@ -183,6 +185,7 @@ export function MaintenanceBillingView({
   onToggleSummaryInfo,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -1096,7 +1099,7 @@ export function MaintenanceBillingView({
               </p>
             </div>
             <div className="table-actions">
-              {month?.canClose ? (
+              {month?.canClose && can(ACTION_KEYS.maintenanceCloseMonth) ? (
                 <button
                   className="btn-primary"
                   type="button"
@@ -1308,7 +1311,10 @@ export function MaintenanceBillingView({
                             </span>
                           </td>
                           <td>
-                            {month?.canEdit && !isSelecting ? (
+                            {month?.canEdit &&
+                            !isSelecting &&
+                            (line.billingStatus === 'TO_ESTIMATE' ||
+                              can(ACTION_KEYS.maintenanceCheckAfterEstimate)) ? (
                               <div className="action-buttons">
                                 <button
                                   className="btn-icon btn-icon-ghost"

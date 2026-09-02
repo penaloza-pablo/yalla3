@@ -34,6 +34,13 @@ import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
+import { UsersPanel } from './rbac/UsersPanel'
+import { RolesPanel } from './rbac/RolesPanel'
+import { usePermissions } from './rbac/PermissionsProvider'
+import {
+  CORE_PAGES,
+  NAVIGATION,
+} from '../amplify/functions/shared/rbac-catalog'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
@@ -270,53 +277,8 @@ type PropertyDiff = {
   row: PropertyRow
 }
 
-const navigation = [
-  {
-    section: 'Inventory',
-    items: ['Inventory', 'Spot Check', 'Purchases', 'Subtractions'],
-  },
-  {
-    section: 'Ops',
-    items: [
-      'Properties',
-      'Bookings',
-      'Reviews',
-      'Unassigned tasks',
-      'Visit templates',
-    ],
-  },
-  {
-    section: 'Cleaning',
-    items: [
-      'Cleaning Plan',
-      'Cleaning Incidents',
-      'Cleaning Billing',
-      'Cleaning settings',
-    ],
-  },
-  {
-    section: 'Maintenance',
-    items: [
-      'Maintenance Incidents',
-      'Maintenance Billing',
-      'Maintenance settings',
-    ],
-  },
-  {
-    section: 'Settings',
-    items: ['Logs'],
-  },
-  {
-    section: 'Grow',
-    items: ['Grow solution 1', 'Grow solution 2', 'Grow solution 3'],
-  },
-  {
-    section: 'Finance',
-    items: ['Finance solution 1', 'Finance solution 2', 'Finance solution 3'],
-  },
-]
-
-const coreItems = ['Daily Operations']
+const navigation = NAVIGATION
+const coreItems: string[] = [...CORE_PAGES]
 const validPages = new Set([
   ...coreItems,
   ...navigation.flatMap((group) => group.items),
@@ -328,6 +290,8 @@ const pagesWithMobileSearch = new Set([
   'Purchases',
   'Subtractions',
   'Logs',
+  'Users',
+  'Roles',
   'Visit templates',
   'Cleaning Incidents',
   'Maintenance Incidents',
@@ -1364,10 +1328,20 @@ const emptySubtractionFormState: SubtractionFormState = {
 
 function App() {
   const { t, i18n } = useTranslation()
+  const { ready: permissionsReady, can, canPage } = usePermissions()
   const pageLabel = (page: string) => translatePage(t, page)
   const navItemLabel = (page: string) =>
     t(`navPages.${page}`, { defaultValue: translatePage(t, page) })
   const sectionLabel = (section: string) => translateSection(t, section)
+  const visibleCoreItems = coreItems.filter((item) => canPage(item))
+  const visibleNavigation = navigation
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canPage(item)),
+    }))
+    .filter((group) => group.items.length > 0)
+  const firstAllowedPage =
+    visibleCoreItems[0] ?? visibleNavigation[0]?.items[0] ?? null
   const statusLabel = (status: string) => translateStatus(t, status)
   const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
     displayInventoryName(i18n.language, row.name, row.nameEs)
@@ -4083,6 +4057,19 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (!permissionsReady) {
+      return
+    }
+    if (canPage(activePage)) {
+      return
+    }
+    if (firstAllowedPage) {
+      setActivePage(firstAllowedPage)
+      rememberActivePage(firstAllowedPage)
+    }
+  }, [activePage, canPage, firstAllowedPage, permissionsReady])
+
   const openMobileNav = () => {
     setIsSidebarCollapsed(false)
     setIsMobileNavOpen(true)
@@ -4173,6 +4160,10 @@ function App() {
         return t('subtractions.search')
       case 'Logs':
         return t('logs.search')
+      case 'Users':
+        return t('rbac.searchUsers')
+      case 'Roles':
+        return t('rbac.searchRoles')
       case 'Visit templates':
         return t('operations.searchTemplates')
       case 'Cleaning Incidents':
@@ -4333,7 +4324,7 @@ function App() {
         <nav className="nav">
           {!isSidebarCollapsed ? (
             <ul className="nav-items nav-items-primary">
-              {coreItems.map((item) => {
+              {visibleCoreItems.map((item) => {
                 const isActive = activePage === item
                 return (
                   <li key={item}>
@@ -4353,7 +4344,7 @@ function App() {
           {isSidebarCollapsed ? (
             <>
               <ul className="nav-items nav-items-primary nav-items-collapsed">
-                {coreItems.map((item) => {
+                {visibleCoreItems.map((item) => {
                   const isActive = activePage === item
                   return (
                     <li key={item}>
@@ -4387,7 +4378,7 @@ function App() {
                 })}
               </ul>
               <ul className="nav-items nav-section-shortcuts">
-                {navigation.map((group) => (
+                {visibleNavigation.map((group) => (
                   <li key={group.section}>
                     <button
                       className="nav-button nav-section-shortcut"
@@ -4404,7 +4395,7 @@ function App() {
               </ul>
             </>
           ) : null}
-          {navigation.map((group) => (
+          {visibleNavigation.map((group) => (
             <div className="nav-section" key={group.section}>
               <button
                 className="nav-section-title nav-section-toggle"
@@ -4460,7 +4451,13 @@ function App() {
       </button>
 
       <main className="main">
-        {activePage === 'Inventory' ? (
+        {!permissionsReady || !canPage(activePage) ? (
+          <section className="card">
+            <h1 className="page-title">
+              {permissionsReady ? t('rbac.noAccess') : t('common.loading')}
+            </h1>
+          </section>
+        ) : activePage === 'Inventory' ? (
           <>
             <header className="page-header">
               <div className="page-header-leading">
@@ -4582,6 +4579,7 @@ function App() {
                     />
                   </svg>
                 </button>
+                {can('action:inventory.create') ? (
                 <button
                   className="btn-ghost"
                   type="button"
@@ -4597,6 +4595,7 @@ function App() {
                     <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
                   </svg>
                 </button>
+                ) : null}
                 <button
                   className="btn-primary"
                   onClick={fetchInventory}
@@ -5219,6 +5218,7 @@ function App() {
                     </span>
                   ) : null}
                 </button>
+                {can('action:purchases.create') ? (
                 <button
                   className="btn-ghost"
                   type="button"
@@ -5234,6 +5234,7 @@ function App() {
                     <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
                   </svg>
                 </button>
+                ) : null}
                 <button
                   className="btn-primary"
                   onClick={fetchPurchases}
@@ -6372,14 +6373,18 @@ function App() {
                     <span className="filter-badge">{propertiesActiveFilterCount}</span>
                   ) : null}
                 </button>
+                {can('action:properties.updateFromGuesty') ? (
                 <button
                   className="btn-primary"
                   type="button"
                   onClick={() => void refreshPropertiesDiff()}
                   disabled={isPropertiesLoading}
                 >
-                  {isPropertiesLoading ? 'Updating...' : 'Update from Guesty'}
+                  {isPropertiesLoading
+                    ? t('bookings.updatingFromGuesty')
+                    : t('bookings.updateFromGuesty')}
                 </button>
+                ) : null}
                 </div>
               </div>
               </MobileBodyPortal>
@@ -7696,6 +7701,24 @@ function App() {
           />
         ) : activePage === 'Maintenance settings' ? (
           <MaintenanceSettingsView getEndpoint={getEndpoint} />
+        ) : activePage === 'Users' ? (
+          <UsersPanel
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
+          />
+        ) : activePage === 'Roles' ? (
+          <RolesPanel
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
+          />
         ) : activePage === 'Logs' ? (
           <LogsPanel
             getEndpoint={getEndpoint}

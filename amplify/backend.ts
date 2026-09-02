@@ -39,6 +39,11 @@ import { getTasks } from './functions/get-tasks/resource';
 import { upsertTask } from './functions/upsert-task/resource';
 import { getTeams } from './functions/get-teams/resource';
 import { getUsers } from './functions/get-users/resource';
+import { getRoles } from './functions/get-roles/resource';
+import { upsertRole } from './functions/upsert-role/resource';
+import { getCognitoUsers } from './functions/get-cognito-users/resource';
+import { upsertUserRole } from './functions/upsert-user-role/resource';
+import { getMyPermissions } from './functions/get-my-permissions/resource';
 import { getVisitTypes } from './functions/get-visit-types/resource';
 import { getVisitTemplates } from './functions/get-visit-templates/resource';
 import { upsertVisitTemplate } from './functions/upsert-visit-template/resource';
@@ -102,6 +107,11 @@ const backend = defineBackend({
   upsertTask,
   getTeams,
   getUsers,
+  getRoles,
+  upsertRole,
+  getCognitoUsers,
+  upsertUserRole,
+  getMyPermissions,
   getVisitTypes,
   getVisitTemplates,
   upsertVisitTemplate,
@@ -166,6 +176,11 @@ const lambdaFunctionsWithHttp = [
   backend.upsertTask,
   backend.getTeams,
   backend.getUsers,
+  backend.getRoles,
+  backend.upsertRole,
+  backend.getCognitoUsers,
+  backend.upsertUserRole,
+  backend.getMyPermissions,
   backend.getVisitTypes,
   backend.getVisitTemplates,
   backend.upsertVisitTemplate,
@@ -341,6 +356,33 @@ tasksTable.grantReadData(backend.handleSlackCommand.resources.lambda);
 tasksTable.grantReadData(backend.getTodaySummary.resources.lambda);
 teamsTable.grantReadData(backend.getTeams.resources.lambda);
 usersTable.grantReadData(backend.getUsers.resources.lambda);
+
+const rbacTable = new Table(dataStack, 'RbacTable', {
+  partitionKey: { name: 'pk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const rbacLambdas = [
+  backend.getRoles,
+  backend.upsertRole,
+  backend.getCognitoUsers,
+  backend.upsertUserRole,
+  backend.getMyPermissions,
+];
+for (const lambdaFunction of rbacLambdas) {
+  lambdaFunction.addEnvironment('TABLE_NAME', rbacTable.tableName);
+}
+rbacTable.grantReadWriteData(backend.getRoles.resources.lambda);
+rbacTable.grantReadWriteData(backend.upsertRole.resources.lambda);
+rbacTable.grantReadWriteData(backend.getCognitoUsers.resources.lambda);
+rbacTable.grantReadWriteData(backend.upsertUserRole.resources.lambda);
+rbacTable.grantReadWriteData(backend.getMyPermissions.resources.lambda);
+backend.getCognitoUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['cognito-idp:ListUsers'],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
 visitTypesTable.grantReadWriteData(backend.upsertVisitType.resources.lambda);
 visitTemplatesTable.grantReadWriteData(backend.getVisitTemplates.resources.lambda);
@@ -1023,6 +1065,23 @@ const getTeamsUrl = backend.getTeams.resources.lambda.addFunctionUrl({
 const getUsersUrl = backend.getUsers.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getRolesUrl = backend.getRoles.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertRoleUrl = backend.upsertRole.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getCognitoUsersUrl =
+  backend.getCognitoUsers.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertUserRoleUrl = backend.upsertUserRole.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const getMyPermissionsUrl =
+  backend.getMyPermissions.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getVisitTypesUrl = backend.getVisitTypes.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1173,6 +1232,11 @@ backend.addOutput({
     upsertTaskUrl: upsertTaskUrl.url,
     getTeamsUrl: getTeamsUrl.url,
     getUsersUrl: getUsersUrl.url,
+    getRolesUrl: getRolesUrl.url,
+    upsertRoleUrl: upsertRoleUrl.url,
+    getCognitoUsersUrl: getCognitoUsersUrl.url,
+    upsertUserRoleUrl: upsertUserRoleUrl.url,
+    getMyPermissionsUrl: getMyPermissionsUrl.url,
     getVisitTypesUrl: getVisitTypesUrl.url,
     getVisitTemplatesUrl: getVisitTemplatesUrl.url,
     upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,

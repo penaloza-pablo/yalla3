@@ -33,6 +33,8 @@ import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemp
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { displayTaskTitle } from './taskTitleDisplay'
 import { isSpanishLocale } from '../i18n/display'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   buildApplyTemplateVisitPayload,
   templateTasksToDrafts,
@@ -329,6 +331,7 @@ export function DailyOperationsView({
   onToggleMobileSearch,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
   const visitColumns = useMemo(
     () =>
       VISIT_COLUMN_DEFS.map((column) => ({
@@ -1722,6 +1725,7 @@ export function DailyOperationsView({
                   </button>
                 </>
               ) : null}
+              {mode !== 'dashboard' || can(ACTION_KEYS.dailyOpsCreate) ? (
               <button
                 className="btn-ghost"
                 type="button"
@@ -1754,6 +1758,7 @@ export function DailyOperationsView({
                   <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
                 </svg>
               </button>
+              ) : null}
               {mode === 'dashboard' ? (
                 <button
                   className={`btn-ghost btn-filter ${
@@ -2399,6 +2404,7 @@ export function DailyOperationsView({
               </div>
 
               <div className="operations-detail-actions">
+                {can(ACTION_KEYS.visitMoreInfo) ? (
                 <button
                   type="button"
                   className={`btn-icon btn-icon-ghost operations-more-info-btn${
@@ -2411,6 +2417,7 @@ export function DailyOperationsView({
                 >
                   i
                 </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-icon btn-icon-ghost"

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ACTION_KEYS } from '../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from './rbac/PermissionsProvider'
 import { displayInventoryName, translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
 import { MobileBodyPortal } from './MobileBodyPortal'
@@ -125,6 +127,7 @@ export function SpotCheckPanel({
   onToggleSummaryInfo,
 }: SpotCheckPanelProps) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
   const [rows, setRows] = useState<SpotCheckRow[]>([])
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -629,6 +632,7 @@ export function SpotCheckPanel({
                       <span className="filter-badge">{activeFilterCount}</span>
                     ) : null}
                   </button>
+                  {can(ACTION_KEYS.spotCheckCreate) ? (
                   <button
                     className="btn-ghost"
                     type="button"
@@ -647,6 +651,7 @@ export function SpotCheckPanel({
                       />
                     </svg>
                   </button>
+                  ) : null}
                   <button
                     className="btn-primary"
                     type="button"

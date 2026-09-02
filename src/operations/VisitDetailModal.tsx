@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type TouchEvent, type WheelEvent } from '
 import { createPortal } from 'react-dom'
 import { fetchUserAttributes } from 'aws-amplify/auth'
 import { useTranslation } from 'react-i18next'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   fetchJson,
   getReferenceList,
@@ -181,6 +183,7 @@ export function VisitDetailModal({
   onVisitChanged,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
   const [visit, setVisit] = useState<VisitRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -892,6 +895,7 @@ export function VisitDetailModal({
               </div>
 
               <div className="operations-detail-actions">
+                {can(ACTION_KEYS.visitMoreInfo) ? (
                 <button
                   type="button"
                   className={`btn-icon btn-icon-ghost operations-more-info-btn${
@@ -904,6 +908,7 @@ export function VisitDetailModal({
                 >
                   i
                 </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-icon btn-icon-ghost"

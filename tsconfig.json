@@ -20,6 +20,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src", "amplify/functions/shared/rbac-catalog.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

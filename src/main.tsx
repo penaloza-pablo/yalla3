@@ -7,6 +7,7 @@ import { Authenticator } from '@aws-amplify/ui-react'
 import './i18n'
 import './index.css'
 import App from './App.tsx'
+import { PermissionsProvider } from './rbac/PermissionsProvider'
 
 function AuthHeader() {
   return (
@@ -61,7 +62,9 @@ const startApp = async () => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <Authenticator components={{ Header: AuthHeader }}>
-        <App />
+        <PermissionsProvider>
+          <App />
+        </PermissionsProvider>
       </Authenticator>
     </StrictMode>,
   )
