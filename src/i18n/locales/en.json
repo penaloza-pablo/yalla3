@@ -20,13 +20,15 @@
   },
   "today": {
     "eyebrow": "Today",
-    "subtitle": "A snapshot of Cleaning, Maintenance, Reviews, and Inventory for today.",
+    "subtitle": "A snapshot of Cleaning, Maintenance, Ops, and Inventory for today.",
     "loading": "Loading today's snapshot...",
     "missingEndpoint": "Missing today summary endpoint. Redeploy the backend or set VITE_GET_TODAY_SUMMARY_URL.",
     "loadError": "Unable to load today's snapshot.",
     "cleaning": "Cleaning",
     "maintenance": "Maintenance",
+    "ops": "Ops",
     "reviews": "Reviews",
+    "unassignedTasks": "Unassigned tasks",
     "inventory": "Inventory",
     "planning": "Planning",
     "currentCleanings": "Today cleanings",
@@ -284,9 +286,9 @@
   "settings": {
     "account": "Account",
     "email": "Email",
-    "open": "Open settings",
+    "open": "Open user",
     "subtitle": "Account and preferences",
-    "title": "Settings",
+    "title": "User",
     "unknownUser": "Signed-in user"
   },
   "pages": {
@@ -432,7 +434,7 @@
     "Ops": "Ops",
     "Cleaning": "Cleaning",
     "Maintenance": "Maintenance",
-    "Tech": "Tech"
+    "Settings": "Settings"
   },
   "navPages": {
     "Cleaning Plan": "Plan",
@@ -563,6 +565,7 @@
     "kanban": "Kanban",
     "agenda": "Agenda",
     "day": "Day",
+    "openDashboard": "Open Dashboard",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "dayLabel": "Day",
@@ -635,7 +638,7 @@
     "stepFinished": "Finished"
   },
   "logs": {
-    "eyebrow": "Tech / Logs",
+    "eyebrow": "Settings / Logs",
     "subtitle": "A chronological record of considerable changes across Yalla.",
     "search": "Search logs",
     "cardTitle": "Activity logs",

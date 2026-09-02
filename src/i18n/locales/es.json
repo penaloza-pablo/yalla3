@@ -20,13 +20,15 @@
   },
   "today": {
     "eyebrow": "Hoy",
-    "subtitle": "Resumen de limpieza, mantenimiento, reseñas e inventario para hoy.",
+    "subtitle": "Resumen de limpiezas, mantenimiento, Ops e inventario para hoy.",
     "loading": "Cargando el resumen de hoy...",
     "missingEndpoint": "Falta el endpoint del resumen de hoy. Vuelve a desplegar el backend o configura VITE_GET_TODAY_SUMMARY_URL.",
     "loadError": "No se pudo cargar el resumen de hoy.",
     "cleaning": "Limpieza",
     "maintenance": "Mantenimiento",
+    "ops": "Ops",
     "reviews": "Reseñas",
+    "unassignedTasks": "Tareas sin asignar",
     "inventory": "Inventario",
     "planning": "Planificación",
     "currentCleanings": "Limpiezas de hoy",
@@ -284,9 +286,9 @@
   "settings": {
     "account": "Cuenta",
     "email": "Correo electrónico",
-    "open": "Abrir ajustes",
+    "open": "Abrir usuario",
     "subtitle": "Cuenta y preferencias",
-    "title": "Ajustes",
+    "title": "Usuario",
     "unknownUser": "Usuario conectado"
   },
   "pages": {
@@ -432,7 +434,7 @@
     "Ops": "Ops",
     "Cleaning": "Cleaning",
     "Maintenance": "Maintenance",
-    "Tech": "Tech"
+    "Settings": "Ajustes"
   },
   "navPages": {
     "Cleaning Plan": "Plan",
@@ -563,6 +565,7 @@
     "kanban": "Kanban",
     "agenda": "Agenda",
     "day": "Día",
+    "openDashboard": "Abrir Dashboard",
     "today": "Hoy",
     "tomorrow": "Mañana",
     "dayLabel": "Día",
@@ -586,7 +589,7 @@
     "refresh": "Actualizar",
     "tasksNotOnVisit": "Tareas fuera de visita",
     "subtitlePage": "Programa visitas, controla trabajo atrasado y gestiona tareas.",
-    "dashboard": "Panel",
+    "dashboard": "Dashboard",
     "unassigned": "Sin asignar",
     "visitSavedWithTasks": "Visita guardada con {{count}} tareas.",
     "changeView": "Cambiar vista",
@@ -635,7 +638,7 @@
     "stepFinished": "Finalizado"
   },
   "logs": {
-    "eyebrow": "Tech / Registros",
+    "eyebrow": "Ajustes / Registros",
     "subtitle": "Un historial cronológico de los cambios considerables en Yalla.",
     "search": "Buscar registros",
     "cardTitle": "Registros de actividad",

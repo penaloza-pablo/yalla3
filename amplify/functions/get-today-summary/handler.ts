@@ -1,3 +1,4 @@
+import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -8,6 +9,7 @@ import { addDaysToDateString } from '../shared/date-range';
 import { getPlanByDate, scanAllItems } from '../shared/cleaning-plan';
 import { sumVisibleWarningCounts } from '../shared/cleaning-billing';
 import {
+  docClient,
   getTodayInMadrid,
   resolveVisitStatus,
 } from '../shared/visit-task-utils';
@@ -80,6 +82,35 @@ const emptyVisitCounts = (): VisitCounts => ({
 
 const toDateOnly = (value: unknown) => asString(value).slice(0, 10);
 
+const queryAllByStatus = async (tableName: string, status: string) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  const items: Record<string, unknown>[] = [];
+
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: 'status-createdAt-index',
+        KeyConditionExpression: '#status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': status },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return items;
+};
+
+const countUnassignedPending = async (tableName: string) => {
+  const items = await queryAllByStatus(tableName, 'UNASSIGNED');
+  return items.filter((task) => !task.visitId).length;
+};
+
 const countVisitsForTypes = (
   items: Record<string, unknown>[],
   visitTypeIds: Set<string>,
@@ -131,6 +162,7 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const visitsTable = process.env.VISITS_TABLE;
+  const tasksTable = process.env.TASKS_TABLE;
   const plansTable = process.env.CLEANING_PLANS_TABLE;
   const reviewsTable = process.env.REVIEWS_TABLE;
   const inventoryTable = process.env.INVENTORY_TABLE;
@@ -138,6 +170,7 @@ export const handler = async (event: HttpEvent) => {
   const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
   if (
     !visitsTable ||
+    !tasksTable ||
     !plansTable ||
     !reviewsTable ||
     !inventoryTable ||
@@ -145,7 +178,7 @@ export const handler = async (event: HttpEvent) => {
   ) {
     return buildHttpResponse(500, {
       message:
-        'VISITS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, INVENTORY_TABLE, or CLEANING_BILLING_TABLE is not configured.',
+        'VISITS_TABLE, TASKS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, INVENTORY_TABLE, or CLEANING_BILLING_TABLE is not configured.',
     });
   }
 
@@ -153,20 +186,28 @@ export const handler = async (event: HttpEvent) => {
   const tomorrow = addDaysToDateString(today, 1);
 
   try {
-    const [visits, todayPlan, tomorrowPlan, reviews, inventory, previousOpen] =
-      await Promise.all([
-        scanAllItems(visitsTable),
-        getPlanByDate(plansTable, today),
-        getPlanByDate(plansTable, tomorrow),
-        scanAllItems(reviewsTable),
-        scanAllItems(inventoryTable),
-        sumVisibleWarningCounts({
-          billingTable: cleaningBillingTable,
-          visitsTable,
-          plansTable,
-          detailsTable,
-        }),
-      ]);
+    const [
+      visits,
+      todayPlan,
+      tomorrowPlan,
+      reviews,
+      inventory,
+      previousOpen,
+      unassignedPending,
+    ] = await Promise.all([
+      scanAllItems(visitsTable),
+      getPlanByDate(plansTable, today),
+      getPlanByDate(plansTable, tomorrow),
+      scanAllItems(reviewsTable),
+      scanAllItems(inventoryTable),
+      sumVisibleWarningCounts({
+        billingTable: cleaningBillingTable,
+        visitsTable,
+        plansTable,
+        detailsTable,
+      }),
+      countUnassignedPending(tasksTable),
+    ]);
 
     const cleaning = countVisitsForTypes(
       visits,
@@ -221,6 +262,9 @@ export const handler = async (event: HttpEvent) => {
       },
       reviews: {
         needsAttention: reviewsNeedAttention,
+      },
+      unassignedTasks: {
+        pending: unassignedPending,
       },
       inventory: {
         waitingDelivery,

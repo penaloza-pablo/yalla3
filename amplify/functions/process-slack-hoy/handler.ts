@@ -21,6 +21,7 @@ type TodaySummary = {
     previousOpen: number;
   };
   reviews: { needsAttention: number };
+  unassignedTasks: { pending: number };
   inventory: {
     waitingDelivery: number;
     reorder: number;
@@ -60,10 +61,20 @@ const loadTodaySummary = async (): Promise<TodaySummary> => {
     throw new Error(payloadText || response.FunctionError);
   }
   const body = parseLambdaJson(payloadText);
-  if (!body.cleaning || !body.maintenance || !body.reviews || !body.inventory) {
+  if (
+    !body.cleaning ||
+    !body.maintenance ||
+    !body.reviews ||
+    !body.inventory
+  ) {
     throw new Error(body.message || 'Today summary payload is incomplete.');
   }
-  return body as TodaySummary;
+  return {
+    ...body,
+    unassignedTasks: {
+      pending: Number(body.unassignedTasks?.pending) || 0,
+    },
+  } as TodaySummary;
 };
 
 const formatDayMonth = (date?: string) => {
@@ -121,6 +132,18 @@ const todayBlocks = (summary: TodaySummary) => {
   ].filter((line): line is string => Boolean(line));
 
   const reviewsClear = summary.reviews.needsAttention === 0;
+  const unassignedPending = summary.unassignedTasks.pending;
+  const opsClear = reviewsClear && unassignedPending === 0;
+  const opsLines = [
+    reviewsClear
+      ? null
+      : summary.reviews.needsAttention === 1
+        ? '1 reseña necesita atención'
+        : `${summary.reviews.needsAttention} reseñas necesitan atención`,
+    unassignedPending > 0
+      ? `Tareas sin asignar: ${unassignedPending}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
   const inventoryLines = [
     countLine('Esperando entrega', summary.inventory.waitingDelivery),
     countLine('Reordenar', summary.inventory.reorder),
@@ -150,14 +173,10 @@ const todayBlocks = (summary: TodaySummary) => {
         : ['Yalla! No hay ninguna advertencia de mantenimiento'],
     ),
     section(
-      'Reseñas',
-      reviewsClear
-        ? ['Yalla! No hay ninguna reseña que atender']
-        : [
-            summary.reviews.needsAttention === 1
-              ? '1 reseña necesita atención'
-              : `${summary.reviews.needsAttention} reseñas necesitan atención`,
-          ],
+      'Ops',
+      opsClear
+        ? ['Yalla! No hay nada pendiente en Ops']
+        : opsLines,
     ),
     section(
       'Inventario',

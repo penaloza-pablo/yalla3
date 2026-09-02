@@ -19,17 +19,11 @@ import { Amplify } from 'aws-amplify'
 import { fetchUserAttributes } from 'aws-amplify/auth'
 import { authFetch } from './lib/auth-fetch'
 import outputs from '../amplify_outputs.json'
-import type {
-  ConversationMessage,
-  ConversationMessageContent,
-} from '@aws-amplify/ui-react-ai'
-import { useAIConversation } from './client'
 import {
   ReviewWorkflowPanel,
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
-import { TodayView } from './today/TodayView'
 import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
@@ -287,7 +281,6 @@ const navigation = [
       'Properties',
       'Bookings',
       'Reviews',
-      'Daily Operations',
       'Unassigned tasks',
       'Visit templates',
     ],
@@ -310,7 +303,7 @@ const navigation = [
     ],
   },
   {
-    section: 'Tech',
+    section: 'Settings',
     items: ['Logs'],
   },
   {
@@ -323,7 +316,7 @@ const navigation = [
   },
 ]
 
-const coreItems = ['Chatbot', 'Today']
+const coreItems = ['Daily Operations']
 const validPages = new Set([
   ...coreItems,
   ...navigation.flatMap((group) => group.items),
@@ -1631,264 +1624,6 @@ function App() {
     statuses: [],
     categories: [],
   })
-  const conversationName =
-    import.meta.env.VITE_CHATBOT_NAME?.trim() || 'chatbot'
-
-  const formatChatContent = (content: ConversationMessageContent[]) =>
-    content
-      .map((part) => {
-        if ('text' in part && typeof part.text === 'string') {
-          return part.text
-        }
-        return ''
-      })
-      .filter(Boolean)
-      .join(' ')
-
-  const ChatbotView = () => {
-    const [chatInput, setChatInput] = useState('')
-    const [chatError, setChatError] = useState<string | null>(null)
-    const [debugOpen, setDebugOpen] = useState(false)
-    const [debugInfo, setDebugInfo] = useState<{
-      outputsStatus: string
-      outputsKeys: string[]
-      outputsHasData: boolean
-      outputsHasAuth: boolean
-      configKeys: string[]
-      configHasData: boolean
-      configHasAuth: boolean
-    }>({
-      outputsStatus: 'Not checked',
-      outputsKeys: [],
-      outputsHasData: false,
-      outputsHasAuth: false,
-      configKeys: [],
-      configHasData: false,
-      configHasAuth: false,
-    })
-    const [{ data: chatData, isLoading: isChatLoading }, handleSendMessage] =
-      useAIConversation(conversationName)
-    const chatMessages = (chatData?.messages ?? []) as ConversationMessage[]
-    const isAiConfigured = debugInfo.configHasData || debugInfo.outputsHasData
-    const quickPrompts = [
-      'Show low stock items and locations.',
-      'What still needs attention today?',
-      'Which items need reorder this week?',
-    ]
-
-    const sendMessage = async (content: string) => {
-      const trimmed = content.trim()
-      if (!trimmed) {
-        return
-      }
-      setChatError(null)
-      try {
-        await Promise.resolve(handleSendMessage({ content: [{ text: trimmed }] }))
-        setChatInput('')
-      } catch {
-        setChatError('Unable to send message. Please try again.')
-      }
-    }
-
-    useEffect(() => {
-      const config = Amplify.getConfig() as Record<string, unknown> & {
-        API?: { GraphQL?: unknown }
-      }
-      const hasData =
-        Boolean((config as { data?: unknown }).data) ||
-        Boolean(config.API?.GraphQL)
-      const hasAuth = Boolean(
-        (config as { Auth?: { Cognito?: unknown } }).Auth?.Cognito,
-      )
-
-      setDebugInfo((current) => ({
-        ...current,
-        configKeys: Object.keys(config ?? {}),
-        configHasData: hasData,
-        configHasAuth: hasAuth,
-      }))
-
-      const checkOutputs = async () => {
-        if (!import.meta.env.DEV) {
-          setDebugInfo((current) => ({
-            ...current,
-            outputsStatus: 'Not checked (production)',
-          }))
-          return
-        }
-
-        try {
-          const response = await authFetch('/amplify_outputs.json', {
-            cache: 'no-store',
-          })
-          if (!response.ok) {
-            setDebugInfo((current) => ({
-              ...current,
-              outputsStatus: `HTTP ${response.status}`,
-            }))
-            return
-          }
-          const outputs = (await response.json()) as Record<string, unknown>
-          setDebugInfo((current) => ({
-            ...current,
-            outputsStatus: 'Loaded',
-            outputsKeys: Object.keys(outputs ?? {}),
-            outputsHasData: Boolean((outputs as { data?: unknown }).data),
-            outputsHasAuth: Boolean(
-              (outputs as { Auth?: { Cognito?: unknown } }).Auth?.Cognito,
-            ),
-          }))
-        } catch {
-          setDebugInfo((current) => ({
-            ...current,
-            outputsStatus: 'Fetch failed',
-          }))
-        }
-      }
-
-      void checkOutputs()
-    }, [])
-
-    return (
-      <section className="card">
-        <h1 className="page-title">{t('chatbot.title')}</h1>
-        <p className="subtitle">{t('chatbot.subtitle')}</p>
-        <div className="chat-layout">
-          <div className="chat-panel">
-            {!isAiConfigured ? (
-              <div className="alert">
-                Amplify AI is not configured yet. Verify that
-                amplify_outputs.json includes data outputs.
-              </div>
-            ) : null}
-            <div className="chat-window">
-              {chatMessages.length ? (
-                chatMessages.map((message) => (
-                  <div
-                    className={`chat-message ${
-                      message.role === 'user' ? 'is-user' : 'is-assistant'
-                    }`}
-                    key={message.id}
-                  >
-                    <p className="chat-role">
-                      {message.role === 'user' ? t('chatbot.you') : t('chatbot.assistant')}
-                    </p>
-                    <p className="chat-content">
-                      {formatChatContent(message.content)}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="chat-empty">{t('chatbot.empty')}</p>
-              )}
-            </div>
-            <div className="chat-input-row">
-              <textarea
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void sendMessage(chatInput)
-                  }
-                }}
-                placeholder={t('chatbot.placeholder')}
-                className="chat-input"
-                rows={2}
-              />
-              <div className="chat-actions">
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={() => void sendMessage(chatInput)}
-                  disabled={isChatLoading || !chatInput.trim()}
-                >
-                  {isChatLoading ? t('chatbot.sending') : t('chatbot.send')}
-                </button>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={() => setDebugOpen((current) => !current)}
-                >
-                  {debugOpen ? 'Hide debug' : 'Show debug'}
-                </button>
-              </div>
-            </div>
-            {chatError ? <div className="alert">{chatError}</div> : null}
-            {debugOpen ? <ChatbotDebugPanel debugInfo={debugInfo} /> : null}
-          </div>
-          <div className="chat-side">
-            <div className="card card-compact">
-              <p className="card-label">Amplify AI</p>
-              <p className="card-value">
-                {isAiConfigured ? 'Connected' : 'Not configured'}
-              </p>
-              <p className="card-meta">
-                Conversation: {conversationName || 'chatbot'}
-              </p>
-            </div>
-            <div className="card">
-              <h2 className="card-title">{t('chatbot.quickPrompts')}</h2>
-              <p className="card-subtitle">{t('chatbot.quickPromptsSubtitle')}</p>
-              <div className="quick-prompts">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    className="btn-secondary btn-prompt"
-                    type="button"
-                    key={prompt}
-                    onClick={() => void sendMessage(prompt)}
-                    disabled={isChatLoading}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  const ChatbotDebugPanel = ({
-    debugInfo,
-  }: {
-    debugInfo: {
-      outputsStatus: string
-      outputsKeys: string[]
-      outputsHasData: boolean
-      outputsHasAuth: boolean
-      configKeys: string[]
-      configHasData: boolean
-      configHasAuth: boolean
-    }
-  }) => (
-    <div className="chat-debug">
-      <p className="detail-label">Amplify config</p>
-      <p className="detail-value">
-        Keys: {debugInfo.configKeys.join(', ') || 'None'}
-      </p>
-      <p className="detail-value">
-        Auth configured: {debugInfo.configHasAuth ? 'Yes' : 'No'}
-      </p>
-      <p className="detail-value">
-        AI configured: {debugInfo.configHasData ? 'Yes' : 'No'}
-      </p>
-
-      <p className="detail-label">amplify_outputs.json</p>
-      <p className="detail-value">Status: {debugInfo.outputsStatus}</p>
-      <p className="detail-value">
-        Keys: {debugInfo.outputsKeys.join(', ') || 'None'}
-      </p>
-      <p className="detail-value">
-        Auth configured: {debugInfo.outputsHasAuth ? 'Yes' : 'No'}
-      </p>
-      <p className="detail-value">
-        AI configured: {debugInfo.outputsHasData ? 'Yes' : 'No'}
-      </p>
-    </div>
-  )
-
   const purchaseStatusOptions = [
     'To be confirmed',
     'Waiting Delivery',
@@ -4621,21 +4356,7 @@ function App() {
                         onClick={() => navigateToPage(item)}
                         aria-label={navItemLabel(item)}
                       >
-                        {item === 'Today' ? (
-                          <>
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 20 20"
-                              width="16"
-                              height="16"
-                            >
-                              <path
-                                d="M6 3h2v2h4V3h2v2h1.5A1.5 1.5 0 0 1 17 6.5v10A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-10A1.5 1.5 0 0 1 4.5 5H6V3zm9 6H5v7h10V9z"
-                                fill="currentColor"
-                              />
-                            </svg>
-                          </>
-                        ) : item === 'Chatbot' ? (
+                        {item === 'Daily Operations' ? (
                           <svg
                             aria-hidden="true"
                             viewBox="0 0 20 20"
@@ -4643,7 +4364,7 @@ function App() {
                             height="16"
                           >
                             <path
-                              d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5v4A2.5 2.5 0 0 1 13.5 12H9l-3.5 3.5V12H6.5A2.5 2.5 0 0 1 4 9.5v-4z"
+                              d="M6 3h2v2h4V3h2v2h1.5A1.5 1.5 0 0 1 17 6.5v10A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-10A1.5 1.5 0 0 1 4.5 5H6V3zm9 6H5v7h10V9z"
                               fill="currentColor"
                             />
                           </svg>
@@ -7879,17 +7600,13 @@ function App() {
               </div>
             </section>
           </>
-        ) : activePage === 'Today' ? (
-          <TodayView
-            getEndpoint={getEndpoint}
-            onNavigate={navigateToPage}
-          />
         ) : activePage === 'Daily Operations' ? (
           <DailyOperationsView
             mode="dashboard"
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
+            onNavigate={navigateToPage}
           />
         ) : activePage === 'Unassigned tasks' ? (
           <DailyOperationsView
@@ -7897,6 +7614,7 @@ function App() {
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
+            onNavigate={navigateToPage}
           />
         ) : activePage === 'Visit templates' ? (
           <DailyOperationsView
@@ -7904,6 +7622,7 @@ function App() {
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
+            onNavigate={navigateToPage}
           />
         ) : activePage === 'Cleaning Plan' ? (
           <CleaningPlanView
@@ -7975,8 +7694,6 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
           />
-        ) : activePage === 'Chatbot' ? (
-          <ChatbotView />
         ) : (
           <section className="card">
             <h1 className="page-title">

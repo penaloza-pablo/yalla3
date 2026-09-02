@@ -1,6 +1,12 @@
 const STORAGE_KEY = 'yalla.lastActivePage'
+const OPS_DASHBOARD_KEY = 'yalla.openOpsDashboard'
 const MAX_AGE_MS = 60 * 60 * 1000
-const FALLBACK_PAGE = 'Today'
+const FALLBACK_PAGE = 'Daily Operations'
+
+const LEGACY_PAGE_MAP: Record<string, string> = {
+  Today: 'Daily Operations',
+  Chatbot: 'Daily Operations',
+}
 
 type StoredPage = {
   page: string
@@ -23,6 +29,36 @@ const readStored = (): StoredPage | null => {
   }
 }
 
+const markOpenOpsDashboard = () => {
+  try {
+    window.sessionStorage.setItem(OPS_DASHBOARD_KEY, '1')
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.).
+  }
+}
+
+const resolvePage = (page: string) => {
+  if (page === 'Today') {
+    markOpenOpsDashboard()
+  }
+  return LEGACY_PAGE_MAP[page] ?? page
+}
+
+export const consumeOpenOpsDashboard = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  try {
+    const flag = window.sessionStorage.getItem(OPS_DASHBOARD_KEY)
+    if (flag) {
+      window.sessionStorage.removeItem(OPS_DASHBOARD_KEY)
+    }
+    return flag === '1'
+  } catch {
+    return false
+  }
+}
+
 export const readRememberedPage = (validPages: Set<string>) => {
   if (typeof window === 'undefined') {
     return FALLBACK_PAGE
@@ -34,10 +70,11 @@ export const readRememberedPage = (validPages: Set<string>) => {
   if (Date.now() - stored.at > MAX_AGE_MS) {
     return FALLBACK_PAGE
   }
-  if (!validPages.has(stored.page)) {
+  const page = resolvePage(stored.page)
+  if (!validPages.has(page)) {
     return FALLBACK_PAGE
   }
-  return stored.page
+  return page
 }
 
 export const rememberActivePage = (page: string) => {

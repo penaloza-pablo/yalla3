@@ -6,6 +6,7 @@ export const getTodaySummary = defineFunction({
   entry: './handler.ts',
   environment: {
     VISITS_TABLE: 'yalla-visits',
+    TASKS_TABLE: 'yalla-tasks',
     INVENTORY_TABLE: 'yalla-inventory',
     REVIEWS_TABLE: 'yalla-reviews',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',

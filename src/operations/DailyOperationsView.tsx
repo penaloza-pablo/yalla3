@@ -18,6 +18,8 @@ import {
 import { OperationsAgendaView } from './OperationsAgendaView'
 import { OperationsDayView, type DayBookingEvent } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
+import { TodayView } from '../today/TodayView'
+import { consumeOpenOpsDashboard } from '../lib/lastActivePage'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
@@ -57,7 +59,7 @@ import type {
 } from './types'
 
 type OpsMode = 'dashboard' | 'unassigned' | 'templates'
-type DashboardViewMode = 'kanban' | 'agenda' | 'day'
+type DashboardViewMode = 'dashboard' | 'kanban' | 'agenda' | 'day'
 
 type BookingEventKind = 'check-in' | 'check-out'
 
@@ -74,6 +76,7 @@ type Props = {
   getCurrentUserEmail: () => Promise<string>
   propertyOptions: PropertyOption[]
   mode?: OpsMode
+  onNavigate?: (page: string, options?: { inventoryStatuses?: string[] }) => void
 }
 
 const ALL_VISIT_STATUSES: VisitStatus[] = [
@@ -316,6 +319,7 @@ export function DailyOperationsView({
   getCurrentUserEmail,
   propertyOptions: propertyOptionsProp,
   mode = 'dashboard',
+  onNavigate,
 }: Props) {
   const { t, i18n } = useTranslation()
   const visitColumns = useMemo(
@@ -332,7 +336,10 @@ export function DailyOperationsView({
     Record<string, CleaningPlanDayLookup>
   >({})
   const [dashboardViewMode, setDashboardViewMode] =
-    useState<DashboardViewMode>('day')
+    useState<DashboardViewMode>(() =>
+      consumeOpenOpsDashboard() ? 'dashboard' : 'day',
+    )
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<OpsFilters>(emptyOpsFilters)
@@ -482,7 +489,7 @@ export function DailyOperationsView({
     if (dashboardViewMode === 'agenda') {
       return getAgendaDateRange(agendaAnchorDate)
     }
-    if (dashboardViewMode === 'day') {
+    if (dashboardViewMode === 'day' || dashboardViewMode === 'dashboard') {
       return { from: dayViewDate, to: dayViewDate, dates: [dayViewDate] }
     }
     const normalized = normalizeDateRange(filterDateFrom, filterDateTo)
@@ -1624,6 +1631,27 @@ export function DailyOperationsView({
                   </button>
                   <button
                     className={`btn-ghost ${
+                      dashboardViewMode === 'dashboard' ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-label={t('operations.openDashboard')}
+                    title={t('operations.openDashboard')}
+                    onClick={() => setDashboardViewMode('dashboard')}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    className={`btn-ghost ${
                       isViewMenuOpen || dashboardViewMode !== 'day' ? 'is-active' : ''
                     }`}
                     type="button"
@@ -1689,6 +1717,10 @@ export function DailyOperationsView({
                     void templatesPanelRef.current?.refresh()
                     return
                   }
+                  if (dashboardViewMode === 'dashboard') {
+                    setDashboardRefreshKey((current) => current + 1)
+                    return
+                  }
                   void loadVisits()
                 }}
                 aria-label={t('operations.refresh')}
@@ -1715,7 +1747,7 @@ export function DailyOperationsView({
 
       {mode === 'dashboard' ? (
         <>
-          {dashboardViewMode !== 'day' ? (
+          {dashboardViewMode !== 'day' && dashboardViewMode !== 'dashboard' ? (
           <section className="card filters-card">
             {dashboardViewMode === 'kanban' ? (
               <div className="operations-date-presets">
@@ -1778,9 +1810,24 @@ export function DailyOperationsView({
           </section>
           ) : null}
 
-          {isLoading ? <p className="subtitle">Loading visits…</p> : null}
+          {isLoading && dashboardViewMode !== 'dashboard' ? (
+            <p className="subtitle">Loading visits…</p>
+          ) : null}
 
-          {dashboardViewMode === 'kanban' ? (
+          {dashboardViewMode === 'dashboard' ? (
+            <TodayView
+              embedded
+              refreshKey={dashboardRefreshKey}
+              getEndpoint={getEndpoint}
+              onNavigate={(page, options) => {
+                if (page === 'Daily Operations') {
+                  setDashboardViewMode('day')
+                  return
+                }
+                onNavigate?.(page, options)
+              }}
+            />
+          ) : dashboardViewMode === 'kanban' ? (
             <OperationsKanbanView
               columns={visitColumns}
               visitsByColumn={visitsByColumn}
@@ -1959,6 +2006,7 @@ export function DailyOperationsView({
             <div className="modal-body operations-view-picker">
               {(
                 [
+                  { id: 'dashboard', label: t('operations.dashboard') },
                   { id: 'day', label: t('operations.day') },
                   { id: 'kanban', label: t('operations.kanban') },
                   { id: 'agenda', label: t('operations.agenda') },

@@ -21,6 +21,9 @@ type TodaySummary = {
   reviews: {
     needsAttention: number
   }
+  unassignedTasks?: {
+    pending: number
+  }
   inventory: {
     waitingDelivery: number
     reorder: number
@@ -35,6 +38,8 @@ type NavigateOptions = {
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
   onNavigate: (page: string, options?: NavigateOptions) => void
+  embedded?: boolean
+  refreshKey?: number
 }
 
 const TODAY_INVENTORY_STATUSES = [
@@ -131,6 +136,8 @@ const MetricsOrDone = ({
 export function TodayView({
   getEndpoint,
   onNavigate,
+  embedded = false,
+  refreshKey = 0,
 }: Props) {
   const { t } = useTranslation()
   const [summary, setSummary] = useState<TodaySummary | null>(null)
@@ -164,6 +171,14 @@ export function TodayView({
     void loadSummary()
   }, [loadSummary])
 
+  useEffect(() => {
+    if (refreshKey <= 0) {
+      return
+    }
+    void loadSummary()
+  }, [loadSummary, refreshKey])
+
+  const unassignedPending = summary?.unassignedTasks?.pending ?? 0
   const cleaningDone = Boolean(
     summary &&
       summary.cleaning.planningReady === summary.cleaning.planningTotal &&
@@ -178,7 +193,9 @@ export function TodayView({
           summary.maintenance.currentTotal) &&
       summary.maintenance.previousOpen === 0,
   )
-  const reviewsDone = Boolean(summary && summary.reviews.needsAttention === 0)
+  const opsDone = Boolean(
+    summary && summary.reviews.needsAttention === 0 && unassignedPending === 0,
+  )
   const inventoryDone = Boolean(
     summary &&
       summary.inventory.waitingDelivery === 0 &&
@@ -186,33 +203,147 @@ export function TodayView({
       summary.inventory.lowStock === 0,
   )
 
+  const cards = summary ? (
+    <section className="today-cards" aria-label={t('today.ops')}>
+      <article className="card today-card">
+        <h2 className="today-card-title">{t('today.cleaning')}</h2>
+        <MetricsOrDone done={cleaningDone} doneLabel={t('today.goodJob')}>
+          <RatioMetric
+            label={t('today.planning')}
+            done={summary.cleaning.planningReady}
+            total={summary.cleaning.planningTotal}
+            t={t}
+            onClick={() => onNavigate('Cleaning Plan')}
+          />
+          <RatioMetric
+            label={t('today.currentCleanings')}
+            done={summary.cleaning.currentCompleted}
+            total={summary.cleaning.currentTotal}
+            t={t}
+            onClick={() => onNavigate('Daily Operations')}
+          />
+          <CountMetric
+            label={t('today.previousCleanings')}
+            value={summary.cleaning.previousOpen}
+            onClick={() => onNavigate('Cleaning Billing')}
+          />
+        </MetricsOrDone>
+      </article>
+
+      <article className="card today-card">
+        <h2 className="today-card-title">{t('today.maintenance')}</h2>
+        <MetricsOrDone done={maintenanceDone} doneLabel={t('today.goodJob')}>
+          <RatioMetric
+            label={t('today.currentMaintenance')}
+            done={summary.maintenance.currentCompleted}
+            total={summary.maintenance.currentTotal}
+            t={t}
+            onClick={() => onNavigate('Daily Operations')}
+          />
+          <CountMetric
+            label={t('today.toEstimate')}
+            value={summary.maintenance.previousOpen}
+            onClick={() => onNavigate('Maintenance Billing')}
+          />
+        </MetricsOrDone>
+      </article>
+
+      <article className="card today-card">
+        <h2 className="today-card-title">{t('today.ops')}</h2>
+        <MetricsOrDone
+          done={opsDone}
+          doneLabel={t('today.goodJob')}
+          onDoneClick={() => onNavigate('Reviews')}
+        >
+          <CountMetric
+            label={t('today.reviews')}
+            value={summary.reviews.needsAttention}
+            onClick={() => onNavigate('Reviews')}
+          />
+          <CountMetric
+            label={t('today.unassignedTasks')}
+            value={unassignedPending}
+            onClick={() => onNavigate('Unassigned tasks')}
+          />
+        </MetricsOrDone>
+      </article>
+
+      <article className="card today-card">
+        <button
+          type="button"
+          className="today-card-title-btn"
+          onClick={() =>
+            onNavigate('Inventory', {
+              inventoryStatuses: TODAY_INVENTORY_STATUSES,
+            })
+          }
+        >
+          {t('today.inventory')}
+        </button>
+        <MetricsOrDone
+          done={inventoryDone}
+          doneLabel={t('today.goodJob')}
+          onDoneClick={() =>
+            onNavigate('Inventory', {
+              inventoryStatuses: TODAY_INVENTORY_STATUSES,
+            })
+          }
+        >
+          <CountMetric
+            label={t('today.waitingDelivery')}
+            value={summary.inventory.waitingDelivery}
+            onClick={() =>
+              onNavigate('Inventory', {
+                inventoryStatuses: TODAY_INVENTORY_STATUSES,
+              })
+            }
+          />
+          <CountMetric
+            label={t('today.reorder')}
+            value={summary.inventory.reorder}
+            onClick={() =>
+              onNavigate('Inventory', {
+                inventoryStatuses: TODAY_INVENTORY_STATUSES,
+              })
+            }
+          />
+          <CountMetric
+            label={t('today.lowStock')}
+            value={summary.inventory.lowStock}
+            onClick={() =>
+              onNavigate('Inventory', {
+                inventoryStatuses: TODAY_INVENTORY_STATUSES,
+              })
+            }
+          />
+        </MetricsOrDone>
+      </article>
+    </section>
+  ) : null
+
+  if (embedded) {
+    return (
+      <>
+        {error ? <div className="alert">{error}</div> : null}
+        {isLoading && !summary ? <p>{t('today.loading')}</p> : null}
+        {cards}
+      </>
+    )
+  }
+
   return (
     <>
       <header className="page-header">
         <div className="page-header-leading">
           <p className="eyebrow">{t('today.eyebrow')}</p>
           <div className="page-title-row">
-            <h1 className="page-title">{t('pages.Today')}</h1>
+            <h1 className="page-title">{t('operations.dashboard')}</h1>
           </div>
           <p className="subtitle">{t('today.subtitle')}</p>
         </div>
         <MobileBodyPortal>
           <div className="page-action-bar">
             <div className="header-actions">
-              <button
-                className="btn-ghost"
-                type="button"
-                onClick={() => onNavigate('Daily Operations')}
-                aria-label={t('today.openDailyOps')}
-                title={t('today.openDailyOps')}
-              >
-                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                  <path
-                    d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
               <button
                 className="btn-primary"
                 type="button"
@@ -234,121 +365,7 @@ export function TodayView({
 
       {error ? <div className="alert">{error}</div> : null}
       {isLoading && !summary ? <p>{t('today.loading')}</p> : null}
-
-      {summary ? (
-        <section className="today-cards" aria-label={t('pages.Today')}>
-          <article className="card today-card">
-            <h2 className="today-card-title">{t('today.cleaning')}</h2>
-            <MetricsOrDone done={cleaningDone} doneLabel={t('today.goodJob')}>
-              <RatioMetric
-                label={t('today.planning')}
-                done={summary.cleaning.planningReady}
-                total={summary.cleaning.planningTotal}
-                t={t}
-                onClick={() => onNavigate('Cleaning Plan')}
-              />
-              <RatioMetric
-                label={t('today.currentCleanings')}
-                done={summary.cleaning.currentCompleted}
-                total={summary.cleaning.currentTotal}
-                t={t}
-                onClick={() => onNavigate('Daily Operations')}
-              />
-              <CountMetric
-                label={t('today.previousCleanings')}
-                value={summary.cleaning.previousOpen}
-                onClick={() => onNavigate('Cleaning Billing')}
-              />
-            </MetricsOrDone>
-          </article>
-
-          <article className="card today-card">
-            <h2 className="today-card-title">{t('today.maintenance')}</h2>
-            <MetricsOrDone done={maintenanceDone} doneLabel={t('today.goodJob')}>
-              <RatioMetric
-                label={t('today.currentMaintenance')}
-                done={summary.maintenance.currentCompleted}
-                total={summary.maintenance.currentTotal}
-                t={t}
-                onClick={() => onNavigate('Daily Operations')}
-              />
-              <CountMetric
-                label={t('today.toEstimate')}
-                value={summary.maintenance.previousOpen}
-                onClick={() => onNavigate('Maintenance Billing')}
-              />
-            </MetricsOrDone>
-          </article>
-
-          <button
-            type="button"
-            className="card today-card"
-            onClick={() => onNavigate('Reviews')}
-          >
-            <h2 className="today-card-title">{t('today.reviews')}</h2>
-            {reviewsDone ? (
-              <p className="today-good-job">{t('today.goodJob')}</p>
-            ) : (
-              <p className="today-attention">
-                {t('today.reviewsNeedAttention', {
-                  count: summary.reviews.needsAttention,
-                })}
-              </p>
-            )}
-          </button>
-
-          <article className="card today-card">
-            <button
-              type="button"
-              className="today-card-title-btn"
-              onClick={() =>
-                onNavigate('Inventory', {
-                  inventoryStatuses: TODAY_INVENTORY_STATUSES,
-                })
-              }
-            >
-              {t('today.inventory')}
-            </button>
-            <MetricsOrDone
-              done={inventoryDone}
-              doneLabel={t('today.goodJob')}
-              onDoneClick={() =>
-                onNavigate('Inventory', {
-                  inventoryStatuses: TODAY_INVENTORY_STATUSES,
-                })
-              }
-            >
-              <CountMetric
-                label={t('today.waitingDelivery')}
-                value={summary.inventory.waitingDelivery}
-                onClick={() =>
-                  onNavigate('Inventory', {
-                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
-                  })
-                }
-              />
-              <CountMetric
-                label={t('today.reorder')}
-                value={summary.inventory.reorder}
-                onClick={() =>
-                  onNavigate('Inventory', {
-                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
-                  })
-                }
-              />
-              <CountMetric
-                label={t('today.lowStock')}
-                value={summary.inventory.lowStock}
-                onClick={() =>
-                  onNavigate('Inventory', {
-                    inventoryStatuses: TODAY_INVENTORY_STATUSES,
-                  })
-                }
-              />
-            </MetricsOrDone>
-          </article>
-        </section>
-      ) : null}
+      {cards}
     </>
   )
 }
