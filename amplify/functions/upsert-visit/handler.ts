@@ -387,15 +387,16 @@ export const handler = async (event: {
         );
       }
 
+      const tasksToCreate = payload.tasks;
       const shouldCreateTasks =
-        Array.isArray(payload.tasks) &&
-        payload.tasks.length > 0 &&
+        Array.isArray(tasksToCreate) &&
+        tasksToCreate.length > 0 &&
         (!isUpdate || payload.appendTasks === true);
       if (shouldCreateTasks) {
         createdTasks = await createVisitTasksBulk(
           tasksTable,
           item,
-          payload.tasks,
+          tasksToCreate,
         );
       }
     }
