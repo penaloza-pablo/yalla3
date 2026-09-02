@@ -40,7 +40,8 @@
     "reorder": "Reordenar",
     "lowStock": "Stock bajo",
     "ratio": "{{done}} de {{total}}",
-    "goodJob": "Yalla! Todas las tareas completadas"
+    "goodJob": "Yalla! Todas las tareas completadas",
+    "openDailyOps": "Abrir Daily Ops"
   },
   "bookings": {
     "eyebrow": "Ops / Reservas",
@@ -597,6 +598,7 @@
     "checkIns": "Check-ins",
     "checkOuts": "Check-outs",
     "chooseDate": "Elegir fecha",
+    "nextDay": "Día siguiente",
     "emptyTasksHint": "No hay específicos pendientes. Ejecutar según título",
     "cleaningTypePending": "Pendiente de definir"
   },

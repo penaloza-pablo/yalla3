@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { addDaysToDateString } from './dateHelpers'
 import { getPropertyLabel } from './propertyHelpers'
 import {
   getMtlGroupLabel,
@@ -104,7 +105,6 @@ export function OperationsDayView({
   onVisitTimeChange,
 }: Props) {
   const { t } = useTranslation()
-  const dateInputRef = useRef<HTMLInputElement>(null)
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
   const [windowStartMinutes, setWindowStartMinutes] = useState(
     DAY_VIEW_DEFAULT_START_MINUTES,
@@ -215,45 +215,39 @@ export function OperationsDayView({
     })
   }
 
-  const openDayPicker = () => {
-    const input = dateInputRef.current
-    if (!input) {
-      return
-    }
-    if (typeof input.showPicker === 'function') {
-      input.showPicker()
-      return
-    }
-    input.focus()
-    input.click()
-  }
-
   return (
     <section className="card operations-day-card">
       <div className="operations-day-header">
         <div className="operations-day-title-row">
           <h2 className="section-title">{formatAgendaDayLabel(dayViewDate)}</h2>
-          <button
-            type="button"
-            className="btn-ghost operations-day-calendar-btn"
-            aria-label={t('operations.chooseDate')}
-            onClick={openDayPicker}
-          >
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-              <path
-                d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                fill="currentColor"
+          <div className="operations-day-date-controls">
+            <label className="btn-ghost operations-day-calendar-btn">
+              <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
+                <path
+                  d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
+                  fill="currentColor"
+                />
+              </svg>
+              <input
+                className="operations-day-date-input"
+                type="date"
+                value={dayViewDate}
+                onChange={(event) => onDayDateChange(event.target.value)}
+                aria-label={t('operations.chooseDate')}
               />
-            </svg>
-          </button>
-          <input
-            ref={dateInputRef}
-            className="operations-day-date-input"
-            type="date"
-            value={dayViewDate}
-            onChange={(event) => onDayDateChange(event.target.value)}
-            aria-label={t('operations.chooseDate')}
-          />
+            </label>
+            <button
+              type="button"
+              className="btn-ghost operations-day-next-btn"
+              aria-label={t('operations.nextDay')}
+              title={t('operations.nextDay')}
+              onClick={() =>
+                onDayDateChange(addDaysToDateString(dayViewDate, 1))
+              }
+            >
+              <span aria-hidden="true">&gt;&gt;</span>
+            </button>
+          </div>
         </div>
       </div>
 
