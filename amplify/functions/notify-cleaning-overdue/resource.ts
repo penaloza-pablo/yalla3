@@ -1,15 +1,14 @@
 import { defineFunction } from '@aws-amplify/backend';
 
-export const handleSlackCommand = defineFunction({
+export const notifyCleaningOverdue = defineFunction({
   runtime: 22,
-  name: 'HandleSlackCommand',
+  name: 'NotifyCleaningOverdue',
   entry: './handler.ts',
   environment: {
     SLACK_SECRET_ID: 'yalla/slack',
     TABLE_NAME: 'yalla-visits',
-    VISITS_TABLE: 'yalla-visits',
-    TASKS_TABLE: 'yalla-tasks',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
   },
-  timeoutSeconds: 15,
+  schedule: 'every 1m',
+  timeoutSeconds: 30,
 });

@@ -11,6 +11,7 @@ const SLACK_MAX_SKEW_SECONDS = 60 * 5;
 type SlackSecretCache = {
   signingSecret: string;
   botToken: string;
+  cleaningOverdueChannelId: string;
 };
 
 let secretCache: SlackSecretCache | undefined;
@@ -65,6 +66,10 @@ export const loadSlackSecrets = async () => {
       'Bot User OAuth Token',
       'Bot Token',
       'xoxb',
+    ]),
+    cleaningOverdueChannelId: readSecretField(parsed, [
+      'cleaningOverdueChannelId',
+      'notifyChannelId',
     ]),
   };
   return secretCache;
@@ -148,3 +153,46 @@ export const slackJsonResponse = (
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify(payload),
 });
+
+export const slackEmptyAck = () => ({
+  statusCode: 200,
+  headers: { 'content-type': 'text/plain' },
+  body: '',
+});
+
+export const parseSlackInteractivePayload = (rawBody: string) => {
+  const params = new URLSearchParams(rawBody);
+  const rawPayload = params.get('payload');
+  if (!rawPayload) {
+    return null;
+  }
+  return JSON.parse(rawPayload) as Record<string, unknown>;
+};
+
+export const slackApi = async (
+  method: string,
+  body: Record<string, unknown>,
+) => {
+  const { botToken } = await loadSlackSecrets();
+  if (!botToken) {
+    throw new Error('Slack secret is missing Bot Token.');
+  }
+  const response = await fetch(`https://slack.com/api/${method}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${botToken}`,
+      'content-type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    error?: string;
+    ts?: string;
+    channel?: string;
+  };
+  if (!payload.ok) {
+    throw new Error(payload.error || `Slack API ${method} failed.`);
+  }
+  return payload;
+};

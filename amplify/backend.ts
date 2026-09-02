@@ -71,6 +71,7 @@ import { exportMaintenanceBilling } from './functions/export-maintenance-billing
 import { getTodaySummary } from './functions/get-today-summary/resource';
 import { handleSlackCommand } from './functions/handle-slack-command/resource';
 import { processSlackHoy } from './functions/process-slack-hoy/resource';
+import { notifyCleaningOverdue } from './functions/notify-cleaning-overdue/resource';
 
 const backend = defineBackend({
   auth,
@@ -134,6 +135,7 @@ const backend = defineBackend({
   getTodaySummary,
   handleSlackCommand,
   processSlackHoy,
+  notifyCleaningOverdue,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -318,6 +320,8 @@ reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda)
 visitsTable.grantReadWriteData(backend.getVisits.resources.lambda);
 visitsTable.grantReadData(backend.getTodaySummary.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
+visitsTable.grantReadWriteData(backend.handleSlackCommand.resources.lambda);
+visitsTable.grantReadWriteData(backend.notifyCleaningOverdue.resources.lambda);
 visitsTable.grantReadData(backend.upsertTask.resources.lambda);
 tasksTable.grantReadWriteData(backend.getVisits.resources.lambda);
 tasksTable.grantReadWriteData(backend.getTasks.resources.lambda);
@@ -331,6 +335,8 @@ backend.getVisits.resources.lambda.addToRolePolicy(tasksIndexPolicy);
 backend.getTasks.resources.lambda.addToRolePolicy(tasksIndexPolicy);
 backend.upsertVisit.resources.lambda.addToRolePolicy(tasksIndexPolicy);
 backend.upsertTask.resources.lambda.addToRolePolicy(tasksIndexPolicy);
+backend.handleSlackCommand.resources.lambda.addToRolePolicy(tasksIndexPolicy);
+tasksTable.grantReadData(backend.handleSlackCommand.resources.lambda);
 teamsTable.grantReadData(backend.getTeams.resources.lambda);
 usersTable.grantReadData(backend.getUsers.resources.lambda);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
@@ -550,8 +556,15 @@ backend.upsertCleaner.resources.lambda.addToRolePolicy(
     resources: [`${cleaningIncidentsTable.tableArn}/index/*`],
   }),
 );
+backend.handleSlackCommand.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${cleaningIncidentsTable.tableArn}/index/*`],
+  }),
+);
 cleanersTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
 cleanersTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
+cleanersTable.grantReadWriteData(backend.handleSlackCommand.resources.lambda);
 cleanersTable.grantReadWriteData(
   backend.upsertCleaningIncident.resources.lambda,
 );
@@ -575,6 +588,37 @@ const slackSecret = Secret.fromSecretNameV2(
   'yalla/slack',
 );
 slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
+slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
+backend.handleSlackCommand.addEnvironment(
+  'CLEANERS_TABLE',
+  cleanersTable.tableName,
+);
+backend.handleSlackCommand.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.handleSlackCommand.addEnvironment(
+  'CLEANING_INCIDENTS_TABLE',
+  cleaningIncidentsTable.tableName,
+);
+backend.handleSlackCommand.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.handleSlackCommand.resources.lambda,
+);
+propertyCleaningDetailsTable.grantReadData(
+  backend.notifyCleaningOverdue.resources.lambda,
+);
+cleaningPlansTable.grantReadData(backend.handleSlackCommand.resources.lambda);
+cleaningIncidentsTable.grantReadData(
+  backend.handleSlackCommand.resources.lambda,
+);
 backend.processSlackHoy.resources.lambda.grantInvoke(
   backend.handleSlackCommand.resources.lambda,
 );
@@ -663,6 +707,7 @@ backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
 backend.getCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.getTodaySummary.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.notifyCleaningOverdue.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 
 const maintenanceProvidersTable = new Table(
   dataStack,
