@@ -19,7 +19,6 @@ import { OperationsAgendaView } from './OperationsAgendaView'
 import { OperationsDayView, type DayBookingEvent } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
 import { TodayView } from '../today/TodayView'
-import { consumeOpenOpsDashboard } from '../lib/lastActivePage'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
@@ -77,6 +76,10 @@ type Props = {
   propertyOptions: PropertyOption[]
   mode?: OpsMode
   onNavigate?: (page: string, options?: { inventoryStatuses?: string[] }) => void
+  searchQuery?: string
+  onSearchQueryChange?: (value: string) => void
+  isMobileSearchOpen?: boolean
+  onToggleMobileSearch?: () => void
 }
 
 const ALL_VISIT_STATUSES: VisitStatus[] = [
@@ -320,6 +323,10 @@ export function DailyOperationsView({
   propertyOptions: propertyOptionsProp,
   mode = 'dashboard',
   onNavigate,
+  searchQuery = '',
+  onSearchQueryChange,
+  isMobileSearchOpen = false,
+  onToggleMobileSearch,
 }: Props) {
   const { t, i18n } = useTranslation()
   const visitColumns = useMemo(
@@ -336,10 +343,9 @@ export function DailyOperationsView({
     Record<string, CleaningPlanDayLookup>
   >({})
   const [dashboardViewMode, setDashboardViewMode] =
-    useState<DashboardViewMode>(() =>
-      consumeOpenOpsDashboard() ? 'dashboard' : 'day',
-    )
+    useState<DashboardViewMode>('dashboard')
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
+  const [templateFilterCount, setTemplateFilterCount] = useState(0)
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<OpsFilters>(emptyOpsFilters)
@@ -1590,69 +1596,112 @@ export function DailyOperationsView({
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
           </div>
-          <p className="subtitle">{pageSubtitle}</p>
+          {mode === 'dashboard' ? null : (
+            <p className="subtitle">{pageSubtitle}</p>
+          )}
         </div>
         <MobileBodyPortal>
-          <div className="page-action-bar">
+          <div
+            className={`page-action-bar ${
+              mode === 'templates' && isMobileSearchOpen ? 'is-search-open' : ''
+            }`}
+          >
+            {mode === 'templates' && onSearchQueryChange ? (
+              <input
+                className="search-input"
+                placeholder={t('operations.searchTemplates')}
+                type="search"
+                aria-label={t('operations.searchTemplates')}
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+              />
+            ) : null}
             <div className="header-actions">
+              {mode === 'templates' && onToggleMobileSearch ? (
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={onToggleMobileSearch}
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
+              ) : null}
               {mode === 'dashboard' ? (
                 <>
                   <button
-                    className={`btn-ghost btn-filter ${
-                      isFilterOpen ? 'is-active' : ''
-                    }`}
+                    className="btn-ghost"
                     type="button"
-                    aria-label={t('common.filters')}
-                    onClick={() => {
-                      setFilterDraft({
-                        teamIds: [...filters.teamIds],
-                        statuses: [...filters.statuses],
-                        propertyIds: [...filters.propertyIds],
-                        userIds: [...filters.userIds],
-                        bookingEvents: [...filters.bookingEvents],
-                      })
-                      setIsFilterOpen(true)
-                    }}
+                    aria-label={
+                      dashboardViewMode === 'dashboard'
+                        ? t('operations.openDayView')
+                        : t('operations.openDashboard')
+                    }
+                    title={
+                      dashboardViewMode === 'dashboard'
+                        ? t('operations.openDayView')
+                        : t('operations.openDashboard')
+                    }
+                    onClick={() =>
+                      setDashboardViewMode(
+                        dashboardViewMode === 'dashboard'
+                          ? 'day'
+                          : 'dashboard',
+                      )
+                    }
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    {activeFilterCount > 0 ? (
-                      <span className="filter-badge">{activeFilterCount}</span>
-                    ) : null}
+                    {dashboardViewMode === 'dashboard' ? (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        width="16"
+                        height="16"
+                      >
+                        <path
+                          d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        width="16"
+                        height="16"
+                      >
+                        <path
+                          d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    )}
                   </button>
                   <button
                     className={`btn-ghost ${
-                      dashboardViewMode === 'dashboard' ? 'is-active' : ''
-                    }`}
-                    type="button"
-                    aria-label={t('operations.openDashboard')}
-                    title={t('operations.openDashboard')}
-                    onClick={() => setDashboardViewMode('dashboard')}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    className={`btn-ghost ${
-                      isViewMenuOpen || dashboardViewMode !== 'day' ? 'is-active' : ''
+                      isViewMenuOpen || dashboardViewMode !== 'dashboard'
+                        ? 'is-active'
+                        : ''
                     }`}
                     type="button"
                     aria-label={t('operations.changeView')}
@@ -1705,6 +1754,65 @@ export function DailyOperationsView({
                   <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
                 </svg>
               </button>
+              {mode === 'dashboard' ? (
+                <button
+                  className={`btn-ghost btn-filter ${
+                    isFilterOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={t('common.filters')}
+                  onClick={() => {
+                    setFilterDraft({
+                      teamIds: [...filters.teamIds],
+                      statuses: [...filters.statuses],
+                      propertyIds: [...filters.propertyIds],
+                      userIds: [...filters.userIds],
+                      bookingEvents: [...filters.bookingEvents],
+                    })
+                    setIsFilterOpen(true)
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {activeFilterCount > 0 ? (
+                    <span className="filter-badge">{activeFilterCount}</span>
+                  ) : null}
+                </button>
+              ) : null}
+              {mode === 'templates' ? (
+                <button
+                  className={`btn-ghost btn-filter ${
+                    templateFilterCount > 0 ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={t('common.filters')}
+                  onClick={() => templatesPanelRef.current?.openFilters()}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  {templateFilterCount > 0 ? (
+                    <span className="filter-badge">{templateFilterCount}</span>
+                  ) : null}
+                </button>
+              ) : null}
               <button
                 className="btn-primary"
                 type="button"
@@ -1968,6 +2076,8 @@ export function DailyOperationsView({
           teams={teams}
           users={users}
           visitTypes={visitTypes}
+          searchQuery={searchQuery}
+          onFilterCountChange={setTemplateFilterCount}
           onMessage={(value) => {
             setError(null)
             setMessage(value)

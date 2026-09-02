@@ -23,6 +23,23 @@ import type {
   VisitTypeRecord,
 } from './types'
 
+type TemplateFilters = {
+  propertyIds: string[]
+  teamIds: string[]
+  visitTypeIds: string[]
+}
+
+const emptyTemplateFilters = (): TemplateFilters => ({
+  propertyIds: [],
+  teamIds: [],
+  visitTypeIds: [],
+})
+
+const toggleListValue = (values: string[], value: string) =>
+  values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value]
+
 type Props = {
   getVisitTemplatesEndpoint?: string
   upsertVisitTemplateEndpoint?: string
@@ -33,11 +50,14 @@ type Props = {
   onMessage: (message: string) => void
   onError: (message: string) => void
   hideSectionHeader?: boolean
+  searchQuery?: string
+  onFilterCountChange?: (count: number) => void
 }
 
 export type VisitTemplatesPanelHandle = {
   refresh: () => Promise<void>
   openCreate: () => void
+  openFilters: () => void
 }
 
 export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
@@ -51,11 +71,18 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
     onMessage,
     onError,
     hideSectionHeader = false,
+    searchQuery = '',
+    onFilterCountChange,
   }: Props,
   ref: Ref<VisitTemplatesPanelHandle>,
 ) {
   const { t } = useTranslation()
-  const [filterPropertyId, setFilterPropertyId] = useState('')
+  const [filters, setFilters] = useState<TemplateFilters>(emptyTemplateFilters)
+  const [filterDraft, setFilterDraft] = useState<TemplateFilters>(
+    emptyTemplateFilters,
+  )
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [nameSort, setNameSort] = useState<'asc' | 'desc' | null>(null)
   const [templates, setTemplates] = useState<VisitTemplateRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -103,7 +130,6 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
     setIsLoading(true)
     try {
       const payload = await getVisitTemplates(getVisitTemplatesEndpoint, {
-        propertyId: filterPropertyId || undefined,
         includeInactive: true,
       })
       const items = (payload.items ?? []).map((entry) =>
@@ -119,7 +145,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
     } finally {
       setIsLoading(false)
     }
-  }, [filterPropertyId, getVisitTemplatesEndpoint, onError])
+  }, [getVisitTemplatesEndpoint, onError])
 
   useEffect(() => {
     void loadTemplates()
@@ -128,7 +154,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   const openCreateTemplate = () => {
     setTemplateForm({
       ...emptyTemplateForm(),
-      propertyId: filterPropertyId,
+      propertyId: filters.propertyIds[0] ?? '',
     })
     setIsFormOpen(true)
   }
@@ -136,6 +162,14 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   useImperativeHandle(ref, () => ({
     refresh: loadTemplates,
     openCreate: openCreateTemplate,
+    openFilters: () => {
+      setFilterDraft({
+        propertyIds: [...filters.propertyIds],
+        teamIds: [...filters.teamIds],
+        visitTypeIds: [...filters.visitTypeIds],
+      })
+      setIsFilterOpen(true)
+    },
   }))
 
   const openEditTemplate = (template: VisitTemplateRecord) => {
@@ -300,11 +334,68 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   }
 
   const filteredTemplates = useMemo(() => {
-    if (!filterPropertyId) {
-      return templates
+    const query = searchQuery.trim().toLowerCase()
+    let next = templates
+
+    if (filters.propertyIds.length > 0) {
+      const selected = new Set(filters.propertyIds)
+      next = next.filter((template) => {
+        const ids = [template.propertyId, ...(template.propertyIds ?? [])]
+        return ids.some((id) => selected.has(id))
+      })
     }
-    return templates.filter((template) => template.propertyId === filterPropertyId)
-  }, [filterPropertyId, templates])
+    if (filters.teamIds.length > 0) {
+      const selected = new Set(filters.teamIds)
+      next = next.filter((template) => selected.has(template.teamId))
+    }
+    if (filters.visitTypeIds.length > 0) {
+      const selected = new Set(filters.visitTypeIds)
+      next = next.filter((template) => selected.has(template.visitTypeId))
+    }
+    if (query) {
+      next = next.filter((template) => {
+        const propertyLabel =
+          propertyById.get(template.propertyId) ?? template.propertyId
+        const visitTypeLabel =
+          visitTypeById.get(template.visitTypeId) ?? template.visitTypeId
+        const teamLabel = teamById.get(template.teamId) ?? template.teamId
+        return (
+          template.name.toLowerCase().includes(query) ||
+          propertyLabel.toLowerCase().includes(query) ||
+          visitTypeLabel.toLowerCase().includes(query) ||
+          teamLabel.toLowerCase().includes(query) ||
+          template.title.toLowerCase().includes(query) ||
+          template.description.toLowerCase().includes(query)
+        )
+      })
+    }
+    if (nameSort) {
+      next = [...next].sort((left, right) => {
+        const compare = left.name.localeCompare(right.name, undefined, {
+          sensitivity: 'base',
+        })
+        return nameSort === 'asc' ? compare : -compare
+      })
+    }
+    return next
+  }, [
+    filters.propertyIds,
+    filters.teamIds,
+    filters.visitTypeIds,
+    nameSort,
+    propertyById,
+    searchQuery,
+    teamById,
+    templates,
+    visitTypeById,
+  ])
+
+  const activeFilterCount =
+    filters.propertyIds.length + filters.teamIds.length + filters.visitTypeIds.length
+
+  useEffect(() => {
+    onFilterCountChange?.(activeFilterCount)
+  }, [activeFilterCount, onFilterCountChange])
 
   return (
     <>
@@ -333,36 +424,34 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
           </div>
         )}
 
-        <div className="filters-row">
-          <label>
-            Property
-            <select
-              value={filterPropertyId}
-              onChange={(event) => setFilterPropertyId(event.target.value)}
-            >
-              <option value="">All properties</option>
-              {filterPropertyOptions.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {getPropertyLabel(property)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
         {isLoading ? <p>Loading templates…</p> : null}
 
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Property</th>
-                <th>Visit type</th>
-                <th>Team</th>
-                <th>Tasks</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th scope="col">
+                  <button
+                    className={`btn-sort ${nameSort ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() =>
+                      setNameSort((current) =>
+                        current === 'asc' ? 'desc' : 'asc',
+                      )
+                    }
+                  >
+                    {t('common.name')}
+                    <span className="sort-indicator">
+                      {nameSort === 'asc' ? '▲' : nameSort === 'desc' ? '▼' : '↕'}
+                    </span>
+                  </button>
+                </th>
+                <th>{t('operations.property')}</th>
+                <th>{t('operations.visitType')}</th>
+                <th>{t('operations.team')}</th>
+                <th>{t('operations.tasks')}</th>
+                <th>{t('common.status')}</th>
+                <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -421,6 +510,131 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
           </table>
         </div>
       </section>
+
+      {isFilterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">{t('operations.filterSubtitle')}</p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                aria-label={t('common.closeFilters')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.property')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {filterPropertyOptions.map((property) => {
+                      const isChecked = filterDraft.propertyIds.includes(
+                        property.id,
+                      )
+                      return (
+                        <label className="filter-option" key={property.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                propertyIds: toggleListValue(
+                                  current.propertyIds,
+                                  property.id,
+                                ),
+                              }))
+                            }
+                          />
+                          <span>{getPropertyLabel(property)}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.team')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {teams.map((team) => {
+                      const isChecked = filterDraft.teamIds.includes(team.id)
+                      return (
+                        <label className="filter-option" key={team.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                teamIds: toggleListValue(current.teamIds, team.id),
+                              }))
+                            }
+                          />
+                          <span>{team.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.visitType')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {sortedVisitTypes.map((type) => {
+                      const isChecked = filterDraft.visitTypeIds.includes(type.id)
+                      return (
+                        <label className="filter-option" key={type.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                visitTypeIds: toggleListValue(
+                                  current.visitTypeIds,
+                                  type.id,
+                                ),
+                              }))
+                            }
+                          />
+                          <span>{type.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setFilterDraft(emptyTemplateFilters())}
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setFilters({
+                    propertyIds: [...filterDraft.propertyIds],
+                    teamIds: [...filterDraft.teamIds],
+                    visitTypeIds: [...filterDraft.visitTypeIds],
+                  })
+                  setIsFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">

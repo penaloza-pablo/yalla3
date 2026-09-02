@@ -328,6 +328,7 @@ const pagesWithMobileSearch = new Set([
   'Purchases',
   'Subtractions',
   'Logs',
+  'Visit templates',
   'Cleaning Incidents',
   'Maintenance Incidents',
 ])
@@ -4172,6 +4173,8 @@ function App() {
         return t('subtractions.search')
       case 'Logs':
         return t('logs.search')
+      case 'Visit templates':
+        return t('operations.searchTemplates')
       case 'Cleaning Incidents':
         return t('cleaningIncidents.search')
       case 'Maintenance Incidents':
@@ -7623,6 +7626,12 @@ function App() {
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
             onNavigate={navigateToPage}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
           />
         ) : activePage === 'Cleaning Plan' ? (
           <CleaningPlanView
