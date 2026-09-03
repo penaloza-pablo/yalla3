@@ -52,6 +52,7 @@ type Payload = {
   price?: number | null;
   hoursDisabled?: boolean;
   billingStatus?: string;
+  dismissed?: boolean;
 };
 
 const billingContext = () => {
