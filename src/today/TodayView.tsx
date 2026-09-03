@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
@@ -41,6 +41,38 @@ type Props = {
   embedded?: boolean
   refreshKey?: number
 }
+
+const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary'
+
+const readCachedSummary = (): TodaySummary | null => {
+  try {
+    const raw = sessionStorage.getItem(TODAY_SUMMARY_CACHE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as TodaySummary
+    if (!parsed?.date || !parsed.cleaning || !parsed.inventory) {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+const writeCachedSummary = (summary: TodaySummary) => {
+  try {
+    sessionStorage.setItem(TODAY_SUMMARY_CACHE_KEY, JSON.stringify(summary))
+  } catch {
+    // Ignore quota or private-mode failures.
+  }
+}
+
+const TodayLoader = ({ label }: { label: string }) => (
+  <div className="page-loader" role="status" aria-live="polite" aria-label={label}>
+    <span className="page-loader-spinner" aria-hidden="true" />
+  </div>
+)
 
 const TODAY_INVENTORY_STATUSES = [
   'Waiting Delivery',
@@ -140,9 +172,10 @@ export function TodayView({
   refreshKey = 0,
 }: Props) {
   const { t } = useTranslation()
-  const [summary, setSummary] = useState<TodaySummary | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [summary, setSummary] = useState<TodaySummary | null>(readCachedSummary)
+  const [isLoading, setIsLoading] = useState(() => !readCachedSummary())
   const [error, setError] = useState('')
+  const hasSummaryRef = useRef(Boolean(summary))
 
   const loadSummary = useCallback(async () => {
     const endpoint = getEndpoint(
@@ -153,11 +186,15 @@ export function TodayView({
       setError(t('today.missingEndpoint'))
       return
     }
-    setIsLoading(true)
+    if (!hasSummaryRef.current) {
+      setIsLoading(true)
+    }
     setError('')
     try {
       const payload = await fetchJson<TodaySummary>(endpoint)
+      hasSummaryRef.current = true
       setSummary(payload)
+      writeCachedSummary(payload)
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : t('today.loadError'),
@@ -325,7 +362,7 @@ export function TodayView({
     return (
       <>
         {error ? <div className="alert">{error}</div> : null}
-        {isLoading && !summary ? <p>{t('today.loading')}</p> : null}
+        {isLoading && !summary ? <TodayLoader label={t('today.loading')} /> : null}
         {cards}
       </>
     )
@@ -364,7 +401,7 @@ export function TodayView({
       </header>
 
       {error ? <div className="alert">{error}</div> : null}
-      {isLoading && !summary ? <p>{t('today.loading')}</p> : null}
+      {isLoading && !summary ? <TodayLoader label={t('today.loading')} /> : null}
       {cards}
     </>
   )

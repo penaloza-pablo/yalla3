@@ -805,7 +805,7 @@ export function DailyOperationsView({
   }, [propertyOptionsProp])
 
   useEffect(() => {
-    if (mode === 'dashboard') {
+    if (mode === 'dashboard' && dashboardViewMode !== 'dashboard') {
       void loadVisits()
     }
     if (mode === 'unassigned') {

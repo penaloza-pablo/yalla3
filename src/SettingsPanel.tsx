@@ -12,6 +12,7 @@ type SettingsPanelProps = {
 type UserProfile = {
   name: string
   email: string
+  givenName: string
 }
 
 const resolveDisplayName = (
@@ -35,6 +36,18 @@ const resolveDisplayName = (
   )
 }
 
+const firstNameFrom = (name: string, email: string) => {
+  const token = name.trim().split(/\s+/)[0]
+  if (token) {
+    return token
+  }
+  const local = email.split('@')[0]?.split(/[._-]/)[0]?.trim()
+  if (!local) {
+    return ''
+  }
+  return local.charAt(0).toUpperCase() + local.slice(1)
+}
+
 const initialsFrom = (name: string, email: string) => {
   const source = name || email
   if (!source) {
@@ -56,10 +69,6 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
   const [isLoadingProfile, setIsLoadingProfile] = useState(false)
 
   useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
     let cancelled = false
     setIsLoadingProfile(true)
 
@@ -72,10 +81,11 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
         setProfile({
           name: resolveDisplayName(attributes),
           email: attributes.email?.trim() || '',
+          givenName: attributes.given_name?.trim() || '',
         })
       } catch {
         if (!cancelled) {
-          setProfile({ name: '', email: '' })
+          setProfile({ name: '', email: '', givenName: '' })
         }
       } finally {
         if (!cancelled) {
@@ -87,7 +97,7 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
     return () => {
       cancelled = true
     }
-  }, [isOpen])
+  }, [])
 
   useEffect(() => {
     if (!isOpen) {
@@ -114,6 +124,11 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
   }
 
   const displayName = profile?.name || t('settings.unknownUser')
+  const triggerName =
+    firstNameFrom(
+      profile?.givenName || profile?.name || '',
+      profile?.email || '',
+    ) || t('settings.title')
   const displayEmail = profile?.email || '—'
   const initials = initialsFrom(profile?.name || '', profile?.email || '')
 
@@ -215,10 +230,12 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
           >
             <path
               fill="currentColor"
-              d="M11.983 2.3a1.2 1.2 0 0 0-1.166-.85h-1.634a1.2 1.2 0 0 0-1.166.85l-.18.72a6.8 6.8 0 0 0-1.2.693l-.72-.27a1.2 1.2 0 0 0-1.45.436L3.35 5.64a1.2 1.2 0 0 0 .24 1.49l.55.49a6.9 6.9 0 0 0 0 1.386l-.55.49a1.2 1.2 0 0 0-.24 1.49l1.117 1.76a1.2 1.2 0 0 0 1.45.437l.72-.27c.377.27.777.5 1.2.693l.18.72a1.2 1.2 0 0 0 1.166.85h1.634a1.2 1.2 0 0 0 1.166-.85l.18-.72a6.8 6.8 0 0 0 1.2-.693l.72.27a1.2 1.2 0 0 0 1.45-.437l1.117-1.76a1.2 1.2 0 0 0-.24-1.49l-.55-.49a6.9 6.9 0 0 0 0-1.386l.55-.49a1.2 1.2 0 0 0 .24-1.49L16.003 4.88a1.2 1.2 0 0 0-1.45-.437l-.72.27a6.8 6.8 0 0 0-1.2-.693l-.18-.72ZM10 12.25A2.25 2.25 0 1 1 10 7.75a2.25 2.25 0 0 1 0 4.5Z"
+              d="M10 9a3.25 3.25 0 1 0 0-6.5A3.25 3.25 0 0 0 10 9zm-7 8.25a7 7 0 0 1 14 0 .75.75 0 0 1-.75.75H3.75a.75.75 0 0 1-.75-.75z"
             />
           </svg>
-          {!compact ? <span>{t('settings.title')}</span> : null}
+          {!compact ? (
+            <span className="settings-trigger-name">{triggerName}</span>
+          ) : null}
         </button>
       </div>
       {settingsModal}

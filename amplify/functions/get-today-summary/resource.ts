@@ -14,4 +14,5 @@ export const getTodaySummary = defineFunction({
       'visit_type_maintenance,visit_type_deep_property_check,visit_type_property_check,visit_type_fixings,visit_type_emergency',
   },
   timeoutSeconds: 45,
+  memoryMB: 1024,
 });

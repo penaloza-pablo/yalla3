@@ -196,14 +196,19 @@
   margin-bottom: 12px;
 }
 
-.nav-button:hover {
+.nav-button:hover:not(.active) {
   background: #f9fafb;
 }
 
-.nav-button.active {
-  background: #f2f4f7;
+.nav-button.active,
+.nav-button.active:hover,
+.nav-button.active:focus,
+.nav-button.active:focus-visible {
+  background: transparent;
   color: #101828;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: none;
+  outline: none;
 }
 
 .nav-badge {
@@ -363,6 +368,12 @@
 
 .settings-trigger-icon {
   flex-shrink: 0;
+}
+
+.settings-trigger-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-modal-overlay {
@@ -707,6 +718,28 @@ button.today-card {
 .today-card:hover {
   border-color: #d0d5dd;
   box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+.page-loader {
+  min-height: 42vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-loader-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e4e7ec;
+  border-top-color: #2e90fa;
+  border-radius: 50%;
+  animation: page-loader-spin 0.7s linear infinite;
+}
+
+@keyframes page-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .today-card-title {

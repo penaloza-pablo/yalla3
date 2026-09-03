@@ -1,5 +1,6 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  CLEANING_VISIT_TYPE_ID,
   getPlanByDate,
   normalizeCleaningTypes,
   normalizePrice,
@@ -173,88 +174,15 @@ const warningsForLine = (line: {
   return warnings;
 };
 
-const summarizeLines = (lines: BillingLine[]) => {
-  const billable = lines.filter(
-    (line) =>
-      line.warnings.length === 0 &&
-      (line.source === 'manual' || line.status.toUpperCase() === 'COMPLETED'),
-  );
-  const total = billable.reduce((sum, line) => sum + (line.price ?? 0), 0);
-  return {
-    lineCount: lines.length,
-    completedCount: billable.length,
-    warningCount: lines.filter((line) => line.warnings.length > 0).length,
-    total: Math.round(total * 100) / 100,
-  };
+type PropertyCleaningDetails = {
+  nickname: string;
+  types: CleaningTypeRecord[];
 };
 
-const loadVisitsForMonth = async (
-  visitsTable: string,
-  monthId: string,
-  options: { excludeScheduled?: boolean } = {},
-) => {
-  const perDay = await Promise.all(
-    datesInMonth(monthId).map((date) =>
-      queryCleaningVisitsForDate(visitsTable, date),
-    ),
-  );
-  return perDay.flat().filter((visit) => {
-    const status = asString(visit.status).toUpperCase();
-    if (status === 'CANCELLED') {
-      return false;
-    }
-    if (options.excludeScheduled && status === 'SCHEDULED') {
-      return false;
-    }
-    return true;
-  });
-};
-
-export const buildMonthDetail = async (params: {
-  monthId: string;
-  billingTable: string;
-  visitsTable: string;
-  plansTable: string;
-  detailsTable: string;
-  persistSummary?: boolean;
-}) => {
-  const {
-    monthId,
-    billingTable,
-    visitsTable,
-    plansTable,
-    detailsTable,
-    persistSummary = false,
-  } = params;
-  const stored = await getMonthRecord(billingTable, monthId);
-  const status = deriveMonthStatus(monthId, asString(stored?.status));
-  const today = getTodayInMadrid();
-
-  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-    const lines = stored.snapshotLines as BillingLine[];
-    const summary = summarizeLines(lines);
-    return {
-      month: {
-        id: monthId,
-        status,
-        closedAt: asString(stored?.closedAt) || undefined,
-        canClose: false,
-        canReopen: true,
-        canEdit: false,
-        ...summary,
-      },
-      lines,
-      stored,
-    };
-  }
-
-  const [visits, detailItems] = await Promise.all([
-    loadVisitsForMonth(visitsTable, monthId, {
-      excludeScheduled: status === 'CURRENT',
-    }),
-    detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
-  ]);
-  const detailsByPropertyId = new Map(
+const detailsByPropertyIdFrom = (
+  detailItems: Record<string, unknown>[],
+): Map<string, PropertyCleaningDetails> =>
+  new Map(
     detailItems.map((item) => {
       const propertyId = asString(item.propertyId) || asString(item.id);
       return [
@@ -266,11 +194,14 @@ export const buildMonthDetail = async (params: {
       ];
     }),
   );
-  const dates = [...new Set(visits.map((visit) => asString(visit.scheduledDate).slice(0, 10)).filter(Boolean))];
-  const plans = await Promise.all(
-    dates.map(async (date) => [date, await getPlanByDate(plansTable, date)] as const),
-  );
-  const planByDate = new Map(plans);
+
+const linesForMonth = (
+  visits: Record<string, unknown>[],
+  detailsByPropertyId: Map<string, PropertyCleaningDetails>,
+  planByDate: Map<string, Record<string, unknown> | undefined>,
+  stored: Record<string, unknown> | undefined,
+  today: string,
+): BillingLine[] => {
   const overrides = asOverrides(stored?.overrides);
   const visitLines: BillingLine[] = visits.map((visit) => {
     const visitId = asString(visit.id);
@@ -367,7 +298,109 @@ export const buildMonthDetail = async (params: {
     },
   );
 
-  const lines = [...visitLines, ...manualLines].sort((a, b) => {
+  return [...visitLines, ...manualLines];
+};
+
+const summarizeLines = (lines: BillingLine[]) => {
+  const billable = lines.filter(
+    (line) =>
+      line.warnings.length === 0 &&
+      (line.source === 'manual' || line.status.toUpperCase() === 'COMPLETED'),
+  );
+  const total = billable.reduce((sum, line) => sum + (line.price ?? 0), 0);
+  return {
+    lineCount: lines.length,
+    completedCount: billable.length,
+    warningCount: lines.filter((line) => line.warnings.length > 0).length,
+    total: Math.round(total * 100) / 100,
+  };
+};
+
+const loadVisitsForMonth = async (
+  visitsTable: string,
+  monthId: string,
+  options: { excludeScheduled?: boolean } = {},
+) => {
+  const perDay = await Promise.all(
+    datesInMonth(monthId).map((date) =>
+      queryCleaningVisitsForDate(visitsTable, date),
+    ),
+  );
+  return perDay.flat().filter((visit) => {
+    const status = asString(visit.status).toUpperCase();
+    if (status === 'CANCELLED') {
+      return false;
+    }
+    if (options.excludeScheduled && status === 'SCHEDULED') {
+      return false;
+    }
+    return true;
+  });
+};
+
+export const buildMonthDetail = async (params: {
+  monthId: string;
+  billingTable: string;
+  visitsTable: string;
+  plansTable: string;
+  detailsTable: string;
+  persistSummary?: boolean;
+}) => {
+  const {
+    monthId,
+    billingTable,
+    visitsTable,
+    plansTable,
+    detailsTable,
+    persistSummary = false,
+  } = params;
+  const stored = await getMonthRecord(billingTable, monthId);
+  const status = deriveMonthStatus(monthId, asString(stored?.status));
+  const today = getTodayInMadrid();
+
+  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
+    const lines = stored.snapshotLines as BillingLine[];
+    const summary = summarizeLines(lines);
+    return {
+      month: {
+        id: monthId,
+        status,
+        closedAt: asString(stored?.closedAt) || undefined,
+        canClose: false,
+        canReopen: true,
+        canEdit: false,
+        ...summary,
+      },
+      lines,
+      stored,
+    };
+  }
+
+  const [visits, detailItems] = await Promise.all([
+    loadVisitsForMonth(visitsTable, monthId, {
+      excludeScheduled: status === 'CURRENT',
+    }),
+    detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
+  ]);
+  const detailsByPropertyId = detailsByPropertyIdFrom(detailItems);
+  const dates = [
+    ...new Set(
+      visits
+        .map((visit) => asString(visit.scheduledDate).slice(0, 10))
+        .filter(Boolean),
+    ),
+  ];
+  const plans = await Promise.all(
+    dates.map(async (date) => [date, await getPlanByDate(plansTable, date)] as const),
+  );
+  const planByDate = new Map(plans);
+  const lines = linesForMonth(
+    visits,
+    detailsByPropertyId,
+    planByDate,
+    stored,
+    today,
+  ).sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
     }
@@ -410,20 +443,98 @@ export const buildMonthDetail = async (params: {
   return { month, lines, stored };
 };
 
+export const countVisibleBillingWarnings = (
+  visits: Record<string, unknown>[],
+  detailItems: Record<string, unknown>[],
+  planItems: Record<string, unknown>[],
+  storedByMonth: Map<string, Record<string, unknown> | undefined>,
+) => {
+  const monthIds = listVisibleMonthIds();
+  const today = getTodayInMadrid();
+  const detailsByPropertyId = detailsByPropertyIdFrom(detailItems);
+  const planByDate = new Map(
+    planItems.map((item) => [asString(item.id), item] as const),
+  );
+
+  return monthIds.reduce((sum, monthId) => {
+    const stored = storedByMonth.get(monthId);
+    const monthStatus = deriveMonthStatus(monthId, asString(stored?.status));
+    if (monthStatus === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
+      return (
+        sum + summarizeLines(stored.snapshotLines as BillingLine[]).warningCount
+      );
+    }
+    const monthVisits = visits.filter((visit) => {
+      const typeId = asString(
+        visit.visitTypeId ?? visit.visit_type_id ?? visit.VisitTypeId,
+      );
+      if (typeId !== CLEANING_VISIT_TYPE_ID) {
+        return false;
+      }
+      const date = asString(visit.scheduledDate).slice(0, 10);
+      if (!date.startsWith(monthId)) {
+        return false;
+      }
+      const visitStatus = asString(visit.status).toUpperCase();
+      if (visitStatus === 'CANCELLED') {
+        return false;
+      }
+      if (monthStatus === 'CURRENT' && visitStatus === 'SCHEDULED') {
+        return false;
+      }
+      return true;
+    });
+    return (
+      sum +
+      summarizeLines(
+        linesForMonth(
+          monthVisits,
+          detailsByPropertyId,
+          planByDate,
+          stored,
+          today,
+        ),
+      ).warningCount
+    );
+  }, 0);
+};
+
+export const sumVisibleWarningCountsUsingVisits = async (params: {
+  billingTable: string;
+  plansTable: string;
+  detailsTable: string;
+  visits: Record<string, unknown>[];
+}) => {
+  const monthIds = listVisibleMonthIds();
+  const [storedByMonth, detailItems, planItems] = await Promise.all([
+    Promise.all(
+      monthIds.map(
+        async (monthId) =>
+          [monthId, await getMonthRecord(params.billingTable, monthId)] as const,
+      ),
+    ),
+    params.detailsTable ? scanAllItems(params.detailsTable) : Promise.resolve([]),
+    scanAllItems(params.plansTable),
+  ]);
+  return countVisibleBillingWarnings(
+    params.visits,
+    detailItems,
+    planItems,
+    new Map(storedByMonth),
+  );
+};
+
 export const sumVisibleWarningCounts = async (params: {
   billingTable: string;
   visitsTable: string;
   plansTable: string;
   detailsTable: string;
 }) => {
-  const details = await Promise.all(
-    listVisibleMonthIds().map((monthId) =>
-      buildMonthDetail({
-        ...params,
-        monthId,
-        persistSummary: false,
-      }),
-    ),
-  );
-  return details.reduce((sum, detail) => sum + detail.month.warningCount, 0);
+  const visits = await scanAllItems(params.visitsTable);
+  return sumVisibleWarningCountsUsingVisits({
+    billingTable: params.billingTable,
+    plansTable: params.plansTable,
+    detailsTable: params.detailsTable,
+    visits,
+  });
 };

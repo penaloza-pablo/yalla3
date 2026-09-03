@@ -1,4 +1,4 @@
-import { QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -7,7 +7,11 @@ import {
 } from '../shared/dynamo-http';
 import { addDaysToDateString } from '../shared/date-range';
 import { getPlanByDate, scanAllItems } from '../shared/cleaning-plan';
-import { sumVisibleWarningCounts } from '../shared/cleaning-billing';
+import {
+  countVisibleBillingWarnings,
+  getMonthRecord,
+  listVisibleMonthIds,
+} from '../shared/cleaning-billing';
 import {
   docClient,
   getTodayInMadrid,
@@ -81,6 +85,34 @@ const emptyVisitCounts = (): VisitCounts => ({
 });
 
 const toDateOnly = (value: unknown) => asString(value).slice(0, 10);
+
+const scanProjected = async (
+  tableName: string,
+  projection: {
+    expression: string;
+    names?: Record<string, string>;
+  },
+) => {
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  const items: Record<string, unknown>[] = [];
+
+  do {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: projection.expression,
+        ExpressionAttributeNames: projection.names,
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    lastEvaluatedKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (lastEvaluatedKey);
+
+  return items;
+};
 
 const queryAllByStatus = async (tableName: string, status: string) => {
   let lastEvaluatedKey: Record<string, unknown> | undefined;
@@ -184,6 +216,7 @@ export const handler = async (event: HttpEvent) => {
 
   const today = getTodayInMadrid();
   const tomorrow = addDaysToDateString(today, 1);
+  const monthIds = listVisibleMonthIds();
 
   try {
     const [
@@ -192,22 +225,44 @@ export const handler = async (event: HttpEvent) => {
       tomorrowPlan,
       reviews,
       inventory,
-      previousOpen,
+      detailItems,
+      planItems,
+      storedMonths,
       unassignedPending,
     ] = await Promise.all([
-      scanAllItems(visitsTable),
+      scanProjected(visitsTable, {
+        expression:
+          '#id, visitTypeId, scheduledDate, #status, propertyId, Property, #property',
+        names: { '#id': 'id', '#status': 'status', '#property': 'property' },
+      }),
       getPlanByDate(plansTable, today),
       getPlanByDate(plansTable, tomorrow),
-      scanAllItems(reviewsTable),
-      scanAllItems(inventoryTable),
-      sumVisibleWarningCounts({
-        billingTable: cleaningBillingTable,
-        visitsTable,
-        plansTable,
-        detailsTable,
+      scanProjected(reviewsTable, {
+        expression:
+          'Rating, rating, #status, WorkflowStep, workflowStep, WorkflowStepIndex, workflowStepIndex',
+        names: { '#status': 'Status' },
       }),
+      scanProjected(inventoryTable, {
+        expression: '#status',
+        names: { '#status': 'Status' },
+      }),
+      detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
+      scanAllItems(plansTable),
+      Promise.all(
+        monthIds.map(
+          async (monthId) =>
+            [monthId, await getMonthRecord(cleaningBillingTable, monthId)] as const,
+        ),
+      ),
       countUnassignedPending(tasksTable),
     ]);
+
+    const previousOpen = countVisibleBillingWarnings(
+      visits,
+      detailItems,
+      planItems,
+      new Map(storedMonths),
+    );
 
     const cleaning = countVisitsForTypes(
       visits,
