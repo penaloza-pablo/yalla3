@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { ACTION_KEYS, canViewMaintenanceHoursRemaining } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   isBeforeHiddenBillingGap,
@@ -58,6 +58,7 @@ type LineDraft = {
   price: string
   hoursDisabled: boolean
   billingStatus: MaintenanceBillingLineStatus
+  dismissed: boolean
 }
 
 const emptyDraft = (monthId: string): LineDraft => ({
@@ -74,6 +75,7 @@ const emptyDraft = (monthId: string): LineDraft => ({
   price: '',
   hoursDisabled: false,
   billingStatus: 'WAITING_APPROVAL',
+  dismissed: false,
 })
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
@@ -144,6 +146,7 @@ const mapLine = (item: Record<string, unknown>): MaintenanceBillingLine => {
       item.price === null || item.price === undefined ? null : Number(item.price),
     billingStatus: asLineStatus(item.billingStatus),
     isManual: source === 'manual',
+    dismissed: Boolean(item.dismissed),
     members: Array.isArray(item.members)
       ? item.members.map((entry) =>
           mapMember((entry ?? {}) as Record<string, unknown>),
@@ -185,7 +188,8 @@ export function MaintenanceBillingView({
   onToggleSummaryInfo,
 }: Props) {
   const { t, i18n } = useTranslation()
-  const { can } = usePermissions()
+  const { can, roleId } = usePermissions()
+  const canSeeRemainingHours = canViewMaintenanceHoursRemaining(roleId)
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -437,8 +441,13 @@ export function MaintenanceBillingView({
   }, [groupFilter, lines, propertyById, propertyIds])
 
   const filteredTotal = filteredLines
-    .filter((line) => isApprovedOrAbove(line.billingStatus))
+    .filter((line) => !line.dismissed && isApprovedOrAbove(line.billingStatus))
     .reduce((sum, line) => sum + (line.price ?? 0), 0)
+
+  const monthRemainingHours =
+    settings && month
+      ? settings.monthlyHoursPool - month.validatedHours
+      : null
 
   const formatMonthLabel = (monthId: string) => {
     const [year, month] = monthId.split('-').map(Number)
@@ -462,7 +471,9 @@ export function MaintenanceBillingView({
     setIsExporting(true)
     setError('')
     try {
-      const sourceLines = scope === 'filtered' ? filteredLines : lines
+      const sourceLines = (scope === 'filtered' ? filteredLines : lines).filter(
+        (line) => !line.dismissed,
+      )
       const headers = [
         t('maintenanceBilling.visitTitle'),
         t('maintenanceBilling.property'),
@@ -566,6 +577,7 @@ export function MaintenanceBillingView({
       price: line.price === null ? '' : String(line.price),
       hoursDisabled: line.hoursDisabled,
       billingStatus: line.billingStatus,
+      dismissed: Boolean(line.dismissed),
     })
     setIsFormOpen(true)
   }
@@ -618,6 +630,7 @@ export function MaintenanceBillingView({
       hoursDisabled,
       price,
       billingStatus: draft.billingStatus,
+      dismissed: draft.dismissed,
     })
     setIsFormOpen(false)
   }
@@ -635,7 +648,9 @@ export function MaintenanceBillingView({
   const isGroupLine = (line: MaintenanceBillingLine) => line.source === 'group'
 
   const canSelectLine = (line: MaintenanceBillingLine) =>
-    Boolean(month?.canEdit) && line.billingStatus === 'TO_ESTIMATE'
+    Boolean(month?.canEdit) &&
+    line.billingStatus === 'TO_ESTIMATE' &&
+    !line.dismissed
 
   const selectedLines = useMemo(
     () =>
@@ -643,12 +658,7 @@ export function MaintenanceBillingView({
     [filteredLines, selectedLineIds],
   )
 
-  const selectionPropertyId = selectedLines[0]?.propertyId ?? ''
-  const selectionHasMixedProperty = selectedLines.some(
-    (line) => line.propertyId !== selectionPropertyId,
-  )
-  const canConfirmSelection =
-    selectedLines.length >= 2 && !selectionHasMixedProperty
+  const canConfirmSelection = selectedLines.length >= 2
 
   const toggleSelectedLine = (line: MaintenanceBillingLine) => {
     if (!canSelectLine(line)) {
@@ -657,11 +667,6 @@ export function MaintenanceBillingView({
     setSelectedLineIds((current) => {
       if (current.includes(line.id)) {
         return current.filter((id) => id !== line.id)
-      }
-      const first = filteredLines.find((entry) => current.includes(entry.id))
-      if (first && first.propertyId !== line.propertyId) {
-        setError(t('maintenanceBilling.mergeSameProperty'))
-        return current
       }
       setError('')
       return [...current, line.id]
@@ -676,11 +681,7 @@ export function MaintenanceBillingView({
 
   const openMergeForm = () => {
     if (!selectedMonthId || !canConfirmSelection) {
-      if (selectionHasMixedProperty) {
-        setError(t('maintenanceBilling.mergeSameProperty'))
-      } else {
-        setError(t('maintenanceBilling.mergeMinLines'))
-      }
+      setError(t('maintenanceBilling.mergeMinLines'))
       return
     }
     const first = selectedLines[0]
@@ -699,6 +700,7 @@ export function MaintenanceBillingView({
       price: '',
       hoursDisabled: false,
       billingStatus: 'TO_ESTIMATE',
+      dismissed: false,
     })
     setIsMergeOpen(true)
   }
@@ -760,6 +762,28 @@ export function MaintenanceBillingView({
     }
     return String(value).replace('.', ',')
   }
+
+  const remainingHoursCard = (value: number | null) => (
+    <div className="card card-compact">
+      <p className="card-label">{t('maintenanceBilling.remainingCard')}</p>
+      <p className="card-value">
+        {isLoading || value === null
+          ? '—'
+          : value < 0
+            ? t('maintenanceBilling.remainingSurplusValue', {
+                hours: formatHours(Math.abs(value)),
+              })
+            : t('maintenanceBilling.remainingHoursValue', {
+                hours: formatHours(value),
+              })}
+      </p>
+      <p className="card-meta">
+        {value !== null && value < 0
+          ? t('maintenanceBilling.remainingSurplusMeta')
+          : t('maintenanceBilling.remainingCardMeta')}
+      </p>
+    </div>
+  )
 
   const toggleRow = (lineId: string) => {
     setExpandedRowIds((current) => {
@@ -847,10 +871,14 @@ export function MaintenanceBillingView({
       hoursDisabled,
       price: Number.isFinite(price) ? price : null,
       billingStatus: line.billingStatus,
+      dismissed: Boolean(line.dismissed),
     })
   }
 
   const lineWarnings = (line: MaintenanceBillingLine) => {
+    if (line.dismissed) {
+      return []
+    }
     const warnings: string[] = []
     if (line.price === null) {
       warnings.push(t('maintenanceBilling.warning.price'))
@@ -1058,6 +1086,7 @@ export function MaintenanceBillingView({
             <p className="card-value">{month.warningCount}</p>
             <p className="card-meta">{t('maintenanceBilling.warningsCardMeta')}</p>
           </div>
+          {canSeeRemainingHours ? remainingHoursCard(monthRemainingHours) : null}
         </section>
       ) : (
         <section className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}>
@@ -1075,15 +1104,7 @@ export function MaintenanceBillingView({
             </p>
             <p className="card-meta">{t('maintenanceBilling.pendingCardMeta')}</p>
           </div>
-          <div className="card card-compact">
-            <p className="card-label">{t('maintenanceBilling.remainingCard')}</p>
-            <p className="card-value">
-              {isLoading || remainingHours === null
-                ? '—'
-                : `${formatHours(remainingHours)} h`}
-            </p>
-            <p className="card-meta">{t('maintenanceBilling.remainingCardMeta')}</p>
-          </div>
+          {canSeeRemainingHours ? remainingHoursCard(remainingHours) : null}
         </section>
       )}
 
@@ -1170,9 +1191,13 @@ export function MaintenanceBillingView({
                     return (
                       <Fragment key={line.id}>
                         <tr
-                          className={`${line.price === null ? 'billing-warning-row' : ''} ${
+                          className={`${
+                            line.price === null && !line.dismissed
+                              ? 'billing-warning-row'
+                              : ''
+                          } ${
                             selectedLineIds.includes(line.id) ? 'billing-row-selected' : ''
-                          }`}
+                          }${line.dismissed ? ' muted-row' : ''}`}
                         >
                           <td>
                             <div className="billing-title-cell">
@@ -1190,6 +1215,9 @@ export function MaintenanceBillingView({
                                 {isGroupLine(line) ? (
                                   <p className="billing-group-title">
                                     <span className="tag">{t('maintenanceBilling.groupTag')}</span>
+                                    {line.dismissed ? (
+                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
+                                    ) : null}
                                     {titleLabel}
                                   </p>
                                 ) : line.visitId ? (
@@ -1199,10 +1227,18 @@ export function MaintenanceBillingView({
                                     aria-label={t('cleaningPlan.openVisit')}
                                     onClick={() => setOpenVisitId(line.visitId)}
                                   >
+                                    {line.dismissed ? (
+                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
+                                    ) : null}{' '}
                                     {titleLabel}
                                   </button>
                                 ) : (
-                                  titleLabel
+                                  <>
+                                    {line.dismissed ? (
+                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
+                                    ) : null}{' '}
+                                    {titleLabel}
+                                  </>
                                 )}
                                 <p className="card-meta billing-line-property">
                                   {propertyLabel}
@@ -1889,6 +1925,21 @@ export function MaintenanceBillingView({
                         </option>
                       ))}
                     </select>
+                  </label>
+                ) : null}
+                {draft.lineId ? (
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={draft.dismissed}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          dismissed: event.target.checked,
+                        }))
+                      }
+                    />
+                    {t('maintenanceBilling.excludeFromReport')}
                   </label>
                 ) : null}
               </div>

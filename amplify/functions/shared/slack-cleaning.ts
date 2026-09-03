@@ -81,7 +81,7 @@ export const overdueCleaningBlocks = (visitId: string, nickname: string) => [
       {
         type: 'button',
         action_id: SNOOZE_ACTION_ID,
-        text: { type: 'plain_text', text: 'Snooze' },
+        text: { type: 'plain_text', text: 'Posponer' },
         value: visitId,
       },
       {
@@ -108,7 +108,7 @@ export const snoozeModalView = (options: {
     channelId: options.channelId,
     messageTs: options.messageTs,
   }),
-  title: { type: 'plain_text', text: 'Snooze' },
+  title: { type: 'plain_text', text: 'Posponer' },
   submit: { type: 'plain_text', text: 'Guardar' },
   close: { type: 'plain_text', text: 'Cancelar' },
   blocks: [
@@ -171,7 +171,7 @@ export const completeCleaningFromSlack = async (options: {
       return {
         ok: false,
         message:
-          'Hay tareas abiertas. Ciérralas en Yalla antes de marcar la limpieza como lista.',
+          'No se han completado todas las tareas de la visita, imposible cerrar',
       };
     }
   }

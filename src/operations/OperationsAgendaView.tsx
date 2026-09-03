@@ -239,7 +239,7 @@ export function OperationsAgendaView({
                     title={`Next ${shiftDays} days`}
                     onClick={() => onShiftDates(shiftDays)}
                   >
-                    &raquo;
+                    &gt;
                   </button>
                 </div>
               </th>

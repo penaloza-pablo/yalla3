@@ -105,6 +105,7 @@ export type MaintenanceBillingLine = {
   price: number | null
   billingStatus: MaintenanceBillingLineStatus
   isManual: boolean
+  dismissed?: boolean
   members?: MaintenanceBillingMember[]
 }
 

@@ -255,6 +255,7 @@
 .page-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -2953,6 +2954,12 @@ th {
   flex-shrink: 0;
 }
 
+.operations-dashboard-date-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #344054;
+}
+
 .operations-day-calendar-btn,
 .operations-day-next-btn {
   position: relative;
@@ -5157,9 +5164,14 @@ th {
 .billing-group-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 0;
   font-weight: 600;
+}
+
+.billing-title-cell .tag {
+  margin-right: 6px;
 }
 
 .billing-group-members {

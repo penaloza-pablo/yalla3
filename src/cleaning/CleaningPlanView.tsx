@@ -821,7 +821,7 @@ export function CleaningPlanView({
                   <button
                     className="btn-primary"
                     type="button"
-                    disabled={isSaving || isLoading || rows.length === 0}
+                    disabled={isSaving || isLoading}
                     onClick={() => void savePlan('ready')}
                   >
                     {t('cleaningPlan.markReady')}

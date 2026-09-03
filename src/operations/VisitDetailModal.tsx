@@ -23,6 +23,7 @@ import { buildApplyTemplateVisitPayload } from './visitTemplateHelpers'
 import {
   CLEANING_VISIT_TYPE_ID,
   requiresCompleteVisitWizard,
+  resolveTeamIdForVisitType,
 } from './visitTypeIds'
 import type {
   PropertyOption,
@@ -1215,7 +1216,11 @@ export function VisitDetailModal({
                       ? {
                           ...current,
                           visitTypeId,
-                          teamId: visitType?.defaultTeamId ?? current.teamId,
+                          teamId: resolveTeamIdForVisitType(
+                            visitType,
+                            teams,
+                            current.teamId,
+                          ),
                           estimatedDurationMinutes: visitType?.defaultDurationMinutes
                             ? String(visitType.defaultDurationMinutes)
                             : current.estimatedDurationMinutes,
@@ -1483,10 +1488,11 @@ export function VisitDetailModal({
           </button>
         </div>
         <div className="modal-body">
+          {tasks.length > 0 ? (
+            <>
           <p>
             {t('operations.cancelVisitTasksPrompt', { count: tasks.length })}
           </p>
-          {tasks.length > 0 ? (
             <div className="cancel-visit-options">
               <label className="cancel-visit-option">
                 <input
@@ -1537,6 +1543,7 @@ export function VisitDetailModal({
                 </label>
               ) : null}
             </div>
+            </>
           ) : (
             <p className="subtitle">{t('operations.cancelVisitNoTasks')}</p>
           )}

@@ -74,6 +74,7 @@ export type LineOverride = {
   price?: number | null;
   hoursDisabled?: boolean;
   billingStatus?: MaintenanceBillingStatus;
+  dismissed?: boolean;
 };
 
 export type ManualBillingLine = {
@@ -88,6 +89,7 @@ export type ManualBillingLine = {
   hoursDisabled: boolean;
   price: number;
   billingStatus: MaintenanceBillingStatus;
+  dismissed?: boolean;
 };
 
 export type MergedBillingGroup = {
@@ -106,6 +108,7 @@ export type MergedBillingGroup = {
   billingStatus: MaintenanceBillingStatus;
   visitIds: string[];
   manualLineIds: string[];
+  dismissed?: boolean;
 };
 
 export type MaintenanceBillingMember = {
@@ -138,6 +141,7 @@ export type MaintenanceBillingLine = {
   price: number | null;
   billingStatus: MaintenanceBillingStatus;
   isManual: boolean;
+  dismissed?: boolean;
   members?: MaintenanceBillingMember[];
 };
 
@@ -270,6 +274,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
         billingStatus: isBillingStatus(item.billingStatus)
           ? item.billingStatus
           : 'WAITING_APPROVAL',
+        dismissed: Boolean(item.dismissed),
       };
     })
     .filter((entry): entry is ManualBillingLine => entry !== null);
@@ -320,6 +325,7 @@ export const asMergedGroups = (value: unknown): MergedBillingGroup[] => {
           : 'TO_ESTIMATE',
         visitIds,
         manualLineIds,
+        dismissed: Boolean(item.dismissed),
       };
     })
     .filter((entry): entry is MergedBillingGroup => entry !== null);
@@ -578,6 +584,7 @@ const resolveVisitLine = (
       ? override.billingStatus
       : 'TO_ESTIMATE',
     isManual: false,
+    dismissed: Boolean(override.dismissed),
   };
 };
 
@@ -636,6 +643,7 @@ const resolveGroupLine = (
       ? group.billingStatus
       : 'TO_ESTIMATE',
     isManual: false,
+    dismissed: Boolean(group.dismissed),
     members: members
       .slice()
       .sort((a, b) => {
@@ -676,15 +684,18 @@ export const flattenMergeSelection = (selected: MaintenanceBillingLine[]) => {
 };
 
 const summarizeLines = (lines: MaintenanceBillingLine[]) => {
-  const approved = lines.filter((line) => isApprovedOrAbove(line.billingStatus));
+  const countable = lines.filter((line) => !line.dismissed);
+  const approved = countable.filter((line) =>
+    isApprovedOrAbove(line.billingStatus),
+  );
   const total = approved.reduce((sum, line) => sum + (line.price ?? 0), 0);
   const validatedHours = approved.reduce(
     (sum, line) => sum + (line.hours ?? 0),
     0,
   );
-  const missingPrice = lines.filter((line) => line.price === null).length;
+  const missingPrice = countable.filter((line) => line.price === null).length;
   return {
-    lineCount: lines.length,
+    lineCount: countable.length,
     completedCount: approved.length,
     warningCount: missingPrice,
     total: roundMoney(total),
@@ -692,51 +703,13 @@ const summarizeLines = (lines: MaintenanceBillingLine[]) => {
   };
 };
 
-export const buildMonthDetail = async (params: {
-  monthId: string;
-  billingTable: string;
-  visitsTable: string;
-  settingsTable: string;
-  providersTable: string;
-  visitTypesTable: string;
-  propertiesTable: string;
-  persistSummary?: boolean;
-}) => {
-  const stored = await getMonthRecord(params.billingTable, params.monthId);
-  const status = deriveMonthStatus(params.monthId, asString(stored?.status));
-
-  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-    const lines = stored.snapshotLines as MaintenanceBillingLine[];
-    const summary = summarizeLines(lines);
-    return {
-      month: {
-        id: params.monthId,
-        status,
-        closedAt: asString(stored?.closedAt) || undefined,
-        canClose: false,
-        canReopen: true,
-        canEdit: false,
-        ...summary,
-      },
-      lines,
-      stored,
-      settings: normalizeSettings(undefined),
-    };
-  }
-
-  const [visits, settings, propertyById, visitTypes] = await Promise.all([
-    loadMaintenanceVisitsForMonth(params.visitsTable, params.monthId),
-    ensureSettings({
-      settingsTable: params.settingsTable,
-      providersTable: params.providersTable,
-      visitTypesTable: params.visitTypesTable,
-    }),
-    loadPropertyLabels(params.propertiesTable),
-    scanAllItems(params.visitTypesTable),
-  ]);
-  const visitTypeById = new Map(
-    visitTypes.map((item) => [asString(item.id), asString(item.name) || asString(item.id)]),
-  );
+export const assembleMaintenanceLines = (
+  visits: Record<string, unknown>[],
+  stored: Record<string, unknown> | undefined,
+  settings: MaintenanceSettings,
+  propertyById: Map<string, string>,
+  visitTypeById: Map<string, string>,
+): MaintenanceBillingLine[] => {
   const overrides = asOverrides(stored?.overrides);
   const visitLines = visits.map((visit) =>
     resolveVisitLine(
@@ -767,6 +740,7 @@ export const buildMonthDetail = async (params: {
     price: item.price,
     billingStatus: item.billingStatus,
     isManual: true,
+    dismissed: Boolean(item.dismissed),
   }));
   const mergedGroups = asMergedGroups(stored?.mergedGroups);
   const groupedVisitIds = new Set(mergedGroups.flatMap((group) => group.visitIds));
@@ -787,7 +761,7 @@ export const buildMonthDetail = async (params: {
     return resolveGroupLine(group, members, settings);
   });
 
-  const lines = [
+  return [
     ...visitLines.filter((line) => !groupedVisitIds.has(line.visitId)),
     ...manualLines.filter((line) => !groupedManualIds.has(line.id)),
     ...groupLines,
@@ -799,11 +773,98 @@ export const buildMonthDetail = async (params: {
       sensitivity: 'base',
     });
   });
+};
+
+export const summarizeMaintenanceLines = summarizeLines;
+
+export const summaryForStoredMaintenanceMonth = (params: {
+  monthId: string;
+  visits: Record<string, unknown>[];
+  stored?: Record<string, unknown>;
+  settings: MaintenanceSettings;
+}) => {
+  const status = deriveMonthStatus(
+    params.monthId,
+    asString(params.stored?.status),
+  );
+  if (status === 'CLOSED' && Array.isArray(params.stored?.snapshotLines)) {
+    return summarizeLines(params.stored.snapshotLines as MaintenanceBillingLine[]);
+  }
+  const emptyLabels = new Map<string, string>();
+  return summarizeLines(
+    assembleMaintenanceLines(
+      params.visits,
+      params.stored,
+      params.settings,
+      emptyLabels,
+      emptyLabels,
+    ),
+  );
+};
+
+export const buildMonthDetail = async (params: {
+  monthId: string;
+  billingTable: string;
+  visitsTable: string;
+  settingsTable: string;
+  providersTable: string;
+  visitTypesTable: string;
+  propertiesTable: string;
+  persistSummary?: boolean;
+}) => {
+  const stored = await getMonthRecord(params.billingTable, params.monthId);
+  const status = deriveMonthStatus(params.monthId, asString(stored?.status));
+
+  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
+    const lines = stored.snapshotLines as MaintenanceBillingLine[];
+    const summary = summarizeLines(lines);
+    const settings = await ensureSettings({
+      settingsTable: params.settingsTable,
+      providersTable: params.providersTable,
+      visitTypesTable: params.visitTypesTable,
+    });
+    return {
+      month: {
+        id: params.monthId,
+        status,
+        closedAt: asString(stored?.closedAt) || undefined,
+        canClose: false,
+        canReopen: true,
+        canEdit: false,
+        ...summary,
+      },
+      lines,
+      stored,
+      settings,
+    };
+  }
+
+  const [visits, settings, propertyById, visitTypes] = await Promise.all([
+    loadMaintenanceVisitsForMonth(params.visitsTable, params.monthId),
+    ensureSettings({
+      settingsTable: params.settingsTable,
+      providersTable: params.providersTable,
+      visitTypesTable: params.visitTypesTable,
+    }),
+    loadPropertyLabels(params.propertiesTable),
+    scanAllItems(params.visitTypesTable),
+  ]);
+  const visitTypeById = new Map(
+    visitTypes.map((item) => [asString(item.id), asString(item.name) || asString(item.id)]),
+  );
+  const lines = assembleMaintenanceLines(
+    visits,
+    stored,
+    settings,
+    propertyById,
+    visitTypeById,
+  );
   const summary = summarizeLines(lines);
+  const countable = lines.filter((line) => !line.dismissed);
   const canClose =
     status === 'PENDING_TO_CLOSE' &&
     lines.length > 0 &&
-    lines.every((line) => isApprovedOrAbove(line.billingStatus));
+    countable.every((line) => isApprovedOrAbove(line.billingStatus));
   const month = {
     id: params.monthId,
     status,

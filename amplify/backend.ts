@@ -950,6 +950,18 @@ maintenanceBillingTable.grantReadWriteData(
 maintenanceBillingTable.grantReadWriteData(
   backend.upsertMaintenanceBilling.resources.lambda,
 );
+backend.getTodaySummary.addEnvironment(
+  'MAINTENANCE_BILLING_TABLE',
+  maintenanceBillingTable.tableName,
+);
+backend.getTodaySummary.addEnvironment(
+  'MAINTENANCE_SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
+maintenanceBillingTable.grantReadData(backend.getTodaySummary.resources.lambda);
+maintenanceBillingDetailsTable.grantReadData(
+  backend.getTodaySummary.resources.lambda,
+);
 maintenanceBillingTable.grantReadData(
   backend.exportMaintenanceBilling.resources.lambda,
 );

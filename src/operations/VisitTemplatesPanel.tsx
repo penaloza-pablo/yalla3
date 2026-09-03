@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { getVisitTemplates, saveVisitTemplate } from './api'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
+import { resolveTeamIdForVisitType } from './visitTypeIds'
 import {
   emptyTemplateForm,
   mapVisitTemplate,
@@ -236,7 +237,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
     setTemplateForm((current) => ({
       ...current,
       visitTypeId,
-      teamId: visitType?.defaultTeamId ?? current.teamId,
+      teamId: resolveTeamIdForVisitType(visitType, teams, current.teamId),
       assignedUserId: '',
       estimatedDurationMinutes: visitType?.defaultDurationMinutes
         ? String(visitType.defaultDurationMinutes)
@@ -471,37 +472,77 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                     <td>{template.tasks.length}</td>
                     <td>{template.active ? 'Active' : 'Inactive'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn-link"
-                        onClick={() => openEditTemplate(template)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-link"
-                        onClick={() => openDuplicateTemplate(template)}
-                      >
-                        Duplicate
-                      </button>
-                      {template.active ? (
+                      <div className="action-buttons">
                         <button
                           type="button"
-                          className="btn-link"
-                          onClick={() => void deactivateTemplate(template)}
+                          className="btn-icon btn-icon-ghost"
+                          aria-label={t('operations.editTemplate')}
+                          title={t('operations.editTemplate')}
+                          onClick={() => openEditTemplate(template)}
                         >
-                          Deactivate
+                          <span aria-hidden="true">✎</span>
                         </button>
-                      ) : (
                         <button
                           type="button"
-                          className="btn-link"
-                          onClick={() => void reactivateTemplate(template)}
+                          className="btn-icon btn-icon-ghost"
+                          aria-label={t('operations.duplicateTemplate')}
+                          title={t('operations.duplicateTemplate')}
+                          onClick={() => openDuplicateTemplate(template)}
                         >
-                          Reactivate
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            width="16"
+                            height="16"
+                          >
+                            <path
+                              d="M7 3h10v10h-2V5H7V3zm-4 4h10v10H3V7zm2 2v6h6V9H5z"
+                              fill="currentColor"
+                            />
+                          </svg>
                         </button>
-                      )}
+                        {template.active ? (
+                          <button
+                            type="button"
+                            className="btn-icon btn-icon-ghost"
+                            aria-label={t('operations.deactivateTemplate')}
+                            title={t('operations.deactivateTemplate')}
+                            onClick={() => void deactivateTemplate(template)}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              width="16"
+                              height="16"
+                            >
+                              <path
+                                d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm3.5 10.9L8.9 6.5 6.5 8.9l4.6 4.6 2.4-2.4z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-icon btn-icon-ghost"
+                            aria-label={t('operations.reactivateTemplate')}
+                            title={t('operations.reactivateTemplate')}
+                            onClick={() => void reactivateTemplate(template)}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              width="16"
+                              height="16"
+                            >
+                              <path
+                                d="M10 3a7 7 0 1 0 6.3 4H14a5 5 0 1 1-4 8.5V13l4 3-4 3v-2.2A7 7 0 0 0 10 3z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

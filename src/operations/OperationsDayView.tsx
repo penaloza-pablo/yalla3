@@ -245,7 +245,7 @@ export function OperationsDayView({
                 onDayDateChange(addDaysToDateString(dayViewDate, 1))
               }
             >
-              <span aria-hidden="true">&gt;&gt;</span>
+              <span aria-hidden="true">&gt;</span>
             </button>
           </div>
         </div>

@@ -104,6 +104,10 @@ export const allPermissionKeys = () => [
 const pages = (...names: string[]) => names.map(pagePermission)
 
 export const ADMIN_ROLE_ID = 'admin'
+export const KNOCK_KNOCK_SUPERVISOR_ROLE_ID = 'knock-knock-supervisor'
+
+export const canViewMaintenanceHoursRemaining = (roleId?: string | null) =>
+  roleId === ADMIN_ROLE_ID || roleId === KNOCK_KNOCK_SUPERVISOR_ROLE_ID
 
 export const ROLE_SEEDS: {
   id: string
@@ -116,7 +120,7 @@ export const ROLE_SEEDS: {
     permissions: allPermissionKeys(),
   },
   {
-    id: 'knock-knock-supervisor',
+    id: KNOCK_KNOCK_SUPERVISOR_ROLE_ID,
     name: 'Knock-Knock Supervisor',
     permissions: [
       ...pages(

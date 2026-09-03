@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
+import { canViewMaintenanceHoursRemaining } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
 
 type TodaySummary = {
   date: string
@@ -17,6 +19,7 @@ type TodaySummary = {
     currentCompleted: number
     currentTotal: number
     previousOpen: number
+    remainingHours?: number
   }
   reviews: {
     needsAttention: number
@@ -42,7 +45,7 @@ type Props = {
   refreshKey?: number
 }
 
-const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary'
+const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v2'
 
 const readCachedSummary = (): TodaySummary | null => {
   try {
@@ -60,13 +63,15 @@ const readCachedSummary = (): TodaySummary | null => {
   }
 }
 
-const writeCachedSummary = (summary: TodaySummary) => {
+const clearTodaySummaryCache = () => {
   try {
-    sessionStorage.setItem(TODAY_SUMMARY_CACHE_KEY, JSON.stringify(summary))
+    sessionStorage.removeItem(TODAY_SUMMARY_CACHE_KEY)
   } catch {
     // Ignore quota or private-mode failures.
   }
 }
+
+export { clearTodaySummaryCache }
 
 const TodayLoader = ({ label }: { label: string }) => (
   <div className="page-loader" role="status" aria-live="polite" aria-label={label}>
@@ -118,6 +123,39 @@ const RatioMetric = ({
     </li>
   )
 }
+
+const writeCachedSummary = (summary: TodaySummary) => {
+  try {
+    sessionStorage.setItem(TODAY_SUMMARY_CACHE_KEY, JSON.stringify(summary))
+  } catch {
+    // Ignore quota or private-mode failures.
+  }
+}
+
+const RemainingHoursMetric = ({
+  hours,
+  t,
+  onClick,
+}: {
+  hours: number
+  t: TFunction
+  onClick: () => void
+}) => (
+  <li>
+    <button type="button" className="today-metric-btn" onClick={onClick}>
+      <span>{t('today.hoursRemaining')}</span>
+      <strong>
+        {hours < 0
+          ? t('today.hoursRemainingSurplus', {
+              hours: String(Math.abs(hours)).replace('.', ','),
+            })
+          : t('today.hoursRemainingValue', {
+              hours: String(hours).replace('.', ','),
+            })}
+      </strong>
+    </button>
+  </li>
+)
 
 const CountMetric = ({
   label,
@@ -172,6 +210,8 @@ export function TodayView({
   refreshKey = 0,
 }: Props) {
   const { t } = useTranslation()
+  const { roleId } = usePermissions()
+  const canSeeRemainingHours = canViewMaintenanceHoursRemaining(roleId)
   const [summary, setSummary] = useState<TodaySummary | null>(readCachedSummary)
   const [isLoading, setIsLoading] = useState(() => !readCachedSummary())
   const [error, setError] = useState('')
@@ -212,6 +252,7 @@ export function TodayView({
     if (refreshKey <= 0) {
       return
     }
+    clearTodaySummaryCache()
     void loadSummary()
   }, [loadSummary, refreshKey])
 
@@ -283,6 +324,16 @@ export function TodayView({
             onClick={() => onNavigate('Maintenance Billing')}
           />
         </MetricsOrDone>
+        {canSeeRemainingHours &&
+        typeof summary.maintenance.remainingHours === 'number' ? (
+          <ul className="today-metrics">
+            <RemainingHoursMetric
+              hours={summary.maintenance.remainingHours}
+              t={t}
+              onClick={() => onNavigate('Maintenance Billing')}
+            />
+          </ul>
+        ) : null}
       </article>
 
       <article className="card today-card">

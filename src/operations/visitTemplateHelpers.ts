@@ -50,8 +50,8 @@ export const mapVisitTemplate = (
     title: String(item.title ?? ''),
     assignedUserId: String(item.assignedUserId ?? ''),
     description: String(item.description ?? ''),
-    scheduledStartTime: String(item.scheduledStartTime ?? '09:00'),
-    scheduledEndTime: String(item.scheduledEndTime ?? '10:00'),
+    scheduledStartTime: String(item.scheduledStartTime ?? '11:00'),
+    scheduledEndTime: String(item.scheduledEndTime ?? '12:00'),
     estimatedDurationMinutes:
       typeof item.estimatedDurationMinutes === 'number'
         ? item.estimatedDurationMinutes
@@ -147,8 +147,8 @@ export const emptyTemplateForm = () => ({
   assignedUserId: '',
   title: '',
   description: '',
-  scheduledStartTime: '09:00',
-  scheduledEndTime: '10:00',
+  scheduledStartTime: '11:00',
+  scheduledEndTime: '12:00',
   estimatedDurationMinutes: '',
   tasks: [{ title: '', titleEs: '', description: '', urgent: false }],
 })

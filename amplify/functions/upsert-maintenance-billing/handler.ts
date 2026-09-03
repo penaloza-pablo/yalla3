@@ -173,9 +173,16 @@ export const handler = async (event: {
           message: 'The current month cannot be closed.',
         });
       }
+      if (detail.lines.length === 0) {
+        return buildHttpResponse(400, {
+          message:
+            'Every line must be Approved, Billed, or Paid before closing the month.',
+        });
+      }
       if (
-        detail.lines.length === 0 ||
-        detail.lines.some((line) => !isApprovedOrAbove(line.billingStatus))
+        detail.lines.filter((line) => !line.dismissed).some(
+          (line) => !isApprovedOrAbove(line.billingStatus),
+        )
       ) {
         return buildHttpResponse(400, {
           message:
@@ -255,6 +262,10 @@ export const handler = async (event: {
           hoursDisabled,
           price,
           billingStatus,
+          dismissed:
+            payload.dismissed === undefined
+              ? Boolean(current.dismissed)
+              : Boolean(payload.dismissed),
         };
         if (!override.providerId) {
           return buildHttpResponse(400, { message: 'providerId is required.' });
@@ -320,6 +331,16 @@ export const handler = async (event: {
           billingStatus: isBillingStatus(payload.billingStatus)
             ? payload.billingStatus
             : 'WAITING_APPROVAL',
+          dismissed:
+            payload.dismissed === undefined
+              ? Boolean(
+                  manualLines.find(
+                    (item) =>
+                      item.id ===
+                      (asString(payload.lineId) || ''),
+                  )?.dismissed,
+                )
+              : Boolean(payload.dismissed),
         };
         const index = manualLines.findIndex((item) => item.id === line.id);
         if (action === 'update-manual') {
@@ -357,12 +378,7 @@ export const handler = async (event: {
           message: 'Only To Estimate lines can be grouped.',
         });
       }
-      const propertyId = asString(selected[0].propertyId);
-      if (!propertyId || selected.some((line) => line.propertyId !== propertyId)) {
-        return buildHttpResponse(400, {
-          message: 'Grouped lines must belong to the same property.',
-        });
-      }
+      const propertyId = asString(selected[0].propertyId) || selected[0].id;
       const flattened = flattenMergeSelection(selected);
       if (flattened.visitIds.length + flattened.manualLineIds.length < 2) {
         return buildHttpResponse(400, {
@@ -514,6 +530,10 @@ export const handler = async (event: {
           billingStatus: isBillingStatus(payload.billingStatus)
             ? payload.billingStatus
             : current.billingStatus,
+          dismissed:
+            payload.dismissed === undefined
+              ? Boolean(current.dismissed)
+              : Boolean(payload.dismissed),
         };
       }
       await persistRecord(context.billingTable, monthId, { mergedGroups });

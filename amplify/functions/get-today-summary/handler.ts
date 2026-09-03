@@ -13,6 +13,15 @@ import {
   listVisibleMonthIds,
 } from '../shared/cleaning-billing';
 import {
+  currentMonthId,
+  getMonthRecord as getMaintenanceMonthRecord,
+  getSettingsRecord,
+  isMaintenanceVisitType,
+  listVisibleMonthIds as listMaintenanceMonthIds,
+  normalizeSettings,
+  summaryForStoredMaintenanceMonth,
+} from '../shared/maintenance-billing';
+import {
   docClient,
   getTodayInMadrid,
   resolveVisitStatus,
@@ -156,9 +165,10 @@ const countVisitsForTypes = (
     if (!visitTypeIds.has(typeId)) {
       continue;
     }
-    const scheduledDate = toDateOnly(
+    const scheduledDateRaw = asString(
       itemField(item, ['scheduledDate', 'scheduled_date']),
     );
+    const scheduledDate = toDateOnly(scheduledDateRaw);
     const status = resolveVisitStatus({
       status: asString(itemField(item, ['status', 'Status'])),
       scheduledDate,
@@ -166,7 +176,8 @@ const countVisitsForTypes = (
     if (status === 'CANCELLED') {
       continue;
     }
-    if (scheduledDate === today) {
+    // Match Daily Ops Day, which queries the date index by exact YYYY-MM-DD.
+    if (scheduledDateRaw === today) {
       counts.currentTotal += 1;
       if (status === 'COMPLETED') {
         counts.currentCompleted += 1;
@@ -199,6 +210,8 @@ export const handler = async (event: HttpEvent) => {
   const reviewsTable = process.env.REVIEWS_TABLE;
   const inventoryTable = process.env.INVENTORY_TABLE;
   const cleaningBillingTable = process.env.CLEANING_BILLING_TABLE;
+  const maintenanceBillingTable = process.env.MAINTENANCE_BILLING_TABLE;
+  const maintenanceSettingsTable = process.env.MAINTENANCE_SETTINGS_TABLE;
   const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
   if (
     !visitsTable ||
@@ -206,17 +219,20 @@ export const handler = async (event: HttpEvent) => {
     !plansTable ||
     !reviewsTable ||
     !inventoryTable ||
-    !cleaningBillingTable
+    !cleaningBillingTable ||
+    !maintenanceBillingTable ||
+    !maintenanceSettingsTable
   ) {
     return buildHttpResponse(500, {
       message:
-        'VISITS_TABLE, TASKS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, INVENTORY_TABLE, or CLEANING_BILLING_TABLE is not configured.',
+        'VISITS_TABLE, TASKS_TABLE, CLEANING_PLANS_TABLE, REVIEWS_TABLE, INVENTORY_TABLE, CLEANING_BILLING_TABLE, MAINTENANCE_BILLING_TABLE, or MAINTENANCE_SETTINGS_TABLE is not configured.',
     });
   }
 
   const today = getTodayInMadrid();
   const tomorrow = addDaysToDateString(today, 1);
   const monthIds = listVisibleMonthIds();
+  const maintenanceMonthIds = listMaintenanceMonthIds().slice(0, 2);
 
   try {
     const [
@@ -228,6 +244,8 @@ export const handler = async (event: HttpEvent) => {
       detailItems,
       planItems,
       storedMonths,
+      maintenanceStoredMonths,
+      maintenanceSettingsItem,
       unassignedPending,
     ] = await Promise.all([
       scanProjected(visitsTable, {
@@ -253,6 +271,16 @@ export const handler = async (event: HttpEvent) => {
             [monthId, await getMonthRecord(cleaningBillingTable, monthId)] as const,
         ),
       ),
+      Promise.all(
+        maintenanceMonthIds.map(
+          async (monthId) =>
+            [
+              monthId,
+              await getMaintenanceMonthRecord(maintenanceBillingTable, monthId),
+            ] as const,
+        ),
+      ),
+      getSettingsRecord(maintenanceSettingsTable),
       countUnassignedPending(tasksTable),
     ]);
 
@@ -273,6 +301,42 @@ export const handler = async (event: HttpEvent) => {
       new Set(MAINTENANCE_VISIT_TYPE_IDS),
       today,
     );
+    const maintenanceSettings = normalizeSettings(maintenanceSettingsItem);
+    const storedMaintenanceByMonth = new Map(maintenanceStoredMonths);
+    const thisMonthId = currentMonthId();
+    let maintenanceWarnings = 0;
+    let remainingHours = maintenanceSettings.monthlyHoursPool;
+    for (const monthId of maintenanceMonthIds) {
+      const monthVisits = visits.filter((visit) => {
+        const typeId = asString(
+          itemField(visit, ['visitTypeId', 'visit_type_id', 'VisitTypeId']),
+        );
+        if (!isMaintenanceVisitType(typeId)) {
+          return false;
+        }
+        const date = toDateOnly(
+          itemField(visit, ['scheduledDate', 'scheduled_date']),
+        );
+        if (!date.startsWith(monthId)) {
+          return false;
+        }
+        return (
+          asString(itemField(visit, ['status', 'Status'])).toUpperCase() !==
+          'CANCELLED'
+        );
+      });
+      const summary = summaryForStoredMaintenanceMonth({
+        monthId,
+        visits: monthVisits,
+        stored: storedMaintenanceByMonth.get(monthId),
+        settings: maintenanceSettings,
+      });
+      maintenanceWarnings += summary.warningCount;
+      if (monthId === thisMonthId) {
+        remainingHours =
+          maintenanceSettings.monthlyHoursPool - summary.validatedHours;
+      }
+    }
 
     const planningReady =
       (asString(todayPlan?.status).toUpperCase() === 'READY' ? 1 : 0) +
@@ -312,7 +376,8 @@ export const handler = async (event: HttpEvent) => {
       maintenance: {
         currentCompleted: maintenance.currentCompleted,
         currentTotal: maintenance.currentTotal,
-        previousOpen: maintenance.previousOpen,
+        previousOpen: maintenanceWarnings,
+        remainingHours,
       },
       reviews: {
         needsAttention: reviewsNeedAttention,

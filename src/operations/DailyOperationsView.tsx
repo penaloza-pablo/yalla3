@@ -18,7 +18,7 @@ import {
 import { OperationsAgendaView } from './OperationsAgendaView'
 import { OperationsDayView, type DayBookingEvent } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
-import { TodayView } from '../today/TodayView'
+import { TodayView, clearTodaySummaryCache } from '../today/TodayView'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
@@ -28,7 +28,7 @@ import {
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
-import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard } from './visitTypeIds'
+import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { displayTaskTitle } from './taskTitleDisplay'
@@ -157,8 +157,8 @@ const emptyVisitForm = () => ({
   teamId: '',
   assignedUserId: '',
   scheduledDate: getTodayMadrid(),
-  scheduledStartTime: '09:00',
-  scheduledEndTime: '10:00',
+  scheduledStartTime: '11:00',
+  scheduledEndTime: '12:00',
   priority: 'MEDIUM',
   title: '',
   description: '',
@@ -1082,7 +1082,7 @@ export function DailyOperationsView({
     setVisitForm((current) => ({
       ...current,
       visitTypeId,
-      teamId: visitType?.defaultTeamId ?? current.teamId,
+      teamId: resolveTeamIdForVisitType(visitType, teams, current.teamId),
       estimatedDurationMinutes: visitType?.defaultDurationMinutes
         ? String(visitType.defaultDurationMinutes)
         : current.estimatedDurationMinutes,
@@ -1173,6 +1173,8 @@ export function DailyOperationsView({
             })
           : t('operations.visitSaved'),
       )
+      clearTodaySummaryCache()
+      setDashboardRefreshKey((current) => current + 1)
       if (!mapped || !isCreatingVisit) {
         await loadVisits()
       }
@@ -1394,6 +1396,8 @@ export function DailyOperationsView({
         ...extra,
       })
       setMessage(successMessage ?? `Visit marked as ${status}.`)
+      clearTodaySummaryCache()
+      setDashboardRefreshKey((current) => current + 1)
       await loadVisits()
       if (selectedVisitId === visit.id && endpoints.visits) {
         const refreshed = await getVisitById(endpoints.visits, visit.id)
@@ -1668,6 +1672,39 @@ export function DailyOperationsView({
           <p className="eyebrow">{pageEyebrow}</p>
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
+            {mode === 'dashboard' && dashboardViewMode === 'dashboard' ? (
+              <div className="operations-day-date-controls">
+                <span className="operations-dashboard-date-label">
+                  {formatAgendaDayLabel(getTodayMadrid())}
+                </span>
+                <label className="btn-ghost operations-day-calendar-btn">
+                  <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
+                    <path
+                      d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <input
+                    className="operations-day-date-input"
+                    type="date"
+                    value={getTodayMadrid()}
+                    onChange={(event) => goToDayView(event.target.value)}
+                    aria-label={t('operations.chooseDate')}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-ghost operations-day-next-btn"
+                  aria-label={t('operations.nextDay')}
+                  title={t('operations.nextDay')}
+                  onClick={() =>
+                    goToDayView(addDaysToDateString(getTodayMadrid(), 1))
+                  }
+                >
+                  <span aria-hidden="true">&gt;</span>
+                </button>
+              </div>
+            ) : null}
           </div>
           {mode === 'dashboard' ? null : (
             <p className="subtitle">{pageSubtitle}</p>
@@ -2929,9 +2966,6 @@ export function DailyOperationsView({
                   <div className="visit-tasks-header">
                     <div>
                       <h4>Tasks</h4>
-                      <p className="subtitle">
-                        Optional. Tasks are created when you save the visit.
-                      </p>
                     </div>
                     <button
                       type="button"
@@ -3187,8 +3221,11 @@ export function DailyOperationsView({
             </div>
             <div className="modal-body">
               <p>
-                This visit has {visitTasks.length} task
-                {visitTasks.length === 1 ? '' : 's'}. What should happen to them?
+                {visitTasks.length === 0
+                  ? t('operations.cancelVisitNoTasks')
+                  : t('operations.cancelVisitTasksPrompt', {
+                      count: visitTasks.length,
+                    })}
               </p>
               {visitTasks.length > 0 ? (
                 <div className="cancel-visit-options">
