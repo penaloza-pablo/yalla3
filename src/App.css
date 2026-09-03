@@ -2287,6 +2287,11 @@ th {
   color: #b54708;
 }
 
+.operations-cleaner-badge {
+  background: #f0fdfa;
+  color: #0f766e;
+}
+
 .operations-detail-fields {
   display: flex;
   flex-direction: column;

@@ -62,6 +62,20 @@ const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
   return String(item.cleaningTypeName ?? '').trim()
 }
 
+const cleanerNameFromPlanRow = (
+  item: Record<string, unknown> | undefined,
+  nameById: Map<string, string>,
+) => {
+  if (!item) {
+    return ''
+  }
+  const cleanerId = String(item.cleanerId ?? '').trim()
+  if (!cleanerId) {
+    return ''
+  }
+  return nameById.get(cleanerId)?.trim() || String(item.cleanerName ?? '').trim()
+}
+
 type VisitForm = {
   id: string
   propertyId: string
@@ -205,6 +219,7 @@ export function VisitDetailModal({
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false)
   const [cleaningTypeBadge, setCleaningTypeBadge] =
     useState<CleaningTypeBadge | null>(null)
+  const [cleanerBadge, setCleanerBadge] = useState<string | null>(null)
   const [dismissingTaskId, setDismissingTaskId] = useState('')
   const [visitForm, setVisitForm] = useState<VisitForm | null>(null)
   const [completeForm, setCompleteForm] = useState({
@@ -238,6 +253,10 @@ export function VisitDetailModal({
       cleaningPlan: getEndpoint(
         'getCleaningPlanUrl',
         import.meta.env.VITE_GET_CLEANING_PLAN_URL,
+      ),
+      cleaners: getEndpoint(
+        'getCleanersUrl',
+        import.meta.env.VITE_GET_CLEANERS_URL,
       ),
       visitTemplates: getEndpoint(
         'getVisitTemplatesUrl',
@@ -484,20 +503,34 @@ export function VisitDetailModal({
   useEffect(() => {
     if (!visit || visit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
       setCleaningTypeBadge(null)
+      setCleanerBadge(null)
       return
     }
     const date = visit.scheduledDate.trim()
     const endpoint = endpoints.cleaningPlan
     if (!date || !endpoint) {
       setCleaningTypeBadge(null)
+      setCleanerBadge(null)
       return
     }
     let cancelled = false
-    void fetchJson<{
-      status?: string
-      rows?: Record<string, unknown>[]
-    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
-      .then((payload) => {
+    const cleanersUrl = endpoints.cleaners
+      ? `${endpoints.cleaners}${
+          endpoints.cleaners.includes('?') ? '&' : '?'
+        }includeInactive=true`
+      : ''
+    void Promise.all([
+      fetchJson<{
+        status?: string
+        rows?: Record<string, unknown>[]
+      }>(`${endpoint}?date=${encodeURIComponent(date)}`),
+      cleanersUrl
+        ? fetchJson<{ items?: Record<string, unknown>[] }>(cleanersUrl).catch(
+            () => ({ items: [] as Record<string, unknown>[] }),
+          )
+        : Promise.resolve({ items: [] as Record<string, unknown>[] }),
+    ])
+      .then(([payload, cleanersPayload]) => {
         if (cancelled) {
           return
         }
@@ -509,12 +542,23 @@ export function VisitDetailModal({
         const name = row ? cleaningTypeNameFromPlanRow(row) : ''
         if (isReady && name) {
           setCleaningTypeBadge({ pending: false, label: name })
-          return
+        } else {
+          setCleaningTypeBadge({
+            pending: true,
+            label: t('operations.cleaningTypePending'),
+          })
         }
-        setCleaningTypeBadge({
-          pending: true,
-          label: t('operations.cleaningTypePending'),
-        })
+        const nameById = new Map(
+          (cleanersPayload.items ?? [])
+            .map((item) => {
+              const id = String(item.id ?? '').trim()
+              const cleanerName = String(item.name ?? '').trim()
+              return [id, cleanerName] as const
+            })
+            .filter((entry) => entry[0] && entry[1]),
+        )
+        const assignedCleaner = cleanerNameFromPlanRow(row, nameById)
+        setCleanerBadge(assignedCleaner || null)
       })
       .catch(() => {
         if (!cancelled) {
@@ -522,12 +566,13 @@ export function VisitDetailModal({
             pending: true,
             label: t('operations.cleaningTypePending'),
           })
+          setCleanerBadge(null)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [endpoints.cleaningPlan, t, visit])
+  }, [endpoints.cleaners, endpoints.cleaningPlan, t, visit])
 
   useEffect(() => {
     const { body } = document
@@ -853,6 +898,14 @@ export function VisitDetailModal({
                     }`}
                   >
                     {cleaningTypeBadge.label}
+                  </span>
+                ) : null}
+                {cleanerBadge ? (
+                  <span
+                    className="status operations-visit-status operations-cleaner-badge"
+                    aria-label={t('cleaningPlan.cleaner')}
+                  >
+                    {cleanerBadge}
                   </span>
                 ) : null}
               </div>

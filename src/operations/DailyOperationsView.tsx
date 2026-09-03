@@ -133,6 +133,7 @@ const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
 type CleaningPlanDayLookup = {
   status: 'READY' | 'DRAFT'
   typeNameByVisitId: Record<string, string>
+  cleanerIdByVisitId: Record<string, string>
 }
 
 const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
@@ -345,6 +346,9 @@ export function DailyOperationsView({
   const [cleaningPlansByDate, setCleaningPlansByDate] = useState<
     Record<string, CleaningPlanDayLookup>
   >({})
+  const [cleanerNameById, setCleanerNameById] = useState<Map<string, string>>(
+    () => new Map(),
+  )
   const [dashboardViewMode, setDashboardViewMode] =
     useState<DashboardViewMode>('dashboard')
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
@@ -467,6 +471,10 @@ export function DailyOperationsView({
       cleaningPlan: getEndpoint(
         'getCleaningPlanUrl',
         import.meta.env.VITE_GET_CLEANING_PLAN_URL,
+      ),
+      cleaners: getEndpoint(
+        'getCleanersUrl',
+        import.meta.env.VITE_GET_CLEANERS_URL,
       ),
     }),
     [getEndpoint],
@@ -619,6 +627,23 @@ export function DailyOperationsView({
       label: t('operations.cleaningTypePending'),
     }
   }, [cleaningPlansByDate, selectedVisit, t])
+
+  const cleanerBadge = useMemo(() => {
+    if (
+      !selectedVisit ||
+      selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID
+    ) {
+      return null
+    }
+    const cleanerId =
+      cleaningPlansByDate[selectedVisit.scheduledDate]?.cleanerIdByVisitId?.[
+        selectedVisit.id
+      ]?.trim() ?? ''
+    if (!cleanerId) {
+      return null
+    }
+    return cleanerNameById.get(cleanerId)?.trim() || null
+  }, [cleanerNameById, cleaningPlansByDate, selectedVisit])
 
   const teamUsers = useMemo(() => {
     if (!visitForm.teamId) return users
@@ -831,6 +856,41 @@ export function DailyOperationsView({
   }, [selectedVisitId, loadVisitTasks])
 
   useEffect(() => {
+    const endpoint = endpoints.cleaners
+    if (!endpoint) {
+      return
+    }
+    let cancelled = false
+    void fetchJson<{ items?: Record<string, unknown>[] }>(
+      `${endpoint}?includeInactive=true`,
+    )
+      .then((payload) => {
+        if (cancelled) {
+          return
+        }
+        setCleanerNameById(
+          new Map(
+            (payload.items ?? [])
+              .map((item) => {
+                const id = String(item.id ?? '').trim()
+                const name = String(item.name ?? '').trim()
+                return [id, name] as const
+              })
+              .filter((entry) => entry[0] && entry[1]),
+          ),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCleanerNameById(new Map())
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [endpoints.cleaners])
+
+  useEffect(() => {
     if (mode !== 'dashboard' || !selectedVisit) {
       return
     }
@@ -852,11 +912,16 @@ export function DailyOperationsView({
     }>(`${endpoint}?date=${encodeURIComponent(date)}`)
       .then((payload) => {
         const typeNameByVisitId: Record<string, string> = {}
+        const cleanerIdByVisitId: Record<string, string> = {}
         for (const row of payload.rows ?? []) {
           const visitId = String(row.visitId ?? '').trim()
           const name = cleaningTypeNameFromPlanRow(row)
           if (visitId && name) {
             typeNameByVisitId[visitId] = name
+          }
+          const cleanerId = String(row.cleanerId ?? '').trim()
+          if (visitId && cleanerId) {
+            cleanerIdByVisitId[visitId] = cleanerId
           }
         }
         setCleaningPlansByDate((current) => ({
@@ -867,13 +932,18 @@ export function DailyOperationsView({
                 ? 'READY'
                 : 'DRAFT',
             typeNameByVisitId,
+            cleanerIdByVisitId,
           },
         }))
       })
       .catch(() => {
         setCleaningPlansByDate((current) => ({
           ...current,
-          [date]: { status: 'DRAFT', typeNameByVisitId: {} },
+          [date]: {
+            status: 'DRAFT',
+            typeNameByVisitId: {},
+            cleanerIdByVisitId: {},
+          },
         }))
       })
       .finally(() => {
@@ -2364,6 +2434,14 @@ export function DailyOperationsView({
                       }`}
                     >
                       {cleaningTypeBadge.label}
+                    </span>
+                  ) : null}
+                  {cleanerBadge ? (
+                    <span
+                      className="status operations-visit-status operations-cleaner-badge"
+                      aria-label={t('cleaningPlan.cleaner')}
+                    >
+                      {cleanerBadge}
                     </span>
                   ) : null}
                 </div>
