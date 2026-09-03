@@ -231,9 +231,8 @@ export const handler = async (event: HttpEvent) => {
       unassignedPending,
     ] = await Promise.all([
       scanProjected(visitsTable, {
-        expression:
-          '#id, visitTypeId, scheduledDate, #status, propertyId, Property, #property',
-        names: { '#id': 'id', '#status': 'status', '#property': 'property' },
+        expression: '#id, visitTypeId, scheduledDate, #status, propertyId',
+        names: { '#id': 'id', '#status': 'status' },
       }),
       getPlanByDate(plansTable, today),
       getPlanByDate(plansTable, tomorrow),
@@ -328,6 +327,7 @@ export const handler = async (event: HttpEvent) => {
       },
     });
   } catch (error) {
+    console.error('Failed to load today summary', error);
     return buildHttpResponse(500, {
       message: 'Failed to load today summary.',
       details: error instanceof Error ? error.message : String(error),
