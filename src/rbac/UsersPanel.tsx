@@ -11,6 +11,7 @@ type RoleOption = {
 }
 
 type CognitoUserRow = {
+  username: string
   email: string
   name: string
   status: string
@@ -44,6 +45,7 @@ export function UsersPanel({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savingEmail, setSavingEmail] = useState<string | null>(null)
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({})
 
   const fetchUsers = useCallback(async () => {
     const endpoint = getAmplifyEndpoint(
@@ -62,7 +64,11 @@ export function UsersPanel({
         throw new Error(await response.text())
       }
       const payload = (await response.json()) as UsersResponse
-      setRows(payload.items ?? [])
+      const items = payload.items ?? []
+      setRows(items)
+      setNameDrafts(
+        Object.fromEntries(items.map((item) => [item.email, item.name])),
+      )
       setRoles(payload.roles ?? [])
     } catch {
       setError(t('rbac.loadUsersError'))
@@ -81,13 +87,16 @@ export function UsersPanel({
       return rows
     }
     return rows.filter((row) =>
-      [row.email, row.name, row.roleName, row.status]
+      [row.email, nameDrafts[row.email] ?? row.name, row.roleName, row.status]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query)),
     )
-  }, [rows, searchQuery])
+  }, [nameDrafts, rows, searchQuery])
 
-  const assignRole = async (email: string, roleId: string) => {
+  const upsertUser = async (
+    row: CognitoUserRow,
+    payload: { roleId?: string | null; name?: string },
+  ) => {
     const endpoint = getAmplifyEndpoint(
       'upsertUserRoleUrl',
       import.meta.env.VITE_UPSERT_USER_ROLE_URL,
@@ -96,13 +105,17 @@ export function UsersPanel({
       setError(t('rbac.missingAssignEndpoint'))
       return
     }
-    setSavingEmail(email)
+    setSavingEmail(row.email)
     setError(null)
     try {
       const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, roleId: roleId || null }),
+        body: JSON.stringify({
+          email: row.email,
+          username: row.username,
+          ...payload,
+        }),
       })
       if (!response.ok) {
         throw new Error(await response.text())
@@ -110,10 +123,28 @@ export function UsersPanel({
       await fetchUsers()
       await refresh()
     } catch {
-      setError(t('rbac.assignError'))
+      setError(
+        payload.name !== undefined ? t('rbac.saveNameError') : t('rbac.assignError'),
+      )
     } finally {
       setSavingEmail(null)
     }
+  }
+
+  const assignRole = (email: string, roleId: string) => {
+    const row = rows.find((entry) => entry.email === email)
+    if (!row) {
+      return
+    }
+    void upsertUser(row, { roleId: roleId || null })
+  }
+
+  const saveName = (row: CognitoUserRow, name: string) => {
+    const nextName = name.trim()
+    if (nextName === (row.name || '').trim()) {
+      return
+    }
+    void upsertUser(row, { name: nextName })
   }
 
   return (
@@ -216,7 +247,27 @@ export function UsersPanel({
                 {visibleRows.map((row) => (
                   <tr key={row.email}>
                     <td>{row.email}</td>
-                    <td>{row.name || '—'}</td>
+                    <td>
+                      <input
+                        className="table-text-input"
+                        value={nameDrafts[row.email] ?? row.name}
+                        disabled={savingEmail === row.email}
+                        aria-label={t('common.name')}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNameDrafts((current) => ({
+                            ...current,
+                            [row.email]: value,
+                          }))
+                        }}
+                        onBlur={(event) => saveName(row, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
+                          }
+                        }}
+                      />
+                    </td>
                     <td>
                       <span className="tag">
                         {row.enabled ? row.status || 'ENABLED' : 'DISABLED'}

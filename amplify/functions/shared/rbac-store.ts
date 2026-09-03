@@ -22,6 +22,7 @@ export type RoleRecord = {
 export type UserRoleRecord = {
   email: string;
   roleId: string;
+  name: string;
 };
 
 const asStringArray = (value: unknown): string[] =>
@@ -120,8 +121,12 @@ export const listUserAssignments = async (
     .map((item) => ({
       email: typeof item.email === 'string' ? normalizeEmail(item.email) : '',
       roleId: typeof item.roleId === 'string' ? item.roleId : '',
+      name: typeof item.name === 'string' ? item.name.trim() : '',
     }))
-    .filter((entry) => entry.email && isKnownRoleId(entry.roleId));
+    .filter(
+      (entry) =>
+        entry.email && (isKnownRoleId(entry.roleId) || entry.name.length > 0),
+    );
 };
 
 export const hasAdminAssignment = async (tableName: string) => {

@@ -5148,6 +5148,16 @@ th {
   font-size: 0.9rem;
 }
 
+.table-text-input {
+  width: 100%;
+  min-width: 10rem;
+  max-width: 22rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+}
+
 .billing-inline-input:disabled {
   background: #f2f4f7;
   color: #667085;

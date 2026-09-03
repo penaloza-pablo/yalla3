@@ -3,6 +3,7 @@ import {
   ListUsersCommand,
   type UserType,
 } from '@aws-sdk/client-cognito-identity-provider';
+import { isKnownRoleId } from '../shared/rbac-catalog';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -55,6 +56,11 @@ export const handler = async (event: {
     const roleByEmail = new Map(
       assignments.map((entry) => [entry.email, entry.roleId]),
     );
+    const nameByEmail = new Map(
+      assignments
+        .filter((entry) => entry.name)
+        .map((entry) => [entry.email, entry.name]),
+    );
 
     const users: UserType[] = [];
     let paginationToken: string | undefined;
@@ -76,11 +82,12 @@ export const handler = async (event: {
         if (!email) {
           return null;
         }
-        const roleId = roleByEmail.get(email) ?? null;
+        const assignedRoleId = roleByEmail.get(email) ?? '';
+        const roleId = isKnownRoleId(assignedRoleId) ? assignedRoleId : null;
         return {
           username: user.Username ?? email,
           email,
-          name: displayName(user, email),
+          name: nameByEmail.get(email) || displayName(user, email),
           status: user.UserStatus ?? '',
           enabled: user.Enabled !== false,
           roleId,

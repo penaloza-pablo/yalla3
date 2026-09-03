@@ -41,6 +41,10 @@ export function RolesPanel({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [nameDraft, setNameDraft] = useState('')
+  const [roleNameDrafts, setRoleNameDrafts] = useState<Record<string, string>>(
+    {},
+  )
 
   const fetchRoles = useCallback(async () => {
     const endpoint = getAmplifyEndpoint(
@@ -59,7 +63,11 @@ export function RolesPanel({
         throw new Error(await response.text())
       }
       const payload = (await response.json()) as { items?: RoleRow[] }
-      setRoles(payload.items ?? [])
+      const items = payload.items ?? []
+      setRoles(items)
+      setRoleNameDrafts(
+        Object.fromEntries(items.map((item) => [item.id, item.name])),
+      )
     } catch {
       setError(t('rbac.loadRolesError'))
     } finally {
@@ -75,17 +83,19 @@ export function RolesPanel({
   const isAdmin = selected?.id === ADMIN_ROLE_ID
   const query = searchQuery.trim().toLowerCase()
   const visibleRoles = query
-    ? roles.filter((role) => role.name.toLowerCase().includes(query))
+    ? roles.filter((role) =>
+        (roleNameDrafts[role.id] ?? role.name).toLowerCase().includes(query),
+      )
     : roles
 
-  const openRole = (role: RoleRow) => {
-    setSelectedId(role.id)
-    setDraft([...role.permissions])
-    setError(null)
-  }
-
-  const saveRole = async () => {
-    if (!selected || isAdmin) {
+  const persistRole = async (role: RoleRow, name: string, permissions: string[]) => {
+    const nextName = name.trim()
+    if (!nextName) {
+      setError(t('rbac.nameRequired'))
+      setRoleNameDrafts((current) => ({ ...current, [role.id]: role.name }))
+      if (selectedId === role.id) {
+        setNameDraft(role.name)
+      }
       return
     }
     const endpoint = getAmplifyEndpoint(
@@ -102,17 +112,45 @@ export function RolesPanel({
       const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: selected.id, permissions: draft }),
+        body: JSON.stringify({
+          id: role.id,
+          name: nextName,
+          permissions,
+        }),
       })
       if (!response.ok) {
         throw new Error(await response.text())
       }
       await fetchRoles()
+      if (selectedId === role.id) {
+        setNameDraft(nextName)
+      }
     } catch {
       setError(t('rbac.saveRoleError'))
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const openRole = (role: RoleRow) => {
+    setSelectedId(role.id)
+    setDraft([...role.permissions])
+    setNameDraft(roleNameDrafts[role.id] ?? role.name)
+    setError(null)
+  }
+
+  const saveRoleName = (role: RoleRow, name: string) => {
+    if (name.trim() === role.name.trim()) {
+      return
+    }
+    void persistRole(role, name, role.permissions)
+  }
+
+  const saveRole = async () => {
+    if (!selected) {
+      return
+    }
+    await persistRole(selected, nameDraft, draft)
   }
 
   const renderPageRows = (sectionLabel: string, items: readonly string[]) =>
@@ -146,12 +184,12 @@ export function RolesPanel({
         <div className="page-header-leading">
           <p className="eyebrow">
             {selected
-              ? t('rbac.roleEyebrow', { name: selected.name })
+              ? t('rbac.roleEyebrow', { name: nameDraft || selected.name })
               : t('rbac.rolesEyebrow')}
           </p>
           <div className="page-title-row">
             <h1 className="page-title">
-              {selected ? selected.name : t('pages.Roles')}
+              {selected ? nameDraft || selected.name : t('pages.Roles')}
             </h1>
           </div>
           <p className="subtitle">
@@ -190,7 +228,7 @@ export function RolesPanel({
                   <button
                     className="btn-primary"
                     type="button"
-                    disabled={isAdmin || isSaving}
+                    disabled={isSaving || !nameDraft.trim()}
                     onClick={() => void saveRole()}
                   >
                     {t('common.save')}
@@ -274,7 +312,29 @@ export function RolesPanel({
                 <tbody>
                   {visibleRoles.map((role) => (
                     <tr key={role.id}>
-                      <td>{role.name}</td>
+                      <td>
+                        <input
+                          className="table-text-input"
+                          value={roleNameDrafts[role.id] ?? role.name}
+                          disabled={isSaving}
+                          aria-label={t('common.name')}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setRoleNameDrafts((current) => ({
+                              ...current,
+                              [role.id]: value,
+                            }))
+                          }}
+                          onBlur={(event) =>
+                            saveRoleName(role, event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.currentTarget.blur()
+                            }
+                          }}
+                        />
+                      </td>
                       <td>{role.permissions.length}</td>
                       <td>
                         <button
@@ -294,6 +354,15 @@ export function RolesPanel({
         </section>
       ) : (
         <section className="card">
+          <label className="form-field" style={{ marginBottom: 16, maxWidth: '22rem' }}>
+            {t('common.name')}
+            <input
+              value={nameDraft}
+              disabled={isSaving}
+              aria-label={t('common.name')}
+              onChange={(event) => setNameDraft(event.target.value)}
+            />
+          </label>
           <div className="table-wrap">
             <table className="data-table">
               <thead>

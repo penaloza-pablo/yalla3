@@ -383,6 +383,15 @@ backend.getCognitoUsers.resources.lambda.addToRolePolicy(
     resources: [backend.auth.resources.userPool.userPoolArn],
   }),
 );
+backend.upsertUserRole.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'cognito-idp:ListUsers',
+      'cognito-idp:AdminUpdateUserAttributes',
+    ],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
 visitTypesTable.grantReadData(backend.getVisitTypes.resources.lambda);
 visitTypesTable.grantReadWriteData(backend.upsertVisitType.resources.lambda);
 visitTemplatesTable.grantReadWriteData(backend.getVisitTemplates.resources.lambda);

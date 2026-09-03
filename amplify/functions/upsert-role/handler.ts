@@ -17,6 +17,7 @@ import { putItem } from '../shared/visit-task-utils';
 
 type Payload = {
   id?: string;
+  name?: string;
   permissions?: unknown;
 };
 
@@ -51,6 +52,16 @@ export const handler = async (event: {
     return buildHttpResponse(404, { message: 'Role not found.' });
   }
 
+  const hasNameInPayload = typeof payload?.name === 'string';
+  const nextName = hasNameInPayload
+    ? payload?.name?.trim() ?? ''
+    : typeof existing.name === 'string'
+      ? existing.name.trim()
+      : roleId;
+  if (!nextName) {
+    return buildHttpResponse(400, { message: 'name is required.' });
+  }
+
   const permissions =
     roleId === ADMIN_ROLE_ID
       ? allPermissionKeys()
@@ -59,14 +70,19 @@ export const handler = async (event: {
             (entry): entry is string =>
               typeof entry === 'string' && isKnownPermission(entry),
           )
-        : [];
+        : Array.isArray(existing.permissions)
+          ? existing.permissions.filter(
+              (entry): entry is string =>
+                typeof entry === 'string' && isKnownPermission(entry),
+            )
+          : [];
 
   const item = {
     ...existing,
     pk: rolePk(roleId),
     type: 'ROLE',
     id: roleId,
-    name: typeof existing.name === 'string' ? existing.name : roleId,
+    name: nextName,
     permissions,
     updatedAt: nowIso(),
   };

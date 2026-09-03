@@ -432,7 +432,7 @@
   },
   "sections": {
     "Finance": "Finance",
-    "Grow": "Grow",
+    "Grow": "Growth",
     "Inventory": "Inventory",
     "Ops": "Ops",
     "Cleaning": "Cleaning",
@@ -673,6 +673,8 @@
     "missingAssignEndpoint": "Missing assign-role endpoint. Redeploy the backend.",
     "loadUsersError": "Unable to load users. Please try again.",
     "assignError": "Unable to assign the role. Please try again.",
+    "saveNameError": "Unable to save the name. Please try again.",
+    "nameRequired": "Name is required.",
     "role": "Role",
     "noRole": "No role",
     "rolesEyebrow": "Settings / Roles",

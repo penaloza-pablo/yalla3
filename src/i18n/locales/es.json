@@ -43,7 +43,7 @@
     "lowStock": "Stock bajo",
     "ratio": "{{done}} de {{total}}",
     "goodJob": "Yalla! Todas las tareas completadas",
-    "openDailyOps": "Abrir Daily Ops"
+    "openDailyOps": "Abrir resumen diario"
   },
   "bookings": {
     "eyebrow": "Ops / Reservas",
@@ -299,12 +299,12 @@
     "Chatbot": "Chatbot",
     "Cleaning Plan": "Plan de limpieza",
     "Cleaning Incidents": "Cleaning Incidents",
-    "Cleaning Billing": "Cleaning Billing",
+    "Cleaning Billing": "Historial",
     "Cleaning settings": "Ajustes de limpieza",
     "Maintenance Incidents": "Maintenance Incidents",
-    "Maintenance Billing": "Maintenance Billing",
+    "Maintenance Billing": "Historial",
     "Maintenance settings": "Ajustes de mantenimiento",
-    "Daily Operations": "Daily Ops",
+    "Daily Operations": "Resumen diario",
     "Unassigned tasks": "Tareas sin asignar",
     "Visit templates": "Plantillas de visita",
     "Finance solution 1": "Solución Finance 1",
@@ -318,7 +318,7 @@
     "Purchases": "Compras",
     "Reviews": "Reseñas",
     "Subtractions": "Extracciones",
-    "Spot Check": "Spot Check",
+    "Spot Check": "Revisión y conteo",
     "Tech solution 1": "Solución Tech 1",
     "Logs": "Registros",
     "Users": "Usuarios",
@@ -431,21 +431,21 @@
     "informativeSection": "Sección informativa"
   },
   "sections": {
-    "Finance": "Finance",
-    "Grow": "Grow",
+    "Finance": "Finanzas",
+    "Grow": "Crecimiento",
     "Inventory": "Inventario",
     "Ops": "Ops",
-    "Cleaning": "Cleaning",
-    "Maintenance": "Maintenance",
+    "Cleaning": "Limpiezas",
+    "Maintenance": "Mantenimiento",
     "Settings": "Ajustes"
   },
   "navPages": {
     "Cleaning Plan": "Plan",
     "Cleaning Incidents": "Incidencias",
-    "Cleaning Billing": "Billing",
+    "Cleaning Billing": "Historial",
     "Cleaning settings": "Ajustes",
     "Maintenance Incidents": "Incidencias",
-    "Maintenance Billing": "Billing",
+    "Maintenance Billing": "Historial",
     "Maintenance settings": "Ajustes",
     "Unassigned tasks": "Sin asignar",
     "Visit templates": "Plantillas"
@@ -502,8 +502,8 @@
     "exportError": "No se pudieron exportar las extracciones. Inténtalo de nuevo."
   },
   "operations": {
-    "title": "Daily Ops",
-    "eyebrow": "Ops / Daily Ops",
+    "title": "Resumen diario",
+    "eyebrow": "Ops / Resumen diario",
     "scheduled": "Programadas",
     "overdue": "Atrasadas",
     "completedCancelled": "Completadas y canceladas",
@@ -673,6 +673,8 @@
     "missingAssignEndpoint": "Falta el endpoint para asignar roles. Vuelve a desplegar el backend.",
     "loadUsersError": "No se pudieron cargar los usuarios. Inténtalo de nuevo.",
     "assignError": "No se pudo asignar el rol. Inténtalo de nuevo.",
+    "saveNameError": "No se pudo guardar el nombre. Inténtalo de nuevo.",
+    "nameRequired": "El nombre es obligatorio.",
     "role": "Rol",
     "noRole": "Sin rol",
     "rolesEyebrow": "Ajustes / Roles",
@@ -695,19 +697,19 @@
     "specificActions": "Acciones específicas",
     "noAccess": "Tu cuenta aún no tiene rol. Pide a un admin que te asigne uno.",
     "actions": {
-      "cleaningCloseMonth": "Cerrar mes en Cleaning / Billing",
-      "maintenanceCloseMonth": "Cerrar mes en Maintenance / Billing",
-      "maintenanceCheckAfterEstimate": "Check en Maintenance / Billing si el estado no es Por estimar",
+      "cleaningCloseMonth": "Cerrar mes en Limpiezas / Historial",
+      "maintenanceCloseMonth": "Cerrar mes en Mantenimiento / Historial",
+      "maintenanceCheckAfterEstimate": "Check en Mantenimiento / Historial si el estado no es Por estimar",
       "visitMoreInfo": "Botón i en los modales de visita",
-      "dailyOpsCreate": "Crear (+) en Daily Ops",
+      "dailyOpsCreate": "Crear (+) en Resumen diario",
       "inventoryCreate": "Crear (+) en Inventario",
-      "spotCheckCreate": "Crear (+) en Spot Check",
+      "spotCheckCreate": "Crear (+) en Revisión y conteo",
       "purchasesCreate": "Crear (+) en Compras",
       "propertiesUpdateFromGuesty": "Update from Guesty en Propiedades"
     }
   },
   "spotCheck": {
-    "eyebrow": "Inventario / Spot Check",
+    "eyebrow": "Inventario / Revisión y conteo",
     "subtitle": "Revisiones semanales de inventario sin editar ítem por ítem.",
     "search": "Buscar spot checks",
     "cardTitle": "Spot checks",
@@ -746,7 +748,7 @@
   },
   "cleaningPlan": {
     "title": "Plan de limpieza",
-    "eyebrow": "Cleaning / Plan",
+    "eyebrow": "Limpiezas / Plan",
     "subtitle": "Asigna limpiadoras, hora de inicio y Quality Check a las visitas de limpieza del día.",
     "day": "Día",
     "planStatus": "Estado del plan",
@@ -784,7 +786,7 @@
     "openDay": "Abrir",
     "viewing": "Viendo",
     "emptyHistory": "Todavía no hay días de limpieza guardados.",
-    "saved": "Plan de limpieza guardado. Las horas de inicio y fin se actualizaron en Daily Ops y en Guesty.",
+    "saved": "Plan de limpieza guardado. Las horas de inicio y fin se actualizaron en Resumen diario y en Guesty.",
     "markedReady": "Este día de limpieza quedó marcado como listo.",
     "reopened": "Plan reabierto para edición.",
     "incompleteReady": "Asigna una limpiadora y una hora de inicio a cada visita antes de marcar el día como listo.",
@@ -797,7 +799,7 @@
   },
   "cleaningSettings": {
     "title": "Ajustes de limpieza",
-    "eyebrow": "Cleaning / Settings",
+    "eyebrow": "Limpiezas / Ajustes",
     "subtitle": "Gestiona las limpiadoras y los tipos de limpieza por propiedad.",
     "cleanersCard": "Cleaners",
     "cleanersCardMeta": "Personas disponibles en el plan",
@@ -857,7 +859,7 @@
     "trendRating": "Tendencia"
   },
   "cleaningIncidents": {
-    "eyebrow": "Cleaning / Incidents",
+    "eyebrow": "Limpiezas / Incidencias",
     "subtitle": "Registra fallos y reclamos de las visitas de limpieza.",
     "search": "Buscar incidencias de limpieza",
     "add": "Añadir incidencia",
@@ -895,10 +897,10 @@
     "saveError": "No se pudo guardar la incidencia."
   },
   "cleaningBilling": {
-    "eyebrow": "Cleaning / Billing",
+    "eyebrow": "Limpiezas / Historial",
     "subtitle": "Costes mensuales de las visitas de limpieza, con cierre del reporte al terminar el mes.",
     "monthSubtitle": "Completa tipos y precios pendientes antes de cerrar el mes.",
-    "cardTitle": "Cleaning Billing",
+    "cardTitle": "Historial",
     "cardSubtitle": "Los últimos 3 meses más el mes en curso.",
     "monthsCard": "Meses",
     "monthsCardMeta": "Actual más los tres anteriores",
@@ -967,7 +969,7 @@
     }
   },
   "maintenanceSettings": {
-    "eyebrow": "Maintenance / Settings",
+    "eyebrow": "Mantenimiento / Ajustes",
     "subtitle": "Gestiona proveedores y los valores globales de billing de mantenimiento.",
     "providersCard": "Providers",
     "providersCardMeta": "Personas disponibles para incidencias y billing",
@@ -1014,7 +1016,7 @@
     "detailsSaveError": "No se pudieron guardar los billing details."
   },
   "maintenanceIncidents": {
-    "eyebrow": "Maintenance / Incidents",
+    "eyebrow": "Mantenimiento / Incidencias",
     "subtitle": "Registra fallos y reclamos de las visitas de mantenimiento.",
     "search": "Buscar incidencias de mantenimiento",
     "add": "Añadir incidencia",
@@ -1055,10 +1057,10 @@
     "saveError": "No se pudo guardar la incidencia."
   },
   "maintenanceBilling": {
-    "eyebrow": "Maintenance / Billing",
+    "eyebrow": "Mantenimiento / Historial",
     "subtitle": "Costes mensuales de las visitas de mantenimiento, con cierre del reporte al terminar el mes.",
     "monthSubtitle": "Fija horas o precio y avanza el estado de billing de cada línea antes de cerrar.",
-    "cardTitle": "Maintenance Billing",
+    "cardTitle": "Historial",
     "cardSubtitle": "Los últimos 3 meses más el mes en curso.",
     "monthsCard": "Meses",
     "monthsCardMeta": "Actual más los tres anteriores",
