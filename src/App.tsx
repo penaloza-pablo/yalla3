@@ -38,6 +38,7 @@ import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
+import { SlackPanel } from './SlackPanel'
 import { usePermissions } from './rbac/PermissionsProvider'
 import {
   CORE_PAGES,
@@ -98,6 +99,7 @@ type PurchaseRow = {
   priceExclIva: number
   iva: number
   note: string
+  excluded: boolean
 }
 
 type SubtractionRow = {
@@ -153,6 +155,7 @@ type PurchaseFormState = {
   billable: boolean
   markup: boolean
   note: string
+  excluded: boolean
 }
 
 type SubtractionFormState = {
@@ -173,9 +176,15 @@ type InventoryApiResponse = {
   count?: number
 }
 
+type PurchasesSummary = {
+  total: number
+  pending: number
+}
+
 type PurchasesApiResponse = {
   items?: Record<string, unknown>[]
   count?: number
+  summary?: PurchasesSummary
 }
 
 type SubtractionsApiResponse = {
@@ -336,6 +345,7 @@ const purchaseFieldMap = {
   priceExclIva: ['Price excl. IVA', 'priceExclIva', 'Price excl IVA'],
   iva: ['IVA', 'iva'],
   note: ['Note', 'note'],
+  excluded: ['Excluded', 'excluded'],
 }
 
 const subtractionFieldMap = {
@@ -778,7 +788,13 @@ const getRecentPurchasesForItem = (
   limit = 3,
 ) =>
   purchases
-    .filter((purchase) => !purchase.direct && purchase.itemId === itemId)
+    .filter(
+      (purchase) =>
+        !purchase.direct &&
+        !purchase.excluded &&
+        purchase.status !== 'Excluded' &&
+        purchase.itemId === itemId,
+    )
     .slice()
     .sort((a, b) => getPurchaseSortTime(b) - getPurchaseSortTime(a))
     .slice(0, limit)
@@ -804,10 +820,32 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
 }
 
 const PURCHASE_WAITING_INVOICE = 'Waiting invoice'
+const PURCHASE_EXCLUDED = 'Excluded'
 const isReceivedPurchaseStatus = (status: string) =>
   status === 'Confirmed' || status === PURCHASE_WAITING_INVOICE
+const isExcludedPurchase = (row: { excluded?: boolean; status: string }) =>
+  row.excluded === true || row.status === PURCHASE_EXCLUDED
+const isOpenPurchase = (row: PurchaseRow) =>
+  !row.direct && !isExcludedPurchase(row) && !isReceivedPurchaseStatus(row.status)
 const isPendingPurchaseStatus = (status: string) =>
   status === 'Waiting Delivery' || status === PURCHASE_WAITING_INVOICE
+const isPurchasePending = (row: PurchaseRow) =>
+  isPendingPurchaseStatus(row.status) && !isExcludedPurchase(row)
+
+const nextPurchasesSummary = (
+  current: PurchasesSummary | null,
+  params: { added?: boolean; before?: PurchaseRow; after: PurchaseRow },
+): PurchasesSummary | null => {
+  if (!current) {
+    return current
+  }
+  const wasPending = params.before && isPurchasePending(params.before) ? 1 : 0
+  const nowPending = isPurchasePending(params.after) ? 1 : 0
+  return {
+    total: current.total + (params.added ? 1 : 0),
+    pending: Math.max(0, current.pending - wasPending + nowPending),
+  }
+}
 
 const WARNING_STATUSES = ['Reorder', 'Low Stock', 'Skipped'] as const
 
@@ -835,6 +873,16 @@ const applyConfirmedPurchaseToInventory = (
 const markInventoryWaitingDelivery = (rows: InventoryRow[], itemId: string) =>
   rows.map((entry) =>
     entry.id === itemId ? { ...entry, status: 'Waiting Delivery' } : entry,
+  )
+
+const restoreInventoryQuantityStatus = (rows: InventoryRow[], itemId: string) =>
+  rows.map((entry) =>
+    entry.id === itemId
+      ? {
+          ...entry,
+          status: computeInventoryStatus(entry.quantity, entry.rebuyQty),
+        }
+      : entry,
   )
 
 const resolveChoice = (choice: string, other: string) =>
@@ -940,6 +988,10 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
         ? computed.iva
         : getNumberValue(storedIva),
     note: getStringValue(getItemValue(item, purchaseFieldMap.note)),
+    excluded:
+      getBooleanValue(getItemValue(item, purchaseFieldMap.excluded)) ||
+      getStringValue(getItemValue(item, purchaseFieldMap.status)) ===
+        PURCHASE_EXCLUDED,
   }
 }
 
@@ -1258,6 +1310,9 @@ const getStatusClassName = (status: string) => {
   if (status === 'Confirmed') {
     return 'status status-success'
   }
+  if (status === 'Excluded') {
+    return 'status status-neutral'
+  }
   if (status === 'Pending Billing') {
     return 'status status-warning'
   }
@@ -1313,6 +1368,7 @@ const emptyPurchaseFormState: PurchaseFormState = {
   billable: true,
   markup: false,
   note: '',
+  excluded: false,
 }
 
 const emptySubtractionFormState: SubtractionFormState = {
@@ -1529,6 +1585,8 @@ function App() {
   const [purchasesLastUpdated, setPurchasesLastUpdated] = useState<
     string | null
   >(null)
+  const [purchasesSummary, setPurchasesSummary] =
+    useState<PurchasesSummary | null>(null)
   const [expandedPurchaseIds, setExpandedPurchaseIds] = useState<Set<string>>(
     new Set(),
   )
@@ -1607,6 +1665,7 @@ function App() {
     'Waiting Delivery',
     'Waiting invoice',
     'Confirmed',
+    'Excluded',
   ]
 
   const purchaseLocationOptions = useMemo(() => {
@@ -1682,10 +1741,9 @@ function App() {
     tableSearchQuery,
   ])
 
-  const pendingPurchasesCount = useMemo(
-    () => purchaseRows.filter((row) => isPendingPurchaseStatus(row.status)).length,
-    [purchaseRows],
-  )
+  const pendingPurchasesCount =
+    purchasesSummary?.pending ??
+    purchaseRows.filter((row) => isPurchasePending(row)).length
 
   const purchasesActiveFilterCount = useMemo(() => {
     return (
@@ -1995,6 +2053,21 @@ function App() {
         mapPurchaseRow(normalizeInventoryItem(entry)),
       )
       setPurchaseRows(mappedRows)
+      setPurchasesSummary(
+        payload.summary && typeof payload.summary.total === 'number'
+          ? {
+              total: payload.summary.total,
+              pending: payload.summary.pending ?? 0,
+            }
+          : {
+              total: mappedRows.length,
+              pending: mappedRows.filter(
+                (row) =>
+                  isPendingPurchaseStatus(row.status) &&
+                  !isExcludedPurchase(row),
+              ).length,
+            },
+      )
       setPurchasesLastUpdated(
         new Date().toLocaleString('en-US', {
           month: 'short',
@@ -2827,6 +2900,7 @@ function App() {
       billable: row.billable,
       markup: row.markupApplied,
       note: row.note,
+      excluded: isExcludedPurchase(row),
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
@@ -3037,13 +3111,19 @@ function App() {
   ])
 
   const lowStockCount = useMemo(
-    () => filteredRows.filter((row) => row.status === 'Low Stock').length,
-    [filteredRows],
+    () => inventoryRows.filter((row) => row.status === 'Low Stock').length,
+    [inventoryRows],
   )
 
   const reorderCount = useMemo(
-    () => filteredRows.filter((row) => row.status === 'Reorder').length,
-    [filteredRows],
+    () => inventoryRows.filter((row) => row.status === 'Reorder').length,
+    [inventoryRows],
+  )
+
+  const waitingDeliveryCount = useMemo(
+    () =>
+      inventoryRows.filter((row) => row.status === 'Waiting Delivery').length,
+    [inventoryRows],
   )
 
   const locationCount = useMemo(() => {
@@ -3472,6 +3552,7 @@ function App() {
           'Purchase date': formatDateForStorage(
             purchaseFormValues.purchaseDate?.trim() || '',
           ),
+          Excluded: purchaseFormValues.excluded,
           ...(statusValue ? { Status: statusValue } : {}),
         }
       : {
@@ -3487,6 +3568,7 @@ function App() {
           'Purchase date': formatDateForStorage(
             purchaseFormValues.purchaseDate?.trim() || '',
           ),
+          Excluded: purchaseFormValues.excluded,
           ...(statusValue ? { Status: statusValue } : {}),
         }
 
@@ -3515,16 +3597,17 @@ function App() {
           id: payload.id ?? '',
         })
 
-      const wasAlreadyReceived = purchaseRows.some(
-        (entry) =>
-          entry.id === updatedRow.id && isReceivedPurchaseStatus(entry.status),
+      const existingRow = purchaseRows.find(
+        (entry) => entry.id === updatedRow.id,
+      )
+      const wasAlreadyReceived = Boolean(
+        existingRow && isReceivedPurchaseStatus(existingRow.status),
       )
       const hasOtherOpenPurchases = purchaseRows.some(
         (entry) =>
-          !entry.direct &&
-          entry.itemId === updatedRow.itemId &&
           entry.id !== updatedRow.id &&
-          !isReceivedPurchaseStatus(entry.status),
+          entry.itemId === updatedRow.itemId &&
+          isOpenPurchase(entry),
       )
       setPurchaseRows((current) => {
         const existingIndex = current.findIndex(
@@ -3537,8 +3620,21 @@ function App() {
         }
         return [updatedRow, ...current]
       })
-      if (!updatedRow.direct) {
-        if (isReceivedPurchaseStatus(updatedRow.status) && !wasAlreadyReceived) {
+      setPurchasesSummary((current) =>
+        nextPurchasesSummary(current, {
+          added: !existingRow,
+          before: existingRow,
+          after: updatedRow,
+        }),
+      )
+      if (!updatedRow.direct && updatedRow.itemId && updatedRow.itemId !== '—') {
+        if (isExcludedPurchase(updatedRow)) {
+          setInventoryRows((current) =>
+            hasOtherOpenPurchases
+              ? markInventoryWaitingDelivery(current, updatedRow.itemId)
+              : restoreInventoryQuantityStatus(current, updatedRow.itemId),
+          )
+        } else if (isReceivedPurchaseStatus(updatedRow.status) && !wasAlreadyReceived) {
           setInventoryRows((current) =>
             applyConfirmedPurchaseToInventory(
               current,
@@ -3568,7 +3664,7 @@ function App() {
   }
 
   const confirmPurchaseDelivery = async (row: PurchaseRow) => {
-    if (row.status === 'Confirmed') {
+    if (row.status === 'Confirmed' || isExcludedPurchase(row)) {
       return
     }
     const nextStatus =
@@ -3618,6 +3714,7 @@ function App() {
         'Delivery date': formatDateForStorage(row.deliveryDateRaw),
         'Purchase date': formatDateForStorage(row.purchaseDateRaw),
         Status: nextStatus,
+        Excluded: false,
       }
       const response = await authFetch(endpoint, {
         method: 'POST',
@@ -3630,11 +3727,7 @@ function App() {
         throw new Error('Failed to update purchase.')
       }
       const hasOtherOpenPurchases = purchaseRows.some(
-        (entry) =>
-          !entry.direct &&
-          entry.itemId === row.itemId &&
-          entry.id !== row.id &&
-          !isReceivedPurchaseStatus(entry.status),
+        (entry) => entry.id !== row.id && isOpenPurchase(entry) && entry.itemId === row.itemId,
       )
       const shouldUpdateInventory =
         !row.direct && !isReceivedPurchaseStatus(row.status)
@@ -3642,6 +3735,12 @@ function App() {
         current.map((entry) =>
           entry.id === row.id ? { ...entry, status: nextStatus } : entry,
         ),
+      )
+      setPurchasesSummary((current) =>
+        nextPurchasesSummary(current, {
+          before: row,
+          after: { ...row, status: nextStatus, excluded: false },
+        }),
       )
       if (shouldUpdateInventory) {
         setInventoryRows((current) =>
@@ -4646,12 +4745,17 @@ function App() {
             {error ? <div className="alert">{error}</div> : null}
 
             <section
-              className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
+              className={`summary-cards summary-cards-4 ${isSummaryInfoOpen ? 'is-open' : ''}`}
             >
               <div className="card card-compact">
                 <p className="card-label">{t('inventory.locations')}</p>
                 <p className="card-value">{locationCount}</p>
                 <p className="card-meta">{t('inventory.locationsMeta')}</p>
+              </div>
+              <div className="card card-compact">
+                <p className="card-label">{t('inventory.waitingDelivery')}</p>
+                <p className="card-value">{waitingDeliveryCount}</p>
+                <p className="card-meta">{t('inventory.waitingDeliveryMeta')}</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">{t('inventory.reorder')}</p>
@@ -5289,8 +5393,10 @@ function App() {
             >
               <div className="card card-compact">
                 <p className="card-label">{t('purchases.totalPurchases')}</p>
-                <p className="card-value">{purchasesFilteredRows.length}</p>
-                <p className="card-meta">{t('purchases.visiblePurchases')}</p>
+                <p className="card-value">
+                  {purchasesSummary?.total ?? purchaseRows.length}
+                </p>
+                <p className="card-meta">{t('purchases.totalMeta')}</p>
               </div>
               <div className="card card-compact">
                 <p className="card-label">{t('purchases.pending')}</p>
@@ -5550,13 +5656,18 @@ function App() {
                         const isExpanded = expandedPurchaseIds.has(row.id)
                         return (
                           <Fragment key={row.id}>
-                            <tr>
+                            <tr className={isExcludedPurchase(row) ? 'muted-row' : undefined}>
                               <td>
                                 <div className="purchase-name-cell">
                                   <span>{row.itemName}</span>
                                   {row.direct ? (
                                     <span className="purchase-direct-tag">
                                       {t('purchases.directTag')}
+                                    </span>
+                                  ) : null}
+                                  {isExcludedPurchase(row) ? (
+                                    <span className="purchase-excluded-tag">
+                                      {t('purchases.excludedTag')}
                                     </span>
                                   ) : null}
                                 </div>
@@ -5579,7 +5690,10 @@ function App() {
                                         : t('common.confirmDelivery')
                                     }
                                     onClick={() => confirmPurchaseDelivery(row)}
-                                    disabled={row.status === 'Confirmed'}
+                                    disabled={
+                                      row.status === 'Confirmed' ||
+                                      isExcludedPurchase(row)
+                                    }
                                   >
                                     ✓
                                   </button>
@@ -7765,6 +7879,8 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
           />
+        ) : activePage === 'Slack' ? (
+          <SlackPanel getEndpoint={getEndpoint} />
         ) : (
           <section className="card">
             <h1 className="page-title">
@@ -8404,6 +8520,21 @@ function App() {
                     </label>
                   </div>
                 )}
+                {purchaseFormValues.id ? (
+                  <label className="form-field-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={purchaseFormValues.excluded}
+                      onChange={(event) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          excluded: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>{t('purchases.excludeFromReport')}</span>
+                  </label>
+                ) : null}
                 {purchaseFormError ? (
                   <div className="alert">{purchaseFormError}</div>
                 ) : null}

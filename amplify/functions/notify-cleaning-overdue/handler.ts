@@ -12,6 +12,10 @@ import {
 } from '../shared/slack-cleaning';
 import { loadSlackSecrets, slackApi } from '../shared/slack';
 import {
+  SLACK_NOTIFICATION_IDS,
+  isSlackNotificationEnabled,
+} from '../shared/slack-notifications';
+import {
   getNowTimeInMadrid,
   getTodayInMadrid,
   patchUserOriginatedRecord,
@@ -27,6 +31,13 @@ export const handler: EventBridgeHandler<'Scheduled Event', void, void> =
     const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
     if (!visitsTable) {
       throw new Error('TABLE_NAME is not configured.');
+    }
+
+    if (
+      !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
+    ) {
+      console.log('Slack overdue notify skipped: automation disabled.');
+      return;
     }
 
     const secrets = await loadSlackSecrets({ forceRefresh: true });

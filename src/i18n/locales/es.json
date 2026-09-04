@@ -263,6 +263,8 @@
     "locationsMeta": "Ubicaciones visibles",
     "lowStock": "Stock bajo",
     "lowStockMeta": "Requiere atención",
+    "waitingDelivery": "Esperando entrega",
+    "waitingDeliveryMeta": "Reposición en curso",
     "missingDelete": "Falta el endpoint de delete. Configura VITE_DELETE_INVENTORY_URL en el entorno.",
     "missingUpsert": "Falta el endpoint de upsert. Configura VITE_UPSERT_INVENTORY_URL en el entorno.",
     "nameEsHint": "Opcional. Se muestra cuando el idioma de la app es español.",
@@ -305,7 +307,7 @@
     "Cleaning Billing": "Historial",
     "Cleaning settings": "Ajustes de limpieza",
     "Maintenance Plan": "Plan de mantenimiento",
-    "Maintenance Incidents": "Maintenance Incidents",
+    "Maintenance Incidents": "Incidencias de mantenimiento",
     "Maintenance Billing": "Historial",
     "Maintenance settings": "Ajustes de mantenimiento",
     "Daily Operations": "Resumen diario",
@@ -327,6 +329,7 @@
     "Logs": "Registros",
     "Users": "Usuarios",
     "Roles": "Roles",
+    "Slack": "Slack",
     "Tech solution 2": "Solución Tech 2",
     "Tech solution 3": "Solución Tech 3"
   },
@@ -362,6 +365,7 @@
     "cardTitle": "Compras",
     "cardSubtitle": "Marca la entrega como recibida y confirma cuando llegue la factura.",
     "totalPurchases": "Total de compras",
+    "totalMeta": "Todos los registros de la tabla",
     "visiblePurchases": "Compras visibles",
     "pending": "Pending",
     "pendingMeta": "Waiting Delivery y Waiting invoice",
@@ -399,7 +403,9 @@
     "propertyRequired": "La propiedad de destino es obligatoria.",
     "costRequired": "El precio con IVA es obligatorio.",
     "costInvalid": "El precio con IVA debe ser cero o mayor.",
-    "confirmDirectDeliveryPrompt": "¿Marcar esta entrega como recibida? El inventario no se actualizará y la compra quedará en Waiting invoice."
+    "confirmDirectDeliveryPrompt": "¿Marcar esta entrega como recibida? El inventario no se actualizará y la compra quedará en Waiting invoice.",
+    "excludeFromReport": "Excluir esta compra del listado activo",
+    "excludedTag": "Excluida"
   },
   "reviews": {
     "eyebrow": "Ops / Reseñas",
@@ -470,6 +476,7 @@
     "Unknown": "Desconocido",
     "Waiting Delivery": "Esperando entrega",
     "Waiting invoice": "Esperando factura",
+    "Excluded": "Excluida",
     "Skipped": "Omitido"
   },
   "subtractions": {
@@ -692,6 +699,39 @@
     "recentEvents": "Últimos 200 registros",
     "uniqueUsers": "Usuarios",
     "visibleInList": "En la lista actual"
+  },
+  "slackSettings": {
+    "eyebrow": "Ajustes / Slack",
+    "subtitle": "Activa o desactiva las automatizaciones de notificaciones de Slack.",
+    "cardTitle": "Notificaciones",
+    "cardSubtitle": "Si una automatización está deshabilitada, Yalla no envía ese mensaje a Slack.",
+    "loading": "Cargando automatizaciones de Slack...",
+    "empty": "No hay automatizaciones de Slack.",
+    "missingEndpoint": "Falta el endpoint de notificaciones de Slack. Vuelve a desplegar el backend.",
+    "missingWrite": "Falta el endpoint de escritura de notificaciones de Slack. Vuelve a desplegar el backend.",
+    "loadError": "No se pudieron cargar las automatizaciones de Slack.",
+    "saveError": "No se pudo actualizar la automatización de Slack.",
+    "automation": "Automatización",
+    "active": "Habilitada",
+    "inactive": "Deshabilitada",
+    "enable": "Habilitar",
+    "disable": "Deshabilitar",
+    "enabled": "Automatización habilitada.",
+    "disabled": "Automatización deshabilitada.",
+    "items": {
+      "notify_cleaning_overdue": {
+        "name": "Notify Cleanings Overdue",
+        "description": "Envía un mensaje a Slack cuando una limpieza queda overdue."
+      },
+      "notify_visit_closed_with_comments": {
+        "name": "Notify visit closed with comments",
+        "description": "Envía un mensaje a Slack cuando se cierra una visita con comentarios."
+      },
+      "notify_slack_hoy": {
+        "name": "Notify today summary",
+        "description": "Envía el resumen del día cuando alguien usa /yalla hoy."
+      }
+    }
   },
   "rbac": {
     "usersEyebrow": "Ajustes / Usuarios",
@@ -1051,12 +1091,12 @@
   "maintenanceSettings": {
     "eyebrow": "Mantenimiento / Ajustes",
     "subtitle": "Gestiona proveedores y los valores globales de billing de mantenimiento.",
-    "providersCard": "Providers",
+    "providersCard": "Proveedores",
     "providersCardMeta": "Personas disponibles para incidencias y billing",
-    "providersSubtitle": "Estas personas aparecen en Maintenance Incidents y Billing.",
-    "detailsCard": "Billing details",
+    "providersSubtitle": "Estas personas aparecen en Incidencias y Historial de mantenimiento.",
+    "detailsCard": "Detalles de facturación",
     "detailsCardMeta": "Bolsa mensual, coste hora y horas por tipo de visita",
-    "detailsSubtitle": "Valores globales usados por Maintenance Billing. Mapeo de horas por nombre de tipo de visita.",
+    "detailsSubtitle": "Valores globales usados por el historial de mantenimiento. Mapeo de horas por nombre de tipo de visita.",
     "addProvider": "Añadir proveedor",
     "editProvider": "Editar proveedor",
     "edit": "Editar",
@@ -1091,9 +1131,9 @@
     "poolRequired": "La bolsa mensual debe ser cero o mayor.",
     "costRequired": "El coste hora debe ser cero o mayor.",
     "hoursRequired": "Cada mapeo necesita un número de horas válido.",
-    "detailsUpdated": "Billing details actualizados.",
-    "missingDetailsWrite": "Falta el endpoint de billing details. Vuelve a desplegar el backend.",
-    "detailsSaveError": "No se pudieron guardar los billing details.",
+    "detailsUpdated": "Detalles de facturación actualizados.",
+    "missingDetailsWrite": "Falta el endpoint de detalles de facturación. Vuelve a desplegar el backend.",
+    "detailsSaveError": "No se pudieron guardar los detalles de facturación.",
     "agentsCard": "Agentes",
     "agentsCardMeta": "Personas disponibles en el plan",
     "agentsSubtitle": "Estas personas aparecen en el desplegable del Plan de mantenimiento. Añádelas desde Ajustes / Usuarios.",
@@ -1116,7 +1156,7 @@
     "subtitle": "Registra fallos y reclamos de las visitas de mantenimiento.",
     "search": "Buscar incidencias de mantenimiento",
     "add": "Añadir incidencia",
-    "cardTitle": "Maintenance Incidents",
+    "cardTitle": "Incidencias de mantenimiento",
     "cardSubtitle": "Cada fila está vinculada a una visita de mantenimiento, su propiedad, fecha y proveedor.",
     "totalCard": "Incidencias",
     "totalCardMeta": "Visibles con los filtros actuales",

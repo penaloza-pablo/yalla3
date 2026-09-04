@@ -42,6 +42,8 @@ type PurchasePayload = {
   markupApplied?: boolean;
   note?: string;
   Note?: string;
+  excluded?: boolean;
+  Excluded?: boolean;
   ['Item id']?: string;
   ['Item ID']?: string;
   ['Item name']?: string;
@@ -137,8 +139,31 @@ const parseDateOnly = (value?: string) => {
 const INVENTORY_WAITING_DELIVERY = 'Waiting Delivery';
 const PURCHASE_CONFIRMED = 'Confirmed';
 const PURCHASE_WAITING_INVOICE = 'Waiting invoice';
+const PURCHASE_EXCLUDED = 'Excluded';
 
 const normalizePurchaseStatus = (value?: string) => value?.trim() ?? '';
+
+const isExcludedPurchaseStatus = (value?: string) =>
+  normalizePurchaseStatus(value) === PURCHASE_EXCLUDED;
+
+const parseExcluded = (
+  payload: PurchasePayload,
+  existing?: Record<string, unknown>,
+) => {
+  if (typeof payload.excluded === 'boolean') {
+    return payload.excluded;
+  }
+  if (typeof payload.Excluded === 'boolean') {
+    return payload.Excluded;
+  }
+  if (existing?.Excluded === true) {
+    return true;
+  }
+  return (
+    typeof existing?.Status === 'string' &&
+    existing.Status === PURCHASE_EXCLUDED
+  );
+};
 
 const isReceivedPurchaseStatus = (value?: string) => {
   const status = normalizePurchaseStatus(value);
@@ -167,16 +192,19 @@ const hasOpenPurchasesForItem = async (params: {
       new ScanCommand({
         TableName: params.purchasesTable,
         FilterExpression:
-          '#itemId = :itemId AND #status <> :confirmed AND #status <> :waitingInvoice AND (attribute_not_exists(#direct) OR #direct = :notDirect)',
+          '#itemId = :itemId AND #status <> :confirmed AND #status <> :waitingInvoice AND #status <> :excluded AND (attribute_not_exists(#excludedFlag) OR #excludedFlag = :notExcluded) AND (attribute_not_exists(#direct) OR #direct = :notDirect)',
         ExpressionAttributeNames: {
           '#itemId': 'Item id',
           '#status': 'Status',
           '#direct': 'Direct',
+          '#excludedFlag': 'Excluded',
         },
         ExpressionAttributeValues: {
           ':itemId': params.itemId,
           ':confirmed': PURCHASE_CONFIRMED,
           ':waitingInvoice': PURCHASE_WAITING_INVOICE,
+          ':excluded': PURCHASE_EXCLUDED,
+          ':notExcluded': false,
           ':notDirect': false,
         },
         ProjectionExpression: 'id',
@@ -219,6 +247,40 @@ const markInventoryWaitingDelivery = async (params: {
       },
       ExpressionAttributeValues: {
         ':status': INVENTORY_WAITING_DELIVERY,
+        ':lastUpdated': formatDateForStorage(),
+      },
+    }),
+  );
+};
+
+const restoreInventoryQuantityStatus = async (params: {
+  inventoryTable: string;
+  itemId: string;
+}) => {
+  const inventoryResult = await client.send(
+    new GetCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+    }),
+  );
+  const inventoryItem = inventoryResult.Item;
+  if (!inventoryItem) {
+    throw new Error('Inventory item not found.');
+  }
+  const quantity = Number(inventoryItem.Quantity ?? 0) || 0;
+  const rebuyQty = Number(inventoryItem.rebuyQty ?? 0) || 0;
+  await client.send(
+    new UpdateCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+      UpdateExpression: 'SET #status = :status, #lastUpdated = :lastUpdated',
+      ConditionExpression: 'attribute_exists(id)',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#lastUpdated': 'Last updated',
+      },
+      ExpressionAttributeValues: {
+        ':status': computeInventoryStatus(quantity, rebuyQty),
         ':lastUpdated': formatDateForStorage(),
       },
     }),
@@ -437,6 +499,11 @@ export const handler = async (event: {
   }
 
   const isDirect = parseDirect(payload, existingItem);
+  const isExcluded = parseExcluded(payload, existingItem);
+  const wasExcluded =
+    existingItem?.Excluded === true ||
+    (typeof existingItem?.Status === 'string' &&
+      existingItem.Status === PURCHASE_EXCLUDED);
   const itemId = payload.itemId ?? payload['Item id'] ?? payload['Item ID'];
   const itemName = payload.itemName ?? payload['Item name'];
   const location = payload.location ?? payload.Location;
@@ -495,7 +562,27 @@ export const handler = async (event: {
   }
 
   const deliveryDateValue = formatDateForStorage(String(deliveryDate));
-  const statusValue = computePurchaseStatus(deliveryDateValue, status);
+  const payloadStatus =
+    typeof status === 'string' && !isExcludedPurchaseStatus(status)
+      ? status
+      : undefined;
+  const storedPreviousStatus =
+    typeof existingItem?.['Previous status'] === 'string' &&
+    existingItem['Previous status'] &&
+    !isExcludedPurchaseStatus(String(existingItem['Previous status']))
+      ? String(existingItem['Previous status'])
+      : '';
+  const previousStatusValue =
+    storedPreviousStatus ||
+    (previousStatus && !isExcludedPurchaseStatus(previousStatus)
+      ? previousStatus
+      : '');
+  const statusValue = isExcluded
+    ? PURCHASE_EXCLUDED
+    : computePurchaseStatus(
+        deliveryDateValue,
+        payloadStatus ?? previousStatusValue || undefined,
+      );
   const markupApplied = isDirect
     ? parseMarkupApplied(payload)
     : Boolean(existingItem?.['Markup applied']);
@@ -517,6 +604,8 @@ export const handler = async (event: {
     'Delivery date': deliveryDateValue,
     'Purchase date': formatDateForStorage(purchaseDate),
     Status: statusValue,
+    Excluded: isExcluded,
+    'Previous status': isExcluded ? previousStatusValue : '',
   };
 
   if (isDirect) {
@@ -541,28 +630,44 @@ export const handler = async (event: {
 
     const inventoryTable = process.env.INVENTORY_TABLE;
     const becameReceived =
+      !isExcluded &&
       isReceivedPurchaseStatus(statusValue) &&
       !isReceivedPurchaseStatus(previousStatus);
-    if (!isDirect) {
-      if (becameReceived) {
-        if (!inventoryTable) {
-          throw new Error('INVENTORY_TABLE is not configured.');
+    const linkedItemId = String(itemId ?? '').trim();
+    if (!isDirect && linkedItemId) {
+      if (!inventoryTable) {
+        throw new Error('INVENTORY_TABLE is not configured.');
+      }
+      if (isExcluded) {
+        const hasOtherOpen = await hasOpenPurchasesForItem({
+          purchasesTable: tableName,
+          itemId: linkedItemId,
+          excludePurchaseId: id,
+        });
+        if (hasOtherOpen) {
+          await markInventoryWaitingDelivery({
+            inventoryTable,
+            itemId: linkedItemId,
+          });
+        } else {
+          await restoreInventoryQuantityStatus({
+            inventoryTable,
+            itemId: linkedItemId,
+          });
         }
+      } else if (becameReceived) {
         await updateInventoryOnConfirm({
           inventoryTable,
           purchasesTable: tableName,
           purchaseId: id,
-          itemId: String(itemId).trim(),
+          itemId: linkedItemId,
           units: Number(units) || 0,
           totalPrice: totalPriceValue,
         });
       } else if (!isReceivedPurchaseStatus(statusValue)) {
-        if (!inventoryTable) {
-          throw new Error('INVENTORY_TABLE is not configured.');
-        }
         await markInventoryWaitingDelivery({
           inventoryTable,
-          itemId: String(itemId).trim(),
+          itemId: linkedItemId,
         });
       }
     }
@@ -571,26 +676,36 @@ export const handler = async (event: {
     const purchaseName = String(itemName).trim();
     const becameConfirmed =
       statusValue === PURCHASE_CONFIRMED && previousStatus !== PURCHASE_CONFIRMED;
+    const becameExcluded = isExcluded && !wasExcluded;
+    const becameIncluded = !isExcluded && wasExcluded;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PURCHASES,
-      action: becameConfirmed
-        ? 'confirm'
-        : becameReceived
-          ? 'receive'
-          : isUpdate
-            ? 'update'
-            : 'create',
+      action: becameExcluded
+        ? 'exclude'
+        : becameIncluded
+          ? 'include'
+          : becameConfirmed
+            ? 'confirm'
+            : becameReceived
+              ? 'receive'
+              : isUpdate
+                ? 'update'
+                : 'create',
       entityId: id,
       entityName: purchaseName,
-      summary: becameConfirmed
-        ? `confirmed invoice for ${quoted(purchaseName)}`
-        : becameReceived
-          ? `received ${quoted(purchaseName)} (${Number(units) || 0} units), waiting invoice`
-          : isUpdate
-            ? `updated purchase of ${quoted(purchaseName)}`
-            : isDirect
-              ? `created a direct purchase of ${quoted(purchaseName)}`
-              : `created a purchase of ${Number(units) || 0} units of ${quoted(purchaseName)}`,
+      summary: becameExcluded
+        ? `excluded purchase of ${quoted(purchaseName)}`
+        : becameIncluded
+          ? `included purchase of ${quoted(purchaseName)}`
+          : becameConfirmed
+            ? `confirmed invoice for ${quoted(purchaseName)}`
+            : becameReceived
+              ? `received ${quoted(purchaseName)} (${Number(units) || 0} units), waiting invoice`
+              : isUpdate
+                ? `updated purchase of ${quoted(purchaseName)}`
+                : isDirect
+                  ? `created a direct purchase of ${quoted(purchaseName)}`
+                  : `created a purchase of ${Number(units) || 0} units of ${quoted(purchaseName)}`,
     });
 
     const response = { item };

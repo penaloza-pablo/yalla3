@@ -32,6 +32,7 @@ import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-tit
 import { CLEANING_VISIT_TYPE_ID, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
+import { isManagementTeam } from './teamColors'
 import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
 import { isSpanishLocale } from '../i18n/display'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
@@ -562,7 +563,11 @@ export function DailyOperationsView({
 
   const filteredVisits = useMemo(() => {
     return visits.filter((visit) => {
-      if (filters.teamIds.length > 0 && !filters.teamIds.includes(visit.teamId)) {
+      if (filters.teamIds.length === 0) {
+        if (isManagementTeam(visit.teamId, teamById)) {
+          return false
+        }
+      } else if (!filters.teamIds.includes(visit.teamId)) {
         return false
       }
       if (
@@ -585,7 +590,7 @@ export function DailyOperationsView({
       }
       return true
     })
-  }, [visits, filters])
+  }, [visits, filters, teamById])
 
   const activeFilterCount = useMemo(() => {
     const statusCount = listsMatch(filters.statuses, DEFAULT_STATUS_FILTER)

@@ -9,16 +9,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
 };
 
-const parseLimit = (value?: string) => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 200;
-  }
-  return Math.min(Math.trunc(parsed), 500);
-};
-
 type InventoryQueryArgs = {
-  limit?: number;
   status?: string;
   location?: string;
 };
@@ -90,17 +81,14 @@ export const handler = async (event: {
 
   const args = isHttp
     ? {
-        limit: parseLimit(event.queryStringParameters?.limit),
         status: event.queryStringParameters?.status,
         location: event.queryStringParameters?.location,
       }
     : {
-        limit: event.arguments?.limit,
         status: event.arguments?.status,
         location: event.arguments?.location,
     };
 
-  const limit = typeof args.limit === 'number' ? parseLimit(String(args.limit)) : undefined;
   const filters = buildScanFilters(args);
 
   try {
@@ -111,7 +99,6 @@ export const handler = async (event: {
     do {
       const command = new ScanCommand({
         TableName: tableName,
-        Limit: limit ?? 500,
         ExclusiveStartKey: lastEvaluatedKey,
         ...filters,
       });

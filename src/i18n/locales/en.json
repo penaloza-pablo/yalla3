@@ -263,6 +263,8 @@
     "locationsMeta": "Visible locations",
     "lowStock": "Low Stock",
     "lowStockMeta": "Needs attention",
+    "waitingDelivery": "Waiting Delivery",
+    "waitingDeliveryMeta": "Open replenishment",
     "missingDelete": "Missing delete endpoint. Set VITE_DELETE_INVENTORY_URL in the environment.",
     "missingUpsert": "Missing upsert endpoint. Set VITE_UPSERT_INVENTORY_URL in the environment.",
     "nameEsHint": "Optional. Shown when the app language is Spanish.",
@@ -327,6 +329,7 @@
     "Logs": "Logs",
     "Users": "Users",
     "Roles": "Roles",
+    "Slack": "Slack",
     "Tech solution 2": "Tech solution 2",
     "Tech solution 3": "Tech solution 3"
   },
@@ -362,6 +365,7 @@
     "cardTitle": "Purchases",
     "cardSubtitle": "Mark delivery as received, then confirm when the invoice arrives.",
     "totalPurchases": "Total purchases",
+    "totalMeta": "All records in the table",
     "visiblePurchases": "Visible purchases",
     "pending": "Pending",
     "pendingMeta": "Waiting Delivery and Waiting invoice",
@@ -399,7 +403,9 @@
     "propertyRequired": "Receiving property is required.",
     "costRequired": "Price incl. IVA is required.",
     "costInvalid": "Price incl. IVA must be zero or greater.",
-    "confirmDirectDeliveryPrompt": "Mark this delivery as received? Inventory will not be updated and the purchase will wait for the invoice."
+    "confirmDirectDeliveryPrompt": "Mark this delivery as received? Inventory will not be updated and the purchase will wait for the invoice.",
+    "excludeFromReport": "Exclude this purchase from the active list",
+    "excludedTag": "Excluded"
   },
   "reviews": {
     "eyebrow": "Ops / Reviews",
@@ -470,6 +476,7 @@
     "Unknown": "Unknown",
     "Waiting Delivery": "Waiting Delivery",
     "Waiting invoice": "Waiting invoice",
+    "Excluded": "Excluded",
     "Skipped": "Skipped"
   },
   "subtractions": {
@@ -692,6 +699,39 @@
     "recentEvents": "Latest 200 records",
     "uniqueUsers": "Users",
     "visibleInList": "In the current list"
+  },
+  "slackSettings": {
+    "eyebrow": "Settings / Slack",
+    "subtitle": "Enable or disable Slack notification automations.",
+    "cardTitle": "Notifications",
+    "cardSubtitle": "When an automation is disabled, Yalla does not send that Slack message.",
+    "loading": "Loading Slack automations...",
+    "empty": "No Slack automations found.",
+    "missingEndpoint": "Missing Slack notifications endpoint. Redeploy the backend.",
+    "missingWrite": "Missing Slack notifications write endpoint. Redeploy the backend.",
+    "loadError": "Unable to load Slack automations.",
+    "saveError": "Unable to update the Slack automation.",
+    "automation": "Automation",
+    "active": "Enabled",
+    "inactive": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "enabled": "Automation enabled.",
+    "disabled": "Automation disabled.",
+    "items": {
+      "notify_cleaning_overdue": {
+        "name": "Notify Cleanings Overdue",
+        "description": "Posts in Slack when a cleaning visit is overdue."
+      },
+      "notify_visit_closed_with_comments": {
+        "name": "Notify visit closed with comments",
+        "description": "Posts in Slack when a visit is closed with comments."
+      },
+      "notify_slack_hoy": {
+        "name": "Notify today summary",
+        "description": "Posts the daily summary when someone runs /yalla hoy."
+      }
+    }
   },
   "rbac": {
     "usersEyebrow": "Settings / Users",

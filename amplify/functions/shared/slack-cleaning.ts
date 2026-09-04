@@ -4,6 +4,10 @@ import { CLEANING_VISIT_TYPE_ID, normalizeStartTime } from './cleaning-plan';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
+  SLACK_NOTIFICATION_IDS,
+  isSlackNotificationEnabled,
+} from './slack-notifications';
+import {
   docClient,
   getNowTimeInMadrid,
   patchUserOriginatedRecord,
@@ -264,17 +268,25 @@ export const notifyVisitClosedWithComments = async (visit: {
   title?: unknown;
   comments?: unknown;
 }) => {
+  const visitId = asString(visit.id);
+  const title = asString(visit.title) || visitId || 'Visit';
+  const comments = asString(visit.comments);
+  if (!visitId || comments.length < 4) {
+    return;
+  }
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.visitClosedComments,
+    ))
+  ) {
+    console.log('Slack comments notify skipped: automation disabled.');
+    return;
+  }
   const { warningsChannelId } = await loadSlackSecrets();
   if (!warningsChannelId) {
     console.error(
       'Slack comments notify skipped: missing warningsChannelId in yalla/slack.',
     );
-    return;
-  }
-  const visitId = asString(visit.id);
-  const title = asString(visit.title) || visitId || 'Visit';
-  const comments = asString(visit.comments);
-  if (!visitId || comments.length < 4) {
     return;
   }
   const url = visitAppUrl(visitId);

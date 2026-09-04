@@ -1272,6 +1272,20 @@ th {
   white-space: nowrap;
 }
 
+.purchase-excluded-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #f2f4f7;
+  color: #667085;
+  border: 1px solid #d0d5dd;
+  white-space: nowrap;
+}
+
 .subtraction-pricing-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

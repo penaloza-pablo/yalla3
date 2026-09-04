@@ -22,6 +22,10 @@ import {
   slackEmptyAck,
   slackJsonResponse,
 } from '../shared/slack';
+import {
+  SLACK_NOTIFICATION_IDS,
+  isSlackNotificationEnabled,
+} from '../shared/slack-notifications';
 
 const lambdaClient = new LambdaClient({});
 
@@ -224,6 +228,13 @@ export const handler = async (event: SlackHttpEvent) => {
     return slackJsonResponse(200, {
       response_type: 'ephemeral',
       text: 'Slack no envió response_url.',
+    });
+  }
+
+  if (!(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.slackHoy))) {
+    return slackJsonResponse(200, {
+      response_type: 'ephemeral',
+      text: 'El resumen de hoy está deshabilitado en Yalla.',
     });
   }
 

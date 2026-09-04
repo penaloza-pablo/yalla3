@@ -81,6 +81,8 @@ import { getTodaySummary } from './functions/get-today-summary/resource';
 import { handleSlackCommand } from './functions/handle-slack-command/resource';
 import { processSlackHoy } from './functions/process-slack-hoy/resource';
 import { notifyCleaningOverdue } from './functions/notify-cleaning-overdue/resource';
+import { getSlackNotifications } from './functions/get-slack-notifications/resource';
+import { upsertSlackNotification } from './functions/upsert-slack-notification/resource';
 
 const backend = defineBackend({
   auth,
@@ -154,6 +156,8 @@ const backend = defineBackend({
   handleSlackCommand,
   processSlackHoy,
   notifyCleaningOverdue,
+  getSlackNotifications,
+  upsertSlackNotification,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -224,6 +228,8 @@ const lambdaFunctionsWithHttp = [
   backend.getMaintenanceAgents,
   backend.upsertMaintenanceAgent,
   backend.getTodaySummary,
+  backend.getSlackNotifications,
+  backend.upsertSlackNotification,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -451,6 +457,7 @@ const activityLogWriters = [
   backend.upsertMaintenanceBilling,
   backend.upsertMaintenancePlan,
   backend.upsertMaintenanceAgent,
+  backend.upsertSlackNotification,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -663,6 +670,37 @@ const slackSecret = Secret.fromSecretNameV2(
 slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
 slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
 slackSecret.grantRead(backend.upsertVisit.resources.lambda);
+
+const slackNotificationsTable = new Table(dataStack, 'SlackNotificationsTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+backend.getSlackNotifications.addEnvironment(
+  'TABLE_NAME',
+  slackNotificationsTable.tableName,
+);
+backend.upsertSlackNotification.addEnvironment(
+  'TABLE_NAME',
+  slackNotificationsTable.tableName,
+);
+slackNotificationsTable.grantReadData(backend.getSlackNotifications.resources.lambda);
+slackNotificationsTable.grantReadWriteData(
+  backend.upsertSlackNotification.resources.lambda,
+);
+const slackNotificationReaders = [
+  backend.notifyCleaningOverdue,
+  backend.upsertVisit,
+  backend.handleSlackCommand,
+  backend.processSlackHoy,
+];
+for (const lambdaFunction of slackNotificationReaders) {
+  lambdaFunction.addEnvironment(
+    'SLACK_NOTIFICATIONS_TABLE',
+    slackNotificationsTable.tableName,
+  );
+  slackNotificationsTable.grantReadData(lambdaFunction.resources.lambda);
+}
 backend.handleSlackCommand.addEnvironment(
   'CLEANERS_TABLE',
   cleanersTable.tableName,
@@ -1313,6 +1351,14 @@ const handleSlackCommandUrl =
   backend.handleSlackCommand.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getSlackNotificationsUrl =
+  backend.getSlackNotifications.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertSlackNotificationUrl =
+  backend.upsertSlackNotification.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 
 backend.addOutput({
   custom: {
@@ -1382,5 +1428,7 @@ backend.addOutput({
     upsertMaintenanceAgentUrl: upsertMaintenanceAgentUrl.url,
     getTodaySummaryUrl: getTodaySummaryUrl.url,
     handleSlackCommandUrl: handleSlackCommandUrl.url,
+    getSlackNotificationsUrl: getSlackNotificationsUrl.url,
+    upsertSlackNotificationUrl: upsertSlackNotificationUrl.url,
   },
 });

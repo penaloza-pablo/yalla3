@@ -1,4 +1,8 @@
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  SLACK_NOTIFICATION_IDS,
+  isSlackNotificationEnabled,
+} from '../shared/slack-notifications';
 
 const lambdaClient = new LambdaClient({});
 
@@ -206,6 +210,15 @@ export const handler = async (event: SlackHoyEvent) => {
   const responseUrl = event.responseUrl?.trim();
   if (!responseUrl) {
     throw new Error('responseUrl is required.');
+  }
+
+  if (!(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.slackHoy))) {
+    await postToResponseUrl(responseUrl, {
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: 'El resumen de hoy está deshabilitado en Yalla.',
+    });
+    return { ok: true, skipped: true };
   }
 
   try {

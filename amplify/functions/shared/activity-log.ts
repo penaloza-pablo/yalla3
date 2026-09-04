@@ -24,6 +24,7 @@ export const LOG_FEATURES = {
   MAINTENANCE_SETTINGS: 'Maintenance settings',
   MAINTENANCE_INCIDENTS: 'Maintenance Incidents',
   MAINTENANCE_BILLING: 'Maintenance Billing',
+  SLACK: 'Slack',
 } as const;
 
 type HttpHeaders = Record<string, string | string[] | undefined>;

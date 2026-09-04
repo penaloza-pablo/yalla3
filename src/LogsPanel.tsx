@@ -49,6 +49,7 @@ const FEATURE_OPTIONS = [
   'Maintenance Incidents',
   'Maintenance Billing',
   'Maintenance settings',
+  'Slack',
 ] as const
 
 const formatLogDate = (value: string, locale: string) => {

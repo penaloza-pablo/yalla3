@@ -40,7 +40,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Settings',
-    items: ['Logs', 'Users', 'Roles'],
+    items: ['Logs', 'Users', 'Roles', 'Slack'],
   },
   {
     section: 'Grow',

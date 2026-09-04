@@ -105,6 +105,11 @@ export const buildTeamByIdMap = (teams: TeamRecord[]) =>
 export const getTeamSortKey = (teamId: string, teamById: Map<string, string>) =>
   normalizeTeamKey(teamById.get(teamId) ?? teamId)
 
+export const isManagementTeam = (
+  teamId: string,
+  teamById: Map<string, string>,
+) => getTeamSortKey(teamId, teamById) === 'management'
+
 const compareTeamKeyOrder = (
   keyA: string,
   keyB: string,
