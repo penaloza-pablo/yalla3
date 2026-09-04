@@ -510,6 +510,7 @@
     "title": "Daily Ops",
     "eyebrow": "Ops / Daily Ops",
     "scheduled": "Scheduled",
+    "statusScheduled": "Scheduled",
     "overdue": "Overdue",
     "completedCancelled": "Completed & Cancelled",
     "completed": "Completed",
@@ -634,7 +635,12 @@
     "previousDay": "Previous day",
     "nextDay": "Next day",
     "emptyTasksHint": "No pending specifics. Execute according to the title.",
-    "cleaningTypePending": "Waiting to define"
+    "cleaningTypePending": "Waiting to define",
+    "addTask": "Add task",
+    "noDraftTasks": "No tasks added yet.",
+    "removeTask": "Remove",
+    "comments": "Comments",
+    "taskDescriptionEs": "Description in Spanish"
   },
   "reviewWorkflow": {
     "progress": "Review workflow progress",
@@ -719,13 +725,17 @@
     "visible": "Visible",
     "coreSection": "Main",
     "specificActions": "Specific actions",
+    "dashboardCards": "Dashboard cards",
     "noAccess": "Your account has no role yet. Ask an admin to assign one.",
     "actions": {
       "cleaningCloseMonth": "Close month in Cleaning / Billing",
       "maintenanceCloseMonth": "Close month in Maintenance / Billing",
       "maintenanceCheckAfterEstimate": "Check in Maintenance / Billing when status is not To estimate",
       "maintenanceBillingHoursRemaining": "Remaining hours in Maintenance / Billing",
-      "dashboardMaintenanceHoursRemaining": "Remaining hours in Dashboard / Maintenance",
+      "dashboardCardCleaning": "Cleaning dashboard card",
+      "dashboardCardMaintenance": "Maintenance dashboard card",
+      "dashboardCardOps": "Ops dashboard card",
+      "dashboardCardInventory": "Inventory dashboard card",
       "visitMoreInfo": "Info button (i) in visit modals",
       "dailyOpsCreate": "Create (+) in Daily Ops",
       "inventoryCreate": "Create (+) in Inventory",
@@ -734,7 +744,8 @@
       "propertiesUpdateFromGuesty": "Update from Guesty in Properties",
       "unassignedTasksEdit": "Edit in Ops / Unassigned tasks",
       "maintenanceBillingEdit": "Edit in Maintenance / Billing month tables",
-      "cleaningBillingEdit": "Edit in Cleaning / Billing month tables"
+      "cleaningBillingEdit": "Edit in Cleaning / Billing month tables",
+      "createTasks": "Create tasks"
     }
   },
   "spotCheck": {

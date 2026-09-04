@@ -21,6 +21,7 @@ export type VisitRecord = {
   priority: string
   title: string
   description: string
+  comments?: string
   estimatedDurationMinutes?: number
   actualDurationHours?: number
   appliesToHourBank: boolean
@@ -39,6 +40,7 @@ export type TaskRecord = {
   title: string
   titleEs?: string
   description: string
+  descriptionEs?: string
   status: TaskStatus
   priority: string
   dueDate?: string
@@ -73,6 +75,7 @@ export type VisitTemplateTask = {
   title: string
   titleEs?: string
   description: string
+  descriptionEs?: string
   priority: string
   urgent?: boolean
   sortOrder: number
@@ -100,6 +103,7 @@ export type VisitDraftTask = {
   title: string
   titleEs?: string
   description: string
+  descriptionEs?: string
   priority: string
   urgent: boolean
 }

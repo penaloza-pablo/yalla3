@@ -194,9 +194,10 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
               title: task.title,
               titleEs: task.titleEs ?? '',
               description: task.description,
+              descriptionEs: task.descriptionEs ?? '',
               urgent: Boolean(task.urgent || task.priority === 'URGENT'),
             }))
-          : [{ title: '', titleEs: '', description: '', urgent: false }],
+          : [{ title: '', titleEs: '', description: '', descriptionEs: '', urgent: false }],
     })
     setIsFormOpen(true)
   }
@@ -222,9 +223,10 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
               title: task.title,
               titleEs: task.titleEs ?? '',
               description: task.description,
+              descriptionEs: task.descriptionEs ?? '',
               urgent: Boolean(task.urgent || task.priority === 'URGENT'),
             }))
-          : [{ title: '', titleEs: '', description: '', urgent: false }],
+          : [{ title: '', titleEs: '', description: '', descriptionEs: '', urgent: false }],
     })
     setIsFormOpen(true)
   }
@@ -274,6 +276,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
           title: task.title.trim(),
           titleEs: task.titleEs?.trim() || undefined,
           description: task.description,
+          descriptionEs: task.descriptionEs?.trim() || undefined,
           priority: task.urgent ? 'URGENT' : 'MEDIUM',
           urgent: task.urgent,
           sortOrder: index + 1,
@@ -896,6 +899,20 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                         }))
                       }
                     />
+                    <input
+                      placeholder={t('operations.taskDescriptionEs')}
+                      value={task.descriptionEs ?? ''}
+                      onChange={(event) =>
+                        setTemplateForm((current) => ({
+                          ...current,
+                          tasks: current.tasks.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, descriptionEs: event.target.value }
+                              : entry,
+                          ),
+                        }))
+                      }
+                    />
                     <label className="checkbox-row compact">
                       <input
                         type="checkbox"
@@ -941,6 +958,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                           title: '',
                           titleEs: '',
                           description: '',
+                          descriptionEs: '',
                           urgent: false,
                         },
                       ],

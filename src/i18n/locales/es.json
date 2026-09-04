@@ -510,6 +510,7 @@
     "title": "Resumen diario",
     "eyebrow": "Ops / Resumen diario",
     "scheduled": "Programadas",
+    "statusScheduled": "Programada",
     "overdue": "Atrasadas",
     "completedCancelled": "Completadas y canceladas",
     "completed": "Completada",
@@ -634,7 +635,12 @@
     "previousDay": "Día anterior",
     "nextDay": "Día siguiente",
     "emptyTasksHint": "No hay específicos pendientes. Ejecutar según título",
-    "cleaningTypePending": "Pendiente de definir"
+    "cleaningTypePending": "Pendiente de definir",
+    "addTask": "Añadir tarea",
+    "noDraftTasks": "Todavía no hay tareas.",
+    "removeTask": "Quitar",
+    "comments": "Comentarios",
+    "taskDescriptionEs": "Descripción en español"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",
@@ -719,13 +725,17 @@
     "visible": "Visible",
     "coreSection": "Principal",
     "specificActions": "Acciones específicas",
+    "dashboardCards": "Tarjetas del dashboard",
     "noAccess": "Tu cuenta aún no tiene rol. Pide a un admin que te asigne uno.",
     "actions": {
       "cleaningCloseMonth": "Cerrar mes en Limpiezas / Historial",
       "maintenanceCloseMonth": "Cerrar mes en Mantenimiento / Historial",
       "maintenanceCheckAfterEstimate": "Check en Mantenimiento / Historial si el estado no es Por estimar",
       "maintenanceBillingHoursRemaining": "Horas restantes en Mantenimiento / Historial",
-      "dashboardMaintenanceHoursRemaining": "Horas restantes en Resumen diario / Mantenimiento",
+      "dashboardCardCleaning": "Tarjeta del dashboard de Limpieza",
+      "dashboardCardMaintenance": "Tarjeta del dashboard de Mantenimiento",
+      "dashboardCardOps": "Tarjeta del dashboard de Ops",
+      "dashboardCardInventory": "Tarjeta del dashboard de Inventario",
       "visitMoreInfo": "Botón i en los modales de visita",
       "dailyOpsCreate": "Crear (+) en Resumen diario",
       "inventoryCreate": "Crear (+) en Inventario",
@@ -734,7 +744,8 @@
       "propertiesUpdateFromGuesty": "Update from Guesty en Propiedades",
       "unassignedTasksEdit": "Editar en Ops / Tareas sin asignar",
       "maintenanceBillingEdit": "Editar en Mantenimiento / Historial (tablas del mes)",
-      "cleaningBillingEdit": "Editar en Limpiezas / Historial (tablas del mes)"
+      "cleaningBillingEdit": "Editar en Limpiezas / Historial (tablas del mes)",
+      "createTasks": "Crear tareas"
     }
   },
   "spotCheck": {

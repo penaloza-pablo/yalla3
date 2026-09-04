@@ -9,6 +9,8 @@ export const upsertVisit = defineFunction({
     TASKS_TABLE: 'yalla-tasks',
     SYNC_TASK_TO_GUESTY_FUNCTION: 'yalla-syncTaskToGuesty',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
+    SLACK_SECRET_ID: 'yalla/slack',
+    APP_BASE_URL: 'https://main.dd8kh4wy2zlme.amplifyapp.com',
   },
   timeoutSeconds: 60,
 });

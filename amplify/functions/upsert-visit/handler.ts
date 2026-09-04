@@ -29,6 +29,7 @@ import {
   withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
 import { appendUrgentTaskTitles } from '../shared/visit-title';
+import { notifyVisitClosedWithComments } from '../shared/slack-cleaning';
 
 type VisitPayload = {
   id?: string;
@@ -43,6 +44,7 @@ type VisitPayload = {
   priority?: string;
   title?: string;
   description?: string;
+  comments?: string;
   estimatedDurationMinutes?: number;
   actualDurationHours?: number;
   appliesToHourBank?: boolean;
@@ -58,6 +60,7 @@ type VisitPayload = {
     title?: string;
     titleEs?: string;
     description?: string;
+    descriptionEs?: string;
     priority?: string;
   }>;
   createdAt?: string;
@@ -298,6 +301,12 @@ export const handler = async (event: {
     description:
       payload.description?.trim() ??
       (typeof existing?.description === 'string' ? existing.description : ''),
+    comments:
+      payload.comments !== undefined
+        ? payload.comments.trim()
+        : typeof existing?.comments === 'string'
+          ? existing.comments
+          : '',
     estimatedDurationMinutes:
       payload.estimatedDurationMinutes ??
       (typeof existing?.estimatedDurationMinutes === 'number'
@@ -441,6 +450,11 @@ export const handler = async (event: {
         await recordCleaningCompletion(item);
       } catch (error) {
         console.error('Failed to record cleaning completion', error);
+      }
+      try {
+        await notifyVisitClosedWithComments(item);
+      } catch (error) {
+        console.error('Failed to notify visit comments on Slack', error);
       }
     }
 

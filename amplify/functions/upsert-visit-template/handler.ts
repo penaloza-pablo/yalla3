@@ -20,6 +20,7 @@ type TemplateTask = {
   title?: string;
   titleEs?: string;
   description?: string;
+  descriptionEs?: string;
   priority?: string;
   urgent?: boolean;
   sortOrder?: number;
@@ -57,10 +58,12 @@ const normalizeTasks = (tasks?: TemplateTask[]) => {
         ? 'URGENT'
         : (task.priority?.trim().toUpperCase() || 'MEDIUM');
       const titleEs = task.titleEs?.trim() ?? '';
+      const descriptionEs = task.descriptionEs?.trim() ?? '';
       return {
         title,
         titleEs,
         description: task.description?.trim() ?? '',
+        descriptionEs,
         priority,
         urgent,
         sortOrder:

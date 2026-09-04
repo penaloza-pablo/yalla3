@@ -12,6 +12,7 @@ export const getTodaySummary = defineFunction({
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
     MAINTENANCE_VISIT_TYPE_IDS:
       'visit_type_maintenance,visit_type_deep_property_check,visit_type_property_check,visit_type_fixings,visit_type_emergency',
+    MAINTENANCE_TEAM_ID: 'team_maintenance',
   },
   timeoutSeconds: 45,
   memoryMB: 1024,

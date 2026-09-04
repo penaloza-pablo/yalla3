@@ -64,7 +64,10 @@ export const ACTION_KEYS = {
   maintenanceCloseMonth: 'action:maintenanceBilling.closeMonth',
   maintenanceCheckAfterEstimate: 'action:maintenanceBilling.checkAfterEstimate',
   maintenanceBillingHoursRemaining: 'action:maintenanceBilling.hoursRemaining',
-  dashboardMaintenanceHoursRemaining: 'action:dashboard.maintenanceHoursRemaining',
+  dashboardCardCleaning: 'action:dashboard.card.cleaning',
+  dashboardCardMaintenance: 'action:dashboard.card.maintenance',
+  dashboardCardOps: 'action:dashboard.card.ops',
+  dashboardCardInventory: 'action:dashboard.card.inventory',
   visitMoreInfo: 'action:visit.moreInfo',
   dailyOpsCreate: 'action:dailyOps.create',
   inventoryCreate: 'action:inventory.create',
@@ -74,6 +77,7 @@ export const ACTION_KEYS = {
   unassignedTasksEdit: 'action:unassignedTasks.edit',
   maintenanceBillingEdit: 'action:maintenanceBilling.edit',
   cleaningBillingEdit: 'action:cleaningBilling.edit',
+  createTasks: 'action:createTasks',
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -92,10 +96,6 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
   {
     key: ACTION_KEYS.maintenanceBillingHoursRemaining,
     i18nKey: 'rbac.actions.maintenanceBillingHoursRemaining',
-  },
-  {
-    key: ACTION_KEYS.dashboardMaintenanceHoursRemaining,
-    i18nKey: 'rbac.actions.dashboardMaintenanceHoursRemaining',
   },
   { key: ACTION_KEYS.visitMoreInfo, i18nKey: 'rbac.actions.visitMoreInfo' },
   { key: ACTION_KEYS.dailyOpsCreate, i18nKey: 'rbac.actions.dailyOpsCreate' },
@@ -118,9 +118,43 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
     key: ACTION_KEYS.cleaningBillingEdit,
     i18nKey: 'rbac.actions.cleaningBillingEdit',
   },
+  { key: ACTION_KEYS.createTasks, i18nKey: 'rbac.actions.createTasks' },
 ]
 
-export const ALL_ACTION_KEYS = ACTION_DEFINITIONS.map((entry) => entry.key)
+export const DASHBOARD_CARD_DEFINITIONS: { key: string; i18nKey: string }[] = [
+  {
+    key: ACTION_KEYS.dashboardCardCleaning,
+    i18nKey: 'rbac.actions.dashboardCardCleaning',
+  },
+  {
+    key: ACTION_KEYS.dashboardCardMaintenance,
+    i18nKey: 'rbac.actions.dashboardCardMaintenance',
+  },
+  {
+    key: ACTION_KEYS.dashboardCardOps,
+    i18nKey: 'rbac.actions.dashboardCardOps',
+  },
+  {
+    key: ACTION_KEYS.dashboardCardInventory,
+    i18nKey: 'rbac.actions.dashboardCardInventory',
+  },
+]
+
+export const DASHBOARD_CARD_KEYS = DASHBOARD_CARD_DEFINITIONS.map(
+  (entry) => entry.key,
+)
+
+export const withDefaultDashboardCardPermissions = (permissions: string[]) => {
+  if (DASHBOARD_CARD_KEYS.some((key) => permissions.includes(key))) {
+    return permissions
+  }
+  return [...permissions, ...DASHBOARD_CARD_KEYS]
+}
+
+export const ALL_ACTION_KEYS = [
+  ...ACTION_DEFINITIONS.map((entry) => entry.key),
+  ...DASHBOARD_CARD_KEYS,
+]
 
 export const allPermissionKeys = () => [
   ...ALL_PAGES.map(pagePermission),
@@ -185,6 +219,10 @@ export const ROLE_SEEDS: {
       ACTION_KEYS.purchasesCreate,
       ACTION_KEYS.visitMoreInfo,
       ACTION_KEYS.propertiesUpdateFromGuesty,
+      ACTION_KEYS.createTasks,
+      ACTION_KEYS.dashboardCardCleaning,
+      ACTION_KEYS.dashboardCardOps,
+      ACTION_KEYS.dashboardCardInventory,
     ],
   },
   {
@@ -193,6 +231,7 @@ export const ROLE_SEEDS: {
     permissions: [
       ...pages('Daily Operations', 'Cleaning Plan', 'Cleaning Incidents'),
       ACTION_KEYS.visitMoreInfo,
+      ACTION_KEYS.dashboardCardCleaning,
     ],
   },
   {
@@ -215,6 +254,10 @@ export const ROLE_SEEDS: {
       ACTION_KEYS.dailyOpsCreate,
       ACTION_KEYS.visitMoreInfo,
       ACTION_KEYS.propertiesUpdateFromGuesty,
+      ACTION_KEYS.createTasks,
+      ACTION_KEYS.dashboardCardMaintenance,
+      ACTION_KEYS.dashboardCardOps,
+      ACTION_KEYS.dashboardCardInventory,
     ],
   },
   {
@@ -223,6 +266,7 @@ export const ROLE_SEEDS: {
     permissions: [
       ...pages('Daily Operations', 'Maintenance Plan', 'Maintenance Incidents'),
       ACTION_KEYS.visitMoreInfo,
+      ACTION_KEYS.dashboardCardMaintenance,
     ],
   },
 ]

@@ -33,6 +33,8 @@ type HttpEvent = {
 
 const CLEANING_VISIT_TYPE_ID =
   process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
+const MAINTENANCE_TEAM_ID =
+  process.env.MAINTENANCE_TEAM_ID || 'team_maintenance';
 const MAINTENANCE_VISIT_TYPE_IDS = (
   process.env.MAINTENANCE_VISIT_TYPE_IDS ||
   'visit_type_maintenance,visit_type_deep_property_check,visit_type_property_check,visit_type_fixings,visit_type_emergency'
@@ -152,17 +154,14 @@ const countUnassignedPending = async (tableName: string) => {
   return items.filter((task) => !task.visitId).length;
 };
 
-const countVisitsForTypes = (
+const countScheduledVisits = (
   items: Record<string, unknown>[],
-  visitTypeIds: Set<string>,
   today: string,
+  matches: (item: Record<string, unknown>) => boolean,
 ): VisitCounts => {
   const counts = emptyVisitCounts();
   for (const item of items) {
-    const typeId = asString(
-      itemField(item, ['visitTypeId', 'visit_type_id', 'VisitTypeId']),
-    );
-    if (!visitTypeIds.has(typeId)) {
+    if (!matches(item)) {
       continue;
     }
     const scheduledDateRaw = asString(
@@ -189,6 +188,24 @@ const countVisitsForTypes = (
     }
   }
   return counts;
+};
+
+const visitTypeIdOf = (item: Record<string, unknown>) =>
+  asString(itemField(item, ['visitTypeId', 'visit_type_id', 'VisitTypeId']));
+
+const isDashboardMaintenanceVisit = (
+  item: Record<string, unknown>,
+  visitTypeIds: Set<string>,
+) => {
+  const typeId = visitTypeIdOf(item);
+  if (typeId === CLEANING_VISIT_TYPE_ID) {
+    return false;
+  }
+  if (visitTypeIds.has(typeId)) {
+    return true;
+  }
+  const teamId = asString(itemField(item, ['teamId', 'team_id', 'TeamId']));
+  return teamId === MAINTENANCE_TEAM_ID;
 };
 
 export const handler = async (event: HttpEvent) => {
@@ -252,7 +269,7 @@ export const handler = async (event: HttpEvent) => {
       tomorrowMaintenancePlan,
     ] = await Promise.all([
       scanProjected(visitsTable, {
-        expression: '#id, visitTypeId, scheduledDate, #status, propertyId',
+        expression: '#id, visitTypeId, scheduledDate, #status, propertyId, teamId',
         names: { '#id': 'id', '#status': 'status' },
       }),
       getPlanByDate(plansTable, today),
@@ -300,15 +317,14 @@ export const handler = async (event: HttpEvent) => {
       new Map(storedMonths),
     );
 
-    const cleaning = countVisitsForTypes(
+    const cleaning = countScheduledVisits(
       visits,
-      new Set([CLEANING_VISIT_TYPE_ID]),
       today,
+      (item) => visitTypeIdOf(item) === CLEANING_VISIT_TYPE_ID,
     );
-    const maintenance = countVisitsForTypes(
-      visits,
-      new Set(MAINTENANCE_VISIT_TYPE_IDS),
-      today,
+    const maintenanceTypeIds = new Set(MAINTENANCE_VISIT_TYPE_IDS);
+    const maintenance = countScheduledVisits(visits, today, (item) =>
+      isDashboardMaintenanceVisit(item, maintenanceTypeIds),
     );
     const maintenanceSettings = normalizeSettings(maintenanceSettingsItem);
     const storedMaintenanceByMonth = new Map(maintenanceStoredMonths);

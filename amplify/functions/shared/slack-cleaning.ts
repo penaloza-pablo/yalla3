@@ -2,7 +2,7 @@ import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { recordCleaningCompletion } from './cleaner-stats';
 import { CLEANING_VISIT_TYPE_ID, normalizeStartTime } from './cleaning-plan';
 import { nowIso } from './dynamo-http';
-import { slackApi } from './slack';
+import { loadSlackSecrets, slackApi } from './slack';
 import {
   docClient,
   getNowTimeInMadrid,
@@ -257,4 +257,30 @@ export const snoozeCleaningFromSlack = async (options: {
   const text = `La limpieza de ${escapeMrkdwn(nickname)} se pospuso. Nueva hora de finalización: ${endTime}.`;
   await replaceMessage(options.channelId, options.messageTs, text);
   return { ok: true, message: text };
+};
+
+export const notifyVisitClosedWithComments = async (visit: {
+  id?: unknown;
+  title?: unknown;
+  comments?: unknown;
+}) => {
+  const { warningsChannelId } = await loadSlackSecrets();
+  if (!warningsChannelId) {
+    console.error(
+      'Slack comments notify skipped: missing warningsChannelId in yalla/slack.',
+    );
+    return;
+  }
+  const visitId = asString(visit.id);
+  const title = asString(visit.title) || visitId || 'Visit';
+  const comments = asString(visit.comments);
+  if (!visitId || comments.length < 4) {
+    return;
+  }
+  const url = visitAppUrl(visitId);
+  const text = `<${url}|${escapeMrkdwn(title)}> se ha cerrado con los siguientes comentarios: ${escapeMrkdwn(comments)}.`;
+  await slackApi('chat.postMessage', {
+    channel: warningsChannelId,
+    text,
+  });
 };

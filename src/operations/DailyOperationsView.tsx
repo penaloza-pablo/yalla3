@@ -286,6 +286,7 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
   priority: String(item.priority ?? 'MEDIUM').toUpperCase(),
   title: String(item.title ?? ''),
   description: String(item.description ?? ''),
+  comments: String(item.comments ?? ''),
   estimatedDurationMinutes:
     typeof item.estimatedDurationMinutes === 'number'
       ? item.estimatedDurationMinutes
@@ -321,6 +322,10 @@ const mapTask = (item: Record<string, unknown>): TaskRecord => ({
       ? item.titleEs
       : undefined,
   description: String(item.description ?? ''),
+  descriptionEs:
+    typeof item.descriptionEs === 'string' && item.descriptionEs.trim()
+      ? item.descriptionEs
+      : undefined,
   status: String(item.status ?? 'UNASSIGNED').toUpperCase() as TaskRecord['status'],
   priority: String(item.priority ?? 'MEDIUM').toUpperCase(),
   dueDate: typeof item.dueDate === 'string' ? item.dueDate : undefined,
@@ -425,9 +430,11 @@ export function DailyOperationsView({
   const [isRefreshingFromGuesty, setIsRefreshingFromGuesty] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [commentsDraft, setCommentsDraft] = useState('')
 
   const isCreatingVisit = !visitForm.id
   const isCreatingTask = !taskForm.id
+  const canCreateTasks = can(ACTION_KEYS.createTasks)
 
   const visitHasOpenTasks = useMemo(
     () =>
@@ -901,6 +908,10 @@ export function DailyOperationsView({
   }, [selectedVisitId, loadVisitTasks])
 
   useEffect(() => {
+    setCommentsDraft(selectedVisit?.comments ?? '')
+  }, [selectedVisit?.id, selectedVisit?.comments])
+
+  useEffect(() => {
     const endpoint = endpoints.cleaners
     if (!endpoint) {
       return
@@ -1220,6 +1231,7 @@ export function DailyOperationsView({
         : '',
       appliesToHourBank: visit.appliesToHourBank,
     })
+    setDraftVisitTasks([])
     setIsVisitFormOpen(true)
   }
 
@@ -1278,11 +1290,12 @@ export function DailyOperationsView({
 
     const pendingDraftTasks = [...draftVisitTasks]
     const tasksToCreate = pendingDraftTasks
-      .filter((draft) => draft.title.trim())
+      .filter((draft) => draft.title.trim() || draft.titleEs?.trim())
       .map((draft) => ({
-        title: draft.title.trim(),
+        title: draft.title.trim() || draft.titleEs?.trim() || '',
         titleEs: draft.titleEs?.trim() || undefined,
         description: draft.description,
+        descriptionEs: draft.descriptionEs?.trim() || undefined,
         priority: draft.urgent ? 'URGENT' : 'MEDIUM',
       }))
     payload.title = appendUrgentTaskTitles(
@@ -1292,11 +1305,15 @@ export function DailyOperationsView({
         .map((task) => task.title),
     )
 
-    if (isCreatingVisit && tasksToCreate.length > 0) {
+    if (tasksToCreate.length > 0 && (isCreatingVisit || canCreateTasks)) {
       payload.tasks = tasksToCreate
+      if (!isCreatingVisit) {
+        payload.appendTasks = true
+      }
     }
 
-    const hasBulkTasks = isCreatingVisit && tasksToCreate.length > 0
+    const hasBulkTasks =
+      tasksToCreate.length > 0 && (isCreatingVisit || canCreateTasks)
 
     try {
       if (hasBulkTasks) {
@@ -1332,6 +1349,9 @@ export function DailyOperationsView({
       setDashboardRefreshKey((current) => current + 1)
       if (!mapped || !isCreatingVisit) {
         await loadVisits()
+      }
+      if (!isCreatingVisit && selectedVisitId) {
+        await loadVisitTasks(selectedVisitId)
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveVisit'))
@@ -1468,7 +1488,9 @@ export function DailyOperationsView({
       return
     }
     if (!requiresCompleteVisitWizard(selectedVisit.visitTypeId)) {
-      void updateVisitStatus(selectedVisit, 'COMPLETED')
+      void updateVisitStatus(selectedVisit, 'COMPLETED', {
+        comments: commentsDraft,
+      })
       return
     }
     setError(null)
@@ -1497,6 +1519,7 @@ export function DailyOperationsView({
       actualDurationHours: hours,
       appliesToHourBank: completeVisitForm.poolOfHours,
       specialHours: completeVisitForm.specialHours,
+      comments: commentsDraft,
     })
     setIsCompleteVisitOpen(false)
   }
@@ -1567,6 +1590,37 @@ export function DailyOperationsView({
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : 'Unable to update visit.',
+      )
+    }
+  }
+
+  const persistVisitComments = async () => {
+    if (!selectedVisit || !endpoints.upsertVisit) return
+    if (
+      selectedVisit.status === 'COMPLETED' ||
+      selectedVisit.status === 'CANCELLED'
+    ) {
+      return
+    }
+    const nextComments = commentsDraft
+    if (nextComments === (selectedVisit.comments ?? '')) return
+    try {
+      await saveVisit(endpoints.upsertVisit, {
+        id: selectedVisit.id,
+        comments: nextComments,
+      })
+      setVisits((current) =>
+        current.map((entry) =>
+          entry.id === selectedVisit.id
+            ? { ...entry, comments: nextComments }
+            : entry,
+        ),
+      )
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('operations.unableUpdateVisit'),
       )
     }
   }
@@ -1844,7 +1898,7 @@ export function DailyOperationsView({
         ? t('operations.subtitleTemplates')
         : t('operations.subtitlePage')
   const statusLabel = (status: VisitStatus) => {
-    if (status === 'SCHEDULED') return t('operations.scheduled')
+    if (status === 'SCHEDULED') return t('operations.statusScheduled')
     if (status === 'OVERDUE') return t('operations.overdue')
     if (status === 'COMPLETED') return t('operations.completed')
     return t('operations.cancelled')
@@ -2749,7 +2803,7 @@ export function DailyOperationsView({
                   <>
                     <button
                       type="button"
-                      className="btn-icon btn-icon-ghost"
+                      className="btn-icon btn-icon-ghost operations-complete-visit-btn"
                       disabled={visitHasOpenTasks}
                       aria-label={t('operations.completeVisit')}
                       title={
@@ -2771,6 +2825,7 @@ export function DailyOperationsView({
                         />
                       </svg>
                     </button>
+                    {canCreateTasks ? (
                     <button
                       type="button"
                       className="btn-icon btn-icon-ghost"
@@ -2800,6 +2855,7 @@ export function DailyOperationsView({
                         />
                       </svg>
                     </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -2900,6 +2956,7 @@ export function DailyOperationsView({
                   const description = displayTaskDescription(
                     i18n.language,
                     task.description,
+                    task.descriptionEs,
                   )
 
                   return (
@@ -2962,6 +3019,21 @@ export function DailyOperationsView({
                   })}
                 </ul>
               )}
+              <label className="full-width operations-visit-comments">
+                {t('operations.comments')}
+                <textarea
+                  className="visit-create-description"
+                  rows={2}
+                  value={commentsDraft}
+                  placeholder={t('operations.comments')}
+                  readOnly={
+                    selectedVisit.status === 'COMPLETED' ||
+                    selectedVisit.status === 'CANCELLED'
+                  }
+                  onChange={(event) => setCommentsDraft(event.target.value)}
+                  onBlur={() => void persistVisitComments()}
+                />
+              </label>
             </div>
           </div>
         </div>
@@ -2970,7 +3042,7 @@ export function DailyOperationsView({
       {isVisitFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div
-            className={`modal${isCreatingVisit ? ' modal-wide modal-scrollable' : ''}`}
+            className={`modal${isCreatingVisit || canCreateTasks ? ' modal-wide modal-scrollable' : ''}`}
           >
             <div className="modal-header">
               <h3 className="modal-title">
@@ -3139,12 +3211,13 @@ export function DailyOperationsView({
                   />
                 </label>
               )}
-              {isCreatingVisit ? (
+              {isCreatingVisit || canCreateTasks ? (
                 <div className="full-width visit-draft-tasks">
                   <div className="visit-tasks-header">
                     <div>
-                      <h4>Tasks</h4>
+                      <h4>{t('operations.tasks')}</h4>
                     </div>
+                    {canCreateTasks ? (
                     <button
                       type="button"
                       className="btn-secondary"
@@ -3152,7 +3225,9 @@ export function DailyOperationsView({
                         setDraftVisitTasks((current) => [
                           {
                             title: '',
+                            titleEs: '',
                             description: '',
+                            descriptionEs: '',
                             priority: 'MEDIUM',
                             urgent: false,
                           },
@@ -3160,11 +3235,12 @@ export function DailyOperationsView({
                         ])
                       }
                     >
-                      Add task
+                      {t('operations.addTask')}
                     </button>
+                    ) : null}
                   </div>
                   {draftVisitTasks.length === 0 ? (
-                    <p className="subtitle">No tasks added yet.</p>
+                    <p className="subtitle">{t('operations.noDraftTasks')}</p>
                   ) : null}
                   {draftVisitTasks.map((task, index) => (
                     <div key={`draft-${index}`} className="template-task-row">
@@ -3191,16 +3267,24 @@ export function DailyOperationsView({
                       />
                       <input
                         placeholder={t('operations.description')}
-                        value={task.description}
-                        onChange={(event) =>
+                        value={displayTaskDescription(
+                          i18n.language,
+                          task.description,
+                          task.descriptionEs,
+                        )}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          const spanish = isSpanishLocale(i18n.language)
                           setDraftVisitTasks((current) =>
                             current.map((entry, entryIndex) =>
                               entryIndex === index
-                                ? { ...entry, description: event.target.value }
+                                ? spanish
+                                  ? { ...entry, descriptionEs: value }
+                                  : { ...entry, description: value }
                                 : entry,
                             ),
                           )
-                        }
+                        }}
                       />
                       <label className="checkbox-row compact">
                         <input

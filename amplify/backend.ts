@@ -662,6 +662,7 @@ const slackSecret = Secret.fromSecretNameV2(
 );
 slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
 slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
+slackSecret.grantRead(backend.upsertVisit.resources.lambda);
 backend.handleSlackCommand.addEnvironment(
   'CLEANERS_TABLE',
   cleanersTable.tableName,

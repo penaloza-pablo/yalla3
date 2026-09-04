@@ -12,6 +12,7 @@ type SlackSecretCache = {
   signingSecret: string;
   botToken: string;
   cleaningOverdueChannelId: string;
+  warningsChannelId: string;
 };
 
 let secretCache: SlackSecretCache | undefined;
@@ -70,6 +71,11 @@ export const loadSlackSecrets = async () => {
     cleaningOverdueChannelId: readSecretField(parsed, [
       'cleaningOverdueChannelId',
       'notifyChannelId',
+    ]),
+    warningsChannelId: readSecretField(parsed, [
+      'warningsChannelId',
+      'Warnings Channel Id',
+      'WARNING_CHANNEL_ID',
     ]),
   };
   return secretCache;

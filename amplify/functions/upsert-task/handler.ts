@@ -32,6 +32,7 @@ type TaskPayload = {
   title?: string;
   titleEs?: string;
   description?: string;
+  descriptionEs?: string;
   status?: string;
   priority?: string;
   dueDate?: string;
@@ -264,6 +265,9 @@ export const handler = async (event: {
     description:
       payload.description?.trim() ??
       (typeof existing?.description === 'string' ? existing.description : ''),
+    descriptionEs:
+      payload.descriptionEs?.trim() ??
+      (typeof existing?.descriptionEs === 'string' ? existing.descriptionEs : ''),
     status,
     priority: normalizePriority(
       payload.priority ??

@@ -473,6 +473,7 @@ export type BulkVisitTaskInput = {
   title?: string;
   titleEs?: string;
   description?: string;
+  descriptionEs?: string;
   priority?: string;
 };
 
@@ -507,6 +508,7 @@ export const createVisitTasksBulk = async (
       title,
       titleEs: draft.titleEs?.trim() || undefined,
       description: draft.description?.trim() ?? '',
+      descriptionEs: draft.descriptionEs?.trim() || undefined,
       status: 'PENDING',
       priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority)
         ? priority

@@ -131,6 +131,44 @@ const TEMPLATE_TASK_DESCRIPTION_ES: Record<string, string> = {
   'Battery level and charge/battery change':
     'Nivel de batería y carga o cambio de batería',
   'Battery change if needed': 'Cambio de batería si hace falta',
+  'On-property inventory': 'Inventario en la propiedad',
+  'Functionality and cleanliness': 'Funcionamiento y limpieza',
+  'General condition': 'Estado general',
+  'Cleanliness check': 'Comprobación de limpieza',
+  Functionality: 'Funcionamiento',
+  'Cleanliness check (hair-free)': 'Comprobación de limpieza (sin pelos)',
+  'Maintenance cycle': 'Ciclo de mantenimiento',
+  '+2 sets above guest capacity':
+    '+2 juegos por encima de la capacidad de huéspedes',
+  'Battery level and charge': 'Nivel de batería y carga',
+  'Clean/report paint issues': 'Limpiar / reportar problemas de pintura',
+  'Cleanliness and filter check': 'Limpieza y comprobación del filtro',
+  'Functionality and cleanliness check':
+    'Comprobación de funcionamiento y limpieza',
+  'Functionality and filter status': 'Funcionamiento y estado del filtro',
+  'Functionality and leak': 'Funcionamiento y fugas',
+  'In shower with half of content at least + hidden set':
+    'En la ducha, al menos a la mitad + juego oculto',
+  'Kitchen and bathroom': 'Cocina y baño',
+  'Replace batteries / charge if needed':
+    'Cambiar baterías / cargar si hace falta',
+  'Verify login': 'Verificar inicio de sesión',
+  'frozen needed?': '¿Hace falta congelado?',
+  'Noise or instability': 'Ruido o inestabilidad',
+  'General condition and cleanliness': 'Estado general y limpieza',
+  'General condition and sharpness': 'Estado general y filo',
+  'Test electronic and key access': 'Probar acceso electrónico y con llave',
+  'min. 2 each': 'mín. 2 de cada',
+  'On-laundry room': 'En el cuarto de lavadora',
+  'Organisation and cleanliness': 'Organización y limpieza',
+  'In the bathroom': 'En el baño',
+  'In the room': 'En la habitación',
+  '>1.4 bar': '>1.4 bar',
+  'On-laundry room (open cabinet)':
+    'En el cuarto de lavadora (armario abierto)',
+  'Test electronic access': 'Probar acceso electrónico',
+  'Charged and active': 'Cargado y activo',
+  'Charge battery if needed': 'Cargar batería si hace falta',
 }
 
 const BATHROOMS_SUFFIX = /\s*\((?:in )?all bathrooms\)\s*$/i
@@ -191,13 +229,18 @@ export const displayTaskTitle = (
 export const displayTaskDescription = (
   language: string | undefined,
   description?: string | null,
+  descriptionEs?: string | null,
 ) => {
   const text = description?.trim() ?? ''
-  if (!text) {
-    return ''
-  }
   if (!isSpanishLocale(language)) {
     return text
+  }
+  const custom = descriptionEs?.trim()
+  if (custom) {
+    return custom
+  }
+  if (!text) {
+    return ''
   }
   return (
     TEMPLATE_TASK_DESCRIPTION_ES_LOOKUP.get(normalizeLookupKey(text)) ??

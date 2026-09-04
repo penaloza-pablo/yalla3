@@ -4,8 +4,10 @@ import {
   ACTION_DEFINITIONS,
   ADMIN_ROLE_ID,
   CORE_PAGES,
+  DASHBOARD_CARD_DEFINITIONS,
   NAVIGATION,
   pagePermission,
+  withDefaultDashboardCardPermissions,
 } from '../../amplify/functions/shared/rbac-catalog'
 import { translatePage, translateSection } from '../i18n/display'
 import { authFetch } from '../lib/auth-fetch'
@@ -134,7 +136,7 @@ export function RolesPanel({
 
   const openRole = (role: RoleRow) => {
     setSelectedId(role.id)
-    setDraft([...role.permissions])
+    setDraft(withDefaultDashboardCardPermissions([...role.permissions]))
     setNameDraft(roleNameDrafts[role.id] ?? role.name)
     setError(null)
   }
@@ -377,6 +379,44 @@ export function RolesPanel({
                 {NAVIGATION.map((group) =>
                   renderPageRows(translateSection(t, group.section), group.items),
                 )}
+              </tbody>
+            </table>
+          </div>
+          <h2 className="card-title" style={{ marginTop: 24 }}>
+            {t('rbac.dashboardCards')}
+          </h2>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('rbac.feature')}</th>
+                  <th>{t('rbac.visible')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DASHBOARD_CARD_DEFINITIONS.map((card) => {
+                  const checked = isAdmin || draft.includes(card.key)
+                  return (
+                    <tr key={card.key}>
+                      <td>{t(card.i18nKey)}</td>
+                      <td>
+                        <label className="filter-option">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={isAdmin}
+                            onChange={() =>
+                              setDraft((current) =>
+                                toggleValue(current, card.key),
+                              )
+                            }
+                          />
+                          <span>{t('rbac.visible')}</span>
+                        </label>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
-import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { ACTION_KEYS, DASHBOARD_CARD_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 
 type TodaySummary = {
@@ -47,7 +47,7 @@ type Props = {
   refreshKey?: number
 }
 
-const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v2'
+const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v3'
 
 const readCachedSummary = (): TodaySummary | null => {
   try {
@@ -134,31 +134,6 @@ const writeCachedSummary = (summary: TodaySummary) => {
   }
 }
 
-const RemainingHoursMetric = ({
-  hours,
-  t,
-  onClick,
-}: {
-  hours: number
-  t: TFunction
-  onClick: () => void
-}) => (
-  <li>
-    <button type="button" className="today-metric-btn" onClick={onClick}>
-      <span>{t('today.hoursRemaining')}</span>
-      <strong>
-        {hours < 0
-          ? t('today.hoursRemainingSurplus', {
-              hours: String(Math.abs(hours)).replace('.', ','),
-            })
-          : t('today.hoursRemainingValue', {
-              hours: String(hours).replace('.', ','),
-            })}
-      </strong>
-    </button>
-  </li>
-)
-
 const CountMetric = ({
   label,
   value,
@@ -213,7 +188,9 @@ export function TodayView({
 }: Props) {
   const { t } = useTranslation()
   const { can } = usePermissions()
-  const canSeeRemainingHours = can(ACTION_KEYS.dashboardMaintenanceHoursRemaining)
+  const hasExplicitDashboardCards = DASHBOARD_CARD_KEYS.some((key) => can(key))
+  const showDashboardCard = (key: string) =>
+    can(key) || !hasExplicitDashboardCards
   const [summary, setSummary] = useState<TodaySummary | null>(readCachedSummary)
   const [isLoading, setIsLoading] = useState(() => !readCachedSummary())
   const [error, setError] = useState('')
@@ -288,6 +265,7 @@ export function TodayView({
 
   const cards = summary ? (
     <section className="today-cards" aria-label={t('today.ops')}>
+      {showDashboardCard(ACTION_KEYS.dashboardCardCleaning) ? (
       <article className="card today-card">
         <h2 className="today-card-title">{t('today.cleaning')}</h2>
         <MetricsOrDone done={cleaningDone} doneLabel={t('today.goodJob')}>
@@ -312,7 +290,9 @@ export function TodayView({
           />
         </MetricsOrDone>
       </article>
+      ) : null}
 
+      {showDashboardCard(ACTION_KEYS.dashboardCardMaintenance) ? (
       <article className="card today-card">
         <h2 className="today-card-title">{t('today.maintenance')}</h2>
         <MetricsOrDone done={maintenanceDone} doneLabel={t('today.goodJob')}>
@@ -336,18 +316,10 @@ export function TodayView({
             onClick={() => onNavigate('Maintenance Billing')}
           />
         </MetricsOrDone>
-        {canSeeRemainingHours &&
-        typeof summary.maintenance.remainingHours === 'number' ? (
-          <ul className="today-metrics">
-            <RemainingHoursMetric
-              hours={summary.maintenance.remainingHours}
-              t={t}
-              onClick={() => onNavigate('Maintenance Billing')}
-            />
-          </ul>
-        ) : null}
       </article>
+      ) : null}
 
+      {showDashboardCard(ACTION_KEYS.dashboardCardOps) ? (
       <article className="card today-card">
         <h2 className="today-card-title">{t('today.ops')}</h2>
         <MetricsOrDone
@@ -367,7 +339,9 @@ export function TodayView({
           />
         </MetricsOrDone>
       </article>
+      ) : null}
 
+      {showDashboardCard(ACTION_KEYS.dashboardCardInventory) ? (
       <article className="card today-card">
         <button
           type="button"
@@ -418,6 +392,7 @@ export function TodayView({
           />
         </MetricsOrDone>
       </article>
+      ) : null}
     </section>
   ) : null
 
