@@ -4675,7 +4675,7 @@ function App() {
 
               {isFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
@@ -5316,7 +5316,7 @@ function App() {
 
               {isPurchasesFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
@@ -5925,7 +5925,7 @@ function App() {
 
               {isSubtractionsFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
@@ -6450,7 +6450,7 @@ function App() {
 
               {isPropertiesFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
@@ -6852,7 +6852,7 @@ function App() {
 
               {isBookingsFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
@@ -7218,7 +7218,7 @@ function App() {
 
               {isReviewsFilterOpen ? (
                 <div className="modal-overlay" role="dialog" aria-modal="true">
-                  <div className="modal">
+                  <div className="modal modal-scrollable">
                     <div className="modal-header">
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>

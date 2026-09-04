@@ -15,7 +15,11 @@ type SlackSecretCache = {
   warningsChannelId: string;
 };
 
-let secretCache: SlackSecretCache | undefined;
+const SECRET_CACHE_TTL_MS = 60 * 1000;
+
+let secretCache:
+  | { value: SlackSecretCache; expiresAt: number }
+  | undefined;
 
 const normalizeKey = (value: string) =>
   value.toLowerCase().replace(/[\s_-]/g, '');
@@ -39,9 +43,13 @@ const readSecretField = (
   return '';
 };
 
-export const loadSlackSecrets = async () => {
-  if (secretCache) {
-    return secretCache;
+export const loadSlackSecrets = async (options?: { forceRefresh?: boolean }) => {
+  if (
+    !options?.forceRefresh &&
+    secretCache &&
+    Date.now() < secretCache.expiresAt
+  ) {
+    return secretCache.value;
   }
   const secretId = process.env.SLACK_SECRET_ID || 'yalla/slack';
   const result = await secretsClient.send(
@@ -60,7 +68,7 @@ export const loadSlackSecrets = async () => {
   if (!signingSecret) {
     throw new Error('Slack secret is missing Signing Secret.');
   }
-  secretCache = {
+  const value: SlackSecretCache = {
     signingSecret,
     botToken: readSecretField(parsed, [
       'botToken',
@@ -70,6 +78,8 @@ export const loadSlackSecrets = async () => {
     ]),
     cleaningOverdueChannelId: readSecretField(parsed, [
       'cleaningOverdueChannelId',
+      'Cleaning Overdue Channel Id',
+      'CLEANING_OVERDUE_CHANNEL_ID',
       'notifyChannelId',
     ]),
     warningsChannelId: readSecretField(parsed, [
@@ -78,7 +88,11 @@ export const loadSlackSecrets = async () => {
       'WARNING_CHANNEL_ID',
     ]),
   };
-  return secretCache;
+  secretCache = {
+    value,
+    expiresAt: Date.now() + SECRET_CACHE_TTL_MS,
+  };
+  return value;
 };
 
 export const getHeader = (

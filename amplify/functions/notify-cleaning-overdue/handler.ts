@@ -29,7 +29,7 @@ export const handler: EventBridgeHandler<'Scheduled Event', void, void> =
       throw new Error('TABLE_NAME is not configured.');
     }
 
-    const secrets = await loadSlackSecrets();
+    const secrets = await loadSlackSecrets({ forceRefresh: true });
     if (!secrets.botToken || !secrets.cleaningOverdueChannelId) {
       console.error(
         'Slack notify skipped: missing botToken or cleaningOverdueChannelId in yalla/slack.',
@@ -60,6 +60,9 @@ export const handler: EventBridgeHandler<'Scheduled Event', void, void> =
       const title = asString(visit.title) || nickname;
       const text = overdueCleaningMessage(title);
       try {
+        console.log(
+          `Posting overdue cleaning ${visitId} to Slack channel ${secrets.cleaningOverdueChannelId}`,
+        );
         await slackApi('chat.postMessage', {
           channel: secrets.cleaningOverdueChannelId,
           text,

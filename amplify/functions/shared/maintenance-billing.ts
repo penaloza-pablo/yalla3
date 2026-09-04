@@ -29,6 +29,10 @@ export const MAINTENANCE_VISIT_TYPE_IDS =
 
 export const MAINTENANCE_VISIT_TYPE_ID =
   process.env.MAINTENANCE_VISIT_TYPE_ID || MAINTENANCE_VISIT_TYPE_IDS[0];
+export const MAINTENANCE_TEAM_ID =
+  process.env.MAINTENANCE_TEAM_ID || 'team_maintenance';
+export const CLEANING_VISIT_TYPE_ID =
+  process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
 export const SETTINGS_ID = 'GLOBAL';
 export const VISIBLE_PAST_MONTHS = 3;
 export const DEFAULT_HOURS_POOL = 100;
@@ -151,6 +155,19 @@ export const asString = (value: unknown) =>
 export const isMaintenanceVisitType = (visitTypeId?: string) => {
   const id = asString(visitTypeId);
   return Boolean(id) && MAINTENANCE_VISIT_TYPE_IDS.includes(id);
+};
+
+export const isBillingMaintenanceVisit = (visit: Record<string, unknown>) => {
+  const visitTypeId =
+    asString(visit.visitTypeId) || asString(visit.visit_type_id);
+  if (visitTypeId === CLEANING_VISIT_TYPE_ID) {
+    return false;
+  }
+  if (isMaintenanceVisitType(visitTypeId)) {
+    return true;
+  }
+  const teamId = asString(visit.teamId) || asString(visit.team_id);
+  return teamId === MAINTENANCE_TEAM_ID;
 };
 
 export const asNumber = (value: unknown) => {
@@ -371,11 +388,7 @@ const queryVisitsForDate = async (visitsTable: string, scheduledDate: string) =>
       | Record<string, unknown>
       | undefined;
   } while (lastEvaluatedKey);
-  return items.filter((visit) => {
-    const visitTypeId =
-      asString(visit.visitTypeId) || asString(visit.visit_type_id);
-    return isMaintenanceVisitType(visitTypeId);
-  });
+  return items.filter((visit) => isBillingMaintenanceVisit(visit));
 };
 
 export const loadMaintenanceVisitsForMonth = async (

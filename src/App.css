@@ -965,6 +965,8 @@ button.today-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  min-height: 0;
+  align-content: start;
 }
 
 .filter-group {
@@ -991,8 +993,7 @@ button.today-card {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  max-height: min(50vh, calc(100vh - 16rem));
-  max-height: min(50dvh, calc(100dvh - 16rem));
+  max-height: min(16rem, 34dvh);
   min-height: 0;
   padding-right: 4px;
 }
@@ -1454,6 +1455,10 @@ th {
   flex-direction: column;
   gap: 16px;
   padding: 20px 24px 24px;
+  max-height: min(92vh, calc(100vh - 48px));
+  max-height: min(92dvh, calc(100dvh - 48px));
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1461,6 +1466,7 @@ th {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -1477,6 +1483,11 @@ th {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .form-grid {
@@ -1571,6 +1582,8 @@ th {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  flex-shrink: 0;
+  background: #ffffff;
 }
 
 .export-scope-modal {
@@ -3545,8 +3558,10 @@ th {
     padding: 12px;
   }
 
+  .modal,
   .modal-scrollable {
     max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
   }
 
   .template-task-row {
@@ -4488,8 +4503,7 @@ th {
     border-radius: 16px 16px 0 0;
     padding: 16px;
     max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px)));
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
   }
 
   .settings-modal-overlay .settings-modal {
@@ -4557,12 +4571,13 @@ th {
   }
 
   .filter-options-scroll {
-    max-height: min(40dvh, calc(100dvh - 18rem));
+    max-height: min(12.5rem, 28dvh);
   }
 
   .modal-footer {
     flex-wrap: wrap;
     gap: 8px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
   }
 
   .modal-footer .btn-primary,

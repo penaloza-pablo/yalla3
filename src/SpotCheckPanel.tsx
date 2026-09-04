@@ -902,7 +902,7 @@ export function SpotCheckPanel({
 
       {isListFilterOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal">
+          <div className="modal modal-scrollable">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{t('common.filters')}</h3>
