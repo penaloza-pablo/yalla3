@@ -30,6 +30,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar.is-collapsed {
@@ -143,6 +144,10 @@
   margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e4e7ec;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #ffffff;
 }
 
 .nav-button {
@@ -2947,17 +2952,15 @@ th {
   margin: 0;
 }
 
+.operations-dashboard-date-row {
+  margin-top: 8px;
+}
+
 .operations-day-date-controls {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.operations-dashboard-date-label {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #344054;
 }
 
 .operations-day-calendar-btn,
@@ -3668,7 +3671,7 @@ th {
     transform: translateX(-105%);
     transition: transform 0.22s ease;
     box-shadow: none;
-    overflow: auto;
+    overflow: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -5019,6 +5022,31 @@ th {
 .cleaning-visit-title-btn:hover,
 .cleaning-visit-title-btn:focus-visible {
   text-decoration: underline;
+}
+
+.cleaning-visit-title-btn.is-excluded,
+.billing-group-title.is-excluded,
+.billing-title-with-badge.is-excluded {
+  color: #98a2b3;
+}
+
+.billing-title-cell .tag.billing-excluded-badge {
+  color: #667085;
+  background: #f2f4f7;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.billing-title-with-badge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
 }
 
 .cleaning-quality-cell {

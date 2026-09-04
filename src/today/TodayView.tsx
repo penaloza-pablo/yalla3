@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
-import { canViewMaintenanceHoursRemaining } from '../../amplify/functions/shared/rbac-catalog'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 
 type TodaySummary = {
@@ -210,8 +210,8 @@ export function TodayView({
   refreshKey = 0,
 }: Props) {
   const { t } = useTranslation()
-  const { roleId } = usePermissions()
-  const canSeeRemainingHours = canViewMaintenanceHoursRemaining(roleId)
+  const { can } = usePermissions()
+  const canSeeRemainingHours = can(ACTION_KEYS.dashboardMaintenanceHoursRemaining)
   const [summary, setSummary] = useState<TodaySummary | null>(readCachedSummary)
   const [isLoading, setIsLoading] = useState(() => !readCachedSummary())
   const [error, setError] = useState('')

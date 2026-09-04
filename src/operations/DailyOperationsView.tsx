@@ -1672,11 +1672,13 @@ export function DailyOperationsView({
           <p className="eyebrow">{pageEyebrow}</p>
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
-            {mode === 'dashboard' && dashboardViewMode === 'dashboard' ? (
+          </div>
+          {mode === 'dashboard' && dashboardViewMode === 'dashboard' ? (
+            <div className="operations-day-title-row operations-dashboard-date-row">
+              <h2 className="section-title">
+                {formatAgendaDayLabel(getTodayMadrid())}
+              </h2>
               <div className="operations-day-date-controls">
-                <span className="operations-dashboard-date-label">
-                  {formatAgendaDayLabel(getTodayMadrid())}
-                </span>
                 <label className="btn-ghost operations-day-calendar-btn">
                   <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
                     <path
@@ -1704,8 +1706,8 @@ export function DailyOperationsView({
                   <span aria-hidden="true">&gt;</span>
                 </button>
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           {mode === 'dashboard' ? null : (
             <p className="subtitle">{pageSubtitle}</p>
           )}
@@ -2482,7 +2484,6 @@ export function DailyOperationsView({
                     </span>
                   ) : null}
                 </div>
-                <p className="modal-subtitle">{selectedVisit.id}</p>
               </div>
               <button
                 className="btn-icon"
@@ -2619,6 +2620,14 @@ export function DailyOperationsView({
                 >
                   <h4 className="section-title">{t('operations.moreInfo')}</h4>
                   <div className="operations-detail-fields">
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.visitId')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {selectedVisit.id}
+                      </span>
+                    </div>
                     <div className="operations-detail-field">
                       <span className="operations-detail-label">
                         {t('operations.assignedUser')}
@@ -2856,6 +2865,7 @@ export function DailyOperationsView({
                   ))}
                 </select>
               </label>
+              {!isCreatingVisit ? (
               <label>
                 Assigned user
                 <select
@@ -2875,6 +2885,7 @@ export function DailyOperationsView({
                   ))}
                 </select>
               </label>
+              ) : null}
               <label>
                 Date
                 <input
@@ -2933,6 +2944,7 @@ export function DailyOperationsView({
                   }
                 />
               </label>
+              {!isCreatingVisit ? (
               <label>
                 Est. duration (min)
                 <input
@@ -2946,6 +2958,7 @@ export function DailyOperationsView({
                   }
                 />
               </label>
+              ) : null}
               {!isCreatingVisit ? (
                 <label className="checkbox-row">
                   <input
@@ -3288,9 +3301,7 @@ export function DailyOperationsView({
                     </label>
                   ) : null}
                 </div>
-              ) : (
-                <p className="subtitle">This visit has no tasks to move or cancel.</p>
-              )}
+              ) : null}
             </div>
             <div className="modal-footer">
               <button

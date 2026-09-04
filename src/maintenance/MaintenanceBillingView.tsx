@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ACTION_KEYS, canViewMaintenanceHoursRemaining } from '../../amplify/functions/shared/rbac-catalog'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   isBeforeHiddenBillingGap,
@@ -188,8 +188,8 @@ export function MaintenanceBillingView({
   onToggleSummaryInfo,
 }: Props) {
   const { t, i18n } = useTranslation()
-  const { can, roleId } = usePermissions()
-  const canSeeRemainingHours = canViewMaintenanceHoursRemaining(roleId)
+  const { can } = usePermissions()
+  const canSeeRemainingHours = can(ACTION_KEYS.maintenanceBillingHoursRemaining)
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -1213,32 +1213,54 @@ export function MaintenanceBillingView({
                               ) : null}
                               <div>
                                 {isGroupLine(line) ? (
-                                  <p className="billing-group-title">
+                                  <p
+                                    className={`billing-group-title${
+                                      line.dismissed ? ' is-excluded' : ''
+                                    }`}
+                                  >
                                     <span className="tag">{t('maintenanceBilling.groupTag')}</span>
-                                    {line.dismissed ? (
-                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
-                                    ) : null}
                                     {titleLabel}
+                                    {line.dismissed ? (
+                                      <span className="tag billing-excluded-badge">
+                                        {t('maintenanceBilling.dismissedTag')}
+                                      </span>
+                                    ) : null}
                                   </p>
                                 ) : line.visitId ? (
-                                  <button
-                                    type="button"
-                                    className="cleaning-visit-title-btn"
-                                    aria-label={t('cleaningPlan.openVisit')}
-                                    onClick={() => setOpenVisitId(line.visitId)}
+                                  <p
+                                    className={`billing-title-with-badge${
+                                      line.dismissed ? ' is-excluded' : ''
+                                    }`}
                                   >
+                                    <button
+                                      type="button"
+                                      className={`cleaning-visit-title-btn${
+                                        line.dismissed ? ' is-excluded' : ''
+                                      }`}
+                                      aria-label={t('cleaningPlan.openVisit')}
+                                      onClick={() => setOpenVisitId(line.visitId)}
+                                    >
+                                      {titleLabel}
+                                    </button>
                                     {line.dismissed ? (
-                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
-                                    ) : null}{' '}
-                                    {titleLabel}
-                                  </button>
+                                      <span className="tag billing-excluded-badge">
+                                        {t('maintenanceBilling.dismissedTag')}
+                                      </span>
+                                    ) : null}
+                                  </p>
                                 ) : (
-                                  <>
+                                  <p
+                                    className={`billing-title-with-badge${
+                                      line.dismissed ? ' is-excluded' : ''
+                                    }`}
+                                  >
+                                    <span>{titleLabel}</span>
                                     {line.dismissed ? (
-                                      <span className="tag">{t('maintenanceBilling.dismissedTag')}</span>
-                                    ) : null}{' '}
-                                    {titleLabel}
-                                  </>
+                                      <span className="tag billing-excluded-badge">
+                                        {t('maintenanceBilling.dismissedTag')}
+                                      </span>
+                                    ) : null}
+                                  </p>
                                 )}
                                 <p className="card-meta billing-line-property">
                                   {propertyLabel}
@@ -1262,7 +1284,7 @@ export function MaintenanceBillingView({
                                 min="0"
                                 step="0.25"
                                 value={inline.hours}
-                                disabled={isSaving || isSelecting}
+                                disabled={isSaving || isSelecting || line.dismissed}
                                 aria-label={t('maintenanceBilling.hours')}
                                 onChange={(event) => {
                                   const hoursValue = event.target.value
@@ -1306,7 +1328,7 @@ export function MaintenanceBillingView({
                                 min="0"
                                 step="0.01"
                                 value={inline.price}
-                                disabled={isSaving || isSelecting}
+                                disabled={isSaving || isSelecting || line.dismissed}
                                 aria-label={t('maintenanceBilling.price')}
                                 onChange={(event) => {
                                   updateInline(line.id, {

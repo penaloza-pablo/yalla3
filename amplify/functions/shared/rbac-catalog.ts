@@ -62,6 +62,8 @@ export const ACTION_KEYS = {
   cleaningCloseMonth: 'action:cleaningBilling.closeMonth',
   maintenanceCloseMonth: 'action:maintenanceBilling.closeMonth',
   maintenanceCheckAfterEstimate: 'action:maintenanceBilling.checkAfterEstimate',
+  maintenanceBillingHoursRemaining: 'action:maintenanceBilling.hoursRemaining',
+  dashboardMaintenanceHoursRemaining: 'action:dashboard.maintenanceHoursRemaining',
   visitMoreInfo: 'action:visit.moreInfo',
   dailyOpsCreate: 'action:dailyOps.create',
   inventoryCreate: 'action:inventory.create',
@@ -82,6 +84,14 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
   {
     key: ACTION_KEYS.maintenanceCheckAfterEstimate,
     i18nKey: 'rbac.actions.maintenanceCheckAfterEstimate',
+  },
+  {
+    key: ACTION_KEYS.maintenanceBillingHoursRemaining,
+    i18nKey: 'rbac.actions.maintenanceBillingHoursRemaining',
+  },
+  {
+    key: ACTION_KEYS.dashboardMaintenanceHoursRemaining,
+    i18nKey: 'rbac.actions.dashboardMaintenanceHoursRemaining',
   },
   { key: ACTION_KEYS.visitMoreInfo, i18nKey: 'rbac.actions.visitMoreInfo' },
   { key: ACTION_KEYS.dailyOpsCreate, i18nKey: 'rbac.actions.dailyOpsCreate' },
@@ -105,9 +115,6 @@ const pages = (...names: string[]) => names.map(pagePermission)
 
 export const ADMIN_ROLE_ID = 'admin'
 export const KNOCK_KNOCK_SUPERVISOR_ROLE_ID = 'knock-knock-supervisor'
-
-export const canViewMaintenanceHoursRemaining = (roleId?: string | null) =>
-  roleId === ADMIN_ROLE_ID || roleId === KNOCK_KNOCK_SUPERVISOR_ROLE_ID
 
 export const ROLE_SEEDS: {
   id: string

@@ -911,7 +911,6 @@ export function VisitDetailModal({
                 ) : null}
               </div>
             ) : null}
-            <p className="modal-subtitle">{visit?.id || visitId}</p>
           </div>
           <button
             className="btn-icon"
@@ -1017,6 +1016,14 @@ export function VisitDetailModal({
                 >
                   <h4 className="section-title">{t('operations.moreInfo')}</h4>
                   <div className="operations-detail-fields">
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.visitId')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {visit.id}
+                      </span>
+                    </div>
                     <div className="operations-detail-field">
                       <span className="operations-detail-label">
                         {t('operations.assignedUser')}
