@@ -581,7 +581,7 @@ export const handler = async (event: {
     ? PURCHASE_EXCLUDED
     : computePurchaseStatus(
         deliveryDateValue,
-        payloadStatus ?? previousStatusValue || undefined,
+        payloadStatus ?? (previousStatusValue || undefined),
       );
   const markupApplied = isDirect
     ? parseMarkupApplied(payload)
