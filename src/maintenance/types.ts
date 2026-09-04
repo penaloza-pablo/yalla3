@@ -109,6 +109,44 @@ export type MaintenanceBillingLine = {
   members?: MaintenanceBillingMember[]
 }
 
+export type MaintenancePlanStatus = 'DRAFT' | 'READY'
+
+export type MaintenanceAgentRecord = {
+  id: string
+  userId: string
+  name: string
+  active: boolean
+}
+
+export type MaintenancePlanRow = {
+  visitId: string
+  propertyId: string
+  title: string
+  visitStatus: string
+  visitStartTime: string
+  visitEndTime: string
+  agentId: string
+  startTime: string
+  endTime: string
+  guestyTaskId?: string
+}
+
+export type MaintenancePlanRecord = {
+  id: string
+  plannedDate: string
+  status: MaintenancePlanStatus
+  items?: Array<{
+    visitId: string
+    propertyId?: string
+    agentId?: string
+    startTime?: string
+    endTime?: string
+  }>
+  createdAt?: string
+  updatedAt?: string
+  readyAt?: string
+}
+
 export const nextBillingLineStatus = (status: MaintenanceBillingLineStatus) => {
   const index = MAINTENANCE_BILLING_LINE_STATUSES.indexOf(status)
   if (index < 0 || index >= MAINTENANCE_BILLING_LINE_STATUSES.length - 1) {

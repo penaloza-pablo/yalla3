@@ -221,6 +221,17 @@ export function OperationsDayView({
         <div className="operations-day-title-row">
           <h2 className="section-title">{formatAgendaDayLabel(dayViewDate)}</h2>
           <div className="operations-day-date-controls">
+            <button
+              type="button"
+              className="btn-ghost operations-day-nav-btn"
+              aria-label={t('operations.previousDay')}
+              title={t('operations.previousDay')}
+              onClick={() =>
+                onDayDateChange(addDaysToDateString(dayViewDate, -1))
+              }
+            >
+              <span aria-hidden="true">&lt;</span>
+            </button>
             <label className="btn-ghost operations-day-calendar-btn">
               <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
                 <path
@@ -238,7 +249,7 @@ export function OperationsDayView({
             </label>
             <button
               type="button"
-              className="btn-ghost operations-day-next-btn"
+              className="btn-ghost operations-day-nav-btn"
               aria-label={t('operations.nextDay')}
               title={t('operations.nextDay')}
               onClick={() =>

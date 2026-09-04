@@ -25,6 +25,23 @@ export const addDaysToDateString = (value: string, days: number) => {
   return formatDateOnly(parsed);
 };
 
+export const calendarDaysBetween = (from: string, to: string) => {
+  const start = parseDateOnly(from);
+  const end = parseDateOnly(to);
+  if (!start || !end) {
+    return 0;
+  }
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+};
+
+export const MAX_PLAN_READY_AHEAD_DAYS = 2;
+
+export const isPlanDateTooFarAhead = (
+  plannedDate: string,
+  today: string,
+  maxAheadDays = MAX_PLAN_READY_AHEAD_DAYS,
+) => calendarDaysBetween(today, plannedDate) > maxAheadDays;
+
 export const getInclusiveDayCount = (from: string, to: string) => {
   const start = parseDateOnly(from);
   const end = parseDateOnly(to);

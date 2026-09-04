@@ -45,6 +45,7 @@ const FEATURE_OPTIONS = [
   'Cleaning Incidents',
   'Cleaning Billing',
   'Cleaning settings',
+  'Maintenance Plan',
   'Maintenance Incidents',
   'Maintenance Billing',
   'Maintenance settings',

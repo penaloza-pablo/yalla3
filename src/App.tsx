@@ -31,6 +31,7 @@ import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView'
+import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { LogsPanel } from './LogsPanel'
@@ -2702,7 +2703,7 @@ function App() {
     if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates') {
       void fetchProperties()
     }
-    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings') {
+    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings') {
       void fetchProperties()
     }
   }, [
@@ -7699,6 +7700,15 @@ function App() {
         ) : activePage === 'Cleaning settings' ? (
           <CleaningSettingsView
             getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Maintenance Plan' ? (
+          <MaintenancePlanView
+            getEndpoint={getEndpoint}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
             propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Maintenance Incidents' ? (

@@ -73,6 +73,10 @@ import { upsertMaintenanceBillingDetails } from './functions/upsert-maintenance-
 import { getMaintenanceBilling } from './functions/get-maintenance-billing/resource';
 import { upsertMaintenanceBilling } from './functions/upsert-maintenance-billing/resource';
 import { exportMaintenanceBilling } from './functions/export-maintenance-billing/resource';
+import { getMaintenancePlan } from './functions/get-maintenance-plan/resource';
+import { upsertMaintenancePlan } from './functions/upsert-maintenance-plan/resource';
+import { getMaintenanceAgents } from './functions/get-maintenance-agents/resource';
+import { upsertMaintenanceAgent } from './functions/upsert-maintenance-agent/resource';
 import { getTodaySummary } from './functions/get-today-summary/resource';
 import { handleSlackCommand } from './functions/handle-slack-command/resource';
 import { processSlackHoy } from './functions/process-slack-hoy/resource';
@@ -142,6 +146,10 @@ const backend = defineBackend({
   getMaintenanceBilling,
   upsertMaintenanceBilling,
   exportMaintenanceBilling,
+  getMaintenancePlan,
+  upsertMaintenancePlan,
+  getMaintenanceAgents,
+  upsertMaintenanceAgent,
   getTodaySummary,
   handleSlackCommand,
   processSlackHoy,
@@ -211,6 +219,10 @@ const lambdaFunctionsWithHttp = [
   backend.getMaintenanceBilling,
   backend.upsertMaintenanceBilling,
   backend.exportMaintenanceBilling,
+  backend.getMaintenancePlan,
+  backend.upsertMaintenancePlan,
+  backend.getMaintenanceAgents,
+  backend.upsertMaintenanceAgent,
   backend.getTodaySummary,
 ];
 
@@ -437,6 +449,8 @@ const activityLogWriters = [
   backend.upsertMaintenanceIncident,
   backend.upsertMaintenanceBillingDetails,
   backend.upsertMaintenanceBilling,
+  backend.upsertMaintenancePlan,
+  backend.upsertMaintenanceAgent,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -771,6 +785,8 @@ backend.getCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.getTodaySummary.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.notifyCleaningOverdue.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.getMaintenancePlan.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.upsertMaintenancePlan.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 
 const maintenanceProvidersTable = new Table(
   dataStack,
@@ -800,6 +816,16 @@ const maintenanceBillingDetailsTable = new Table(
   },
 );
 const maintenanceBillingTable = new Table(dataStack, 'MaintenanceBillingTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const maintenanceAgentsTable = new Table(dataStack, 'MaintenanceAgentsTable', {
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const maintenancePlansTable = new Table(dataStack, 'MaintenancePlansTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
   removalPolicy: RemovalPolicy.RETAIN,
@@ -997,12 +1023,53 @@ backend.upsertMaintenanceBilling.resources.lambda.addToRolePolicy(
   visitsIndexPolicy,
 );
 
+backend.getMaintenanceAgents.addEnvironment(
+  'TABLE_NAME',
+  maintenanceAgentsTable.tableName,
+);
+backend.upsertMaintenanceAgent.addEnvironment(
+  'TABLE_NAME',
+  maintenanceAgentsTable.tableName,
+);
+backend.getMaintenancePlan.addEnvironment(
+  'TABLE_NAME',
+  maintenancePlansTable.tableName,
+);
+backend.upsertMaintenancePlan.addEnvironment(
+  'TABLE_NAME',
+  maintenancePlansTable.tableName,
+);
+backend.upsertMaintenancePlan.addEnvironment(
+  'AGENTS_TABLE',
+  maintenanceAgentsTable.tableName,
+);
+backend.getTodaySummary.addEnvironment(
+  'MAINTENANCE_PLANS_TABLE',
+  maintenancePlansTable.tableName,
+);
+maintenanceAgentsTable.grantReadData(backend.getMaintenanceAgents.resources.lambda);
+maintenanceAgentsTable.grantReadWriteData(
+  backend.upsertMaintenanceAgent.resources.lambda,
+);
+maintenanceAgentsTable.grantReadData(backend.upsertMaintenancePlan.resources.lambda);
+maintenancePlansTable.grantReadData(backend.getMaintenancePlan.resources.lambda);
+maintenancePlansTable.grantReadWriteData(
+  backend.upsertMaintenancePlan.resources.lambda,
+);
+maintenancePlansTable.grantReadData(backend.getTodaySummary.resources.lambda);
+teamsTable.grantReadData(backend.getMaintenancePlan.resources.lambda);
+teamsTable.grantReadData(backend.upsertMaintenancePlan.resources.lambda);
+usersTable.grantReadData(backend.upsertMaintenanceAgent.resources.lambda);
+visitsTable.grantReadData(backend.getMaintenancePlan.resources.lambda);
+visitsTable.grantReadWriteData(backend.upsertMaintenancePlan.resources.lambda);
+
 const syncTaskToGuesty = LambdaFunction.fromFunctionName(
   dataStack,
   'SyncTaskToGuesty',
   'yalla-syncTaskToGuesty',
 );
 syncTaskToGuesty.grantInvoke(backend.upsertCleaningPlan.resources.lambda);
+syncTaskToGuesty.grantInvoke(backend.upsertMaintenancePlan.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertVisit.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertTask.resources.lambda);
 
@@ -1222,6 +1289,22 @@ const exportMaintenanceBillingUrl =
   backend.exportMaintenanceBilling.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getMaintenancePlanUrl =
+  backend.getMaintenancePlan.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenancePlanUrl =
+  backend.upsertMaintenancePlan.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const getMaintenanceAgentsUrl =
+  backend.getMaintenanceAgents.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertMaintenanceAgentUrl =
+  backend.upsertMaintenanceAgent.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getTodaySummaryUrl = backend.getTodaySummary.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1292,6 +1375,10 @@ backend.addOutput({
     getMaintenanceBillingUrl: getMaintenanceBillingUrl.url,
     upsertMaintenanceBillingUrl: upsertMaintenanceBillingUrl.url,
     exportMaintenanceBillingUrl: exportMaintenanceBillingUrl.url,
+    getMaintenancePlanUrl: getMaintenancePlanUrl.url,
+    upsertMaintenancePlanUrl: upsertMaintenancePlanUrl.url,
+    getMaintenanceAgentsUrl: getMaintenanceAgentsUrl.url,
+    upsertMaintenanceAgentUrl: upsertMaintenanceAgentUrl.url,
     getTodaySummaryUrl: getTodaySummaryUrl.url,
     handleSlackCommandUrl: handleSlackCommandUrl.url,
   },

@@ -18,10 +18,11 @@ import {
 import { formatDayMonthLabel } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
-import { displayTaskTitle } from './taskTitleDisplay'
+import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
 import { buildApplyTemplateVisitPayload } from './visitTemplateHelpers'
 import {
   CLEANING_VISIT_TYPE_ID,
+  isMaintenanceVisitType,
   requiresCompleteVisitWizard,
   resolveTeamIdForVisitType,
 } from './visitTypeIds'
@@ -221,6 +222,8 @@ export function VisitDetailModal({
   const [cleaningTypeBadge, setCleaningTypeBadge] =
     useState<CleaningTypeBadge | null>(null)
   const [cleanerBadge, setCleanerBadge] = useState<string | null>(null)
+  const [maintenanceAssigneeBadge, setMaintenanceAssigneeBadge] =
+    useState<CleaningTypeBadge | null>(null)
   const [dismissingTaskId, setDismissingTaskId] = useState('')
   const [visitForm, setVisitForm] = useState<VisitForm | null>(null)
   const [completeForm, setCompleteForm] = useState({
@@ -258,6 +261,14 @@ export function VisitDetailModal({
       cleaners: getEndpoint(
         'getCleanersUrl',
         import.meta.env.VITE_GET_CLEANERS_URL,
+      ),
+      maintenancePlan: getEndpoint(
+        'getMaintenancePlanUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_PLAN_URL,
+      ),
+      maintenanceAgents: getEndpoint(
+        'getMaintenanceAgentsUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_AGENTS_URL,
       ),
       visitTemplates: getEndpoint(
         'getVisitTemplatesUrl',
@@ -501,6 +512,7 @@ export function VisitDetailModal({
       setCleanerBadge(null)
       return
     }
+    setMaintenanceAssigneeBadge(null)
     const date = visit.scheduledDate.trim()
     const endpoint = endpoints.cleaningPlan
     if (!date || !endpoint) {
@@ -568,6 +580,98 @@ export function VisitDetailModal({
       cancelled = true
     }
   }, [endpoints.cleaners, endpoints.cleaningPlan, t, visit])
+
+  useEffect(() => {
+    if (!visit || visit.visitTypeId === CLEANING_VISIT_TYPE_ID) {
+      setMaintenanceAssigneeBadge(null)
+      return
+    }
+    const date = visit.scheduledDate.trim()
+    const endpoint = endpoints.maintenancePlan
+    if (!date || !endpoint) {
+      if (isMaintenanceVisitType(visit.visitTypeId)) {
+        setMaintenanceAssigneeBadge({
+          pending: true,
+          label: t('operations.cleaningTypePending'),
+        })
+      } else {
+        setMaintenanceAssigneeBadge(null)
+      }
+      return
+    }
+    let cancelled = false
+    const agentsUrl = endpoints.maintenanceAgents
+      ? `${endpoints.maintenanceAgents}${
+          endpoints.maintenanceAgents.includes('?') ? '&' : '?'
+        }includeInactive=true`
+      : ''
+    void Promise.all([
+      fetchJson<{
+        status?: string
+        rows?: Record<string, unknown>[]
+      }>(`${endpoint}?date=${encodeURIComponent(date)}`),
+      agentsUrl
+        ? fetchJson<{ items?: Record<string, unknown>[] }>(agentsUrl).catch(
+            () => ({ items: [] as Record<string, unknown>[] }),
+          )
+        : Promise.resolve({ items: [] as Record<string, unknown>[] }),
+    ])
+      .then(([payload, agentsPayload]) => {
+        if (cancelled) {
+          return
+        }
+        const row = (payload.rows ?? []).find(
+          (item) => String(item.visitId ?? '').trim() === visit.id,
+        )
+        const isOnPlan = Boolean(row)
+        if (!isMaintenanceVisitType(visit.visitTypeId) && !isOnPlan) {
+          setMaintenanceAssigneeBadge(null)
+          return
+        }
+        const isReady =
+          String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+        const agentId = String(row?.agentId ?? '').trim()
+        const nameById = new Map(
+          (agentsPayload.items ?? [])
+            .map((item) => {
+              const id = String(item.id ?? item.userId ?? '').trim()
+              const agentName = String(item.name ?? '').trim()
+              return [id, agentName] as const
+            })
+            .filter((entry) => entry[0] && entry[1]),
+        )
+        const assignedName = agentId ? nameById.get(agentId)?.trim() ?? '' : ''
+        if (isReady && assignedName) {
+          setMaintenanceAssigneeBadge({ pending: false, label: assignedName })
+          return
+        }
+        setMaintenanceAssigneeBadge({
+          pending: true,
+          label: t('operations.cleaningTypePending'),
+        })
+      })
+      .catch(() => {
+        if (cancelled) {
+          return
+        }
+        if (isMaintenanceVisitType(visit.visitTypeId)) {
+          setMaintenanceAssigneeBadge({
+            pending: true,
+            label: t('operations.cleaningTypePending'),
+          })
+        } else {
+          setMaintenanceAssigneeBadge(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    endpoints.maintenanceAgents,
+    endpoints.maintenancePlan,
+    t,
+    visit,
+  ])
 
   useEffect(() => {
     const { body } = document
@@ -903,6 +1007,15 @@ export function VisitDetailModal({
                     {cleanerBadge}
                   </span>
                 ) : null}
+                {maintenanceAssigneeBadge ? (
+                  <span
+                    className={`status operations-visit-status operations-cleaning-type-badge${
+                      maintenanceAssigneeBadge.pending ? ' is-pending' : ''
+                    }`}
+                  >
+                    {maintenanceAssigneeBadge.label}
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1095,12 +1208,23 @@ export function VisitDetailModal({
                     const canActOnTask =
                       task.status === 'PENDING' || task.status === 'BLOCKED'
                     const isDismissing = dismissingTaskId === task.id
+                    const description = displayTaskDescription(
+                      i18n.language,
+                      task.description,
+                    )
                     return (
                       <li key={task.id}>
                         <div className="operations-task-content">
-                          <span className="operations-task-title">
-                            {displayTaskTitle(i18n.language, task.title, task.titleEs)}
-                          </span>
+                          <div className="operations-task-copy">
+                            <span className="operations-task-title">
+                              {displayTaskTitle(i18n.language, task.title, task.titleEs)}
+                            </span>
+                            {description ? (
+                              <span className="operations-task-description">
+                                {description}
+                              </span>
+                            ) : null}
+                          </div>
                           {task.priority === 'URGENT' ? (
                             <span className="status status-danger">
                               {t('operations.priorityUrgent')}

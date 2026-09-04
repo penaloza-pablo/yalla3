@@ -16,6 +16,8 @@ type TodaySummary = {
     previousOpen: number
   }
   maintenance: {
+    planningReady?: number
+    planningTotal?: number
     currentCompleted: number
     currentTotal: number
     previousOpen: number
@@ -264,8 +266,11 @@ export function TodayView({
         summary.cleaning.currentCompleted === summary.cleaning.currentTotal) &&
       summary.cleaning.previousOpen === 0,
   )
+  const maintenancePlanningReady = summary?.maintenance.planningReady ?? 0
+  const maintenancePlanningTotal = summary?.maintenance.planningTotal ?? 2
   const maintenanceDone = Boolean(
     summary &&
+      maintenancePlanningReady === maintenancePlanningTotal &&
       (summary.maintenance.currentTotal === 0 ||
         summary.maintenance.currentCompleted ===
           summary.maintenance.currentTotal) &&
@@ -311,6 +316,13 @@ export function TodayView({
       <article className="card today-card">
         <h2 className="today-card-title">{t('today.maintenance')}</h2>
         <MetricsOrDone done={maintenanceDone} doneLabel={t('today.goodJob')}>
+          <RatioMetric
+            label={t('today.planning')}
+            done={maintenancePlanningReady}
+            total={maintenancePlanningTotal}
+            t={t}
+            onClick={() => onNavigate('Maintenance Plan')}
+          />
           <RatioMetric
             label={t('today.currentMaintenance')}
             done={summary.maintenance.currentCompleted}

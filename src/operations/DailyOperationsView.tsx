@@ -29,10 +29,10 @@ import {
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-title'
-import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
+import { CLEANING_VISIT_TYPE_ID, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
-import { displayTaskTitle } from './taskTitleDisplay'
+import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
 import { isSpanishLocale } from '../i18n/display'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
@@ -135,6 +135,12 @@ type CleaningPlanDayLookup = {
   status: 'READY' | 'DRAFT'
   typeNameByVisitId: Record<string, string>
   cleanerIdByVisitId: Record<string, string>
+}
+
+type MaintenancePlanDayLookup = {
+  status: 'READY' | 'DRAFT'
+  agentIdByVisitId: Record<string, string>
+  visitIds: string[]
 }
 
 const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
@@ -344,10 +350,17 @@ export function DailyOperationsView({
   )
   const templatesPanelRef = useRef<VisitTemplatesPanelHandle>(null)
   const cleaningPlanInflight = useRef(new Set<string>())
+  const maintenancePlanInflight = useRef(new Set<string>())
   const [cleaningPlansByDate, setCleaningPlansByDate] = useState<
     Record<string, CleaningPlanDayLookup>
   >({})
+  const [maintenancePlansByDate, setMaintenancePlansByDate] = useState<
+    Record<string, MaintenancePlanDayLookup>
+  >({})
   const [cleanerNameById, setCleanerNameById] = useState<Map<string, string>>(
+    () => new Map(),
+  )
+  const [agentNameById, setAgentNameById] = useState<Map<string, string>>(
     () => new Map(),
   )
   const [dashboardViewMode, setDashboardViewMode] =
@@ -476,6 +489,14 @@ export function DailyOperationsView({
       cleaners: getEndpoint(
         'getCleanersUrl',
         import.meta.env.VITE_GET_CLEANERS_URL,
+      ),
+      maintenancePlan: getEndpoint(
+        'getMaintenancePlanUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_PLAN_URL,
+      ),
+      maintenanceAgents: getEndpoint(
+        'getMaintenanceAgentsUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_AGENTS_URL,
       ),
     }),
     [getEndpoint],
@@ -645,6 +666,34 @@ export function DailyOperationsView({
     }
     return cleanerNameById.get(cleanerId)?.trim() || null
   }, [cleanerNameById, cleaningPlansByDate, selectedVisit])
+
+  const maintenanceAssigneeBadge = useMemo(() => {
+    if (
+      !selectedVisit ||
+      selectedVisit.visitTypeId === CLEANING_VISIT_TYPE_ID
+    ) {
+      return null
+    }
+    const plan = maintenancePlansByDate[selectedVisit.scheduledDate]
+    const isOnPlan = Boolean(plan?.visitIds.includes(selectedVisit.id))
+    const agentId = plan?.agentIdByVisitId?.[selectedVisit.id]?.trim() ?? ''
+    if (!isMaintenanceVisitType(selectedVisit.visitTypeId) && !isOnPlan) {
+      return null
+    }
+    if (plan?.status === 'READY' && agentId) {
+      const name = agentNameById.get(agentId)?.trim()
+      if (name) {
+        return { pending: false, label: name }
+      }
+    }
+    if (isMaintenanceVisitType(selectedVisit.visitTypeId) || isOnPlan) {
+      return {
+        pending: true,
+        label: t('operations.cleaningTypePending'),
+      }
+    }
+    return null
+  }, [agentNameById, maintenancePlansByDate, selectedVisit, t])
 
   const loadReferenceData = useCallback(async () => {
     if (!endpoints.teams || !endpoints.users || !endpoints.visitTypes) {
@@ -887,6 +936,41 @@ export function DailyOperationsView({
   }, [endpoints.cleaners])
 
   useEffect(() => {
+    const endpoint = endpoints.maintenanceAgents
+    if (!endpoint) {
+      return
+    }
+    let cancelled = false
+    void fetchJson<{ items?: Record<string, unknown>[] }>(
+      `${endpoint}?includeInactive=true`,
+    )
+      .then((payload) => {
+        if (cancelled) {
+          return
+        }
+        setAgentNameById(
+          new Map(
+            (payload.items ?? [])
+              .map((item) => {
+                const id = String(item.id ?? item.userId ?? '').trim()
+                const name = String(item.name ?? '').trim()
+                return [id, name] as const
+              })
+              .filter((entry) => entry[0] && entry[1]),
+          ),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAgentNameById(new Map())
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [endpoints.maintenanceAgents])
+
+  useEffect(() => {
     if (mode !== 'dashboard' || !selectedVisit) {
       return
     }
@@ -948,6 +1032,75 @@ export function DailyOperationsView({
   }, [
     cleaningPlansByDate,
     endpoints.cleaningPlan,
+    mode,
+    selectedVisit,
+  ])
+
+  useEffect(() => {
+    if (mode !== 'dashboard' || !selectedVisit) {
+      return
+    }
+    if (selectedVisit.visitTypeId === CLEANING_VISIT_TYPE_ID) {
+      return
+    }
+    const date = selectedVisit.scheduledDate.trim()
+    const endpoint = endpoints.maintenancePlan
+    if (!date || !endpoint) {
+      return
+    }
+    if (
+      maintenancePlansByDate[date] ||
+      maintenancePlanInflight.current.has(date)
+    ) {
+      return
+    }
+    maintenancePlanInflight.current.add(date)
+    void fetchJson<{
+      status?: string
+      rows?: Record<string, unknown>[]
+    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
+      .then((payload) => {
+        const agentIdByVisitId: Record<string, string> = {}
+        const visitIds: string[] = []
+        for (const row of payload.rows ?? []) {
+          const visitId = String(row.visitId ?? '').trim()
+          if (!visitId) {
+            continue
+          }
+          visitIds.push(visitId)
+          const agentId = String(row.agentId ?? '').trim()
+          if (agentId) {
+            agentIdByVisitId[visitId] = agentId
+          }
+        }
+        setMaintenancePlansByDate((current) => ({
+          ...current,
+          [date]: {
+            status:
+              String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+                ? 'READY'
+                : 'DRAFT',
+            agentIdByVisitId,
+            visitIds,
+          },
+        }))
+      })
+      .catch(() => {
+        setMaintenancePlansByDate((current) => ({
+          ...current,
+          [date]: {
+            status: 'DRAFT',
+            agentIdByVisitId: {},
+            visitIds: [],
+          },
+        }))
+      })
+      .finally(() => {
+        maintenancePlanInflight.current.delete(date)
+      })
+  }, [
+    endpoints.maintenancePlan,
+    maintenancePlansByDate,
     mode,
     selectedVisit,
   ])
@@ -2512,6 +2665,15 @@ export function DailyOperationsView({
                       {cleanerBadge}
                     </span>
                   ) : null}
+                  {maintenanceAssigneeBadge ? (
+                    <span
+                      className={`status operations-visit-status operations-cleaning-type-badge${
+                        maintenanceAssigneeBadge.pending ? ' is-pending' : ''
+                      }`}
+                    >
+                      {maintenanceAssigneeBadge.label}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <button
@@ -2735,17 +2897,28 @@ export function DailyOperationsView({
                   const canActOnTask =
                     task.status === 'PENDING' || task.status === 'BLOCKED'
                   const isDismissing = dismissingTaskId === task.id
+                  const description = displayTaskDescription(
+                    i18n.language,
+                    task.description,
+                  )
 
                   return (
                     <li key={task.id}>
                       <div className="operations-task-content">
-                        <span className="operations-task-title">
-                          {displayTaskTitle(
-                            i18n.language,
-                            task.title,
-                            task.titleEs,
-                          )}
-                        </span>
+                        <div className="operations-task-copy">
+                          <span className="operations-task-title">
+                            {displayTaskTitle(
+                              i18n.language,
+                              task.title,
+                              task.titleEs,
+                            )}
+                          </span>
+                          {description ? (
+                            <span className="operations-task-description">
+                              {description}
+                            </span>
+                          ) : null}
+                        </div>
                         {task.priority === 'URGENT' ? (
                           <span className="status status-danger">Urgent</span>
                         ) : null}

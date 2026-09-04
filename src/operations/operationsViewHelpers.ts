@@ -249,9 +249,13 @@ export const formatAgendaDayLabel = (date: string) => {
   if (Number.isNaN(parsed.getTime())) {
     return date
   }
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  }).format(parsed)
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(
+    parsed,
+  )
+  const day = parsed.getDate()
+  const month = new Intl.DateTimeFormat('en-GB', { month: 'short' })
+    .format(parsed)
+    .replace('.', '')
+    .slice(0, 3)
+  return `${weekday} ${day} ${month}`
 }

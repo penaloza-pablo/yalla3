@@ -32,6 +32,7 @@ export const NAVIGATION: NavGroup[] = [
   {
     section: 'Maintenance',
     items: [
+      'Maintenance Plan',
       'Maintenance Incidents',
       'Maintenance Billing',
       'Maintenance settings',
@@ -204,6 +205,7 @@ export const ROLE_SEEDS: {
         'Properties',
         'Bookings',
         'Unassigned tasks',
+        'Maintenance Plan',
         'Maintenance Incidents',
         'Maintenance Billing',
         'Maintenance settings',
@@ -219,7 +221,7 @@ export const ROLE_SEEDS: {
     id: 'maintenance-agent',
     name: 'maintenance agent',
     permissions: [
-      ...pages('Daily Operations', 'Maintenance Incidents'),
+      ...pages('Daily Operations', 'Maintenance Plan', 'Maintenance Incidents'),
       ACTION_KEYS.visitMoreInfo,
     ],
   },

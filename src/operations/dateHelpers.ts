@@ -57,6 +57,23 @@ export const normalizeDateRange = (from: string, to: string) => {
 
 export const getTomorrowMadrid = () => addDaysToDateString(getTodayMadrid(), 1)
 
+export const calendarDaysBetween = (from: string, to: string) => {
+  const start = parseDateOnly(from)
+  const end = parseDateOnly(to)
+  if (!start || !end) {
+    return 0
+  }
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
+}
+
+export const MAX_PLAN_READY_AHEAD_DAYS = 2
+
+export const isPlanDateTooFarAhead = (
+  plannedDate: string,
+  today = getTodayMadrid(),
+  maxAheadDays = MAX_PLAN_READY_AHEAD_DAYS,
+) => calendarDaysBetween(today, plannedDate) > maxAheadDays
+
 export const getMadridMonthRange = (monthOffset = 0) => {
   const today = getTodayMadrid()
   const [year, month] = today.split('-').map(Number)

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
+import type { UserRecord } from '../operations/types'
 import type {
+  MaintenanceAgentRecord,
   MaintenanceSettings,
   ProviderRecord,
   VisitTypeHours,
@@ -13,17 +15,38 @@ type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
 }
 
-type SettingsSection = 'providers' | 'billingDetails'
+type SettingsSection = 'agents' | 'providers' | 'billingDetails'
 
 type HoursDraft = {
   visitTypeId: string
   hours: string
 }
 
+const emptyAgentForm = () => ({
+  id: '',
+  userId: '',
+  name: '',
+  active: true,
+})
+
 const emptyProviderForm = () => ({
   id: '',
   name: '',
   active: true,
+})
+
+const mapAgent = (item: Record<string, unknown>): MaintenanceAgentRecord => ({
+  id: String(item.id ?? item.userId ?? ''),
+  userId: String(item.userId ?? item.id ?? ''),
+  name: String(item.name ?? item.id ?? ''),
+  active: item.active !== false,
+})
+
+const mapUser = (item: Record<string, unknown>): UserRecord => ({
+  id: String(item.id ?? ''),
+  name: String(item.name ?? item.email ?? item.id ?? ''),
+  email: typeof item.email === 'string' ? item.email : undefined,
+  teamId: typeof item.teamId === 'string' ? item.teamId : undefined,
 })
 
 const toNumber = (value: unknown) => {
@@ -76,12 +99,23 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
         'upsertMaintenanceBillingDetailsUrl',
         import.meta.env.VITE_UPSERT_MAINTENANCE_BILLING_DETAILS_URL,
       ),
+      getAgents: getEndpoint(
+        'getMaintenanceAgentsUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_AGENTS_URL,
+      ),
+      upsertAgent: getEndpoint(
+        'upsertMaintenanceAgentUrl',
+        import.meta.env.VITE_UPSERT_MAINTENANCE_AGENT_URL,
+      ),
+      getUsers: getEndpoint('getUsersUrl', import.meta.env.VITE_GET_USERS_URL),
     }),
     [getEndpoint],
   )
 
   const [section, setSection] = useState<SettingsSection | null>(null)
   const [providers, setProviders] = useState<ProviderRecord[]>([])
+  const [agents, setAgents] = useState<MaintenanceAgentRecord[]>([])
+  const [users, setUsers] = useState<UserRecord[]>([])
   const [settings, setSettings] = useState<MaintenanceSettings | null>(null)
   const [visitTypes, setVisitTypes] = useState<VisitTypeOption[]>([])
   const [poolDraft, setPoolDraft] = useState('')
@@ -92,10 +126,13 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
   const [isSaving, setIsSaving] = useState(false)
   const [isProviderFormOpen, setIsProviderFormOpen] = useState(false)
   const [providerForm, setProviderForm] = useState(emptyProviderForm())
+  const [isAgentFormOpen, setIsAgentFormOpen] = useState(false)
+  const [agentForm, setAgentForm] = useState(emptyAgentForm())
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const activeProviders = providers.filter((provider) => provider.active)
+  const activeAgents = agents.filter((agent) => agent.active)
   const visitTypeById = useMemo(
     () => new Map(visitTypes.map((item) => [item.id, item.name])),
     [visitTypes],
@@ -111,6 +148,26 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     )
     setProviders((payload.items ?? []).map(mapProvider))
   }, [endpoints.getProviders, t])
+
+  const loadAgents = useCallback(async () => {
+    if (!endpoints.getAgents) {
+      return
+    }
+    const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
+      `${endpoints.getAgents}?includeInactive=true`,
+    )
+    setAgents((payload.items ?? []).map(mapAgent))
+  }, [endpoints.getAgents])
+
+  const loadUsers = useCallback(async () => {
+    if (!endpoints.getUsers) {
+      return
+    }
+    const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
+      endpoints.getUsers,
+    )
+    setUsers((payload.items ?? []).map(mapUser).filter((user) => user.id))
+  }, [endpoints.getUsers])
 
   const applySettings = (item: MaintenanceSettings) => {
     setSettings(item)
@@ -146,7 +203,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     setError('')
     try {
       await loadDetails()
-      await loadProviders()
+      await Promise.all([loadProviders(), loadAgents(), loadUsers()])
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -156,11 +213,106 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     } finally {
       setIsLoading(false)
     }
-  }, [loadDetails, loadProviders, t])
+  }, [loadAgents, loadDetails, loadProviders, loadUsers, t])
 
   useEffect(() => {
     void refreshAll()
   }, [refreshAll])
+
+  const openCreateAgent = () => {
+    setAgentForm(emptyAgentForm())
+    setIsAgentFormOpen(true)
+    setMessage('')
+    setError('')
+  }
+
+  const openEditAgent = (agent: MaintenanceAgentRecord) => {
+    setAgentForm({
+      id: agent.id,
+      userId: agent.userId,
+      name: agent.name,
+      active: agent.active,
+    })
+    setIsAgentFormOpen(true)
+    setMessage('')
+    setError('')
+  }
+
+  const saveAgent = async () => {
+    if (!endpoints.upsertAgent) {
+      setError(t('maintenanceSettings.missingAgentsWrite'))
+      return
+    }
+    if (!agentForm.id && !agentForm.userId.trim()) {
+      setError(t('maintenanceSettings.userRequired'))
+      return
+    }
+    const selectedUser = users.find((user) => user.id === agentForm.userId)
+    setIsSaving(true)
+    setError('')
+    try {
+      await fetchJson(endpoints.upsertAgent, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: agentForm.id || undefined,
+          userId: agentForm.userId || undefined,
+          name: agentForm.name.trim() || selectedUser?.name,
+          active: agentForm.active,
+        }),
+      })
+      setIsAgentFormOpen(false)
+      setMessage(
+        agentForm.id
+          ? t('maintenanceSettings.agentUpdated')
+          : t('maintenanceSettings.agentCreated'),
+      )
+      await loadAgents()
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : t('maintenanceSettings.agentSaveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const toggleAgentActive = async (agent: MaintenanceAgentRecord) => {
+    if (!endpoints.upsertAgent) {
+      setError(t('maintenanceSettings.missingAgentsWrite'))
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await fetchJson(endpoints.upsertAgent, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: agent.id,
+          userId: agent.userId,
+          name: agent.name,
+          active: !agent.active,
+        }),
+      })
+      setMessage(
+        agent.active
+          ? t('maintenanceSettings.agentDeactivated')
+          : t('maintenanceSettings.agentActivated'),
+      )
+      await loadAgents()
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : t('maintenanceSettings.agentSaveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const openCreateProvider = () => {
     setProviderForm(emptyProviderForm())
@@ -315,6 +467,11 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
   const unusedVisitTypes = visitTypes.filter(
     (item) => !hoursDrafts.some((draft) => draft.visitTypeId === item.id),
   )
+  const agentUserIds = new Set(agents.map((agent) => agent.userId || agent.id))
+  const availableUsers = users.filter(
+    (user) =>
+      !agentUserIds.has(user.id) || user.id === agentForm.userId,
+  )
 
   return (
     <>
@@ -354,6 +511,19 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
         <button
           type="button"
           className={`card card-compact summary-card-button ${
+            section === 'agents' ? 'is-selected' : ''
+          }`}
+          onClick={() =>
+            setSection((current) => (current === 'agents' ? null : 'agents'))
+          }
+        >
+          <p className="card-label">{t('maintenanceSettings.agentsCard')}</p>
+          <p className="card-value">{isLoading ? '—' : activeAgents.length}</p>
+          <p className="card-meta">{t('maintenanceSettings.agentsCardMeta')}</p>
+        </button>
+        <button
+          type="button"
+          className={`card card-compact summary-card-button ${
             section === 'providers' ? 'is-selected' : ''
           }`}
           onClick={() =>
@@ -384,6 +554,162 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
           <p className="card-meta">{t('maintenanceSettings.detailsCardMeta')}</p>
         </button>
       </section>
+
+      {section === 'agents' ? (
+        <>
+          {isAgentFormOpen ? (
+            <section className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">
+                    {agentForm.id
+                      ? t('maintenanceSettings.editAgent')
+                      : t('maintenanceSettings.addAgent')}
+                  </h2>
+                </div>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setIsAgentFormOpen(false)}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+              <div className="filters-grid">
+                {agentForm.id ? (
+                  <label>
+                    {t('maintenanceSettings.name')}
+                    <input value={agentForm.name} disabled />
+                  </label>
+                ) : (
+                  <label>
+                    {t('maintenanceSettings.selectUser')}
+                    <select
+                      value={agentForm.userId}
+                      onChange={(event) => {
+                        const userId = event.target.value
+                        const user = users.find((item) => item.id === userId)
+                        setAgentForm((current) => ({
+                          ...current,
+                          userId,
+                          name: user?.name ?? '',
+                        }))
+                      }}
+                    >
+                      <option value="">
+                        {t('maintenanceSettings.selectUser')}
+                      </option>
+                      {availableUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                          {user.email ? ` (${user.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={agentForm.active}
+                    onChange={(event) =>
+                      setAgentForm((current) => ({
+                        ...current,
+                        active: event.target.checked,
+                      }))
+                    }
+                  />
+                  {t('maintenanceSettings.active')}
+                </label>
+              </div>
+              <div className="page-action-bar" style={{ marginTop: 16 }}>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void saveAgent()}
+                >
+                  {isSaving ? t('common.saving') : t('common.save')}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">
+                  {t('maintenanceSettings.agentsCard')}
+                </h2>
+                <p className="card-subtitle">
+                  {t('maintenanceSettings.agentsSubtitle')}
+                </p>
+              </div>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={openCreateAgent}
+              >
+                {t('maintenanceSettings.addAgent')}
+              </button>
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('maintenanceSettings.name')}</th>
+                    <th>{t('maintenanceSettings.status')}</th>
+                    <th>{t('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={3}>{t('common.loading')}</td>
+                    </tr>
+                  ) : agents.length === 0 ? (
+                    <tr>
+                      <td colSpan={3}>{t('maintenanceSettings.emptyAgents')}</td>
+                    </tr>
+                  ) : (
+                    agents.map((agent) => (
+                      <tr key={agent.id}>
+                        <td>{agent.name}</td>
+                        <td>
+                          {agent.active
+                            ? t('maintenanceSettings.active')
+                            : t('maintenanceSettings.inactive')}
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              onClick={() => openEditAgent(agent)}
+                            >
+                              {t('maintenanceSettings.edit')}
+                            </button>
+                            <button
+                              className="btn-ghost"
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => void toggleAgentActive(agent)}
+                            >
+                              {agent.active
+                                ? t('maintenanceSettings.deactivate')
+                                : t('maintenanceSettings.activate')}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
 
       {section === 'providers' ? (
         <>

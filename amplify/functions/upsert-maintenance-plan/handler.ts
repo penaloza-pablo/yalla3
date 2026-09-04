@@ -1,21 +1,18 @@
-import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   LOG_FEATURES,
   quoted,
   recordActivityLog,
 } from '../shared/activity-log';
-import { reconcileCleanerStatsFromPlans } from '../shared/cleaner-stats';
+import { isDateOnly } from '../shared/cleaning-plan';
 import { isPlanDateTooFarAhead } from '../shared/date-range';
 import {
-  addHoursToTime,
   getPlanByDate,
-  isDateOnly,
-  normalizeCleaningTypes,
+  loadAgent,
+  minutesBetweenTimes,
   normalizeStartTime,
-  queryCleaningVisitsForDate,
-  resolveCleaningType,
-  scanAllItems,
-} from '../shared/cleaning-plan';
+  queryMaintenanceTeamVisitsForDate,
+  resolveMaintenanceTeamId,
+} from '../shared/maintenance-plan';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -26,7 +23,6 @@ import {
 } from '../shared/dynamo-http';
 import { invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
-  docClient,
   getTodayInMadrid,
   patchUserOriginatedRecord,
   putItem,
@@ -34,10 +30,9 @@ import {
 
 type PlanItemInput = {
   visitId?: string;
-  cleanerId?: string;
+  agentId?: string;
   startTime?: string;
-  qualityReview?: boolean;
-  cleaningTypeId?: string;
+  endTime?: string;
 };
 
 type PlanPayload = {
@@ -49,26 +44,9 @@ type PlanPayload = {
 type SavedPlanItem = {
   visitId: string;
   propertyId: string;
-  cleanerId: string;
+  agentId: string;
   startTime: string;
-  qualityReview: boolean;
-  cleaningTypeId: string;
-  cleaningTypeName: string;
-  durationHours: number;
-  price: number;
-};
-
-const loadCleaner = async (tableName: string | undefined, cleanerId: string) => {
-  if (!tableName || !cleanerId) {
-    return undefined;
-  }
-  const result = await docClient.send(
-    new GetCommand({
-      TableName: tableName,
-      Key: { id: cleanerId },
-    }),
-  );
-  return (result.Item as Record<string, unknown> | undefined) ?? undefined;
+  endTime: string;
 };
 
 const invokeGuestyStartTimeSync = async (visitId: string) =>
@@ -94,11 +72,11 @@ export const handler = async (event: {
 
   const plansTable = process.env.TABLE_NAME;
   const visitsTable = process.env.VISITS_TABLE;
-  const cleanersTable = process.env.CLEANERS_TABLE;
-  const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE;
-  if (!plansTable || !visitsTable) {
+  const agentsTable = process.env.AGENTS_TABLE;
+  const teamsTable = process.env.TEAMS_TABLE;
+  if (!plansTable || !visitsTable || !teamsTable) {
     return buildHttpResponse(500, {
-      message: 'TABLE_NAME or VISITS_TABLE is not configured.',
+      message: 'TABLE_NAME, VISITS_TABLE, or TEAMS_TABLE is not configured.',
     });
   }
 
@@ -133,31 +111,20 @@ export const handler = async (event: {
       isPlanDateTooFarAhead(plannedDate as string, getTodayInMadrid())
     ) {
       return buildHttpResponse(400, {
-        message:
-          'Days more than two days ahead can only be saved as a draft.',
+        message: 'Days more than two days ahead can only be saved as a draft.',
       });
     }
 
-    const visits = await queryCleaningVisitsForDate(
+    const teamId = await resolveMaintenanceTeamId(teamsTable);
+    const visits = await queryMaintenanceTeamVisitsForDate(
       visitsTable,
       plannedDate as string,
+      teamId,
     );
     const visitById = new Map(
       visits
         .filter((visit) => typeof visit.id === 'string')
         .map((visit) => [visit.id as string, visit]),
-    );
-    const detailItems = detailsTable ? await scanAllItems(detailsTable) : [];
-    const detailsByPropertyId = new Map(
-      detailItems.map((item) => {
-        const propertyId =
-          typeof item.propertyId === 'string'
-            ? item.propertyId
-            : typeof item.id === 'string'
-              ? item.id
-              : '';
-        return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
-      }),
     );
 
     const incomingItems = Array.isArray(payload.items)
@@ -176,33 +143,26 @@ export const handler = async (event: {
       if (!visit) {
         continue;
       }
-      const cleanerId = draft.cleanerId?.trim() ?? '';
-      if (cleanerId && action !== 'reopen') {
-        const cleaner = await loadCleaner(cleanersTable, cleanerId);
-        if (!cleaner || cleaner.active === false) {
+      const agentId = draft.agentId?.trim() ?? '';
+      if (agentId && action !== 'reopen') {
+        const agent = await loadAgent(agentsTable, agentId);
+        if (!agent || agent.active === false) {
           return buildHttpResponse(400, {
-            message: `Cleaner ${cleanerId} is not available.`,
+            message: `Agent ${agentId} is not available.`,
             visitId,
           });
         }
       }
       const startTime = normalizeStartTime(draft.startTime);
+      const endTime = normalizeStartTime(draft.endTime);
       const propertyId =
         typeof visit.propertyId === 'string' ? visit.propertyId : '';
-      const selectedType = resolveCleaningType(
-        detailsByPropertyId.get(propertyId) ?? [],
-        draft.cleaningTypeId,
-      );
       normalizedItems.push({
         visitId,
         propertyId,
-        cleanerId,
+        agentId,
         startTime,
-        qualityReview: Boolean(draft.qualityReview),
-        cleaningTypeId: selectedType?.id ?? '',
-        cleaningTypeName: selectedType?.name ?? '',
-        durationHours: selectedType?.durationHours ?? 0,
-        price: selectedType?.price ?? 0,
+        endTime,
       });
     }
 
@@ -210,12 +170,12 @@ export const handler = async (event: {
       const missing = visits.filter((visit) => {
         const visitId = typeof visit.id === 'string' ? visit.id : '';
         const saved = normalizedItems.find((item) => item.visitId === visitId);
-        return !saved?.cleanerId || !saved.startTime;
+        return !saved?.agentId || !saved.startTime || !saved.endTime;
       });
       if (missing.length > 0) {
         return buildHttpResponse(400, {
           message:
-            'Every cleaning visit needs a cleaner and a start time before the plan can be marked ready.',
+            'Every maintenance visit needs an agent, a start time, and an end time before the plan can be marked ready.',
           missingCount: missing.length,
         });
       }
@@ -243,19 +203,13 @@ export const handler = async (event: {
 
     await putItem(plansTable, item);
 
-    try {
-      await reconcileCleanerStatsFromPlans();
-    } catch (error) {
-      console.error('Failed to reconcile cleaner stats', error);
-    }
-
     const syncedVisitIds: string[] = [];
     const syncErrors: { visitId: string; error: string }[] = [];
 
     if (action !== 'reopen') {
       for (const planItem of normalizedItems) {
         const visit = visitById.get(planItem.visitId);
-        if (!visit || !planItem.startTime) {
+        if (!visit || (!planItem.startTime && !planItem.endTime)) {
           continue;
         }
         const currentStart =
@@ -267,16 +221,14 @@ export const handler = async (event: {
             ? visit.scheduledEndTime
             : '';
         const currentDurationMinutes = Number(visit.estimatedDurationMinutes);
-        const endTime =
-          planItem.durationHours > 0
-            ? addHoursToTime(planItem.startTime, planItem.durationHours)
-            : '';
         const durationMinutes =
-          planItem.durationHours > 0
-            ? Math.round(planItem.durationHours * 60)
+          planItem.startTime && planItem.endTime
+            ? minutesBetweenTimes(planItem.startTime, planItem.endTime)
             : undefined;
-        const startChanged = currentStart !== planItem.startTime;
-        const endChanged = Boolean(endTime) && currentEnd !== endTime;
+        const startChanged =
+          Boolean(planItem.startTime) && currentStart !== planItem.startTime;
+        const endChanged =
+          Boolean(planItem.endTime) && currentEnd !== planItem.endTime;
         const durationChanged =
           durationMinutes !== undefined &&
           currentDurationMinutes !== durationMinutes;
@@ -284,11 +236,12 @@ export const handler = async (event: {
           continue;
         }
 
-        const setFields: Record<string, unknown> = {
-          scheduledStartTime: planItem.startTime,
-        };
-        if (endTime) {
-          setFields.scheduledEndTime = endTime;
+        const setFields: Record<string, unknown> = {};
+        if (planItem.startTime) {
+          setFields.scheduledStartTime = planItem.startTime;
+        }
+        if (planItem.endTime) {
+          setFields.scheduledEndTime = planItem.endTime;
         }
         if (durationMinutes !== undefined) {
           setFields.estimatedDurationMinutes = durationMinutes;
@@ -314,18 +267,8 @@ export const handler = async (event: {
             continue;
           }
           syncedVisitIds.push(planItem.visitId);
-          // Guesty echoes the update as UTC; re-assert Madrid wall times for Daily Ops.
-          const reassert: Record<string, unknown> = {
-            scheduledStartTime: planItem.startTime,
-          };
-          if (endTime) {
-            reassert.scheduledEndTime = endTime;
-          }
-          if (durationMinutes !== undefined) {
-            reassert.estimatedDurationMinutes = durationMinutes;
-          }
           await patchUserOriginatedRecord(visitsTable, planItem.visitId, {
-            set: reassert,
+            set: setFields,
           });
         } catch (error) {
           syncErrors.push({
@@ -338,13 +281,13 @@ export const handler = async (event: {
 
     const summaryAction =
       action === 'ready'
-        ? `marked cleaning plan ${quoted(plannedDate)} as ready`
+        ? `marked maintenance plan ${quoted(plannedDate)} as ready`
         : action === 'reopen'
-          ? `reopened cleaning plan ${quoted(plannedDate)}`
-          : `saved cleaning plan ${quoted(plannedDate)}`;
+          ? `reopened maintenance plan ${quoted(plannedDate)}`
+          : `saved maintenance plan ${quoted(plannedDate)}`;
 
     await recordActivityLog(event, {
-      feature: LOG_FEATURES.CLEANING_PLAN,
+      feature: LOG_FEATURES.MAINTENANCE_PLAN,
       action,
       entityId: plannedDate,
       entityName: plannedDate,
@@ -358,7 +301,7 @@ export const handler = async (event: {
     });
   } catch (error) {
     return buildHttpResponse(500, {
-      message: 'Failed to save cleaning plan.',
+      message: 'Failed to save maintenance plan.',
       details: error instanceof Error ? error.message : String(error),
     });
   }

@@ -2214,9 +2214,25 @@ th {
   flex: 1;
 }
 
+.operations-task-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
 .operations-task-title {
   font-weight: 600;
   color: #101828;
+}
+
+.operations-task-description {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #667085;
+  line-height: 1.35;
 }
 
 .btn-icon-ghost.is-task-complete {
@@ -2979,6 +2995,15 @@ th {
   margin-top: 8px;
 }
 
+.cleaning-plan-jump-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.cleaning-plan-jump-btn svg {
+  pointer-events: none;
+}
+
 .operations-day-date-controls {
   display: flex;
   align-items: center;
@@ -2987,6 +3012,7 @@ th {
 }
 
 .operations-day-calendar-btn,
+.operations-day-nav-btn,
 .operations-day-next-btn {
   position: relative;
   box-sizing: border-box;
@@ -3009,6 +3035,7 @@ th {
   pointer-events: none;
 }
 
+.operations-day-nav-btn,
 .operations-day-next-btn {
   font-size: 15px;
   font-weight: 700;
@@ -3966,6 +3993,7 @@ th {
   }
 
   .operations-day-calendar-btn,
+  .operations-day-nav-btn,
   .operations-day-next-btn {
     width: 44px;
     height: 44px;

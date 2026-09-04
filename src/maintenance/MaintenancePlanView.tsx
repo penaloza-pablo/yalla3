@@ -12,11 +12,10 @@ import {
 } from '../operations/dateHelpers'
 import type { PropertyOption } from '../operations/types'
 import type {
-  CleanerRecord,
-  CleaningPlanRecord,
-  CleaningPlanRow,
-  CleaningPlanStatus,
-  PropertyCleaningType,
+  MaintenanceAgentRecord,
+  MaintenancePlanRecord,
+  MaintenancePlanRow,
+  MaintenancePlanStatus,
 } from './types'
 
 type Props = {
@@ -26,53 +25,37 @@ type Props = {
   onToggleSummaryInfo: () => void
 }
 
-const mapCleaner = (item: Record<string, unknown>): CleanerRecord => ({
-  id: String(item.id ?? ''),
+const mapAgent = (item: Record<string, unknown>): MaintenanceAgentRecord => ({
+  id: String(item.id ?? item.userId ?? ''),
+  userId: String(item.userId ?? item.id ?? ''),
   name: String(item.name ?? item.id ?? ''),
   active: item.active !== false,
 })
 
-const mapCleaningType = (item: Record<string, unknown>): PropertyCleaningType => ({
-  id: String(item.id ?? ''),
-  name: String(item.name ?? ''),
-  price: Number(item.price ?? 0),
-  durationHours: Number(item.durationHours ?? 0),
-  isDefault: Boolean(item.isDefault),
+const mapPlanRow = (item: Record<string, unknown>): MaintenancePlanRow => ({
+  visitId: String(item.visitId ?? ''),
+  propertyId: String(item.propertyId ?? ''),
+  title: String(item.title ?? ''),
+  visitStatus: String(item.visitStatus ?? ''),
+  visitStartTime: String(item.visitStartTime ?? ''),
+  visitEndTime: String(item.visitEndTime ?? ''),
+  agentId: String(item.agentId ?? ''),
+  startTime: String(item.startTime ?? item.visitStartTime ?? '')
+    .trim()
+    .replace(/^(\d):/, '0$1'),
+  endTime: String(item.endTime ?? item.visitEndTime ?? '')
+    .trim()
+    .replace(/^(\d):/, '0$1'),
+  guestyTaskId:
+    typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
 })
 
-const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => {
-  const cleaningTypes = Array.isArray(item.cleaningTypes)
-    ? (item.cleaningTypes as Record<string, unknown>[]).map(mapCleaningType)
-    : []
-  const defaultType = cleaningTypes.find((type) => type.isDefault) ?? cleaningTypes[0]
-  const savedTypeId = String(item.cleaningTypeId ?? '')
-  const cleaningTypeId = cleaningTypes.some((type) => type.id === savedTypeId)
-    ? savedTypeId
-    : defaultType?.id ?? ''
-  return {
-    visitId: String(item.visitId ?? ''),
-    propertyId: String(item.propertyId ?? ''),
-    title: String(item.title ?? ''),
-    visitStatus: String(item.visitStatus ?? ''),
-    visitStartTime: String(item.visitStartTime ?? ''),
-    cleanerId: String(item.cleanerId ?? ''),
-    startTime: String(item.startTime ?? item.visitStartTime ?? '')
-      .trim()
-      .replace(/^(\d):/, '0$1'),
-    qualityReview: Boolean(item.qualityReview),
-    cleaningTypeId,
-    cleaningTypes,
-    guestyTaskId:
-      typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
-  }
-}
-
-const mapPlan = (item: Record<string, unknown>): CleaningPlanRecord => ({
+const mapPlan = (item: Record<string, unknown>): MaintenancePlanRecord => ({
   id: String(item.id ?? ''),
   plannedDate: String(item.plannedDate ?? item.id ?? ''),
-  status: String(item.status ?? 'DRAFT').toUpperCase() as CleaningPlanStatus,
+  status: String(item.status ?? 'DRAFT').toUpperCase() as MaintenancePlanStatus,
   items: Array.isArray(item.items)
-    ? (item.items as CleaningPlanRecord['items'])
+    ? (item.items as MaintenancePlanRecord['items'])
     : [],
   createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
   updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined,
@@ -80,14 +63,14 @@ const mapPlan = (item: Record<string, unknown>): CleaningPlanRecord => ({
 })
 
 const planStatusOf = (
-  history: CleaningPlanRecord[],
+  history: MaintenancePlanRecord[],
   date: string,
-): CleaningPlanStatus => {
+): MaintenancePlanStatus => {
   const match = history.find((plan) => (plan.plannedDate || plan.id) === date)
   return match?.status === 'READY' ? 'READY' : 'DRAFT'
 }
 
-export function CleaningPlanView({
+export function MaintenancePlanView({
   getEndpoint,
   propertyOptions,
   isSummaryInfoOpen,
@@ -98,16 +81,16 @@ export function CleaningPlanView({
   const endpoints = useMemo(
     () => ({
       getPlan: getEndpoint(
-        'getCleaningPlanUrl',
-        import.meta.env.VITE_GET_CLEANING_PLAN_URL,
+        'getMaintenancePlanUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_PLAN_URL,
       ),
       upsertPlan: getEndpoint(
-        'upsertCleaningPlanUrl',
-        import.meta.env.VITE_UPSERT_CLEANING_PLAN_URL,
+        'upsertMaintenancePlanUrl',
+        import.meta.env.VITE_UPSERT_MAINTENANCE_PLAN_URL,
       ),
-      getCleaners: getEndpoint(
-        'getCleanersUrl',
-        import.meta.env.VITE_GET_CLEANERS_URL,
+      getAgents: getEndpoint(
+        'getMaintenanceAgentsUrl',
+        import.meta.env.VITE_GET_MAINTENANCE_AGENTS_URL,
       ),
     }),
     [getEndpoint],
@@ -116,10 +99,10 @@ export function CleaningPlanView({
   const [plannedDate, setPlannedDate] = useState('')
   const [isDayModalOpen, setIsDayModalOpen] = useState(false)
   const [openVisitId, setOpenVisitId] = useState('')
-  const [status, setStatus] = useState<CleaningPlanStatus>('DRAFT')
-  const [rows, setRows] = useState<CleaningPlanRow[]>([])
-  const [history, setHistory] = useState<CleaningPlanRecord[]>([])
-  const [cleaners, setCleaners] = useState<CleanerRecord[]>([])
+  const [status, setStatus] = useState<MaintenancePlanStatus>('DRAFT')
+  const [rows, setRows] = useState<MaintenancePlanRow[]>([])
+  const [history, setHistory] = useState<MaintenancePlanRecord[]>([])
+  const [agents, setAgents] = useState<MaintenanceAgentRecord[]>([])
   const [dateFrom, setDateFrom] = useState(currentMonth.from)
   const [dateTo, setDateTo] = useState(currentMonth.to)
   const [filterDraft, setFilterDraft] = useState({
@@ -136,13 +119,13 @@ export function CleaningPlanView({
   const tomorrow = getTomorrowMadrid()
   const isReady = status === 'READY'
   const canMarkReady = !isPlanDateTooFarAhead(plannedDate, today)
-  const cleanerById = useMemo(
-    () => new Map(cleaners.map((cleaner) => [cleaner.id, cleaner])),
-    [cleaners],
+  const agentById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent])),
+    [agents],
   )
-  const activeCleaners = useMemo(
-    () => cleaners.filter((cleaner) => cleaner.active),
-    [cleaners],
+  const activeAgents = useMemo(
+    () => agents.filter((agent) => agent.active),
+    [agents],
   )
   const filteredHistory = useMemo(
     () =>
@@ -152,32 +135,24 @@ export function CleaningPlanView({
       }),
     [dateFrom, dateTo, history],
   )
-  const qualityChecksCount = useMemo(
-    () =>
-      filteredHistory.reduce((total, plan) => {
-        const items = plan.items ?? []
-        return total + items.filter((item) => item.qualityReview).length
-      }, 0),
-    [filteredHistory],
-  )
   const isCustomRange =
     dateFrom !== currentMonth.from || dateTo !== currentMonth.to
   const todayStatus = planStatusOf(history, today)
   const tomorrowStatus = planStatusOf(history, tomorrow)
 
-  const loadCleaners = useCallback(async () => {
-    if (!endpoints.getCleaners) {
+  const loadAgents = useCallback(async () => {
+    if (!endpoints.getAgents) {
       return
     }
     const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
-      `${endpoints.getCleaners}?includeInactive=true`,
+      `${endpoints.getAgents}?includeInactive=true`,
     )
-    setCleaners((payload.items ?? []).map(mapCleaner))
-  }, [endpoints.getCleaners])
+    setAgents((payload.items ?? []).map(mapAgent))
+  }, [endpoints.getAgents])
 
   const loadHistory = useCallback(async () => {
     if (!endpoints.getPlan) {
-      setError(t('cleaningPlan.missingEndpoint'))
+      setError(t('maintenancePlan.missingEndpoint'))
       return
     }
     const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
@@ -189,7 +164,7 @@ export function CleaningPlanView({
   const loadPlan = useCallback(
     async (date: string) => {
       if (!endpoints.getPlan) {
-        setError(t('cleaningPlan.missingEndpoint'))
+        setError(t('maintenancePlan.missingEndpoint'))
         return
       }
       setIsLoading(true)
@@ -209,7 +184,7 @@ export function CleaningPlanView({
         setError(
           requestError instanceof Error
             ? requestError.message
-            : t('cleaningPlan.loadError'),
+            : t('maintenancePlan.loadError'),
         )
       } finally {
         setIsLoading(false)
@@ -221,7 +196,7 @@ export function CleaningPlanView({
   const refreshPage = useCallback(async () => {
     setError('')
     try {
-      await Promise.all([loadHistory(), loadCleaners()])
+      await Promise.all([loadHistory(), loadAgents()])
       if (isDayModalOpen && plannedDate) {
         await loadPlan(plannedDate)
       }
@@ -229,16 +204,16 @@ export function CleaningPlanView({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : t('cleaningPlan.loadError'),
+          : t('maintenancePlan.loadError'),
       )
     }
-  }, [isDayModalOpen, loadCleaners, loadHistory, loadPlan, plannedDate, t])
+  }, [isDayModalOpen, loadAgents, loadHistory, loadPlan, plannedDate, t])
 
   useEffect(() => {
-    void loadCleaners().catch(() => {
-      setError(t('cleaningPlan.missingCleaners'))
+    void loadAgents().catch(() => {
+      setError(t('maintenancePlan.missingAgents'))
     })
-  }, [loadCleaners, t])
+  }, [loadAgents, t])
 
   useEffect(() => {
     void loadHistory()
@@ -260,9 +235,7 @@ export function CleaningPlanView({
 
   const updateRow = (
     visitId: string,
-    patch: Partial<
-      Pick<CleaningPlanRow, 'cleanerId' | 'startTime' | 'qualityReview' | 'cleaningTypeId'>
-    >,
+    patch: Partial<Pick<MaintenancePlanRow, 'agentId' | 'startTime' | 'endTime'>>,
   ) => {
     setRows((current) =>
       current.map((row) =>
@@ -274,17 +247,19 @@ export function CleaningPlanView({
 
   const savePlan = async (action: 'save' | 'ready' | 'reopen') => {
     if (!endpoints.upsertPlan) {
-      setError(t('cleaningPlan.missingWrite'))
+      setError(t('maintenancePlan.missingWrite'))
       return
     }
     if (action === 'ready') {
       if (isPlanDateTooFarAhead(plannedDate)) {
-        setError(t('cleaningPlan.draftOnlyFuture'))
+        setError(t('maintenancePlan.draftOnlyFuture'))
         return
       }
-      const incomplete = rows.filter((row) => !row.cleanerId || !row.startTime)
+      const incomplete = rows.filter(
+        (row) => !row.agentId || !row.startTime || !row.endTime,
+      )
       if (incomplete.length > 0) {
-        setError(t('cleaningPlan.incompleteReady'))
+        setError(t('maintenancePlan.incompleteReady'))
         return
       }
     }
@@ -302,10 +277,9 @@ export function CleaningPlanView({
           action,
           items: rows.map((row) => ({
             visitId: row.visitId,
-            cleanerId: row.cleanerId,
+            agentId: row.agentId,
             startTime: row.startTime,
-            qualityReview: row.qualityReview,
-            cleaningTypeId: row.cleaningTypeId,
+            endTime: row.endTime,
           })),
         }),
       })
@@ -316,14 +290,14 @@ export function CleaningPlanView({
       setStatus(nextStatus)
       if (payload.syncErrors && payload.syncErrors.length > 0) {
         setError(
-          t('cleaningPlan.syncPartial', { count: payload.syncErrors.length }),
+          t('maintenancePlan.syncPartial', { count: payload.syncErrors.length }),
         )
       } else if (action === 'ready') {
-        setMessage(t('cleaningPlan.markedReady'))
+        setMessage(t('maintenancePlan.markedReady'))
       } else if (action === 'reopen') {
-        setMessage(t('cleaningPlan.reopened'))
+        setMessage(t('maintenancePlan.reopened'))
       } else {
-        setMessage(t('cleaningPlan.saved'))
+        setMessage(t('maintenancePlan.saved'))
       }
       await loadHistory()
       await loadPlan(plannedDate)
@@ -331,40 +305,40 @@ export function CleaningPlanView({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : t('cleaningPlan.saveError'),
+          : t('maintenancePlan.saveError'),
       )
     } finally {
       setIsSaving(false)
     }
   }
 
-  const statusLabel = (value: CleaningPlanStatus) =>
-    value === 'READY' ? t('cleaningPlan.ready') : t('cleaningPlan.pending')
+  const statusLabel = (value: MaintenancePlanStatus) =>
+    value === 'READY' ? t('maintenancePlan.ready') : t('maintenancePlan.pending')
 
   const renderVisitRows = () => {
     if (isLoading) {
       return (
         <tr>
-          <td colSpan={5}>{t('common.loading')}</td>
+          <td colSpan={4}>{t('common.loading')}</td>
         </tr>
       )
     }
     if (rows.length === 0) {
       return (
         <tr>
-          <td colSpan={5}>{t('cleaningPlan.emptyVisits')}</td>
+          <td colSpan={4}>{t('maintenancePlan.emptyVisits')}</td>
         </tr>
       )
     }
     return rows.map((row) => {
-      const assignedCleaner = cleanerById.get(row.cleanerId)
-      const cleanerOptions = activeCleaners.slice()
+      const assignedAgent = agentById.get(row.agentId)
+      const agentOptions = activeAgents.slice()
       if (
-        assignedCleaner &&
-        !assignedCleaner.active &&
-        !cleanerOptions.some((entry) => entry.id === assignedCleaner.id)
+        assignedAgent &&
+        !assignedAgent.active &&
+        !agentOptions.some((entry) => entry.id === assignedAgent.id)
       ) {
-        cleanerOptions.push(assignedCleaner)
+        agentOptions.push(assignedAgent)
       }
       return (
         <tr key={row.visitId}>
@@ -373,7 +347,7 @@ export function CleaningPlanView({
               <button
                 type="button"
                 className="cleaning-visit-title-btn"
-                aria-label={t('cleaningPlan.openVisit')}
+                aria-label={t('maintenancePlan.openVisit')}
                 onClick={() => setOpenVisitId(row.visitId)}
               >
                 {row.title || row.visitId}
@@ -389,40 +363,19 @@ export function CleaningPlanView({
           </td>
           <td>
             <select
-              value={row.cleaningTypeId}
-              disabled={isReady || row.cleaningTypes.length === 0}
-              onChange={(event) =>
-                updateRow(row.visitId, {
-                  cleaningTypeId: event.target.value,
-                })
-              }
-            >
-              {row.cleaningTypes.length === 0 ? (
-                <option value="">{t('cleaningPlan.noTypes')}</option>
-              ) : (
-                row.cleaningTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </td>
-          <td>
-            <select
-              value={row.cleanerId}
+              value={row.agentId}
               disabled={isReady}
               onChange={(event) =>
                 updateRow(row.visitId, {
-                  cleanerId: event.target.value,
+                  agentId: event.target.value,
                 })
               }
             >
-              <option value="">{t('cleaningPlan.selectCleaner')}</option>
-              {cleanerOptions.map((cleaner) => (
-                <option key={cleaner.id} value={cleaner.id}>
-                  {cleaner.name}
-                  {cleaner.active ? '' : ` (${t('cleaningSettings.inactive')})`}
+              <option value="">{t('maintenancePlan.selectAgent')}</option>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                  {agent.active ? '' : ` (${t('maintenanceSettings.inactive')})`}
                 </option>
               ))}
             </select>
@@ -439,17 +392,16 @@ export function CleaningPlanView({
               }
             />
           </td>
-          <td className="cleaning-quality-cell">
+          <td>
             <input
-              type="checkbox"
-              checked={row.qualityReview}
+              type="time"
+              value={row.endTime}
               disabled={isReady}
               onChange={(event) =>
                 updateRow(row.visitId, {
-                  qualityReview: event.target.checked,
+                  endTime: event.target.value,
                 })
               }
-              aria-label={t('cleaningPlan.qualityCheck')}
             />
           </td>
         </tr>
@@ -461,9 +413,9 @@ export function CleaningPlanView({
     <>
       <header className="page-header">
         <div className="page-header-leading">
-          <p className="eyebrow">{t('cleaningPlan.eyebrow')}</p>
+          <p className="eyebrow">{t('maintenancePlan.eyebrow')}</p>
           <div className="page-title-row">
-            <h1 className="page-title">{t('pages.Cleaning Plan')}</h1>
+            <h1 className="page-title">{t('pages.Maintenance Plan')}</h1>
             <button
               type="button"
               className={`btn-page-info ${isSummaryInfoOpen ? 'is-active' : ''}`}
@@ -478,7 +430,7 @@ export function CleaningPlanView({
               i
             </button>
           </div>
-          <p className="subtitle">{t('cleaningPlan.subtitle')}</p>
+          <p className="subtitle">{t('maintenancePlan.subtitle')}</p>
         </div>
         <MobileBodyPortal>
           <div className="page-action-bar">
@@ -571,7 +523,7 @@ export function CleaningPlanView({
           }`}
           onClick={() => void openDay(today)}
         >
-          <p className="card-label">{t('cleaningPlan.todayCard')}</p>
+          <p className="card-label">{t('maintenancePlan.todayCard')}</p>
           <p className="card-value">{statusLabel(todayStatus)}</p>
           <p className="card-meta">
             {formatDateOnlyLabel(today, i18n.language)}
@@ -584,17 +536,12 @@ export function CleaningPlanView({
           }`}
           onClick={() => void openDay(tomorrow)}
         >
-          <p className="card-label">{t('cleaningPlan.tomorrowCard')}</p>
+          <p className="card-label">{t('maintenancePlan.tomorrowCard')}</p>
           <p className="card-value">{statusLabel(tomorrowStatus)}</p>
           <p className="card-meta">
             {formatDateOnlyLabel(tomorrow, i18n.language)}
           </p>
         </button>
-        <div className="card card-compact">
-          <p className="card-label">{t('cleaningPlan.qualityChecks')}</p>
-          <p className="card-value">{qualityChecksCount}</p>
-          <p className="card-meta">{t('cleaningPlan.qualityChecksMeta')}</p>
-        </div>
       </section>
 
       {isFilterOpen ? (
@@ -604,7 +551,7 @@ export function CleaningPlanView({
               <div>
                 <h3 className="modal-title">{t('common.filters')}</h3>
                 <p className="modal-subtitle">
-                  {t('cleaningPlan.filterSubtitle')}
+                  {t('maintenancePlan.filterSubtitle')}
                 </p>
               </div>
               <button
@@ -686,8 +633,8 @@ export function CleaningPlanView({
       <section className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title">{t('cleaningPlan.historyTitle')}</h2>
-            <p className="card-subtitle">{t('cleaningPlan.historySubtitle')}</p>
+            <h2 className="card-title">{t('maintenancePlan.historyTitle')}</h2>
+            <p className="card-subtitle">{t('maintenancePlan.historySubtitle')}</p>
           </div>
         </div>
         <div className="table-wrapper">
@@ -703,7 +650,7 @@ export function CleaningPlanView({
                     aria-pressed={isDayModalOpen && plannedDate === today}
                     onClick={() => void openDay(today)}
                   >
-                    {t('cleaningPlan.todayCard')}
+                    {t('maintenancePlan.todayCard')}
                     <span className="quick-filter-dot" aria-hidden="true" />
                   </button>
                 </th>
@@ -716,38 +663,31 @@ export function CleaningPlanView({
                     aria-pressed={isDayModalOpen && plannedDate === tomorrow}
                     onClick={() => void openDay(tomorrow)}
                   >
-                    {t('cleaningPlan.tomorrowCard')}
+                    {t('maintenancePlan.tomorrowCard')}
                     <span className="quick-filter-dot" aria-hidden="true" />
                   </button>
                 </th>
-                <th>{t('cleaningPlan.day')}</th>
-                <th>{t('cleaningPlan.cleanings')}</th>
-                <th>{t('cleaningPlan.planStatus')}</th>
-                <th>{t('cleaningPlan.qualityChecks')}</th>
+                <th>{t('maintenancePlan.day')}</th>
+                <th>{t('maintenancePlan.visits')}</th>
+                <th>{t('maintenancePlan.planStatus')}</th>
                 <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td className="table-empty" colSpan={5}>
-                    {t('cleaningPlan.emptyHistory')}
+                  <td className="table-empty" colSpan={4}>
+                    {t('maintenancePlan.emptyHistory')}
                   </td>
                 </tr>
               ) : (
                 filteredHistory.map((plan) => {
                   const items = plan.items ?? []
-                  const quality = items.filter((item) => item.qualityReview).length
                   const date = plan.plannedDate || plan.id
                   return (
                     <tr key={plan.id}>
                       <td>{formatDateOnlyLabel(date, i18n.language)}</td>
-                      <td>
-                        <span className="cleaning-plan-count-label">
-                          {t('cleaningPlan.cleanings')}:{' '}
-                        </span>
-                        {items.length}
-                      </td>
+                      <td>{items.length}</td>
                       <td>
                         <span
                           className={`cleaning-status-tag ${
@@ -757,16 +697,15 @@ export function CleaningPlanView({
                           {statusLabel(plan.status)}
                         </span>
                       </td>
-                      <td>{quality}</td>
                       <td>
                         <button
                           className="btn-secondary cleaning-plan-view-btn"
                           type="button"
                           onClick={() => void openDay(date)}
-                          aria-label={t('cleaningPlan.viewDay')}
+                          aria-label={t('maintenancePlan.viewDay')}
                         >
                           <span className="cleaning-plan-view-text">
-                            {t('cleaningPlan.viewDay')}
+                            {t('maintenancePlan.viewDay')}
                           </span>
                           <svg
                             className="cleaning-plan-view-icon"
@@ -822,17 +761,16 @@ export function CleaningPlanView({
               {message ? <p className="notice success">{message}</p> : null}
               {error ? <p className="notice error">{error}</p> : null}
               {!isReady && !canMarkReady ? (
-                <p className="notice">{t('cleaningPlan.draftOnlyFuture')}</p>
+                <p className="notice">{t('maintenancePlan.draftOnlyFuture')}</p>
               ) : null}
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>{t('cleaningPlan.visit')}</th>
-                      <th>{t('cleaningPlan.type')}</th>
-                      <th>{t('cleaningPlan.cleaner')}</th>
-                      <th>{t('cleaningPlan.startTime')}</th>
-                      <th>{t('cleaningPlan.qualityCheck')}</th>
+                      <th>{t('maintenancePlan.visit')}</th>
+                      <th>{t('maintenancePlan.agent')}</th>
+                      <th>{t('maintenancePlan.startTime')}</th>
+                      <th>{t('maintenancePlan.endTime')}</th>
                     </tr>
                   </thead>
                   <tbody>{renderVisitRows()}</tbody>
@@ -847,7 +785,7 @@ export function CleaningPlanView({
                   disabled={isSaving}
                   onClick={() => void savePlan('reopen')}
                 >
-                  {t('cleaningPlan.editPlan')}
+                  {t('maintenancePlan.editPlan')}
                 </button>
               ) : (
                 <>
@@ -857,7 +795,7 @@ export function CleaningPlanView({
                     disabled={isSaving || isLoading}
                     onClick={() => void savePlan('save')}
                   >
-                    {isSaving ? t('common.saving') : t('cleaningPlan.saveDraft')}
+                    {isSaving ? t('common.saving') : t('maintenancePlan.saveDraft')}
                   </button>
                   <button
                     className="btn-primary"
@@ -865,7 +803,7 @@ export function CleaningPlanView({
                     disabled={isSaving || isLoading || !canMarkReady}
                     onClick={() => void savePlan('ready')}
                   >
-                    {t('cleaningPlan.markReady')}
+                    {t('maintenancePlan.markReady')}
                   </button>
                 </>
               )}

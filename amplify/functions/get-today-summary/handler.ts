@@ -212,6 +212,7 @@ export const handler = async (event: HttpEvent) => {
   const cleaningBillingTable = process.env.CLEANING_BILLING_TABLE;
   const maintenanceBillingTable = process.env.MAINTENANCE_BILLING_TABLE;
   const maintenanceSettingsTable = process.env.MAINTENANCE_SETTINGS_TABLE;
+  const maintenancePlansTable = process.env.MAINTENANCE_PLANS_TABLE || '';
   const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
   if (
     !visitsTable ||
@@ -247,6 +248,8 @@ export const handler = async (event: HttpEvent) => {
       maintenanceStoredMonths,
       maintenanceSettingsItem,
       unassignedPending,
+      todayMaintenancePlan,
+      tomorrowMaintenancePlan,
     ] = await Promise.all([
       scanProjected(visitsTable, {
         expression: '#id, visitTypeId, scheduledDate, #status, propertyId',
@@ -282,6 +285,12 @@ export const handler = async (event: HttpEvent) => {
       ),
       getSettingsRecord(maintenanceSettingsTable),
       countUnassignedPending(tasksTable),
+      maintenancePlansTable
+        ? getPlanByDate(maintenancePlansTable, today)
+        : Promise.resolve(undefined),
+      maintenancePlansTable
+        ? getPlanByDate(maintenancePlansTable, tomorrow)
+        : Promise.resolve(undefined),
     ]);
 
     const previousOpen = countVisibleBillingWarnings(
@@ -341,6 +350,11 @@ export const handler = async (event: HttpEvent) => {
     const planningReady =
       (asString(todayPlan?.status).toUpperCase() === 'READY' ? 1 : 0) +
       (asString(tomorrowPlan?.status).toUpperCase() === 'READY' ? 1 : 0);
+    const maintenancePlanningReady =
+      (asString(todayMaintenancePlan?.status).toUpperCase() === 'READY' ? 1 : 0) +
+      (asString(tomorrowMaintenancePlan?.status).toUpperCase() === 'READY'
+        ? 1
+        : 0);
 
     let reviewsNeedAttention = 0;
     for (const item of reviews) {
@@ -374,6 +388,8 @@ export const handler = async (event: HttpEvent) => {
         previousOpen,
       },
       maintenance: {
+        planningReady: maintenancePlanningReady,
+        planningTotal: 2,
         currentCompleted: maintenance.currentCompleted,
         currentTotal: maintenance.currentTotal,
         previousOpen: maintenanceWarnings,
