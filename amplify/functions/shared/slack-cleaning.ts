@@ -63,8 +63,26 @@ export const isOpenCleaningVisit = (visit: Record<string, unknown>) => {
   );
 };
 
-export const overdueCleaningMessage = (nickname: string) =>
-  `La limpieza de ${escapeMrkdwn(nickname)} debería haber terminado y no se ha cerrado:`;
+const DEFAULT_APP_BASE_URL = 'https://main.dd8kh4wy2zlme.amplifyapp.com';
+
+export const cleaningDisplayTitle = (
+  visit: Record<string, unknown>,
+  fallback: string,
+) => {
+  const title = asString(visit.title);
+  return title || fallback;
+};
+
+export const visitAppUrl = (visitId: string) => {
+  const base = (process.env.APP_BASE_URL || DEFAULT_APP_BASE_URL).replace(
+    /\/$/,
+    '',
+  );
+  return `${base}/?visit=${encodeURIComponent(visitId)}`;
+};
+
+export const overdueCleaningMessage = (title: string) =>
+  `${escapeMrkdwn(title)} debería haber terminado y no se ha cerrado:`;
 
 export const overdueCleaningBlocks = (visitId: string, nickname: string) => [
   {
@@ -168,10 +186,15 @@ export const completeCleaningFromSlack = async (options: {
       options.visitId,
     );
     if (hasOpenTasks) {
+      const nickname = await loadPropertyNickname(
+        process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+        visit,
+      );
+      const title = cleaningDisplayTitle(visit, nickname);
+      const url = visitAppUrl(options.visitId);
       return {
         ok: false,
-        message:
-          'No se han completado todas las tareas de la visita, imposible cerrar',
+        message: `No se han completado todas las tareas de ${escapeMrkdwn(title)}, imposible cerrar. <${url}|Abrir en yalla>`,
       };
     }
   }

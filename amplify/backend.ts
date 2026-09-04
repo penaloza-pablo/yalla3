@@ -685,6 +685,10 @@ backend.getTodaySummary.resources.lambda.grantInvoke(
   backend.processSlackHoy.resources.lambda,
 );
 backend.handleSlackCommand.addEnvironment(
+  'APP_BASE_URL',
+  'https://main.dd8kh4wy2zlme.amplifyapp.com',
+);
+backend.handleSlackCommand.addEnvironment(
   'PROCESS_SLACK_HOY_FUNCTION_NAME',
   backend.processSlackHoy.resources.lambda.functionName,
 );

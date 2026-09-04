@@ -290,12 +290,6 @@ export function VisitDetailModal({
     () => new Map(visitTypes.map((type) => [type.id, type.name])),
     [visitTypes],
   )
-  const teamUsers = useMemo(() => {
-    if (!visitForm?.teamId) {
-      return users
-    }
-    return users.filter((user) => user.teamId === visitForm.teamId)
-  }, [users, visitForm?.teamId])
   const visitHasOpenTasks = tasks.some(
     (task) =>
       task.status !== 'COMPLETED' &&
@@ -1252,50 +1246,6 @@ export function VisitDetailModal({
               </select>
             </label>
             <label>
-              {t('operations.team')}
-              <select
-                value={visitForm.teamId}
-                onChange={(event) =>
-                  setVisitForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          teamId: event.target.value,
-                          assignedUserId: '',
-                        }
-                      : current,
-                  )
-                }
-              >
-                <option value="">{t('common.select')}</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t('operations.assignedUser')}
-              <select
-                value={visitForm.assignedUserId}
-                onChange={(event) =>
-                  setVisitForm((current) =>
-                    current
-                      ? { ...current, assignedUserId: event.target.value }
-                      : current,
-                  )
-                }
-              >
-                <option value="">{t('operations.unassigned')}</option>
-                {teamUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               {t('common.date')}
               <input
                 type="date"
@@ -1310,7 +1260,7 @@ export function VisitDetailModal({
               />
             </label>
             <label>
-              {t('operations.schedule')}
+              {t('operations.start')}
               <input
                 type="time"
                 value={visitForm.scheduledStartTime}
@@ -1324,7 +1274,7 @@ export function VisitDetailModal({
               />
             </label>
             <label>
-              {t('operations.schedule')}
+              {t('operations.end')}
               <input
                 type="time"
                 value={visitForm.scheduledEndTime}
@@ -1360,20 +1310,6 @@ export function VisitDetailModal({
                   )
                 }
               />
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={visitForm.appliesToHourBank}
-                onChange={(event) =>
-                  setVisitForm((current) =>
-                    current
-                      ? { ...current, appliesToHourBank: event.target.checked }
-                      : current,
-                  )
-                }
-              />
-              {t('operations.poolOfHours')}
             </label>
           </div>
           <div className="modal-footer">

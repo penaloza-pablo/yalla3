@@ -1485,6 +1485,29 @@ th {
   gap: 16px;
 }
 
+.form-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #344054;
+  font-size: 0.9rem;
+}
+
+.form-grid > label > input,
+.form-grid > label > select,
+.form-grid > label > textarea {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+.form-grid textarea.visit-create-description {
+  min-height: 4.4em;
+  resize: vertical;
+}
+
 .form-field {
   display: flex;
   flex-direction: column;

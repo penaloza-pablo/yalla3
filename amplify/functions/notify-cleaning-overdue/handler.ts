@@ -57,12 +57,13 @@ export const handler: EventBridgeHandler<'Scheduled Event', void, void> =
       }
 
       const nickname = await loadPropertyNickname(detailsTable, visit);
-      const text = overdueCleaningMessage(nickname);
+      const title = asString(visit.title) || nickname;
+      const text = overdueCleaningMessage(title);
       try {
         await slackApi('chat.postMessage', {
           channel: secrets.cleaningOverdueChannelId,
           text,
-          blocks: overdueCleaningBlocks(visitId, nickname),
+          blocks: overdueCleaningBlocks(visitId, title),
         });
         await patchUserOriginatedRecord(visitsTable, visitId, {
           set: { [SLACK_OVERDUE_FIELD]: notifyKey },

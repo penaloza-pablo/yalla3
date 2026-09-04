@@ -17,6 +17,7 @@ import {
   getPropertyLabel,
   sortPropertyOptions,
 } from '../operations/propertyHelpers'
+import { translateVisitStatus } from '../i18n/display'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
 import type { PropertyOption } from '../operations/types'
 import { PropertyGroupChips } from './PropertyGroupChips'
@@ -406,7 +407,7 @@ export function CleaningBillingView({
         [t('cleaningBilling.date')]: line.date,
         [t('cleaningBilling.visitStatus')]: line.isManual
           ? t('cleaningBilling.manualStatus')
-          : line.status,
+          : translateVisitStatus(t, line.status),
         [t('cleaningBilling.cleaningType')]: line.cleaningTypeName || '',
         [t('cleaningBilling.price')]: line.price ?? '',
         [t('cleaningBilling.source')]: line.isManual
@@ -516,11 +517,20 @@ export function CleaningBillingView({
     setIsFormOpen(false)
   }
 
-  const statusLabel = (status: CleaningBillingMonth['status']) => {
+  const statusLabel = (
+    status: CleaningBillingMonth['status'],
+    canClose?: boolean,
+  ) => {
     if (status === 'CURRENT') return t('cleaningBilling.statusCurrent')
-    if (status === 'PENDING_TO_CLOSE') return t('cleaningBilling.statusPending')
+    if (status === 'PENDING_TO_CLOSE') {
+      return canClose
+        ? t('cleaningBilling.statusReady')
+        : t('cleaningBilling.statusPending')
+    }
     return t('cleaningBilling.statusClosed')
   }
+
+  const visitStatusLabel = (status: string) => translateVisitStatus(t, status)
 
   return (
     <>
@@ -665,7 +675,7 @@ export function CleaningBillingView({
         >
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.status')}</p>
-            <p className="card-value">{statusLabel(month.status)}</p>
+            <p className="card-value">{statusLabel(month.status, month.canClose)}</p>
             <p className="card-meta">{t('cleaningBilling.statusMeta')}</p>
           </div>
           <div className="card card-compact">
@@ -792,7 +802,11 @@ export function CleaningBillingView({
                         ) : null}
                       </td>
                       <td>{formatDateOnlyLabel(line.date, i18n.language)}</td>
-                      <td>{line.isManual ? t('cleaningBilling.manualStatus') : line.status}</td>
+                      <td>
+                        {line.isManual
+                          ? t('cleaningBilling.manualStatus')
+                          : visitStatusLabel(line.status)}
+                      </td>
                       <td>{line.cleaningTypeName || '—'}</td>
                       <td>
                         {line.price === null ? '—' : money.format(line.price)}
@@ -805,13 +819,17 @@ export function CleaningBillingView({
                       <td>
                         {month?.canEdit ? (
                           <div className="table-actions">
-                            <button
-                              className="btn-secondary"
-                              type="button"
-                              onClick={() => openEdit(line)}
-                            >
-                              {t('cleaningSettings.edit')}
-                            </button>
+                            {can(ACTION_KEYS.cleaningBillingEdit) ? (
+                              <button
+                                className="btn-icon btn-icon-ghost"
+                                type="button"
+                                aria-label={t('cleaningSettings.edit')}
+                                title={t('cleaningSettings.edit')}
+                                onClick={() => openEdit(line)}
+                              >
+                                ✎
+                              </button>
+                            ) : null}
                             {line.isManual ? (
                               <button
                                 className="btn-secondary"
@@ -877,7 +895,7 @@ export function CleaningBillingView({
                       <td>{formatMonthLabel(item.id)}</td>
                       <td>
                         <span className={`tag ${item.status === 'CLOSED' ? 'muted' : ''}`}>
-                          {statusLabel(item.status)}
+                          {statusLabel(item.status, item.canClose)}
                         </span>
                       </td>
                       <td>{item.lineCount}</td>

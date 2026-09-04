@@ -12,6 +12,14 @@ export const translateSection = (t: TFunction, section: string) =>
 export const translateStatus = (t: TFunction, status: string) =>
   t(`status.${status}`, { defaultValue: status })
 
+export const translateVisitStatus = (t: TFunction, status: string) => {
+  const normalized = status.trim().toUpperCase()
+  if (!normalized) {
+    return status
+  }
+  return t(`operations.visitStatuses.${normalized}`, { defaultValue: status })
+}
+
 export const displayLocalizedText = (
   language: string | undefined,
   english: string,

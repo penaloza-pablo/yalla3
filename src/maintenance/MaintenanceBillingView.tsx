@@ -17,6 +17,7 @@ import {
   getPropertyLabel,
   sortPropertyOptions,
 } from '../operations/propertyHelpers'
+import { translateVisitStatus } from '../i18n/display'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
 import type { PropertyOption } from '../operations/types'
 import { PropertyGroupChips } from '../cleaning/PropertyGroupChips'
@@ -460,6 +461,8 @@ export function MaintenanceBillingView({
   const lineStatusLabel = (status: MaintenanceBillingLineStatus) =>
     t(`maintenanceBilling.lineStatus.${status}`)
 
+  const visitStatusLabel = (status: string) => translateVisitStatus(t, status)
+
   const exportClosedMonth = async (scope: 'filtered' | 'all') => {
     if (!selectedMonthId || month?.status !== 'CLOSED') {
       return false
@@ -496,7 +499,7 @@ export function MaintenanceBillingView({
             ? t('maintenanceBilling.groupStatus')
             : line.isManual
               ? t('maintenanceBilling.manualStatus')
-              : line.status,
+              : translateVisitStatus(t, line.status),
         [t('maintenanceBilling.provider')]: line.providerName,
         [t('maintenanceBilling.hours')]: line.hours ?? 0,
         [t('maintenanceBilling.price')]: line.price ?? '',
@@ -750,9 +753,16 @@ export function MaintenanceBillingView({
     }
   }
 
-  const statusLabel = (status: MaintenanceBillingMonth['status']) => {
+  const statusLabel = (
+    status: MaintenanceBillingMonth['status'],
+    canClose?: boolean,
+  ) => {
     if (status === 'CURRENT') return t('maintenanceBilling.statusCurrent')
-    if (status === 'PENDING_TO_CLOSE') return t('maintenanceBilling.statusPending')
+    if (status === 'PENDING_TO_CLOSE') {
+      return canClose
+        ? t('maintenanceBilling.statusReady')
+        : t('maintenanceBilling.statusPending')
+    }
     return t('maintenanceBilling.statusClosed')
   }
 
@@ -1073,7 +1083,7 @@ export function MaintenanceBillingView({
         <section className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}>
           <div className="card card-compact">
             <p className="card-label">{t('maintenanceBilling.status')}</p>
-            <p className="card-value">{statusLabel(month.status)}</p>
+            <p className="card-value">{statusLabel(month.status, month.canClose)}</p>
             <p className="card-meta">{t('maintenanceBilling.statusMeta')}</p>
           </div>
           <div className="card card-compact">
@@ -1274,7 +1284,7 @@ export function MaintenanceBillingView({
                               ? t('maintenanceBilling.groupStatus')
                               : line.isManual
                                 ? t('maintenanceBilling.manualStatus')
-                                : line.status}
+                                : visitStatusLabel(line.status)}
                           </td>
                           <td>
                             {month?.canEdit ? (
@@ -1408,6 +1418,7 @@ export function MaintenanceBillingView({
                                     />
                                   </svg>
                                 </button>
+                                {can(ACTION_KEYS.maintenanceBillingEdit) ? (
                                 <button
                                   className="btn-icon btn-icon-ghost"
                                   type="button"
@@ -1417,6 +1428,7 @@ export function MaintenanceBillingView({
                                 >
                                   ✎
                                 </button>
+                                ) : null}
                                 {isGroupLine(line) ? (
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -1583,7 +1595,9 @@ export function MaintenanceBillingView({
                                             {' · '}
                                             {member.source === 'manual'
                                               ? t('maintenanceBilling.manualStatus')
-                                              : member.status || '—'}
+                                              : member.status
+                                                ? visitStatusLabel(member.status)
+                                                : '—'}
                                           </span>
                                         </li>
                                       ))}
@@ -1637,7 +1651,7 @@ export function MaintenanceBillingView({
                       <td>{formatMonthLabel(item.id)}</td>
                       <td>
                         <span className={`tag ${item.status === 'CLOSED' ? 'muted' : ''}`}>
-                          {statusLabel(item.status)}
+                          {statusLabel(item.status, item.canClose)}
                         </span>
                       </td>
                       <td>{item.lineCount}</td>

@@ -1,4 +1,4 @@
-import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   LOG_FEATURES,
   quoted,
@@ -21,6 +21,7 @@ import {
   withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
 import { hasGuestyTaskId, invokeGuestyTaskSync } from '../shared/guesty-sync';
+import { appendUrgentTaskTitles } from '../shared/visit-title';
 
 type TaskPayload = {
   id?: string;
@@ -34,7 +35,7 @@ type TaskPayload = {
   status?: string;
   priority?: string;
   dueDate?: string;
-  action?: 'dismiss' | 'assign';
+  action?: 'dismiss' | 'assign' | 'delete';
   assignVisitId?: string;
   closedBy?: string;
   createdAt?: string;
@@ -131,6 +132,31 @@ export const handler = async (event: {
     await patchUserOriginatedRecord(tasksTable, taskId, dismissPatch);
     const item = mergeUserEditResponseItem(existing, dismissPatch, timestamp);
     return buildHttpResponse(200, { item });
+  }
+
+  if (action === 'delete' && existing) {
+    const taskId = typeof existing.id === 'string' ? existing.id : '';
+    if (!taskId) {
+      return buildHttpResponse(400, { message: 'Task id is required.' });
+    }
+    await docClient.send(
+      new DeleteCommand({
+        TableName: tasksTable,
+        Key: { id: taskId },
+      }),
+    );
+    const taskTitle =
+      typeof existing.title === 'string' && existing.title.trim()
+        ? existing.title
+        : taskId;
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.OPERATIONS,
+      action: 'delete',
+      entityId: taskId,
+      entityName: taskTitle,
+      summary: `deleted task ${quoted(taskTitle)}`,
+    });
+    return buildHttpResponse(200, { item: { id: taskId, deleted: true } });
   }
 
   if (action === 'assign' || payload.assignVisitId?.trim()) {
@@ -351,6 +377,33 @@ export const handler = async (event: {
         }
       } catch (error) {
         console.error('Failed to sync task to Guesty', error);
+      }
+    }
+
+    const savedPriority = normalizePriority(
+      typeof item.priority === 'string' ? item.priority : undefined,
+    );
+    const savedVisitId =
+      typeof item.visitId === 'string' ? item.visitId.trim() : '';
+    const wasUrgent =
+      existing &&
+      normalizePriority(
+        typeof existing.priority === 'string' ? existing.priority : undefined,
+      ) === 'URGENT';
+    if (savedPriority === 'URGENT' && savedVisitId && !wasUrgent) {
+      const visit = linkedVisit ?? (await loadVisit(visitsTable, savedVisitId));
+      const visitStatus = normalizeStatus(
+        typeof visit?.status === 'string' ? visit.status : '',
+      );
+      if (visit && !TERMINAL_VISIT_STATUSES.has(visitStatus)) {
+        const currentTitle =
+          typeof visit.title === 'string' ? visit.title : '';
+        const nextTitle = appendUrgentTaskTitles(currentTitle, [taskTitle]);
+        if (nextTitle !== currentTitle) {
+          await patchUserOriginatedRecord(visitsTable, savedVisitId, {
+            set: { title: nextTitle },
+          });
+        }
       }
     }
 

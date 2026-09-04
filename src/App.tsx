@@ -24,6 +24,7 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
@@ -1554,6 +1555,7 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
+  const [deepLinkVisitId, setDeepLinkVisitId] = useState('')
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [titleProgress, setTitleProgress] = useState(0)
@@ -4070,6 +4072,19 @@ function App() {
     }
   }, [activePage, canPage, firstAllowedPage, permissionsReady])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const visitId = params.get('visit')?.trim() || ''
+    if (!visitId) {
+      return
+    }
+    setDeepLinkVisitId(visitId)
+    params.delete('visit')
+    const query = params.toString()
+    const next = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+    window.history.replaceState({}, '', next)
+  }, [])
+
   const openMobileNav = () => {
     setIsSidebarCollapsed(false)
     setIsMobileNavOpen(true)
@@ -4451,11 +4466,18 @@ function App() {
       </button>
 
       <main className="main">
-        {!permissionsReady || !canPage(activePage) ? (
+        {!permissionsReady ? (
+          <div
+            className="page-loader"
+            role="status"
+            aria-live="polite"
+            aria-label={t('common.loading')}
+          >
+            <span className="page-loader-spinner" aria-hidden="true" />
+          </div>
+        ) : !canPage(activePage) ? (
           <section className="card">
-            <h1 className="page-title">
-              {permissionsReady ? t('rbac.noAccess') : t('common.loading')}
-            </h1>
+            <h1 className="page-title">{t('rbac.noAccess')}</h1>
           </section>
         ) : activePage === 'Inventory' ? (
           <>
@@ -8594,6 +8616,14 @@ function App() {
               </div>
             </div>
           </div>
+        ) : null}
+        {deepLinkVisitId ? (
+          <VisitDetailModal
+            visitId={deepLinkVisitId}
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            onClose={() => setDeepLinkVisitId('')}
+          />
         ) : null}
       </main>
     </div>

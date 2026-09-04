@@ -70,6 +70,9 @@ export const ACTION_KEYS = {
   spotCheckCreate: 'action:spotCheck.create',
   purchasesCreate: 'action:purchases.create',
   propertiesUpdateFromGuesty: 'action:properties.updateFromGuesty',
+  unassignedTasksEdit: 'action:unassignedTasks.edit',
+  maintenanceBillingEdit: 'action:maintenanceBilling.edit',
+  cleaningBillingEdit: 'action:cleaningBilling.edit',
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -101,6 +104,18 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
   {
     key: ACTION_KEYS.propertiesUpdateFromGuesty,
     i18nKey: 'rbac.actions.propertiesUpdateFromGuesty',
+  },
+  {
+    key: ACTION_KEYS.unassignedTasksEdit,
+    i18nKey: 'rbac.actions.unassignedTasksEdit',
+  },
+  {
+    key: ACTION_KEYS.maintenanceBillingEdit,
+    i18nKey: 'rbac.actions.maintenanceBillingEdit',
+  },
+  {
+    key: ACTION_KEYS.cleaningBillingEdit,
+    i18nKey: 'rbac.actions.cleaningBillingEdit',
   },
 ]
 

@@ -28,6 +28,7 @@ import {
   visitHasOpenTasks,
   withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
+import { appendUrgentTaskTitles } from '../shared/visit-title';
 
 type VisitPayload = {
   id?: string;
@@ -329,6 +330,19 @@ export const handler = async (event: {
         ? payload.closedBy?.trim() ?? undefined
         : undefined,
   };
+
+  const urgentTaskTitles = Array.isArray(payload.tasks)
+    ? payload.tasks
+        .filter((task) => normalizeStatus(task.priority) === 'URGENT')
+        .map((task) => String(task.title ?? '').trim())
+        .filter(Boolean)
+    : [];
+  if (urgentTaskTitles.length > 0) {
+    editableFields.title = appendUrgentTaskTitles(
+      String(editableFields.title ?? ''),
+      urgentTaskTitles,
+    );
+  }
 
   if (status === 'COMPLETED' || status === 'CANCELLED') {
     editableFields.closedAt = editableFields.closedAt ?? timestamp;

@@ -28,6 +28,7 @@ import {
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
+import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-title'
 import { CLEANING_VISIT_TYPE_ID, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
@@ -645,11 +646,6 @@ export function DailyOperationsView({
     return cleanerNameById.get(cleanerId)?.trim() || null
   }, [cleanerNameById, cleaningPlansByDate, selectedVisit])
 
-  const teamUsers = useMemo(() => {
-    if (!visitForm.teamId) return users
-    return users.filter((user) => user.teamId === visitForm.teamId)
-  }, [users, visitForm.teamId])
-
   const loadReferenceData = useCallback(async () => {
     if (!endpoints.teams || !endpoints.users || !endpoints.visitTypes) {
       setError(
@@ -1136,6 +1132,12 @@ export function DailyOperationsView({
         description: draft.description,
         priority: draft.urgent ? 'URGENT' : 'MEDIUM',
       }))
+    payload.title = appendUrgentTaskTitles(
+      title,
+      tasksToCreate
+        .filter((task) => task.priority === 'URGENT')
+        .map((task) => task.title),
+    )
 
     if (isCreatingVisit && tasksToCreate.length > 0) {
       payload.tasks = tasksToCreate
@@ -1478,10 +1480,40 @@ export function DailyOperationsView({
       setMessage(t('operations.taskSaved'))
       await loadPool()
       if (taskForm.visitId || selectedVisitId) {
-        await loadVisitTasks(taskForm.visitId || selectedVisitId || '')
+        const visitId = taskForm.visitId || selectedVisitId || ''
+        await loadVisitTasks(visitId)
+        if (endpoints.visits && visitId) {
+          const visitPayload = await getVisitById(endpoints.visits, visitId).catch(
+            () => null,
+          )
+          const item = visitPayload?.item as Record<string, unknown> | undefined
+          if (item) {
+            const mapped = mapVisit(item)
+            setVisits((current) =>
+              current.map((entry) => (entry.id === mapped.id ? mapped : entry)),
+            )
+          }
+        }
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveTask'))
+    }
+  }
+
+  const deleteTask = async () => {
+    if (!endpoints.upsertTask || !taskForm.id) return
+    if (!window.confirm(t('operations.deleteTaskConfirm'))) return
+    try {
+      await saveTask(endpoints.upsertTask, { id: taskForm.id, action: 'delete' })
+      setIsTaskFormOpen(false)
+      setMessage(t('operations.taskDeleted'))
+      await loadPool()
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : t('operations.unableSaveTask'),
+      )
     }
   }
 
@@ -1673,41 +1705,6 @@ export function DailyOperationsView({
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
           </div>
-          {mode === 'dashboard' && dashboardViewMode === 'dashboard' ? (
-            <div className="operations-day-title-row operations-dashboard-date-row">
-              <h2 className="section-title">
-                {formatAgendaDayLabel(getTodayMadrid())}
-              </h2>
-              <div className="operations-day-date-controls">
-                <label className="btn-ghost operations-day-calendar-btn">
-                  <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
-                    <path
-                      d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  <input
-                    className="operations-day-date-input"
-                    type="date"
-                    value={getTodayMadrid()}
-                    onChange={(event) => goToDayView(event.target.value)}
-                    aria-label={t('operations.chooseDate')}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn-ghost operations-day-next-btn"
-                  aria-label={t('operations.nextDay')}
-                  title={t('operations.nextDay')}
-                  onClick={() =>
-                    goToDayView(addDaysToDateString(getTodayMadrid(), 1))
-                  }
-                >
-                  <span aria-hidden="true">&gt;</span>
-                </button>
-              </div>
-            </div>
-          ) : null}
           {mode === 'dashboard' ? null : (
             <p className="subtitle">{pageSubtitle}</p>
           )}
@@ -2125,53 +2122,85 @@ export function DailyOperationsView({
                       <td>{task.priority}</td>
                       <td>{formatTaskCreatedDate(task.createdAt)}</td>
                       <td className="table-actions">
+                        <div className="action-buttons">
                         <button
                           type="button"
-                          className="btn-link"
+                          className="btn-icon btn-icon-ghost"
+                          aria-label={t('operations.assignTask')}
+                          title={t('operations.assignTask')}
                           onClick={() => {
                             setAssignTaskId(task.id)
                             setAssignVisitId('')
                             setIsAssignVisitOpen(true)
                           }}
                         >
-                          Assign
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            width="16"
+                            height="16"
+                          >
+                            <path
+                              d="M11 4h5v5h-2V7.4l-5.3 5.3-1.4-1.4L12.6 6H11V4zM4 6h5v2H6v8h8v-3h2v5H4V6z"
+                              fill="currentColor"
+                            />
+                          </svg>
                         </button>
+                        {can(ACTION_KEYS.unassignedTasksEdit) ? (
+                          <button
+                            type="button"
+                            className="btn-icon btn-icon-ghost"
+                            aria-label={t('operations.editTask')}
+                            title={t('operations.editTask')}
+                            onClick={() => {
+                              setTaskForm({
+                                ...emptyTaskForm(),
+                                id: task.id,
+                                propertyId: task.propertyId,
+                                teamId: task.teamId,
+                                assignedUserId: task.assignedUserId ?? '',
+                                title: task.title,
+                                description: task.description,
+                                priority: task.priority,
+                                dueDate: task.dueDate ?? '',
+                              })
+                              setIsTaskFormOpen(true)
+                            }}
+                          >
+                            ✎
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          className="btn-link"
-                          onClick={() => {
-                            setTaskForm({
-                              ...emptyTaskForm(),
-                              id: task.id,
-                              propertyId: task.propertyId,
-                              teamId: task.teamId,
-                              assignedUserId: task.assignedUserId ?? '',
-                              title: task.title,
-                              description: task.description,
-                              priority: task.priority,
-                              dueDate: task.dueDate ?? '',
-                            })
-                            setIsTaskFormOpen(true)
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-link"
+                          className="btn-icon btn-icon-ghost"
+                          aria-label={t('operations.completeTask')}
+                          title={t('operations.completeTask')}
                           onClick={() => void completeTask(task)}
                         >
-                          Complete
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            width="16"
+                            height="16"
+                          >
+                            <path
+                              d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
+                              fill="currentColor"
+                            />
+                          </svg>
                         </button>
                         {task.status !== 'DISMISS' ? (
                           <button
                             type="button"
-                            className="btn-link"
+                            className="btn-icon btn-icon-ghost"
+                            aria-label={t('operations.dismissTask')}
+                            title={t('operations.dismissTask')}
                             onClick={() => void dismissTask(task)}
                           >
-                            Dismiss
+                            ✕
                           </button>
                         ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -2846,47 +2875,6 @@ export function DailyOperationsView({
                 </select>
               </label>
               <label>
-                Team
-                <select
-                  value={visitForm.teamId}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({
-                      ...c,
-                      teamId: event.target.value,
-                      assignedUserId: '',
-                    }))
-                  }
-                >
-                  <option value="">Select team</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!isCreatingVisit ? (
-              <label>
-                Assigned user
-                <select
-                  value={visitForm.assignedUserId}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({
-                      ...c,
-                      assignedUserId: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Unassigned</option>
-                  {teamUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              ) : null}
-              <label>
                 Date
                 <input
                   type="date"
@@ -2901,7 +2889,7 @@ export function DailyOperationsView({
                 />
               </label>
               <label>
-                Start
+                {t('operations.start')}
                 <input
                   type="time"
                   value={visitForm.scheduledStartTime}
@@ -2914,7 +2902,7 @@ export function DailyOperationsView({
                 />
               </label>
               <label>
-                End
+                {t('operations.end')}
                 <input
                   type="time"
                   value={visitForm.scheduledEndTime}
@@ -2926,54 +2914,58 @@ export function DailyOperationsView({
                   }
                 />
               </label>
-              <label>
-                Title
-                <input
-                  value={visitForm.title}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({ ...c, title: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="full-width">
-                Description
-                <textarea
-                  value={visitForm.description}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({ ...c, description: event.target.value }))
-                  }
-                />
-              </label>
-              {!isCreatingVisit ? (
-              <label>
-                Est. duration (min)
-                <input
-                  type="number"
-                  value={visitForm.estimatedDurationMinutes}
-                  onChange={(event) =>
-                    setVisitForm((c) => ({
-                      ...c,
-                      estimatedDurationMinutes: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              ) : null}
-              {!isCreatingVisit ? (
-                <label className="checkbox-row">
+              {isCreatingVisit ? (
+                <div className="form-field full-width">
                   <input
-                    type="checkbox"
-                    checked={visitForm.appliesToHourBank}
+                    value={visitForm.title}
+                    placeholder={t('operations.visitTitle')}
+                    aria-label={t('operations.visitTitle')}
+                    onChange={(event) =>
+                      setVisitForm((c) => ({ ...c, title: event.target.value }))
+                    }
+                  />
+                </div>
+              ) : (
+                <label>
+                  Title
+                  <input
+                    value={visitForm.title}
+                    onChange={(event) =>
+                      setVisitForm((c) => ({ ...c, title: event.target.value }))
+                    }
+                  />
+                </label>
+              )}
+              {isCreatingVisit ? (
+                <div className="form-field full-width">
+                  <textarea
+                    className="visit-create-description"
+                    rows={2}
+                    value={visitForm.description}
+                    placeholder={t('operations.description')}
+                    aria-label={t('operations.description')}
                     onChange={(event) =>
                       setVisitForm((c) => ({
                         ...c,
-                        appliesToHourBank: event.target.checked,
+                        description: event.target.value,
                       }))
                     }
                   />
-                  Applies to hour bank
+                </div>
+              ) : (
+                <label className="full-width">
+                  Description
+                  <textarea
+                    value={visitForm.description}
+                    onChange={(event) =>
+                      setVisitForm((c) => ({
+                        ...c,
+                        description: event.target.value,
+                      }))
+                    }
+                  />
                 </label>
-              ) : null}
+              )}
               {isCreatingVisit ? (
                 <div className="full-width visit-draft-tasks">
                   <div className="visit-tasks-header">
@@ -3207,6 +3199,15 @@ export function DailyOperationsView({
               ) : null}
             </div>
             <div className="modal-footer">
+              {taskForm.id && mode === 'unassigned' && !taskForm.visitId ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => void deleteTask()}
+                >
+                  {t('operations.deleteTask')}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn-primary"
