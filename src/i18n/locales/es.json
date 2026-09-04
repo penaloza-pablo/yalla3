@@ -32,7 +32,7 @@
     "inventory": "Inventario",
     "planning": "Planificación",
     "currentCleanings": "Limpiezas de hoy",
-    "previousCleanings": "Limpiezas anteriores",
+    "previousCleanings": "Advertencias",
     "currentMaintenance": "Mantenimientos de hoy",
     "toEstimate": "Asignar horas",
     "hoursRemaining": "Horas restantes",
@@ -745,6 +745,7 @@
       "unassignedTasksEdit": "Editar en Ops / Tareas sin asignar",
       "maintenanceBillingEdit": "Editar en Mantenimiento / Historial (tablas del mes)",
       "cleaningBillingEdit": "Editar en Limpiezas / Historial (tablas del mes)",
+      "cleaningBillingPrices": "Visibilidad de precios de limpieza",
       "createTasks": "Crear tareas"
     }
   },

@@ -32,7 +32,7 @@
     "inventory": "Inventory",
     "planning": "Planning",
     "currentCleanings": "Today cleanings",
-    "previousCleanings": "Previous cleanings",
+    "previousCleanings": "Warnings",
     "currentMaintenance": "Maintenance today",
     "toEstimate": "Assign hours",
     "hoursRemaining": "Remaining Hours",
@@ -745,6 +745,7 @@
       "unassignedTasksEdit": "Edit in Ops / Unassigned tasks",
       "maintenanceBillingEdit": "Edit in Maintenance / Billing month tables",
       "cleaningBillingEdit": "Edit in Cleaning / Billing month tables",
+      "cleaningBillingPrices": "Cleaning prices visibility",
       "createTasks": "Create tasks"
     }
   },

@@ -122,6 +122,7 @@ export function CleaningBillingView({
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const canSeePrices = can(ACTION_KEYS.cleaningBillingPrices)
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -605,34 +606,36 @@ export function CleaningBillingView({
                       <span className="filter-badge">{activeFilterCount}</span>
                     ) : null}
                   </button>
-                  <button
-                    className="btn-ghost"
-                    type="button"
-                    onClick={() => {
-                      if (month?.status !== 'CLOSED') {
-                        setMessage('')
-                        setError(t('cleaningBilling.exportClosedOnly'))
-                        return
-                      }
-                      setError('')
-                      setIsExportOpen(true)
-                    }}
-                    disabled={isExporting}
-                    aria-label={t('common.export')}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
+                  {canSeePrices ? (
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      onClick={() => {
+                        if (month?.status !== 'CLOSED') {
+                          setMessage('')
+                          setError(t('cleaningBilling.exportClosedOnly'))
+                          return
+                        }
+                        setError('')
+                        setIsExportOpen(true)
+                      }}
+                      disabled={isExporting}
+                      aria-label={t('common.export')}
                     >
-                      <path
-                        d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </button>
-                  {month?.canEdit ? (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        width="16"
+                        height="16"
+                      >
+                        <path
+                          d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  ) : null}
+                  {canSeePrices && month?.canEdit ? (
                     <button
                       className="btn-ghost"
                       type="button"
@@ -671,18 +674,20 @@ export function CleaningBillingView({
 
       {selectedMonthId && month ? (
         <section
-          className={`summary-cards summary-cards-4 ${isSummaryInfoOpen ? 'is-open' : ''}`}
+          className={`summary-cards ${canSeePrices ? 'summary-cards-4' : ''} ${isSummaryInfoOpen ? 'is-open' : ''}`}
         >
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.status')}</p>
             <p className="card-value">{statusLabel(month.status, month.canClose)}</p>
             <p className="card-meta">{t('cleaningBilling.statusMeta')}</p>
           </div>
-          <div className="card card-compact">
-            <p className="card-label">{t('cleaningBilling.totalCard')}</p>
-            <p className="card-value">{money.format(filteredTotal)}</p>
-            <p className="card-meta">{t('cleaningBilling.totalCardMeta')}</p>
-          </div>
+          {canSeePrices ? (
+            <div className="card card-compact">
+              <p className="card-label">{t('cleaningBilling.totalCard')}</p>
+              <p className="card-value">{money.format(filteredTotal)}</p>
+              <p className="card-meta">{t('cleaningBilling.totalCardMeta')}</p>
+            </div>
+          ) : null}
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.recordsCard')}</p>
             <p className="card-value">{filteredLines.length}</p>
@@ -753,26 +758,34 @@ export function CleaningBillingView({
             groups={BILLING_PROPERTY_GROUP_CHIPS}
           />
           <div className="table-wrapper">
-            <table className="data-table data-table-cleaning-billing">
+            <table
+              className={`data-table data-table-cleaning-billing${canSeePrices ? '' : ' is-prices-hidden'}`}
+            >
               <thead>
                 <tr>
                   <th>{t('cleaningBilling.property')}</th>
                   <th>{t('cleaningBilling.date')}</th>
                   <th>{t('cleaningBilling.visitStatus')}</th>
                   <th>{t('cleaningBilling.cleaningType')}</th>
-                  <th>{t('cleaningBilling.price')}</th>
-                  <th>{t('cleaningBilling.source')}</th>
-                  <th>{t('common.actions')}</th>
+                  {canSeePrices ? (
+                    <>
+                      <th>{t('cleaningBilling.price')}</th>
+                      <th>{t('cleaningBilling.source')}</th>
+                      <th>{t('common.actions')}</th>
+                    </>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7}>{t('common.loading')}</td>
+                    <td colSpan={canSeePrices ? 7 : 4}>{t('common.loading')}</td>
                   </tr>
                 ) : filteredLines.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>{t('cleaningBilling.emptyLines')}</td>
+                    <td colSpan={canSeePrices ? 7 : 4}>
+                      {t('cleaningBilling.emptyLines')}
+                    </td>
                   </tr>
                 ) : (
                   filteredLines.map((line) => (
@@ -808,51 +821,57 @@ export function CleaningBillingView({
                           : visitStatusLabel(line.status)}
                       </td>
                       <td>{line.cleaningTypeName || '—'}</td>
-                      <td>
-                        {line.price === null ? '—' : money.format(line.price)}
-                      </td>
-                      <td>
-                        {line.isManual
-                          ? t('cleaningBilling.sourceManual')
-                          : t('cleaningBilling.sourceVisit')}
-                      </td>
-                      <td>
-                        {month?.canEdit ? (
-                          <div className="table-actions">
-                            {can(ACTION_KEYS.cleaningBillingEdit) ? (
-                              <button
-                                className="btn-icon btn-icon-ghost"
-                                type="button"
-                                aria-label={t('cleaningSettings.edit')}
-                                title={t('cleaningSettings.edit')}
-                                onClick={() => openEdit(line)}
-                              >
-                                ✎
-                              </button>
-                            ) : null}
-                            {line.isManual ? (
-                              <button
-                                className="btn-secondary"
-                                type="button"
-                                disabled={isSaving}
-                                onClick={() => {
-                                  if (window.confirm(t('cleaningBilling.deleteConfirm'))) {
-                                    void save({
-                                      month: selectedMonthId,
-                                      action: 'delete-manual',
-                                      lineId: line.id,
-                                    })
-                                  }
-                                }}
-                              >
-                                {t('common.delete')}
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
+                      {canSeePrices ? (
+                        <>
+                          <td>
+                            {line.price === null ? '—' : money.format(line.price)}
+                          </td>
+                          <td>
+                            {line.isManual
+                              ? t('cleaningBilling.sourceManual')
+                              : t('cleaningBilling.sourceVisit')}
+                          </td>
+                          <td>
+                            {month?.canEdit ? (
+                              <div className="table-actions">
+                                {can(ACTION_KEYS.cleaningBillingEdit) ? (
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    aria-label={t('cleaningSettings.edit')}
+                                    title={t('cleaningSettings.edit')}
+                                    onClick={() => openEdit(line)}
+                                  >
+                                    ✎
+                                  </button>
+                                ) : null}
+                                {line.isManual ? (
+                                  <button
+                                    className="btn-secondary"
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(t('cleaningBilling.deleteConfirm'))
+                                      ) {
+                                        void save({
+                                          month: selectedMonthId,
+                                          action: 'delete-manual',
+                                          lineId: line.id,
+                                        })
+                                      }
+                                    }}
+                                  >
+                                    {t('common.delete')}
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </>
+                      ) : null}
                     </tr>
                   ))
                 )}
@@ -869,25 +888,27 @@ export function CleaningBillingView({
             </div>
           </div>
           <div className="table-wrapper">
-            <table className="data-table data-table-cleaning-billing-months">
+            <table
+              className={`data-table data-table-cleaning-billing-months${canSeePrices ? '' : ' is-prices-hidden'}`}
+            >
               <thead>
                 <tr>
                   <th>{t('cleaningBilling.month')}</th>
                   <th>{t('cleaningBilling.status')}</th>
                   <th>{t('cleaningBilling.lines')}</th>
                   <th>{t('cleaningBilling.warnings')}</th>
-                  <th>{t('cleaningBilling.total')}</th>
+                  {canSeePrices ? <th>{t('cleaningBilling.total')}</th> : null}
                   <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6}>{t('common.loading')}</td>
+                    <td colSpan={canSeePrices ? 6 : 5}>{t('common.loading')}</td>
                   </tr>
                 ) : months.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>{t('cleaningBilling.empty')}</td>
+                    <td colSpan={canSeePrices ? 6 : 5}>{t('cleaningBilling.empty')}</td>
                   </tr>
                 ) : (
                   months.map((item) => (
@@ -900,7 +921,7 @@ export function CleaningBillingView({
                       </td>
                       <td>{item.lineCount}</td>
                       <td>{item.warningCount}</td>
-                      <td>{money.format(item.total)}</td>
+                      {canSeePrices ? <td>{money.format(item.total)}</td> : null}
                       <td>
                         <button
                           className="btn-secondary"

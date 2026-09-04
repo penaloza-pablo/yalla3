@@ -77,6 +77,7 @@ export const ACTION_KEYS = {
   unassignedTasksEdit: 'action:unassignedTasks.edit',
   maintenanceBillingEdit: 'action:maintenanceBilling.edit',
   cleaningBillingEdit: 'action:cleaningBilling.edit',
+  cleaningBillingPrices: 'action:cleaningBilling.prices',
   createTasks: 'action:createTasks',
 } as const
 
@@ -117,6 +118,10 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
   {
     key: ACTION_KEYS.cleaningBillingEdit,
     i18nKey: 'rbac.actions.cleaningBillingEdit',
+  },
+  {
+    key: ACTION_KEYS.cleaningBillingPrices,
+    i18nKey: 'rbac.actions.cleaningBillingPrices',
   },
   { key: ACTION_KEYS.createTasks, i18nKey: 'rbac.actions.createTasks' },
 ]
@@ -213,6 +218,7 @@ export const ROLE_SEEDS: {
         'Cleaning settings',
       ),
       ACTION_KEYS.cleaningCloseMonth,
+      ACTION_KEYS.cleaningBillingPrices,
       ACTION_KEYS.dailyOpsCreate,
       ACTION_KEYS.inventoryCreate,
       ACTION_KEYS.spotCheckCreate,

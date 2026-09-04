@@ -5344,6 +5344,8 @@ th {
   .data-table-cleaning-billing-months td:nth-child(4)::before { content: 'Warnings'; }
   .data-table-cleaning-billing-months td:nth-child(5)::before { content: 'Total'; }
   .data-table-cleaning-billing-months td:nth-child(6)::before { content: 'Actions'; }
+  .data-table-cleaning-billing-months.is-prices-hidden td:nth-child(5)::before { content: 'Actions'; }
+  .data-table-cleaning-billing-months.is-prices-hidden td:nth-child(6)::before { content: none; }
   .data-table-cleaning-billing td:nth-child(1)::before { content: 'Property'; }
   .data-table-cleaning-billing td:nth-child(2)::before { content: 'Date'; }
   .data-table-cleaning-billing td:nth-child(3)::before { content: 'Status'; }
