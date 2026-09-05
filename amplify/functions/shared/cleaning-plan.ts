@@ -157,7 +157,7 @@ export const getPlanByDate = async (tableName: string, plannedDate: string) => {
   return (result.Item as Record<string, unknown> | undefined) ?? undefined;
 };
 
-export const queryCleaningVisitsForDate = async (
+export const queryVisitsForScheduledDate = async (
   visitsTable: string,
   scheduledDate: string,
 ) => {
@@ -182,10 +182,20 @@ export const queryCleaningVisitsForDate = async (
   } while (lastEvaluatedKey);
 
   return items.filter((visit) => {
-    const visitTypeId =
-      typeof visit.visitTypeId === 'string' ? visit.visitTypeId : '';
     const status =
       typeof visit.status === 'string' ? visit.status.toUpperCase() : '';
-    return visitTypeId === CLEANING_VISIT_TYPE_ID && status !== 'CANCELLED';
+    return status !== 'CANCELLED';
+  });
+};
+
+export const queryCleaningVisitsForDate = async (
+  visitsTable: string,
+  scheduledDate: string,
+) => {
+  const items = await queryVisitsForScheduledDate(visitsTable, scheduledDate);
+  return items.filter((visit) => {
+    const visitTypeId =
+      typeof visit.visitTypeId === 'string' ? visit.visitTypeId : '';
+    return visitTypeId === CLEANING_VISIT_TYPE_ID;
   });
 };

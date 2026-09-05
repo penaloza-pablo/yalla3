@@ -10,5 +10,5 @@ export const notifyCleaningOverdue = defineFunction({
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
   },
   schedule: 'every 1m',
-  timeoutSeconds: 30,
+  timeoutSeconds: 60,
 });

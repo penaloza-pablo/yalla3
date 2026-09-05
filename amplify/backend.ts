@@ -721,6 +721,11 @@ backend.notifyCleaningOverdue.addEnvironment(
   'PROPERTY_CLEANING_DETAILS_TABLE',
   propertyCleaningDetailsTable.tableName,
 );
+backend.notifyCleaningOverdue.addEnvironment(
+  'TEAMS_TABLE',
+  teamsTable.tableName,
+);
+teamsTable.grantReadData(backend.notifyCleaningOverdue.resources.lambda);
 propertyCleaningDetailsTable.grantReadData(
   backend.handleSlackCommand.resources.lambda,
 );

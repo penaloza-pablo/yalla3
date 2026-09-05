@@ -88,6 +88,109 @@ export const visitAppUrl = (visitId: string) => {
 export const overdueCleaningMessage = (title: string) =>
   `${escapeMrkdwn(title)} debería haber terminado y no se ha cerrado:`;
 
+export const overdueMaintenanceMessage = (title: string) =>
+  `${escapeMrkdwn(title)} (mantenimiento) debería haber terminado y no se ha cerrado.`;
+
+export const overdueMaintenanceBlocks = (visitId: string, title: string) => {
+  const url = visitAppUrl(visitId);
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `<${url}|${escapeMrkdwn(title)}> debería haber terminado y no se ha cerrado.`,
+      },
+    },
+  ];
+};
+
+const P2_CLEANING_PROPERTIES = new Set(
+  [
+    'P2',
+    '201',
+    '202',
+    '203',
+    '204',
+    '205',
+    '206',
+    '207',
+    '208',
+    '209',
+    '210',
+    '211',
+    '212',
+  ].map((value) => value.toLowerCase()),
+);
+
+const normalizeTeamLabel = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+
+export const classifyOverdueTeam = (
+  teamId: string,
+  teamName = '',
+): 'cleaning' | 'maintenance' | null => {
+  const combined = normalizeTeamLabel(`${teamName} ${teamId}`);
+  if (!combined.trim()) {
+    return null;
+  }
+  if (combined.includes('maint') || combined.includes('manten')) {
+    return 'maintenance';
+  }
+  if (combined.includes('clean') || combined.includes('limpiez')) {
+    return 'cleaning';
+  }
+  return null;
+};
+
+export const isP2CleaningProperty = (...values: string[]) =>
+  values.some((value) => P2_CLEANING_PROPERTIES.has(value.trim().toLowerCase()));
+
+export type OverdueChannelKey =
+  | 'cleaningChannelId'
+  | 'P2cleaningChannelId'
+  | 'maintenanceChannelId';
+
+export const resolveOverdueChannel = (params: {
+  teamKind: 'cleaning' | 'maintenance' | null;
+  nickname: string;
+  propertyId: string;
+  title: string;
+  secrets: {
+    cleaningChannelId: string;
+    p2CleaningChannelId: string;
+    maintenanceChannelId: string;
+  };
+}): { key: OverdueChannelKey; channelId: string } | null => {
+  if (params.teamKind === 'maintenance') {
+    return params.secrets.maintenanceChannelId
+      ? {
+          key: 'maintenanceChannelId',
+          channelId: params.secrets.maintenanceChannelId,
+        }
+      : null;
+  }
+  if (params.teamKind !== 'cleaning') {
+    return null;
+  }
+  if (
+    isP2CleaningProperty(params.nickname, params.propertyId, params.title)
+  ) {
+    return params.secrets.p2CleaningChannelId
+      ? {
+          key: 'P2cleaningChannelId',
+          channelId: params.secrets.p2CleaningChannelId,
+        }
+      : null;
+  }
+  return params.secrets.cleaningChannelId
+    ? { key: 'cleaningChannelId', channelId: params.secrets.cleaningChannelId }
+    : null;
+};
+
 export const overdueCleaningBlocks = (visitId: string, nickname: string) => [
   {
     type: 'section',

@@ -11,7 +11,9 @@ const SLACK_MAX_SKEW_SECONDS = 60 * 5;
 type SlackSecretCache = {
   signingSecret: string;
   botToken: string;
-  cleaningOverdueChannelId: string;
+  cleaningChannelId: string;
+  p2CleaningChannelId: string;
+  maintenanceChannelId: string;
   warningsChannelId: string;
 };
 
@@ -76,11 +78,23 @@ export const loadSlackSecrets = async (options?: { forceRefresh?: boolean }) => 
       'Bot Token',
       'xoxb',
     ]),
-    cleaningOverdueChannelId: readSecretField(parsed, [
+    cleaningChannelId: readSecretField(parsed, [
+      'cleaningChannelId',
       'cleaningOverdueChannelId',
-      'Cleaning Overdue Channel Id',
-      'CLEANING_OVERDUE_CHANNEL_ID',
+      'Cleaning Channel Id',
+      'CLEANING_CHANNEL_ID',
       'notifyChannelId',
+    ]),
+    p2CleaningChannelId: readSecretField(parsed, [
+      'P2cleaningChannelId',
+      'p2CleaningChannelId',
+      'P2 Cleaning Channel Id',
+      'P2_CLEANING_CHANNEL_ID',
+    ]),
+    maintenanceChannelId: readSecretField(parsed, [
+      'maintenanceChannelId',
+      'Maintenance Channel Id',
+      'MAINTENANCE_CHANNEL_ID',
     ]),
     warningsChannelId: readSecretField(parsed, [
       'warningsChannelId',
