@@ -116,7 +116,7 @@ const handleBlockActions = async (payload: Record<string, unknown>) => {
       channelId,
       messageTs,
     });
-    if (!result.ok && responseUrl) {
+    if ((!result.ok || result.alreadyClosed) && responseUrl) {
       await postEphemeral(responseUrl, result.message);
     }
     return slackEmptyAck();

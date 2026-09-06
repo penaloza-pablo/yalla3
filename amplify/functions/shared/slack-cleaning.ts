@@ -286,7 +286,23 @@ export const completeCleaningFromSlack = async (options: {
   messageTs: string;
 }) => {
   const visit = await loadVisit(options.visitsTable, options.visitId);
-  if (!visit || !isOpenCleaningVisit(visit)) {
+  if (!visit) {
+    return { ok: false, message: 'No se encontró la visita.' };
+  }
+  const currentStatus = asString(visit.status).toUpperCase();
+  if (TERMINAL_VISIT_STATUSES.has(currentStatus)) {
+    const nickname = await loadPropertyNickname(
+      process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+      visit,
+    );
+    const text =
+      currentStatus === 'CANCELLED'
+        ? `La limpieza de ${escapeMrkdwn(nickname)} ya estaba cancelada.`
+        : `La limpieza de ${escapeMrkdwn(nickname)} ya estaba marcada como lista.`;
+    await replaceMessage(options.channelId, options.messageTs, text);
+    return { ok: true, alreadyClosed: true, message: text };
+  }
+  if (!isOpenCleaningVisit(visit)) {
     return { ok: false, message: 'La visita ya no está abierta.' };
   }
   if (options.tasksTable) {
