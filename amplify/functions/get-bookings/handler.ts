@@ -533,6 +533,12 @@ export const handler = async (event: HttpEvent) => {
           useIndex: false,
         });
       }
+      if (status) {
+        collected = {
+          ...collected,
+          items: collected.items.filter((item) => matchesStatus(item, status)),
+        };
+      }
       const payload = paginate(
         collected.items,
         collected.scannedCount,

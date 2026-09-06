@@ -145,18 +145,8 @@ export const isCanceledBooking = (status: unknown) => {
   return normalized === 'canceled' || normalized === 'cancelled';
 };
 
-export const isActivePlannerStatus = (status: unknown) => {
-  if (isCanceledBooking(status)) {
-    return false;
-  }
-  const normalized = asString(status).toLowerCase();
-  return (
-    !normalized ||
-    normalized === 'confirmed' ||
-    normalized === 'reserved' ||
-    normalized === 'modified'
-  );
-};
+export const isActivePlannerStatus = (status: unknown) =>
+  asString(status).toLowerCase() === 'confirmed';
 
 const normalizeRuleId = (value: unknown): PlannerRuleId | null => {
   if (value === 'linen' || value === 'giftCard' || value === 'singleGuest') {
@@ -314,9 +304,10 @@ export const computePlannerFields = ({
         linen = LINEN_VALUES.NO;
       } else if (guests >= 3) {
         linen = LINEN_VALUES.YES;
-      } else {
-        warnings.push('linen_ask_guest');
       }
+    }
+    if (!isCanonicalLinenValue(linen)) {
+      warnings.push('linen_ask_guest');
     }
   }
 

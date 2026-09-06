@@ -267,6 +267,19 @@ export const applyPlannerToReservation = async ({
     return { ok: false as const, reason: 'not_found' };
   }
 
+  if (!isActivePlannerStatus(current.Status) && !overrides) {
+    return {
+      ok: true as const,
+      reservationId,
+      patch: computePlannerFields({
+        item: current as BookingPlannerItem,
+        settings,
+        today,
+      }),
+      syncedToGuesty: false,
+    };
+  }
+
   const patch = computePlannerFields({
     item: current as BookingPlannerItem,
     settings,
@@ -327,6 +340,9 @@ export const applyPlannerWindow = async ({
   for (const item of items) {
     const reservationId = String(item.ReservationID ?? '').trim();
     if (!reservationId) {
+      continue;
+    }
+    if (!isActivePlannerStatus(item.Status)) {
       continue;
     }
     try {

@@ -31,3 +31,27 @@ export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
         !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim(),
     ),
   )
+
+const P2_ROOM_NICKNAMES = new Set(
+  Array.from({ length: 12 }, (_, index) => String(201 + index)),
+)
+
+export const isP2RoomNickname = (value: string) =>
+  P2_ROOM_NICKNAMES.has(value.trim())
+
+export const filterBookingsPlannerPropertyOptions = (
+  properties: PropertyOption[],
+) =>
+  sortPropertyOptions(
+    properties.filter((property) => {
+      if (
+        isP2RoomNickname(property.nickname) ||
+        isP2RoomNickname(property.listingNickname)
+      ) {
+        return true
+      }
+      return (
+        !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim()
+      )
+    }),
+  )

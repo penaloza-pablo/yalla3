@@ -370,7 +370,7 @@ async function applyPlannerInline(item) {
   if (!plannerEnabled) return;
 
   const status = String(item.Status?.S || "").toLowerCase();
-  if (status === "canceled" || status === "cancelled") return;
+  if (status !== "confirmed") return;
 
   const today = todayInMadrid();
   const checkIn = toDateOnly(item.CheckInDate?.S);

@@ -11,7 +11,7 @@ import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import { addDaysToDateString, getTodayMadrid } from '../operations/dateHelpers'
 import {
-  filterPropertySelectOptions,
+  filterBookingsPlannerPropertyOptions,
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
@@ -56,13 +56,26 @@ type BookingsApiResponse = {
   nextCursor?: string | null
 }
 
-const LINEN_BADGE: Record<
-  string,
-  { label: string; className: string }
-> = {
-  [LINEN_VALUES.NA]: { label: 'n/a', className: 'status-neutral' },
-  [LINEN_VALUES.NO]: { label: 'no', className: 'status-info' },
-  [LINEN_VALUES.YES]: { label: 'si / yes', className: 'status-success' },
+const LINEN_BADGE_CLASS: Record<string, string> = {
+  [LINEN_VALUES.NA]: 'status-neutral',
+  [LINEN_VALUES.NO]: 'status-info',
+  [LINEN_VALUES.YES]: 'status-success',
+}
+
+const linenBadgeLabel = (
+  value: string,
+  t: (key: string) => string,
+) => {
+  if (value === LINEN_VALUES.NA) {
+    return 'n/a'
+  }
+  if (value === LINEN_VALUES.NO) {
+    return 'no'
+  }
+  if (value === LINEN_VALUES.YES) {
+    return t('bookingsPlan.linenYes')
+  }
+  return t('bookingsPlan.linenUnknown')
 }
 
 const asString = (value: unknown) =>
@@ -81,10 +94,7 @@ const asWarnings = (value: unknown): PlannerWarningCode[] =>
       )
     : []
 
-const isCanceled = (status: string) => {
-  const normalized = status.toLowerCase()
-  return normalized === 'canceled' || normalized === 'cancelled'
-}
+const isConfirmed = (status: string) => status.toLowerCase() === 'confirmed'
 
 const formatDayMonth = (value: string) => {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -140,6 +150,50 @@ const mapRow = (item: Record<string, unknown>): PlanRow => {
   }
 }
 
+const warningsForRow = (row: PlanRow): PlannerWarningCode[] => {
+  if (isCanonicalLinenValue(row.linen) || row.warnings.includes('linen_ask_guest')) {
+    return row.warnings
+  }
+  return [...row.warnings, 'linen_ask_guest']
+}
+
+const CheckIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
+    <path
+      d="M10 1.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17zm3.3 5.7-4.2 5.1-2.2-2.2-1.4 1.4 3 3a1 1 0 0 0 1.5-.1l4.9-6-1.6-1.2z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+const WarningIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
+    <path
+      d="M10 1.6 18.5 17H1.5L10 1.6zM9 8h2v4H9V8zm1 7.2A1.1 1.1 0 1 0 10 13a1.1 1.1 0 0 0 0 2.2z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+const PlanStatusIcon = ({
+  ok,
+  label,
+  onClick,
+}: {
+  ok: boolean
+  label: string
+  onClick?: () => void
+}) => (
+  <button
+    type="button"
+    className={`plan-status-icon ${ok ? 'is-ready' : 'is-warn'}`}
+    aria-label={label}
+    onClick={onClick}
+  >
+    {ok ? <CheckIcon /> : <WarningIcon />}
+  </button>
+)
+
 const SwitchToggle = ({
   on,
   disabled,
@@ -176,40 +230,35 @@ const LinenBadgeSelect = ({
   onToggle: () => void
   onSelect: (linen: string) => void
 }) => {
-  const badge = LINEN_BADGE[value] ?? {
-    label: '( ? )',
-    className: 'status-warning',
-  }
+  const { t } = useTranslation()
+  const className = LINEN_BADGE_CLASS[value] ?? 'status-warning'
   return (
     <div className="linen-badge-wrap">
       <button
         type="button"
-        className={`status linen-badge ${badge.className}`}
+        className={`status linen-badge ${className}`}
         disabled={disabled}
         aria-expanded={open}
         onClick={onToggle}
       >
-        {badge.label}
+        {linenBadgeLabel(value, t)}
       </button>
       {open ? (
         <div className="linen-badge-menu" role="listbox">
-          {LINEN_OPTIONS.map((option) => {
-            const entry = LINEN_BADGE[option]
-            return (
-              <button
-                key={option}
-                type="button"
-                className={`status linen-badge ${entry.className} ${
-                  option === value ? 'is-selected' : ''
-                }`}
-                role="option"
-                aria-selected={option === value}
-                onClick={() => onSelect(option)}
-              >
-                {entry.label}
-              </button>
-            )
-          })}
+          {LINEN_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`status linen-badge ${LINEN_BADGE_CLASS[option]} ${
+                option === value ? 'is-selected' : ''
+              }`}
+              role="option"
+              aria-selected={option === value}
+              onClick={() => onSelect(option)}
+            >
+              {linenBadgeLabel(option, t)}
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
@@ -244,7 +293,7 @@ export function BookingsPlanView({
   )
 
   const properties = useMemo(
-    () => filterPropertySelectOptions(propertyOptions),
+    () => filterBookingsPlannerPropertyOptions(propertyOptions),
     [propertyOptions],
   )
 
@@ -284,6 +333,7 @@ export function BookingsPlanView({
         const query = new URLSearchParams({
           checkInFrom: today,
           checkInTo: to,
+          status: 'confirmed',
           limit: '200',
         })
         if (cursor) {
@@ -298,7 +348,7 @@ export function BookingsPlanView({
 
       const nextRows = items
         .map(mapRow)
-        .filter((row) => row.id && !isCanceled(row.status))
+        .filter((row) => row.id && isConfirmed(row.status))
         .sort((left, right) => {
           if (left.checkIn !== right.checkIn) {
             return left.checkIn.localeCompare(right.checkIn)
@@ -438,7 +488,7 @@ export function BookingsPlanView({
   )
 
   const warningCount = filteredRows.reduce(
-    (sum, row) => sum + row.warnings.length,
+    (sum, row) => sum + warningsForRow(row).length,
     0,
   )
   const canEdit = plannerEnabled
@@ -602,6 +652,10 @@ export function BookingsPlanView({
                 filteredRows.map((row) => {
                   const isExpanded = expandedIds.has(row.id)
                   const isSaving = savingId === row.id
+                  const linenReady = isCanonicalLinenValue(row.linen)
+                  const giftReady = Boolean(row.giftCard.trim())
+                  const accessReady = Boolean(row.access.trim())
+                  const displayWarnings = warningsForRow(row)
                   return (
                     <Fragment key={row.id}>
                       <tr>
@@ -610,46 +664,41 @@ export function BookingsPlanView({
                         <td>{row.property}</td>
                         <td>{row.guests || '—'}</td>
                         <td>
-                          <LinenBadgeSelect
-                            value={
-                              isCanonicalLinenValue(row.linen) ? row.linen : ''
+                          <PlanStatusIcon
+                            ok={linenReady}
+                            label={
+                              linenReady
+                                ? t('bookingsPlan.statusReady')
+                                : t('bookingsPlan.statusNeedsReview')
                             }
-                            disabled={!canEdit || isSaving}
-                            open={openLinenId === row.id}
-                            onToggle={() =>
-                              setOpenLinenId((current) =>
-                                current === row.id ? null : row.id,
-                              )
-                            }
-                            onSelect={(linen) => {
-                              setOpenLinenId(null)
-                              void saveFields(row, { linen })
-                            }}
+                            onClick={() => toggleExpanded(row.id)}
                           />
                         </td>
                         <td>
-                          <SwitchToggle
-                            on={row.giftCardOn}
-                            disabled={!canEdit || isSaving}
-                            label={t('bookingsPlan.giftCard')}
-                            onToggle={() =>
-                              void saveFields(row, {
-                                giftCardOn: !row.giftCardOn,
-                              })
+                          <PlanStatusIcon
+                            ok={giftReady}
+                            label={
+                              giftReady
+                                ? t('bookingsPlan.statusReady')
+                                : t('bookingsPlan.statusNeedsReview')
                             }
+                            onClick={() => toggleExpanded(row.id)}
                           />
                         </td>
                         <td>
-                          <SwitchToggle
-                            on={Boolean(row.access)}
-                            disabled={!canEdit || isSaving}
-                            label={t('bookingsPlan.access')}
-                            onToggle={() => {
-                              if (row.access) {
-                                void saveFields(row, { access: '' })
+                          <PlanStatusIcon
+                            ok={accessReady}
+                            label={
+                              accessReady
+                                ? t('bookingsPlan.statusReady')
+                                : t('bookingsPlan.statusNeedsReview')
+                            }
+                            onClick={() => {
+                              if (!accessReady) {
+                                expandAndFocusAccess(row)
                                 return
                               }
-                              expandAndFocusAccess(row)
+                              toggleExpanded(row.id)
                             }}
                           />
                         </td>
@@ -666,9 +715,9 @@ export function BookingsPlanView({
                           />
                         </td>
                         <td>
-                          {row.warnings.length ? (
+                          {displayWarnings.length ? (
                             <span className="status status-warning">
-                              {row.warnings.length}
+                              {displayWarnings.length}
                             </span>
                           ) : (
                             '—'
@@ -702,11 +751,46 @@ export function BookingsPlanView({
                               </div>
                               <div>
                                 <p className="detail-label">
+                                  {t('bookingsPlan.linen')}
+                                </p>
+                                <LinenBadgeSelect
+                                  value={
+                                    isCanonicalLinenValue(row.linen)
+                                      ? row.linen
+                                      : ''
+                                  }
+                                  disabled={!canEdit || isSaving}
+                                  open={openLinenId === row.id}
+                                  onToggle={() =>
+                                    setOpenLinenId((current) =>
+                                      current === row.id ? null : row.id,
+                                    )
+                                  }
+                                  onSelect={(linen) => {
+                                    setOpenLinenId(null)
+                                    void saveFields(row, { linen })
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <p className="detail-label">
                                   {t('bookingsPlan.giftCard')}
                                 </p>
-                                <p className="detail-value">
-                                  {row.giftCard.trim() || '—'}
-                                </p>
+                                <div className="plan-detail-control">
+                                  <SwitchToggle
+                                    on={row.giftCardOn}
+                                    disabled={!canEdit || isSaving}
+                                    label={t('bookingsPlan.giftCard')}
+                                    onToggle={() =>
+                                      void saveFields(row, {
+                                        giftCardOn: !row.giftCardOn,
+                                      })
+                                    }
+                                  />
+                                  <p className="detail-value">
+                                    {row.giftCard.trim() || '—'}
+                                  </p>
+                                </div>
                               </div>
                               <div className="detail-span-2">
                                 <p className="detail-label">
@@ -738,13 +822,13 @@ export function BookingsPlanView({
                                   </p>
                                 )}
                               </div>
-                              {row.warnings.length ? (
+                              {displayWarnings.length ? (
                                 <div className="detail-span">
                                   <p className="detail-label">
                                     {t('bookingsPlan.warnings')}
                                   </p>
                                   <ul className="planner-warning-list">
-                                    {row.warnings.map((code) => (
+                                    {displayWarnings.map((code) => (
                                       <li key={code}>
                                         {t(`bookingsPlan.warning.${code}`)}
                                       </li>

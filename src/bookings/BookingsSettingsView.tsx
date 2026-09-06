@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import {
-  filterPropertySelectOptions,
+  filterBookingsPlannerPropertyOptions,
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
@@ -64,7 +64,7 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<PlannerRuleId | null>(null)
   const properties = useMemo(
-    () => filterPropertySelectOptions(propertyOptions),
+    () => filterBookingsPlannerPropertyOptions(propertyOptions),
     [propertyOptions],
   )
 
