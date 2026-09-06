@@ -1116,6 +1116,7 @@ syncTaskToGuesty.grantInvoke(backend.upsertCleaningPlan.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertMaintenancePlan.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertVisit.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertTask.resources.lambda);
+syncTaskToGuesty.grantInvoke(backend.handleSlackCommand.resources.lambda);
 
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,

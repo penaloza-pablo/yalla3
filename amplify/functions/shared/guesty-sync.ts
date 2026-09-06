@@ -1,4 +1,5 @@
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { reassertVisitSchedule } from './visit-task-utils';
 
 const lambdaClient = new LambdaClient({});
 
@@ -43,16 +44,18 @@ export const hasGuestyTaskId = (item: Record<string, unknown>) =>
 export const invokeGuestyTaskSync = async (options: {
   tableName: string;
   id: string;
+  invocationType?: 'Event' | 'RequestResponse';
 }): Promise<GuestySyncResult> => {
   const functionName = process.env.SYNC_TASK_TO_GUESTY_FUNCTION;
   if (!functionName) {
     return { ok: false, error: 'SYNC_TASK_TO_GUESTY_FUNCTION is not configured.' };
   }
 
+  const invocationType = options.invocationType ?? 'RequestResponse';
   const response = await lambdaClient.send(
     new InvokeCommand({
       FunctionName: functionName,
-      InvocationType: 'RequestResponse',
+      InvocationType: invocationType,
       Payload: Buffer.from(
         JSON.stringify({
           tableName: options.tableName,
@@ -61,6 +64,10 @@ export const invokeGuestyTaskSync = async (options: {
       ),
     }),
   );
+
+  if (invocationType === 'Event') {
+    return { ok: true };
+  }
 
   const payloadText = response.Payload
     ? Buffer.from(response.Payload).toString('utf8')
@@ -85,6 +92,23 @@ export const invokeGuestyTaskSync = async (options: {
   }
 
   return { ok: true };
+};
+
+export const invokeGuestyTaskSyncAndReassert = async (options: {
+  tableName: string;
+  id: string;
+  visit: Record<string, unknown>;
+}): Promise<GuestySyncResult> => {
+  const syncResult = await invokeGuestyTaskSync({
+    tableName: options.tableName,
+    id: options.id,
+  });
+  try {
+    await reassertVisitSchedule(options.tableName, options.id, options.visit);
+  } catch (error) {
+    console.error('Failed to reassert visit schedule after Guesty sync', error);
+  }
+  return syncResult;
 };
 
 export const invokeGuestyTaskRefresh = async (options: {

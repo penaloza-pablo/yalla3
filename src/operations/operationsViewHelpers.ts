@@ -43,6 +43,21 @@ export const getVisitTimeRange = (visit: VisitRecord) => {
   return { start, end }
 }
 
+export const visitScheduleWriteFields = (visit: VisitRecord) => {
+  const range = getVisitTimeRange(visit)
+  const start = visit.scheduledStartTime?.trim() || formatMinutesAsTime(range.start)
+  const storedEnd = visit.scheduledEndTime?.trim()
+  const end =
+    storedEnd && parseTimeToMinutes(storedEnd) > parseTimeToMinutes(start)
+      ? storedEnd
+      : formatMinutesAsTime(range.end)
+  return {
+    scheduledStartTime: start,
+    scheduledEndTime: end,
+    estimatedDurationMinutes: Math.max(1, range.end - range.start),
+  }
+}
+
 export const isTerminalVisit = (visit: VisitRecord) =>
   visit.status === 'COMPLETED' || visit.status === 'CANCELLED'
 

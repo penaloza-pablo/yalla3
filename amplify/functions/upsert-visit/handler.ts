@@ -5,7 +5,7 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import { recordCleaningCompletion } from '../shared/cleaner-stats';
-import { hasGuestyTaskId, invokeGuestyTaskRefresh, invokeGuestyTaskSync } from '../shared/guesty-sync';
+import { hasGuestyTaskId, invokeGuestyTaskRefresh, invokeGuestyTaskSyncAndReassert } from '../shared/guesty-sync';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -17,6 +17,7 @@ import {
   docClient,
   getNextSequentialId,
   mergeUserEditResponseItem,
+  durationMinutesFromSchedule,
   patchUserOriginatedRecord,
   putItem,
   cancelVisitTasksOnVisitCancel,
@@ -308,6 +309,20 @@ export const handler = async (event: {
           ? existing.comments
           : '',
     estimatedDurationMinutes:
+      durationMinutesFromSchedule(
+        payload.scheduledStartTime?.trim() ??
+          (typeof existing?.scheduledStartTime === 'string'
+            ? existing.scheduledStartTime
+            : ''),
+        payload.scheduledEndTime?.trim() ??
+          (typeof existing?.scheduledEndTime === 'string'
+            ? existing.scheduledEndTime
+            : ''),
+        payload.estimatedDurationMinutes ??
+          (typeof existing?.estimatedDurationMinutes === 'number'
+            ? existing.estimatedDurationMinutes
+            : undefined),
+      ) ??
       payload.estimatedDurationMinutes ??
       (typeof existing?.estimatedDurationMinutes === 'number'
         ? existing.estimatedDurationMinutes
@@ -460,9 +475,10 @@ export const handler = async (event: {
 
     if (isUpdate && typeof item.id === 'string' && hasGuestyTaskId(item)) {
       try {
-        const syncResult = await invokeGuestyTaskSync({
+        const syncResult = await invokeGuestyTaskSyncAndReassert({
           tableName: visitsTable,
           id: item.id,
+          visit: item,
         });
         if (!syncResult.ok) {
           console.error('Failed to sync visit to Guesty', syncResult.error);

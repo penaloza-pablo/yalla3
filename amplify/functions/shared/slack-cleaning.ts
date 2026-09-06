@@ -7,10 +7,12 @@ import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
 } from './slack-notifications';
+import { hasGuestyTaskId, invokeGuestyTaskSync } from './guesty-sync';
 import {
   docClient,
   getNowTimeInMadrid,
   patchUserOriginatedRecord,
+  reassertVisitSchedule,
   TERMINAL_VISIT_STATUSES,
   visitHasOpenTasks,
 } from './visit-task-utils';
@@ -314,12 +316,35 @@ export const completeCleaningFromSlack = async (options: {
   await patchUserOriginatedRecord(options.visitsTable, options.visitId, {
     set: setFields,
   });
+  const completedVisit = {
+    ...visit,
+    ...setFields,
+    id: options.visitId,
+  };
+  if (hasGuestyTaskId(completedVisit)) {
+    try {
+      await reassertVisitSchedule(
+        options.visitsTable,
+        options.visitId,
+        completedVisit,
+      );
+      const syncResult = await invokeGuestyTaskSync({
+        tableName: options.visitsTable,
+        id: options.visitId,
+        invocationType: 'Event',
+      });
+      if (!syncResult.ok) {
+        console.error(
+          'Failed to sync Slack completion to Guesty',
+          syncResult.error,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to sync Slack completion to Guesty', error);
+    }
+  }
   try {
-    await recordCleaningCompletion({
-      ...visit,
-      ...setFields,
-      id: options.visitId,
-    });
+    await recordCleaningCompletion(completedVisit);
   } catch (error) {
     console.error('Failed to record cleaning completion from Slack', error);
   }

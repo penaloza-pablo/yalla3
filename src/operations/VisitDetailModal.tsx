@@ -15,6 +15,7 @@ import {
   saveVisit,
   canRefreshVisitFromGuesty,
 } from './api'
+import { visitScheduleWriteFields } from './operationsViewHelpers'
 import { formatDayMonthLabel } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
@@ -836,6 +837,9 @@ export function VisitDetailModal({
         id: visit.id,
         status,
         closedBy,
+        ...(status === 'COMPLETED' || status === 'CANCELLED'
+          ? visitScheduleWriteFields(visit)
+          : {}),
         ...extra,
       })
       setMessage(successMessage ?? t('operations.visitSaved'))

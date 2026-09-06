@@ -25,6 +25,7 @@ import {
   formatAgendaDayLabel,
   getAgendaDateRange,
   isTerminalVisit,
+  visitScheduleWriteFields,
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
@@ -1576,6 +1577,9 @@ export function DailyOperationsView({
         id: visit.id,
         status,
         closedBy,
+        ...(status === 'COMPLETED' || status === 'CANCELLED'
+          ? visitScheduleWriteFields(visit)
+          : {}),
         ...extra,
       })
       setMessage(successMessage ?? `Visit marked as ${status}.`)

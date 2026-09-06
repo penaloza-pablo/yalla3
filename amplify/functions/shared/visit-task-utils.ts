@@ -29,6 +29,76 @@ export const getNowTimeInMadrid = () => {
   return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
 };
 
+export const parseHhMmToMinutes = (value?: string) => {
+  const match = String(value ?? '')
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null;
+  }
+  return hours * 60 + minutes;
+};
+
+export const durationMinutesFromSchedule = (
+  startTime?: string,
+  endTime?: string,
+  storedMinutes?: unknown,
+) => {
+  const start = parseHhMmToMinutes(startTime);
+  const end = parseHhMmToMinutes(endTime);
+  if (start != null && end != null && end > start) {
+    return end - start;
+  }
+  const stored = Number(storedMinutes);
+  if (!Number.isFinite(stored) || stored <= 0) {
+    return undefined;
+  }
+  // Guesty plannedDuration is hours and was sometimes stored in this field.
+  if (!Number.isInteger(stored) && stored < 24) {
+    return Math.max(1, Math.round(stored * 60));
+  }
+  return Math.round(stored);
+};
+
+export const reassertVisitSchedule = async (
+  tableName: string,
+  visitId: string,
+  visit: Record<string, unknown>,
+) => {
+  const start =
+    typeof visit.scheduledStartTime === 'string'
+      ? visit.scheduledStartTime.trim()
+      : '';
+  const end =
+    typeof visit.scheduledEndTime === 'string'
+      ? visit.scheduledEndTime.trim()
+      : '';
+  if (!start && !end) {
+    return;
+  }
+  const durationMinutes = durationMinutesFromSchedule(
+    start,
+    end,
+    visit.estimatedDurationMinutes,
+  );
+  const set: Record<string, unknown> = {};
+  if (start) {
+    set.scheduledStartTime = start;
+  }
+  if (end) {
+    set.scheduledEndTime = end;
+  }
+  if (durationMinutes != null) {
+    set.estimatedDurationMinutes = durationMinutes;
+  }
+  await patchUserOriginatedRecord(tableName, visitId, { set });
+};
+
 export const TERMINAL_VISIT_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
 
 export const resolveVisitStatus = (visit: {
