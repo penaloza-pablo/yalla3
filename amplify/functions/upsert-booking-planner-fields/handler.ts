@@ -46,7 +46,10 @@ export const handler = async (event: {
   }
 
   const payload = parseBody<FieldsPayload>(event.body);
-  const reservationId = payload?.reservationId?.trim();
+  if (!payload) {
+    return buildHttpResponse(400, { message: 'Payload is required.' });
+  }
+  const reservationId = payload.reservationId?.trim();
   if (!reservationId) {
     return buildHttpResponse(400, { message: 'reservationId is required.' });
   }

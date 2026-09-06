@@ -460,9 +460,10 @@ for (const fn of [
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
 ]) {
-  fn.resources.lambda.addLayers(guestyAuthLayer);
-  fn.resources.lambda.addToRolePolicy(guestySecretsPolicy);
-  fn.resources.lambda.addToRolePolicy(guestySsmPolicy);
+  const lambdaFn = fn.resources.lambda as LambdaFunction;
+  lambdaFn.addLayers(guestyAuthLayer);
+  lambdaFn.addToRolePolicy(guestySecretsPolicy);
+  lambdaFn.addToRolePolicy(guestySsmPolicy);
 }
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
 reviewsTable.grantReadData(backend.getTodaySummary.resources.lambda);
