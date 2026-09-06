@@ -1,6 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { RemovalPolicy } from 'aws-cdk-lib';
-import { Function as LambdaFunction, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion } from 'aws-cdk-lib/aws-lambda';
 import {
   AttributeType,
   BillingMode,
@@ -30,6 +30,10 @@ import { getProperties } from './functions/get-properties/resource';
 import { upsertProperty } from './functions/upsert-property/resource';
 import { deleteProperty } from './functions/delete-property/resource';
 import { getBookings } from './functions/get-bookings/resource';
+import { getBookingsPlannerSettings } from './functions/get-bookings-planner-settings/resource';
+import { upsertBookingsPlannerSettings } from './functions/upsert-bookings-planner-settings/resource';
+import { applyBookingsPlanner } from './functions/apply-bookings-planner/resource';
+import { upsertBookingPlannerFields } from './functions/upsert-booking-planner-fields/resource';
 import { getReviews } from './functions/get-reviews/resource';
 import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
 import { updateReviewWorkflow } from './functions/update-review-workflow/resource';
@@ -104,6 +108,10 @@ const backend = defineBackend({
   upsertProperty,
   deleteProperty,
   getBookings,
+  getBookingsPlannerSettings,
+  upsertBookingsPlannerSettings,
+  applyBookingsPlanner,
+  upsertBookingPlannerFields,
   getReviews,
   getReviewsSyncState,
   updateReviewWorkflow,
@@ -179,6 +187,10 @@ const lambdaFunctionsWithHttp = [
   backend.upsertProperty,
   backend.deleteProperty,
   backend.getBookings,
+  backend.getBookingsPlannerSettings,
+  backend.upsertBookingsPlannerSettings,
+  backend.applyBookingsPlanner,
+  backend.upsertBookingPlannerFields,
   backend.getReviews,
   backend.getReviewsSyncState,
   backend.updateReviewWorkflow,
@@ -330,6 +342,14 @@ propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantReadWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantReadWriteData(backend.deleteProperty.resources.lambda);
 bookingsTable.grantReadData(backend.getBookings.resources.lambda);
+bookingsTable.grantReadData(backend.getTodaySummary.resources.lambda);
+bookingsTable.grantReadWriteData(
+  backend.upsertBookingsPlannerSettings.resources.lambda,
+);
+bookingsTable.grantReadWriteData(backend.applyBookingsPlanner.resources.lambda);
+bookingsTable.grantReadWriteData(
+  backend.upsertBookingPlannerFields.resources.lambda,
+);
 backend.getBookings.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: [
@@ -346,6 +366,104 @@ backend.getBookings.resources.lambda.addToRolePolicy(
     ],
   }),
 );
+const bookingsPlannerIndexPolicy = new PolicyStatement({
+  actions: [
+    'dynamodb:Query',
+    'dynamodb:Scan',
+    'dynamodb:GetItem',
+    'dynamodb:BatchGetItem',
+    'dynamodb:UpdateItem',
+    'dynamodb:PutItem',
+  ],
+  resources: [
+    bookingsTable.tableArn,
+    `${bookingsTable.tableArn}/index/CheckInDate-index`,
+  ],
+});
+backend.getTodaySummary.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
+);
+backend.upsertBookingsPlannerSettings.resources.lambda.addToRolePolicy(
+  bookingsPlannerIndexPolicy,
+);
+backend.applyBookingsPlanner.resources.lambda.addToRolePolicy(
+  bookingsPlannerIndexPolicy,
+);
+backend.upsertBookingPlannerFields.resources.lambda.addToRolePolicy(
+  bookingsPlannerIndexPolicy,
+);
+
+const bookingsPlannerSettingsTable = Table.fromTableName(
+  dataStack,
+  'BookingsPlannerSettingsTable',
+  'yalla-bookings-planner-settings',
+);
+backend.getBookingsPlannerSettings.addEnvironment(
+  'TABLE_NAME',
+  bookingsPlannerSettingsTable.tableName,
+);
+backend.upsertBookingsPlannerSettings.addEnvironment(
+  'TABLE_NAME',
+  bookingsPlannerSettingsTable.tableName,
+);
+backend.applyBookingsPlanner.addEnvironment(
+  'TABLE_NAME',
+  bookingsPlannerSettingsTable.tableName,
+);
+backend.upsertBookingPlannerFields.addEnvironment(
+  'TABLE_NAME',
+  bookingsPlannerSettingsTable.tableName,
+);
+backend.getTodaySummary.addEnvironment(
+  'BOOKINGS_TABLE',
+  bookingsTable.tableName,
+);
+backend.getTodaySummary.addEnvironment(
+  'BOOKINGS_PLANNER_SETTINGS_TABLE',
+  bookingsPlannerSettingsTable.tableName,
+);
+bookingsPlannerSettingsTable.grantReadData(
+  backend.getBookingsPlannerSettings.resources.lambda,
+);
+bookingsPlannerSettingsTable.grantReadData(backend.getTodaySummary.resources.lambda);
+bookingsPlannerSettingsTable.grantReadWriteData(
+  backend.upsertBookingsPlannerSettings.resources.lambda,
+);
+bookingsPlannerSettingsTable.grantReadData(
+  backend.applyBookingsPlanner.resources.lambda,
+);
+bookingsPlannerSettingsTable.grantReadData(
+  backend.upsertBookingPlannerFields.resources.lambda,
+);
+
+const guestyAuthLayer = LayerVersion.fromLayerVersionArn(
+  dataStack,
+  'GuestyAuthLayer',
+  'arn:aws:lambda:eu-central-1:471112597523:layer:guesty-auth-layer:3',
+);
+const guestySecretsPolicy = new PolicyStatement({
+  actions: ['secretsmanager:GetSecretValue'],
+  resources: ['*'],
+});
+const guestySsmPolicy = new PolicyStatement({
+  actions: ['ssm:GetParameter', 'ssm:PutParameter'],
+  resources: ['*'],
+});
+for (const fn of [
+  backend.upsertBookingsPlannerSettings,
+  backend.applyBookingsPlanner,
+  backend.upsertBookingPlannerFields,
+]) {
+  fn.resources.lambda.addLayers(guestyAuthLayer);
+  fn.resources.lambda.addToRolePolicy(guestySecretsPolicy);
+  fn.resources.lambda.addToRolePolicy(guestySsmPolicy);
+}
 reviewsTable.grantReadData(backend.getReviews.resources.lambda);
 reviewsTable.grantReadData(backend.getTodaySummary.resources.lambda);
 reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
@@ -445,6 +563,8 @@ const activityLogWriters = [
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
   backend.proxyGuestyBookingsSync,
+  backend.upsertBookingsPlannerSettings,
+  backend.upsertBookingPlannerFields,
   backend.completeSpotCheck,
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
@@ -1173,6 +1293,22 @@ const deletePropertyUrl = backend.deleteProperty.resources.lambda.addFunctionUrl
 const getBookingsUrl = backend.getBookings.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getBookingsPlannerSettingsUrl =
+  backend.getBookingsPlannerSettings.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertBookingsPlannerSettingsUrl =
+  backend.upsertBookingsPlannerSettings.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const applyBookingsPlannerUrl =
+  backend.applyBookingsPlanner.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertBookingPlannerFieldsUrl =
+  backend.upsertBookingPlannerFields.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getReviewsUrl = backend.getReviews.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1384,6 +1520,10 @@ backend.addOutput({
     upsertPropertyUrl: upsertPropertyUrl.url,
     deletePropertyUrl: deletePropertyUrl.url,
     getBookingsUrl: getBookingsUrl.url,
+    getBookingsPlannerSettingsUrl: getBookingsPlannerSettingsUrl.url,
+    upsertBookingsPlannerSettingsUrl: upsertBookingsPlannerSettingsUrl.url,
+    applyBookingsPlannerUrl: applyBookingsPlannerUrl.url,
+    upsertBookingPlannerFieldsUrl: upsertBookingPlannerFieldsUrl.url,
     getReviewsUrl: getReviewsUrl.url,
     getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
     updateReviewWorkflowUrl: updateReviewWorkflowUrl.url,

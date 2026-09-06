@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
+  BatchGetCommand,
   DynamoDBDocumentClient,
   QueryCommand,
   ScanCommand,
@@ -38,6 +39,76 @@ const PROJECTED_FIELDS = [
 const EXPRESSION_NAMES = {
   '#status': 'Status',
   '#source': 'Source',
+};
+const PLANNER_ATTRIBUTES = [
+  'ConfirmationCode',
+  'GiftCard',
+  'Linen',
+  'EarlyCheckIn',
+  'GiftCardOn',
+  'EarlyCheckInOn',
+  'PlannerWarnings',
+  'PlannerWarningCount',
+];
+const PLANNER_PROJECTION = [
+  'ReservationID',
+  ...PLANNER_ATTRIBUTES,
+  '#access',
+].join(', ');
+const PLANNER_EXPRESSION_NAMES = {
+  '#access': 'Access',
+};
+
+const hydratePlannerFields = async (
+  tableName: string,
+  items: Record<string, unknown>[],
+) => {
+  const ids = [
+    ...new Set(
+      items
+        .map((item) => String(item.ReservationID ?? '').trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (ids.length === 0) {
+    return items;
+  }
+
+  const extras = new Map<string, Record<string, unknown>>();
+  let keys: Record<string, unknown>[] = ids.map((id) => ({
+    ReservationID: id,
+  }));
+
+  for (let attempt = 0; attempt < 3 && keys.length > 0; attempt += 1) {
+    const nextKeys: Record<string, unknown>[] = [];
+    for (let offset = 0; offset < keys.length; offset += 100) {
+      const chunk = keys.slice(offset, offset + 100);
+      const result = await client.send(
+        new BatchGetCommand({
+          RequestItems: {
+            [tableName]: {
+              Keys: chunk,
+              ProjectionExpression: PLANNER_PROJECTION,
+              ExpressionAttributeNames: PLANNER_EXPRESSION_NAMES,
+            },
+          },
+        }),
+      );
+      const page = result.Responses?.[tableName] ?? [];
+      for (const item of page) {
+        extras.set(String(item.ReservationID ?? ''), item);
+      }
+      const unprocessed =
+        result.UnprocessedKeys?.[tableName]?.Keys ?? [];
+      nextKeys.push(...unprocessed);
+    }
+    keys = nextKeys;
+  }
+
+  return items.map((item) => {
+    const extra = extras.get(String(item.ReservationID ?? ''));
+    return extra ? { ...item, ...extra } : item;
+  });
 };
 
 type HttpEvent = {
@@ -429,12 +500,13 @@ export const handler = async (event: HttpEvent) => {
         toIsoDate(onDate),
         status,
       );
+      const items = await hydratePlannerFields(tableName, collected.items);
       const payload = {
-        items: collected.items,
-        count: collected.items.length,
+        items,
+        count: items.length,
         scannedCount: collected.scannedCount,
         nextCursor: null,
-        pageSize: collected.items.length,
+        pageSize: items.length,
       };
       return isHttp ? jsonResponse(200, payload) : payload;
     }
@@ -467,14 +539,17 @@ export const handler = async (event: HttpEvent) => {
         limit,
         cursor,
       );
+      payload.items = await hydratePlannerFields(tableName, payload.items);
+      payload.count = payload.items.length;
       return isHttp ? jsonResponse(200, payload) : payload;
     }
 
     try {
       const scanned = await scanPage(tableName, limit, cursor, true);
+      const items = await hydratePlannerFields(tableName, scanned.items);
       const payload = {
-        items: scanned.items,
-        count: scanned.items.length,
+        items,
+        count: items.length,
         scannedCount: scanned.scannedCount,
         nextCursor: encodeCursor(scanned.lastEvaluatedKey),
         pageSize: limit,
@@ -485,9 +560,10 @@ export const handler = async (event: HttpEvent) => {
         throw error;
       }
       const scanned = await scanPage(tableName, limit, cursor, false);
+      const items = await hydratePlannerFields(tableName, scanned.items);
       const payload = {
-        items: scanned.items,
-        count: scanned.items.length,
+        items,
+        count: items.length,
         scannedCount: scanned.scannedCount,
         nextCursor: encodeCursor(scanned.lastEvaluatedKey),
         pageSize: limit,

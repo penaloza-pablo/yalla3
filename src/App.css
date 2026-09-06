@@ -1201,6 +1201,10 @@ th {
   grid-column: span 4;
 }
 
+.detail-span-2 {
+  grid-column: span 2;
+}
+
 .detail-label {
   margin: 0 0 6px;
   color: #667085;
@@ -4250,13 +4254,23 @@ th {
   .data-table-properties td:nth-child(5)::before { content: 'Area'; }
   .data-table-properties td:nth-child(6)::before { content: 'Status'; }
 
-  .data-table-bookings td:nth-child(1)::before { content: 'Booking'; }
-  .data-table-bookings td:nth-child(2)::before { content: 'Guest'; }
-  .data-table-bookings td:nth-child(3)::before { content: 'Property'; }
-  .data-table-bookings td:nth-child(4)::before { content: 'Check-in'; }
-  .data-table-bookings td:nth-child(5)::before { content: 'Check-out'; }
-  .data-table-bookings td:nth-child(6)::before { content: 'Status'; }
-  .data-table-bookings td:nth-child(7)::before { content: 'Source'; }
+  .data-table-bookings td:nth-child(1)::before { content: 'Guest'; }
+  .data-table-bookings td:nth-child(2)::before { content: 'Property'; }
+  .data-table-bookings td:nth-child(3)::before { content: 'Check-in'; }
+  .data-table-bookings td:nth-child(4)::before { content: 'Check-out'; }
+  .data-table-bookings td:nth-child(5)::before { content: 'Status'; }
+  .data-table-bookings td:nth-child(6)::before { content: 'Actions'; }
+
+  .data-table-bookings-plan td:nth-child(1)::before { content: 'Check-in'; }
+  .data-table-bookings-plan td:nth-child(2)::before { content: 'Guest'; }
+  .data-table-bookings-plan td:nth-child(3)::before { content: 'Property'; }
+  .data-table-bookings-plan td:nth-child(4)::before { content: 'Guests'; }
+  .data-table-bookings-plan td:nth-child(5)::before { content: 'Sofa bed'; }
+  .data-table-bookings-plan td:nth-child(6)::before { content: 'Gift Card'; }
+  .data-table-bookings-plan td:nth-child(7)::before { content: 'Access'; }
+  .data-table-bookings-plan td:nth-child(8)::before { content: 'Early Check-in'; }
+  .data-table-bookings-plan td:nth-child(9)::before { content: 'Warnings'; }
+  .data-table-bookings-plan td:nth-child(10)::before { content: 'Actions'; }
 
   .data-table-reviews td:nth-child(1)::before { content: 'Guest'; }
   .data-table-reviews td:nth-child(2)::before { content: 'Listing'; }
@@ -4346,16 +4360,15 @@ th {
   /* Full-width secondary fields (title / description / listing / guest…) */
   .data-table-properties td:nth-child(2),
   .data-table-bookings td:nth-child(2),
-  .data-table-bookings td:nth-child(3),
   .data-table-reviews td:nth-child(2),
   .data-table-alerts td:nth-child(2),
   .data-table-logs td:nth-child(4) {
     grid-column: 1 / -1;
   }
 
-  /* Bookings: check-in / check-out / status on one line; source full width */
-  .data-table-bookings td:nth-child(7) {
-    grid-column: 1 / -1;
+  /* Bookings: check-in / check-out / status on one line */
+  .data-table-bookings tbody tr:not(.detail-row) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   /* Properties: Type|Room then Area|Status */
@@ -4382,6 +4395,7 @@ th {
   .data-table-inventory td:nth-child(5),
   .data-table-purchases td:nth-child(5),
   .data-table-subtractions td:nth-child(5),
+  .data-table-bookings td:nth-child(6),
   .data-table-reviews td:nth-child(6),
   .data-table-alerts td:nth-child(5),
   .data-table-maintenance-billing td:nth-child(7) {
@@ -4399,6 +4413,7 @@ th {
   .data-table-inventory td:nth-child(5)::before,
   .data-table-purchases td:nth-child(5)::before,
   .data-table-subtractions td:nth-child(5)::before,
+  .data-table-bookings td:nth-child(6)::before,
   .data-table-reviews td:nth-child(6)::before,
   .data-table-alerts td:nth-child(5)::before,
   .data-table-maintenance-billing td:nth-child(7)::before {
@@ -5398,4 +5413,135 @@ th {
   .data-table-cleaning-incidents td:nth-child(4)::before { content: 'Description'; }
   .data-table-cleaning-incidents td:nth-child(5)::before { content: 'Actions'; }
 }
+
+.planner-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.planner-switch.compact {
+  font-weight: 500;
+}
+
+.planner-switch input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+}
+
+.property-exclusion-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+}
+
+.table-help {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.planner-warning-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #b54708;
+}
+
+.data-table-bookings-plan select,
+.data-table-bookings-plan input[type='text'],
+.data-table-bookings-plan input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 120px;
+}
+
+.yalla-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #d0d5dd;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.yalla-switch.is-on {
+  background: #1570ef;
+}
+
+.yalla-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.yalla-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 18%);
+  transition: transform 0.2s ease;
+}
+
+.yalla-switch.is-on .yalla-switch-knob {
+  transform: translateX(18px);
+}
+
+.linen-badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.linen-badge {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.linen-badge:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.linen-badge-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 92px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / 12%);
+}
+
+.linen-badge-menu .linen-badge.is-selected {
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+@media (max-width: 768px) {
+  .detail-span-2 {
+    grid-column: span 1;
+  }
+}
+
+
 

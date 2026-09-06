@@ -26,6 +26,10 @@ import {
   getTodayInMadrid,
   resolveVisitStatus,
 } from '../shared/visit-task-utils';
+import {
+  getPlannerSettings,
+  sumPlannerWarnings,
+} from '../shared/bookings-planner-apply';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -394,6 +398,22 @@ export const handler = async (event: HttpEvent) => {
       }
     }
 
+    const bookingsTable = process.env.BOOKINGS_TABLE || 'yalla-bookings';
+    const plannerSettingsTable = process.env.BOOKINGS_PLANNER_SETTINGS_TABLE;
+    let plannerWarnings = 0;
+    if (plannerSettingsTable) {
+      try {
+        const plannerSettings = await getPlannerSettings(plannerSettingsTable);
+        plannerWarnings = await sumPlannerWarnings(
+          bookingsTable,
+          plannerSettings,
+          today,
+        );
+      } catch (error) {
+        console.error('Failed to load planner warnings', error);
+      }
+    }
+
     return buildHttpResponse(200, {
       date: today,
       cleaning: {
@@ -416,6 +436,9 @@ export const handler = async (event: HttpEvent) => {
       },
       unassignedTasks: {
         pending: unassignedPending,
+      },
+      planner: {
+        warnings: plannerWarnings,
       },
       inventory: {
         waitingDelivery,

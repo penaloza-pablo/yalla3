@@ -14,11 +14,14 @@ export const NAVIGATION: NavGroup[] = [
     section: 'Ops',
     items: [
       'Properties',
-      'Bookings',
       'Reviews',
       'Unassigned tasks',
       'Visit templates',
     ],
+  },
+  {
+    section: 'Bookings',
+    items: ['Bookings', 'Bookings Plan', 'Bookings settings'],
   },
   {
     section: 'Cleaning',
@@ -209,6 +212,8 @@ export const ROLE_SEEDS: {
         'Subtractions',
         'Properties',
         'Bookings',
+        'Bookings Plan',
+        'Bookings settings',
         'Reviews',
         'Unassigned tasks',
         'Visit templates',
@@ -249,6 +254,8 @@ export const ROLE_SEEDS: {
         'Inventory',
         'Properties',
         'Bookings',
+        'Bookings Plan',
+        'Bookings settings',
         'Unassigned tasks',
         'Maintenance Plan',
         'Maintenance Incidents',

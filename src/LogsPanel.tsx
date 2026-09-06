@@ -39,6 +39,8 @@ const FEATURE_OPTIONS = [
   'Alerts',
   'Properties',
   'Bookings',
+  'Bookings Plan',
+  'Bookings settings',
   'Reviews',
   'Daily Operations',
   'Cleaning Plan',

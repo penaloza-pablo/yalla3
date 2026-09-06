@@ -14,6 +14,8 @@ export const LOG_FEATURES = {
   ALERTS: 'Alerts',
   PROPERTIES: 'Properties',
   BOOKINGS: 'Bookings',
+  BOOKINGS_PLAN: 'Bookings Plan',
+  BOOKINGS_SETTINGS: 'Bookings settings',
   REVIEWS: 'Reviews',
   OPERATIONS: 'Daily Operations',
   CLEANING_PLAN: 'Cleaning Plan',

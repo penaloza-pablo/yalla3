@@ -30,6 +30,8 @@ import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
+import { BookingsPlanView } from './bookings/BookingsPlanView'
+import { BookingsSettingsView } from './bookings/BookingsSettingsView'
 import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView'
 import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
@@ -235,6 +237,7 @@ type ReviewSyncStateApiResponse = {
 
 type BookingRow = {
   id: string
+  confirmationCode: string
   guestName: string
   property: string
   checkInRaw: string
@@ -243,6 +246,11 @@ type BookingRow = {
   checkOut: string
   status: string
   source: string
+  giftCard: string
+  linen: string
+  guestCount: string
+  earlyCheckIn: string
+  access: string
 }
 
 type ReviewRow = {
@@ -462,7 +470,15 @@ const bookingFieldMap = {
   ],
   status: ['status', 'Status', 'reservationStatus', 'bookingStatus'],
   source: ['source', 'Source', 'channel', 'Channel', 'pms', 'PMS'],
+  confirmationCode: ['ConfirmationCode', 'confirmationCode'],
+  giftCard: ['GiftCard', 'giftCard', 'specialRequests'],
+  linen: ['Linen', 'linen'],
+  guestCount: ['Guests', 'guests', 'GuestCount', 'guestCount', 'guestsCount'],
+  earlyCheckIn: ['EarlyCheckIn', 'earlyCheckIn'],
+  access: ['Access', 'access'],
 }
+
+const displayBookingDetail = (value: string) => value.trim() || '—'
 
 const reviewFieldMap = {
   reviewId: ['ReviewID', 'reviewId', 'id', 'ID'],
@@ -1174,8 +1190,13 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
   const checkInRaw = getStringValue(getItemValue(item, bookingFieldMap.checkIn))
   const checkOutRaw = getStringValue(getItemValue(item, bookingFieldMap.checkOut))
 
+  const guestCountValue = getItemValue(item, bookingFieldMap.guestCount)
+
   return {
     id: getStringValue(getItemValue(item, bookingFieldMap.id)) || '—',
+    confirmationCode: getStringValue(
+      getItemValue(item, bookingFieldMap.confirmationCode),
+    ),
     guestName: getStringValue(getItemValue(item, bookingFieldMap.guestName)) || '—',
     property: getStringValue(getItemValue(item, bookingFieldMap.property)) || '—',
     checkInRaw,
@@ -1183,7 +1204,17 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
     checkOutRaw,
     checkOut: formatUpdatedDate(checkOutRaw),
     status: getStringValue(getItemValue(item, bookingFieldMap.status)) || 'Unknown',
-    source: getStringValue(getItemValue(item, bookingFieldMap.source)) || '—',
+    source: getStringValue(getItemValue(item, bookingFieldMap.source)),
+    giftCard: getStringValue(getItemValue(item, bookingFieldMap.giftCard)),
+    linen: getStringValue(getItemValue(item, bookingFieldMap.linen)),
+    guestCount:
+      guestCountValue === undefined || guestCountValue === null
+        ? ''
+        : getStringValue(guestCountValue),
+    earlyCheckIn: getStringValue(
+      getItemValue(item, bookingFieldMap.earlyCheckIn),
+    ),
+    access: getStringValue(getItemValue(item, bookingFieldMap.access)),
   }
 }
 
@@ -1537,6 +1568,9 @@ function App() {
     Array<string | null>
   >([])
   const [bookingsNextCursor, setBookingsNextCursor] = useState<string | null>(null)
+  const [expandedBookingIds, setExpandedBookingIds] = useState<Set<string>>(
+    new Set(),
+  )
   const [bookingsAvailableStatuses, setBookingsAvailableStatuses] = useState<
     string[]
   >([...DEFAULT_BOOKING_STATUSES])
@@ -2776,7 +2810,7 @@ function App() {
     if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates') {
       void fetchProperties()
     }
-    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings') {
+    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Cleaning settings' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings' || activePage === 'Bookings Plan' || activePage === 'Bookings settings') {
       void fetchProperties()
     }
   }, [
@@ -2992,6 +3026,18 @@ function App() {
 
   const toggleSubtractionRow = (rowId: string) => {
     setExpandedSubtractionIds((current) => {
+      const next = new Set(current)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }
+
+  const toggleBookingRow = (rowId: string) => {
+    setExpandedBookingIds((current) => {
       const next = new Set(current)
       if (next.has(rowId)) {
         next.delete(rowId)
@@ -7090,7 +7136,6 @@ function App() {
                 <table className="data-table data-table-bookings">
                   <thead>
                     <tr>
-                      <th scope="col">{t('common.booking')}</th>
                       <th scope="col">{t('common.guest')}</th>
                       <th scope="col">{t('common.property')}</th>
                       <th scope="col">
@@ -7111,36 +7156,120 @@ function App() {
                       </th>
                       <th scope="col">{t('common.checkOut')}</th>
                       <th scope="col">{t('common.status')}</th>
-                      <th scope="col">{t('common.source')}</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isBookingsLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={7}>
+                        <td className="table-empty" colSpan={6}>
                           {t('bookings.loading')}
                         </td>
                       </tr>
                     ) : sortedBookingsRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={7}>
+                        <td className="table-empty" colSpan={6}>
                           {t('bookings.emptyPage')}
                         </td>
                       </tr>
                     ) : (
-                      sortedBookingsRows.map((row) => (
-                        <tr key={row.id}>
-                          <td>{row.id}</td>
-                          <td>{row.guestName}</td>
-                          <td>{row.property}</td>
-                          <td>{row.checkIn}</td>
-                          <td>{row.checkOut}</td>
-                          <td>
-                            <span className="status status-neutral">{row.status}</span>
-                          </td>
-                          <td>{row.source}</td>
-                        </tr>
-                      ))
+                      sortedBookingsRows.map((row) => {
+                        const isExpanded = expandedBookingIds.has(row.id)
+                        return (
+                          <Fragment key={row.id}>
+                            <tr>
+                              <td>{row.guestName}</td>
+                              <td>{row.property}</td>
+                              <td>{row.checkIn}</td>
+                              <td>{row.checkOut}</td>
+                              <td>
+                                <span className="status status-neutral">
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => toggleBookingRow(row.id)}
+                                    aria-expanded={isExpanded}
+                                    aria-label={t('common.toggleDetails')}
+                                  >
+                                    {isExpanded ? '▾' : '▸'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={6}>
+                                  <div className="detail-grid">
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.booking')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(
+                                          row.confirmationCode || row.id,
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.source')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.source)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.giftCard')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.giftCard)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.linen')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.linen)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.guestCount')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.guestCount)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.earlyCheckIn')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.earlyCheckIn)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.access')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {displayBookingDetail(row.access)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
@@ -7781,6 +7910,22 @@ function App() {
             onToggleMobileSearch={() =>
               setIsMobileSearchOpen((current) => !current)
             }
+          />
+        ) : activePage === 'Bookings Plan' ? (
+          <BookingsPlanView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
+          />
+        ) : activePage === 'Bookings settings' ? (
+          <BookingsSettingsView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Cleaning Plan' ? (
           <CleaningPlanView

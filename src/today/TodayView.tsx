@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
+import { addDaysToDateString, getTodayMadrid } from '../operations/dateHelpers'
 import { ACTION_KEYS, DASHBOARD_CARD_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 
@@ -29,6 +30,9 @@ type TodaySummary = {
   unassignedTasks?: {
     pending: number
   }
+  planner?: {
+    warnings?: number
+  }
   inventory: {
     waitingDelivery: number
     reorder: number
@@ -47,7 +51,7 @@ type Props = {
   refreshKey?: number
 }
 
-const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v3'
+const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v4'
 
 const readCachedSummary = (): TodaySummary | null => {
   try {
@@ -196,6 +200,56 @@ export function TodayView({
   const [error, setError] = useState('')
   const hasSummaryRef = useRef(Boolean(summary))
 
+  const loadPlannerWarnings = useCallback(async () => {
+    const settingsUrl = getEndpoint(
+      'getBookingsPlannerSettingsUrl',
+      import.meta.env.VITE_GET_BOOKINGS_PLANNER_SETTINGS_URL,
+    )
+    const bookingsUrl = getEndpoint(
+      'getBookingsUrl',
+      import.meta.env.VITE_GET_BOOKINGS_URL,
+    )
+    if (!settingsUrl || !bookingsUrl) {
+      return 0
+    }
+    const settings = await fetchJson<{ item?: { plannerEnabled?: boolean } }>(
+      settingsUrl,
+    )
+    if (settings.item?.plannerEnabled !== true) {
+      return 0
+    }
+    const today = getTodayMadrid()
+    const to = addDaysToDateString(today, 6)
+    let cursor: string | null = null
+    let total = 0
+    do {
+      const query = new URLSearchParams({
+        checkInFrom: today,
+        checkInTo: to,
+        limit: '200',
+      })
+      if (cursor) {
+        query.set('cursor', cursor)
+      }
+      const payload = await fetchJson<{
+        items?: Array<{ PlannerWarningCount?: number; Status?: string }>
+        nextCursor?: string | null
+      }>(`${bookingsUrl}?${query.toString()}`)
+      for (const item of payload.items ?? []) {
+        const status = String(item.Status ?? '').toLowerCase()
+        if (status === 'canceled' || status === 'cancelled') {
+          continue
+        }
+        const count = Number(item.PlannerWarningCount)
+        if (Number.isFinite(count) && count > 0) {
+          total += count
+        }
+      }
+      cursor = payload.nextCursor ?? null
+    } while (cursor)
+    return total
+  }, [getEndpoint])
+
   const loadSummary = useCallback(async () => {
     const endpoint = getEndpoint(
       'getTodaySummaryUrl',
@@ -211,9 +265,19 @@ export function TodayView({
     setError('')
     try {
       const payload = await fetchJson<TodaySummary>(endpoint)
+      let plannerWarnings = payload.planner?.warnings ?? 0
+      try {
+        plannerWarnings = await loadPlannerWarnings()
+      } catch {
+        // Keep the backend count when the dedicated planner endpoints are missing.
+      }
+      const next = {
+        ...payload,
+        planner: { warnings: plannerWarnings },
+      }
       hasSummaryRef.current = true
-      setSummary(payload)
-      writeCachedSummary(payload)
+      setSummary(next)
+      writeCachedSummary(next)
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : t('today.loadError'),
@@ -221,7 +285,7 @@ export function TodayView({
     } finally {
       setIsLoading(false)
     }
-  }, [getEndpoint, t])
+  }, [getEndpoint, loadPlannerWarnings, t])
 
   useEffect(() => {
     void loadSummary()
@@ -253,8 +317,12 @@ export function TodayView({
           summary.maintenance.currentTotal) &&
       summary.maintenance.previousOpen === 0,
   )
+  const plannerWarnings = summary?.planner?.warnings ?? 0
   const opsDone = Boolean(
-    summary && summary.reviews.needsAttention === 0 && unassignedPending === 0,
+    summary &&
+      summary.reviews.needsAttention === 0 &&
+      unassignedPending === 0 &&
+      plannerWarnings === 0,
   )
   const inventoryDone = Boolean(
     summary &&
@@ -336,6 +404,11 @@ export function TodayView({
             label={t('today.unassignedTasks')}
             value={unassignedPending}
             onClick={() => onNavigate('Unassigned tasks')}
+          />
+          <CountMetric
+            label={t('today.plannerWarnings')}
+            value={plannerWarnings}
+            onClick={() => onNavigate('Bookings Plan')}
           />
         </MetricsOrDone>
       </article>
