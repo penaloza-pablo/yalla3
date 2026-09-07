@@ -348,6 +348,68 @@ function isAutoGiftCard(value) {
   return text === GIFT_CARD_OFF || /^\d+ - \d{2}\/\d{2}$/.test(text);
 }
 
+function isEarlyCheckInEnabled(value) {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A]/g, " ")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/^[^A-Za-z0-9]+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return /^early[\s-]*check[\s-]*in\b/.test(normalized);
+}
+
+function foldPlannerText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function canonicalizeLinenValue(value, listingId) {
+  const original = String(value || "").trim();
+  if (!original) return "";
+  const compact = foldPlannerText(original).replace(/ /g, "");
+  if (listingId === VERDEJO_LISTING_ID) {
+    if (original === LINEN_DOUBLE || original === LINEN_SINGLE) return original;
+    if (
+      compact.includes("camasseparadas") ||
+      compact.includes("dosindividuales") ||
+      compact.includes("doscamasindividuales") ||
+      compact.includes("twosingles") ||
+      compact.includes("2individuales") ||
+      compact.includes("individual") ||
+      compact.includes("single")
+    ) {
+      return LINEN_SINGLE;
+    }
+    if (
+      compact.includes("camadoble") ||
+      compact.includes("camasdobles") ||
+      compact.includes("double") ||
+      compact.includes("doble")
+    ) {
+      return LINEN_DOUBLE;
+    }
+    return original;
+  }
+  if (original === LINEN_NA || original === LINEN_YES || original === LINEN_NO) {
+    return original;
+  }
+  if (!compact.startsWith("sofacama")) return original;
+  const rest = compact.slice("sofacama".length);
+  if (rest === "na" || rest.startsWith("na")) return LINEN_NA;
+  if (rest === "no" || rest.startsWith("no")) return LINEN_NO;
+  if (rest === "si" || rest.startsWith("si") || rest === "yes" || rest.startsWith("yes")) {
+    return LINEN_YES;
+  }
+  return original;
+}
+
 function formatGiftCard(guestCount, checkOutDate) {
   const date = toDateOnly(checkOutDate);
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -404,30 +466,29 @@ async function applyPlannerInline(item) {
     listingId === VERDEJO_LISTING_ID &&
     !doubleRule.excluded.includes(listingId);
 
-  let linen = String(item.Linen?.S || "");
+  let linen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
   let giftCard = String(item.GiftCard?.S || "");
   let giftCardOn = item.GiftCardOn?.BOOL;
   if (giftCardOn == null) giftCardOn = giftCard ? giftCard !== GIFT_CARD_OFF : true;
   const access = String(item.Access?.S || "");
   const warnings = [];
-  const isVerdejoLinen = linen === LINEN_DOUBLE || linen === LINEN_SINGLE;
 
   if (appliesDoubleOrTwoSingles) {
-    if (guests === 1 && !isVerdejoLinen) {
+    if (!linen && guests === 1) {
       linen = LINEN_DOUBLE;
-    } else if (guests !== 1 && !isVerdejoLinen) {
-      linen = "";
     }
     if (linen !== LINEN_DOUBLE && linen !== LINEN_SINGLE) {
       warnings.push("double_or_two_singles_ask");
     }
   } else if (linenRule.enabled) {
-    if (linenRule.excluded.includes(listingId)) {
+    if (linenRule.excluded.includes(listingId) && linen !== LINEN_NA && linen !== LINEN_YES && linen !== LINEN_NO) {
       linen = LINEN_NA;
     } else if (!linen) {
       if (guests === 1) linen = LINEN_NO;
       else if (guests >= 3) linen = LINEN_YES;
-      else warnings.push("linen_ask_guest");
+    }
+    if (linen !== LINEN_NA && linen !== LINEN_YES && linen !== LINEN_NO) {
+      warnings.push("linen_ask_guest");
     }
   }
 
@@ -620,10 +681,13 @@ export const handler = async (event) => {
         )
       ),
       Linen: s(
-        pickStoredString(
-          getNestedOptionalText(reservation?.notes, "cleaning"),
-          existing,
-          "Linen"
+        canonicalizeLinenValue(
+          pickStoredString(
+            getNestedOptionalText(reservation?.notes, "cleaning"),
+            existing,
+            "Linen"
+          ),
+          listingId
         )
       ),
       EarlyCheckIn: s(
@@ -657,7 +721,7 @@ export const handler = async (event) => {
 
     const incomingEarly = getNestedOptionalText(reservation?.notes, "other");
     if (incomingEarly !== undefined) {
-      item.EarlyCheckInOn = { BOOL: /early check-in/i.test(String(incomingEarly)) };
+      item.EarlyCheckInOn = { BOOL: isEarlyCheckInEnabled(incomingEarly) };
     } else {
       copyExistingAttribute(item, existing, "EarlyCheckInOn");
     }

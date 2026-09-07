@@ -322,6 +322,83 @@ export const isCanonicalLinenValue = (value: string, listingId?: string) => {
 export const isAllowedPlannerLinenValue = (value: string) =>
   ALLOWED_LINEN.has(value.trim());
 
+const foldPlannerText = (value: unknown) =>
+  asString(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+const compactPlannerText = (value: unknown) =>
+  foldPlannerText(value).replace(/ /g, '');
+
+const mapSofaLinenFromGuesty = (original: string) => {
+  const trimmed = original.trim();
+  if (isSofaLinenValue(trimmed)) {
+    return trimmed;
+  }
+  const compact = compactPlannerText(trimmed);
+  if (!compact.startsWith('sofacama')) {
+    return trimmed;
+  }
+  const rest = compact.slice('sofacama'.length);
+  if (rest === 'na' || rest.startsWith('na')) {
+    return LINEN_VALUES.NA;
+  }
+  if (rest === 'no' || rest.startsWith('no')) {
+    return LINEN_VALUES.NO;
+  }
+  if (
+    rest === 'si' ||
+    rest.startsWith('si') ||
+    rest === 'yes' ||
+    rest.startsWith('yes')
+  ) {
+    return LINEN_VALUES.YES;
+  }
+  return trimmed;
+};
+
+const mapVerdejoLinenFromGuesty = (original: string) => {
+  const trimmed = original.trim();
+  if (isVerdejoLinenValue(trimmed)) {
+    return trimmed;
+  }
+  const compact = compactPlannerText(trimmed);
+  if (
+    compact.includes('camasseparadas') ||
+    compact.includes('dosindividuales') ||
+    compact.includes('doscamasindividuales') ||
+    compact.includes('twosingles') ||
+    compact.includes('2individuales') ||
+    compact.includes('individual') ||
+    compact.includes('single')
+  ) {
+    return LINEN_VALUES.SINGLE;
+  }
+  if (
+    compact.includes('camadoble') ||
+    compact.includes('camasdobles') ||
+    compact.includes('double') ||
+    compact.includes('doble')
+  ) {
+    return LINEN_VALUES.DOUBLE;
+  }
+  return trimmed;
+};
+
+export const canonicalizeLinenValue = (value: unknown, listingId = '') => {
+  const original = asString(value);
+  if (!original) {
+    return '';
+  }
+  return isVerdejoBedListing(listingId)
+    ? mapVerdejoLinenFromGuesty(original)
+    : mapSofaLinenFromGuesty(original);
+};
+
 export const linenMenuValuesForListing = (listingId: string) =>
   isVerdejoBedListing(listingId)
     ? [...VERDEJO_LINEN_OPTIONS, '']
@@ -343,8 +420,18 @@ export const asDismissedPlannerWarnings = (value: unknown) => {
   return [...new Set(value.filter(isDismissablePlannerWarning))];
 };
 
+const normalizeEarlyCheckInText = (value: unknown) =>
+  asString(value)
+    .normalize('NFKC')
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A]/g, ' ')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
 export const isEarlyCheckInEnabled = (value: unknown) =>
-  /early check-in/i.test(asString(value));
+  /^early[\s-]*check[\s-]*in\b/.test(normalizeEarlyCheckInText(value));
 
 export const computePlannerFields = ({
   item,
@@ -357,10 +444,11 @@ export const computePlannerFields = ({
   today: string;
   overrides?: PlannerOverrides;
 }): PlannerFieldPatch => {
+  const listingId = asString(item.ListingID);
   let linen =
     overrides?.linen !== undefined
       ? asString(overrides.linen)
-      : asString(item.Linen);
+      : canonicalizeLinenValue(item.Linen, listingId);
   let giftCard = asString(item.GiftCard);
   let earlyCheckIn = asString(item.EarlyCheckIn);
   let access =
@@ -380,6 +468,10 @@ export const computePlannerFields = ({
     storedEarlyOn ??
     isEarlyCheckInEnabled(earlyCheckIn);
 
+  if (overrides?.earlyCheckInOn === undefined && isEarlyCheckInEnabled(earlyCheckIn)) {
+    earlyCheckInOn = true;
+  }
+
   if (overrides?.earlyCheckInOn !== undefined) {
     earlyCheckIn = overrides.earlyCheckInOn ? EARLY_CHECK_IN_ON : '';
   }
@@ -388,7 +480,6 @@ export const computePlannerFields = ({
     ...asDismissedPlannerWarnings(item.PlannerDismissedWarnings),
     ...(overrides?.dismissWarning ? [overrides.dismissWarning] : []),
   ]);
-  const listingId = asString(item.ListingID);
   const guests = toGuestCount(item.Guests);
   const nights = toNightsCount(item);
   const inWindow = isInPlannerWindow(asString(item.CheckInDate), today);
@@ -419,18 +510,20 @@ export const computePlannerFields = ({
     !isPropertyExcluded(doubleRule, listingId);
 
   if (appliesDoubleOrTwoSingles) {
-    if (overrides?.linen === undefined) {
-      if (guests === 1 && !isVerdejoLinenValue(linen)) {
+    if (
+      overrides?.linen === undefined &&
+      !isVerdejoLinenValue(linen) &&
+      !linen
+    ) {
+      if (guests === 1) {
         linen = LINEN_VALUES.DOUBLE;
-      } else if (guests !== 1 && !isVerdejoLinenValue(linen)) {
-        linen = '';
       }
     }
     if (!isVerdejoLinenValue(linen)) {
       warnings.push('double_or_two_singles_ask');
     }
   } else if (linenRule.enabled) {
-    if (isPropertyExcluded(linenRule, listingId)) {
+    if (isPropertyExcluded(linenRule, listingId) && !isSofaLinenValue(linen)) {
       linen = LINEN_VALUES.NA;
     } else if (overrides?.linen === undefined && !linen) {
       if (guests === 1) {

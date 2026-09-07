@@ -19,6 +19,7 @@ import {
   LINEN_VALUES,
   PLANNER_WINDOW_DAYS,
   type PlannerWarningCode,
+  canonicalizeLinenValue,
   isCanonicalLinenValue,
   isDismissablePlannerWarning,
   isEarlyCheckInEnabled,
@@ -138,9 +139,10 @@ const matchesSearch = (query: string, row: PlanRow) => {
 const mapRow = (item: Record<string, unknown>): PlanRow => {
   const giftCard = asString(item.GiftCard ?? item.giftCard)
   const early = asString(item.EarlyCheckIn ?? item.earlyCheckIn)
+  const listingId = asString(item.ListingID ?? item.listingId)
   return {
     id: asString(item.ReservationID ?? item.id),
-    listingId: asString(item.ListingID ?? item.listingId),
+    listingId,
     guestName: asString(item.GuestName) || '—',
     property: asString(item.ListingNickname ?? item.ListingName) || '—',
     checkIn: asString(item.CheckInDate).slice(0, 10),
@@ -148,17 +150,16 @@ const mapRow = (item: Record<string, unknown>): PlanRow => {
     guests: asString(item.Guests),
     nights: asString(item.Nights),
     status: asString(item.Status),
-    linen: asString(item.Linen ?? item.linen),
+    linen: canonicalizeLinenValue(item.Linen ?? item.linen, listingId),
     giftCard,
     giftCardOn: asBoolean(
       item.GiftCardOn ?? item.giftCardOn,
       Boolean(giftCard) && giftCard !== 'Sin tarjeta',
     ),
     access: asString(item.Access ?? item.access),
-    earlyCheckInOn: asBoolean(
-      item.EarlyCheckInOn ?? item.earlyCheckInOn,
+    earlyCheckInOn:
+      asBoolean(item.EarlyCheckInOn ?? item.earlyCheckInOn, false) ||
       isEarlyCheckInEnabled(early),
-    ),
     warnings: asWarnings(item.PlannerWarnings ?? item.warnings),
   }
 }
