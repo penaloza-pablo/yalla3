@@ -7,7 +7,7 @@ import {
   applyPlannerToReservation,
   getPlannerSettings,
 } from '../shared/bookings-planner-apply';
-import { LINEN_OPTIONS } from '../shared/bookings-planner';
+import { isAllowedPlannerLinenValue, isDismissablePlannerWarning } from '../shared/bookings-planner';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -22,6 +22,7 @@ type FieldsPayload = {
   giftCardOn?: boolean;
   earlyCheckInOn?: boolean;
   access?: string;
+  dismissWarning?: string;
 };
 
 export const handler = async (event: {
@@ -56,10 +57,22 @@ export const handler = async (event: {
 
   if (
     payload.linen !== undefined &&
-    !LINEN_OPTIONS.includes(payload.linen as (typeof LINEN_OPTIONS)[number])
+    !isAllowedPlannerLinenValue(payload.linen)
   ) {
     return buildHttpResponse(400, { message: 'Invalid linen value.' });
   }
+  if (
+    payload.dismissWarning !== undefined &&
+    !isDismissablePlannerWarning(payload.dismissWarning)
+  ) {
+    return buildHttpResponse(400, { message: 'Invalid warning to dismiss.' });
+  }
+
+  const hasGuestyFields =
+    payload.linen !== undefined ||
+    payload.giftCardOn !== undefined ||
+    payload.earlyCheckInOn !== undefined ||
+    payload.access !== undefined;
 
   try {
     const settings = await getPlannerSettings(settingsTable);
@@ -76,8 +89,11 @@ export const handler = async (event: {
           ? { earlyCheckInOn: payload.earlyCheckInOn === true }
           : {}),
         ...(payload.access !== undefined ? { access: payload.access } : {}),
+        ...(isDismissablePlannerWarning(payload.dismissWarning)
+          ? { dismissWarning: payload.dismissWarning }
+          : {}),
       },
-      syncGuesty: true,
+      syncGuesty: hasGuestyFields,
     });
 
     if (!result.ok) {

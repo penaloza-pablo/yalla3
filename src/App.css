@@ -5450,8 +5450,45 @@ th {
 
 .planner-warning-list {
   margin: 0;
-  padding-left: 16px;
+  padding: 0;
+  list-style: none;
   color: #b54708;
+}
+
+.planner-warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.planner-warning-item + .planner-warning-item {
+  margin-top: 6px;
+}
+
+.planner-warning-dismiss {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  padding: 0;
+  border: 1px solid #fedf89;
+  border-radius: 999px;
+  background: #fffaeb;
+  color: #b54708;
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.planner-warning-dismiss:hover:not(:disabled),
+.planner-warning-dismiss:focus-visible {
+  background: #fef0c7;
+}
+
+.planner-warning-dismiss:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .data-table-bookings-plan select,

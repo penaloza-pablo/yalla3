@@ -24,6 +24,9 @@ const GIFT_CARD_OFF = "Sin tarjeta";
 const LINEN_NA = "Sofa cama: n/a";
 const LINEN_YES = "Sofa cama: si";
 const LINEN_NO = "Sofa cama: no";
+const LINEN_DOUBLE = "Double";
+const LINEN_SINGLE = "Single";
+const VERDEJO_LISTING_ID = "6835c22941deed0027f93d2b";
 
 function httpJson(statusCode, payload) {
   return {
@@ -395,6 +398,11 @@ async function applyPlannerInline(item) {
   const linenRule = ruleById.linen || { enabled: true, excluded: [] };
   const giftRule = ruleById.giftCard || { enabled: true, excluded: [] };
   const guestRule = ruleById.singleGuest || { enabled: true, excluded: [] };
+  const doubleRule = ruleById.doubleOrTwoSingles || { enabled: true, excluded: [] };
+  const appliesDoubleOrTwoSingles =
+    doubleRule.enabled &&
+    listingId === VERDEJO_LISTING_ID &&
+    !doubleRule.excluded.includes(listingId);
 
   let linen = String(item.Linen?.S || "");
   let giftCard = String(item.GiftCard?.S || "");
@@ -402,8 +410,18 @@ async function applyPlannerInline(item) {
   if (giftCardOn == null) giftCardOn = giftCard ? giftCard !== GIFT_CARD_OFF : true;
   const access = String(item.Access?.S || "");
   const warnings = [];
+  const isVerdejoLinen = linen === LINEN_DOUBLE || linen === LINEN_SINGLE;
 
-  if (linenRule.enabled) {
+  if (appliesDoubleOrTwoSingles) {
+    if (guests === 1 && !isVerdejoLinen) {
+      linen = LINEN_DOUBLE;
+    } else if (guests !== 1 && !isVerdejoLinen) {
+      linen = "";
+    }
+    if (linen !== LINEN_DOUBLE && linen !== LINEN_SINGLE) {
+      warnings.push("double_or_two_singles_ask");
+    }
+  } else if (linenRule.enabled) {
     if (linenRule.excluded.includes(listingId)) {
       linen = LINEN_NA;
     } else if (!linen) {
@@ -424,7 +442,12 @@ async function applyPlannerInline(item) {
   }
 
   if (guestRule.enabled && !guestRule.excluded.includes(listingId) && guests === 1) {
-    warnings.push("single_guest");
+    const dismissed = (item.PlannerDismissedWarnings?.L || [])
+      .map((value) => value?.S)
+      .filter(Boolean);
+    if (!dismissed.includes("single_guest")) {
+      warnings.push("single_guest");
+    }
   }
 
   await ddb.send(new UpdateItemCommand({
@@ -638,6 +661,7 @@ export const handler = async (event) => {
 
     copyExistingAttribute(item, existing, "PlannerWarnings");
     copyExistingAttribute(item, existing, "PlannerWarningCount");
+    copyExistingAttribute(item, existing, "PlannerDismissedWarnings");
 
     await ddb.send(new PutItemCommand({
       TableName: TABLE_NAME,

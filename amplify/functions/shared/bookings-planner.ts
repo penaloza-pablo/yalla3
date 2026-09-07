@@ -4,13 +4,22 @@ export const PLANNER_SETTINGS_ID = 'GLOBAL';
 export const PLANNER_WINDOW_DAYS = 7;
 export const ACCESS_FIELD_ID = '6945126331a9580014e33f73';
 
-export const RULE_IDS = ['linen', 'giftCard', 'singleGuest'] as const;
+export const RULE_IDS = [
+  'linen',
+  'giftCard',
+  'singleGuest',
+  'doubleOrTwoSingles',
+] as const;
 export type PlannerRuleId = (typeof RULE_IDS)[number];
+
+export const VERDEJO_LISTING_ID = '6835c22941deed0027f93d2b';
 
 export const LINEN_VALUES = {
   NA: 'Sofa cama: n/a',
   YES: 'Sofa cama: si',
   NO: 'Sofa cama: no',
+  DOUBLE: 'Double',
+  SINGLE: 'Single',
 } as const;
 
 export const LINEN_OPTIONS = [
@@ -19,13 +28,24 @@ export const LINEN_OPTIONS = [
   LINEN_VALUES.NO,
 ] as const;
 
+export const VERDEJO_LINEN_OPTIONS = [
+  LINEN_VALUES.SINGLE,
+  LINEN_VALUES.DOUBLE,
+] as const;
+
+export const ALL_LINEN_VALUES = [
+  ...LINEN_OPTIONS,
+  ...VERDEJO_LINEN_OPTIONS,
+] as const;
+
 export const GIFT_CARD_OFF = 'Sin tarjeta';
 export const EARLY_CHECK_IN_ON = 'Early check-in';
 
 export type PlannerWarningCode =
   | 'linen_ask_guest'
   | 'gift_card_access_missing'
-  | 'single_guest';
+  | 'single_guest'
+  | 'double_or_two_singles_ask';
 
 export type PlannerRule = {
   id: PlannerRuleId;
@@ -48,6 +68,7 @@ export type PlannerFieldPatch = {
   earlyCheckInOn: boolean;
   warnings: PlannerWarningCode[];
   warningCount: number;
+  dismissedWarnings: PlannerWarningCode[];
 };
 
 export type PlannerOverrides = {
@@ -55,6 +76,7 @@ export type PlannerOverrides = {
   giftCardOn?: boolean;
   earlyCheckInOn?: boolean;
   access?: string;
+  dismissWarning?: PlannerWarningCode;
 };
 
 export type BookingPlannerItem = {
@@ -72,15 +94,62 @@ export type BookingPlannerItem = {
   Access?: unknown;
   GiftCardOn?: unknown;
   EarlyCheckInOn?: unknown;
+  PlannerDismissedWarnings?: unknown;
 };
 
-const CANONICAL_LINEN = new Set<string>(LINEN_OPTIONS);
+const SOFA_LINEN = new Set<string>(LINEN_OPTIONS);
+const VERDEJO_LINEN = new Set<string>(VERDEJO_LINEN_OPTIONS);
+const ALLOWED_LINEN = new Set<string>([...ALL_LINEN_VALUES, '']);
+
+const DEFAULT_DOUBLE_OR_TWO_SINGLES_EXCLUSIONS = [
+  '693c3fa8937d490014b5bceb',
+  '6928222e394afb00100cf038',
+  '693c58109994960014f586d7',
+  '693c58109994960014f58732',
+  '693c5b7bb122320015236bcc',
+  '6928222e394afb00100cf048',
+  '693c59b29430f10014539e64',
+  '693c58109994960014f5878d',
+  '693c5b7bb122320015236bee',
+  '6928222e394afb00100cf040',
+  '693c3ad20c4f0500133cd017',
+  '693c3ad20c4f0500133ccfc3',
+  '6835c21193742a002b128465',
+  '6835c21a7daf0d0026d38b36',
+  '6835c22d3239830026a090c0',
+  '6835c2244cbe32002723b60c',
+  '6835c22020c73c0027a82d6a',
+  '6835c21541deed0027f93bb6',
+  '6835c20bb57936001371aead',
+  '6835cef04af0d8002845abdd',
+  '69b6cf303c0a620014d6127d',
+  '6835cc39fb5792002a5150ea',
+  '6a74ae1eb2d7380014834e53',
+  '6835c2073239830026a08eb1',
+  '6a05df8d0154cb0014c51887',
+  '6835c290ac2dc6002b452288',
+  '691857889e70a50011b53b39',
+  '69185b5b46bd930041396b90',
+  '69403ac1ecebad0012777738',
+  '6835c28c97ce8700130584aa',
+  '6835c1fd27f12a0028b2026d',
+  '6835c20332d7750027764973',
+  '6835cc3d3b0ed3002bb29e81',
+  'JCLStorage',
+  'other',
+];
+
+export const isVerdejoBedListing = (listingId: string) =>
+  listingId.trim() === VERDEJO_LISTING_ID;
 
 export const defaultPlannerRules = (): PlannerRule[] =>
   RULE_IDS.map((id) => ({
     id,
     enabled: true,
-    excludedPropertyIds: [],
+    excludedPropertyIds:
+      id === 'doubleOrTwoSingles'
+        ? [...DEFAULT_DOUBLE_OR_TWO_SINGLES_EXCLUSIONS]
+        : [],
   }));
 
 export const defaultPlannerSettings = (): PlannerSettings => ({
@@ -149,7 +218,12 @@ export const isActivePlannerStatus = (status: unknown) =>
   asString(status).toLowerCase() === 'confirmed';
 
 const normalizeRuleId = (value: unknown): PlannerRuleId | null => {
-  if (value === 'linen' || value === 'giftCard' || value === 'singleGuest') {
+  if (
+    value === 'linen' ||
+    value === 'giftCard' ||
+    value === 'singleGuest' ||
+    value === 'doubleOrTwoSingles'
+  ) {
     return value;
   }
   return null;
@@ -228,8 +302,46 @@ export const isAutoGiftCardValue = (value: string) => {
   return text === GIFT_CARD_OFF || /^\d+ - \d{2}\/\d{2}$/.test(text);
 };
 
-export const isCanonicalLinenValue = (value: string) =>
-  CANONICAL_LINEN.has(value.trim());
+export const isSofaLinenValue = (value: string) =>
+  SOFA_LINEN.has(value.trim());
+
+export const isVerdejoLinenValue = (value: string) =>
+  VERDEJO_LINEN.has(value.trim());
+
+export const isCanonicalLinenValue = (value: string, listingId?: string) => {
+  const text = value.trim();
+  if (listingId && isVerdejoBedListing(listingId)) {
+    return isVerdejoLinenValue(text);
+  }
+  if (listingId) {
+    return isSofaLinenValue(text);
+  }
+  return isSofaLinenValue(text) || isVerdejoLinenValue(text);
+};
+
+export const isAllowedPlannerLinenValue = (value: string) =>
+  ALLOWED_LINEN.has(value.trim());
+
+export const linenMenuValuesForListing = (listingId: string) =>
+  isVerdejoBedListing(listingId)
+    ? [...VERDEJO_LINEN_OPTIONS, '']
+    : [...LINEN_OPTIONS];
+
+export const DISMISSABLE_PLANNER_WARNINGS: PlannerWarningCode[] = [
+  'single_guest',
+];
+
+export const isDismissablePlannerWarning = (
+  value: unknown,
+): value is PlannerWarningCode =>
+  value === 'single_guest';
+
+export const asDismissedPlannerWarnings = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return [] as PlannerWarningCode[];
+  }
+  return [...new Set(value.filter(isDismissablePlannerWarning))];
+};
 
 export const isEarlyCheckInEnabled = (value: unknown) =>
   /early check-in/i.test(asString(value));
@@ -272,6 +384,10 @@ export const computePlannerFields = ({
     earlyCheckIn = overrides.earlyCheckInOn ? EARLY_CHECK_IN_ON : '';
   }
 
+  const dismissedWarnings = asDismissedPlannerWarnings([
+    ...asDismissedPlannerWarnings(item.PlannerDismissedWarnings),
+    ...(overrides?.dismissWarning ? [overrides.dismissWarning] : []),
+  ]);
   const listingId = asString(item.ListingID);
   const guests = toGuestCount(item.Guests);
   const nights = toNightsCount(item);
@@ -288,6 +404,7 @@ export const computePlannerFields = ({
       earlyCheckInOn,
       warnings: [],
       warningCount: 0,
+      dismissedWarnings,
     };
   }
 
@@ -295,8 +412,24 @@ export const computePlannerFields = ({
   const linenRule = getPlannerRule(settings, 'linen');
   const giftRule = getPlannerRule(settings, 'giftCard');
   const guestRule = getPlannerRule(settings, 'singleGuest');
+  const doubleRule = getPlannerRule(settings, 'doubleOrTwoSingles');
+  const appliesDoubleOrTwoSingles =
+    doubleRule.enabled &&
+    isVerdejoBedListing(listingId) &&
+    !isPropertyExcluded(doubleRule, listingId);
 
-  if (linenRule.enabled) {
+  if (appliesDoubleOrTwoSingles) {
+    if (overrides?.linen === undefined) {
+      if (guests === 1 && !isVerdejoLinenValue(linen)) {
+        linen = LINEN_VALUES.DOUBLE;
+      } else if (guests !== 1 && !isVerdejoLinenValue(linen)) {
+        linen = '';
+      }
+    }
+    if (!isVerdejoLinenValue(linen)) {
+      warnings.push('double_or_two_singles_ask');
+    }
+  } else if (linenRule.enabled) {
     if (isPropertyExcluded(linenRule, listingId)) {
       linen = LINEN_VALUES.NA;
     } else if (overrides?.linen === undefined && !linen) {
@@ -306,7 +439,7 @@ export const computePlannerFields = ({
         linen = LINEN_VALUES.YES;
       }
     }
-    if (!isCanonicalLinenValue(linen)) {
+    if (!isSofaLinenValue(linen)) {
       warnings.push('linen_ask_guest');
     }
   }
@@ -333,7 +466,8 @@ export const computePlannerFields = ({
   if (
     guestRule.enabled &&
     !isPropertyExcluded(guestRule, listingId) &&
-    guests === 1
+    guests === 1 &&
+    !dismissedWarnings.includes('single_guest')
   ) {
     warnings.push('single_guest');
   }
@@ -347,6 +481,7 @@ export const computePlannerFields = ({
     earlyCheckInOn,
     warnings,
     warningCount: warnings.length,
+    dismissedWarnings,
   };
 };
 

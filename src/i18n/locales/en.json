@@ -98,8 +98,15 @@
     "warning": {
       "linen_ask_guest": "Ask the guest about the sofa bed.",
       "gift_card_access_missing": "Set Access before completing Gift Card.",
-      "single_guest": "Validate this 1-guest booking with the guest."
-    }
+      "single_guest": "Validate this 1-guest booking with the guest.",
+      "double_or_two_singles_ask": "Ask the guest if they want a double or two singles."
+    },
+    "linenDouble": "Double",
+    "linenSingle": "Single",
+    "dismissWarning": "Dismiss warning",
+    "dismissSingleGuestTitle": "Remove this warning?",
+    "dismissSingleGuestBody": "Only dismiss it after the guest has confirmed this booking will be for one person.",
+    "dismissWarningConfirm": "Yes, it is confirmed"
   },
   "bookingsSettings": {
     "eyebrow": "Bookings / Settings",
@@ -125,6 +132,8 @@
     "ruleGiftCardHelp": "No card for 2 nights or fewer. Otherwise GuestCount - checkout DD/MM. Empty Access raises a warning.",
     "ruleSingleGuest": "1 guest",
     "ruleSingleGuestHelp": "Warn when the booking is for one guest. Exclude studio-style properties such as Esperanza 9.",
+    "ruleDoubleOrTwoSingles": "Double or two singles",
+    "ruleDoubleOrTwoSinglesHelp": "Verdejo only. If the booking is for 1 guest, Sofa bed is Double. Otherwise raise a warning.",
     "missingEndpoint": "Missing planner settings endpoint. Redeploy the backend.",
     "missingWrite": "Missing planner settings write endpoint. Redeploy the backend.",
     "loadError": "Unable to load planner settings.",

@@ -98,8 +98,15 @@
     "warning": {
       "linen_ask_guest": "Consulta al huésped lo del sofá cama.",
       "gift_card_access_missing": "Configura Access antes de completar Gift Card.",
-      "single_guest": "Valida con el huésped esta reserva de 1 guest."
-    }
+      "single_guest": "Valida con el huésped esta reserva de 1 guest.",
+      "double_or_two_singles_ask": "Pregunta al huésped si quiere cama doble o dos individuales."
+    },
+    "linenDouble": "Doble",
+    "linenSingle": "Individual",
+    "dismissWarning": "Cerrar advertencia",
+    "dismissSingleGuestTitle": "¿Eliminar esta advertencia?",
+    "dismissSingleGuestBody": "Solo ciérrala si ya confirmaste con el huésped que la reserva será para una sola persona.",
+    "dismissWarningConfirm": "Sí, está confirmado"
   },
   "bookingsSettings": {
     "eyebrow": "Reservas / Ajustes",
@@ -125,6 +132,8 @@
     "ruleGiftCardHelp": "Sin tarjeta si hay 2 noches o menos. Si no, GuestCount - checkout DD/MM. Access vacío genera advertencia.",
     "ruleSingleGuest": "1 guest",
     "ruleSingleGuestHelp": "Advierte si la reserva es para un huésped. Excluye propiedades de 1 pax como Esperanza 9.",
+    "ruleDoubleOrTwoSingles": "Double or two singles",
+    "ruleDoubleOrTwoSinglesHelp": "Solo Verdejo. Si hay 1 huésped, Sofa cama = Double. En el resto de casos, advertencia.",
     "missingEndpoint": "Falta el endpoint de ajustes del planner. Redesplega el backend.",
     "missingWrite": "Falta el endpoint de escritura de ajustes del planner. Redesplega el backend.",
     "loadError": "No se pudieron cargar los ajustes del planner.",

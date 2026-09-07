@@ -49,6 +49,7 @@ const PLANNER_ATTRIBUTES = [
   'EarlyCheckInOn',
   'PlannerWarnings',
   'PlannerWarningCount',
+  'PlannerDismissedWarnings',
 ];
 const PLANNER_PROJECTION = [
   'ReservationID',

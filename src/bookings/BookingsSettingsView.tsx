@@ -35,6 +35,10 @@ const RULE_I18N: Record<PlannerRuleId, { name: string; description: string }> = 
     name: 'bookingsSettings.ruleSingleGuest',
     description: 'bookingsSettings.ruleSingleGuestHelp',
   },
+  doubleOrTwoSingles: {
+    name: 'bookingsSettings.ruleDoubleOrTwoSingles',
+    description: 'bookingsSettings.ruleDoubleOrTwoSinglesHelp',
+  },
 }
 
 const mapSettings = (item: Record<string, unknown> | undefined) =>

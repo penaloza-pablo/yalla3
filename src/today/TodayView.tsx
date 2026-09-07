@@ -237,7 +237,7 @@ export function TodayView({
       }>(`${bookingsUrl}?${query.toString()}`)
       for (const item of payload.items ?? []) {
         const status = String(item.Status ?? '').toLowerCase()
-        if (status === 'canceled' || status === 'cancelled') {
+        if (status !== 'confirmed') {
           continue
         }
         const count = Number(item.PlannerWarningCount)

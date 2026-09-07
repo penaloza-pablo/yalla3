@@ -15,7 +15,6 @@ import {
   isActivePlannerStatus,
   isInPlannerWindow,
   normalizePlannerSettings,
-  plannerFieldsChanged,
   plannerWindowEnd,
   toDateOnly,
 } from './bookings-planner';
@@ -27,7 +26,10 @@ const GUESTY_CLIENT_PATH =
   '/opt/nodejs/node_modules/@nockai/guesty-client/index.mjs';
 
 type GuestyClient = {
-  guestyGet: (path: string) => Promise<Record<string, unknown>>;
+  guestyGet: (
+    path: string,
+    params?: Record<string, unknown>,
+  ) => Promise<unknown>;
   guestyPut: (path: string, body: unknown) => Promise<unknown>;
 };
 
@@ -188,6 +190,7 @@ export const persistPlannerFields = async (
             EarlyCheckInOn = :earlyCheckInOn,
             PlannerWarnings = :warnings,
             PlannerWarningCount = :warningCount,
+            PlannerDismissedWarnings = :dismissedWarnings,
             UpdatedAt = :updatedAt
       `,
       ExpressionAttributeNames: { '#access': 'Access' },
@@ -200,6 +203,7 @@ export const persistPlannerFields = async (
         ':earlyCheckInOn': patch.earlyCheckInOn,
         ':warnings': patch.warnings,
         ':warningCount': patch.warningCount,
+        ':dismissedWarnings': patch.dismissedWarnings,
         ':updatedAt': nowIso(),
       },
     }),
@@ -208,6 +212,52 @@ export const persistPlannerFields = async (
 
 const asNoteText = (value: unknown) =>
   typeof value === 'string' ? value : value == null ? '' : String(value);
+
+const firstReservation = (value: unknown): Record<string, unknown> | null => {
+  if (Array.isArray(value)) {
+    return asRecord(value[0]);
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  for (const key of ['data', 'results', 'reservations', 'items']) {
+    const nested = record[key];
+    if (Array.isArray(nested)) {
+      return asRecord(nested[0]);
+    }
+  }
+  return record.notes || record._id || record.id || record.specialRequests
+    ? record
+    : null;
+};
+
+const fetchGuestyReservation = async (
+  client: GuestyClient,
+  reservationId: string,
+) => {
+  const encoded = encodeURIComponent(reservationId);
+  try {
+    const byIds = await client.guestyGet(
+      `/v1/reservations-v3?reservationIds[]=${encoded}`,
+    );
+    const reservation = firstReservation(byIds);
+    if (reservation) {
+      return reservation;
+    }
+  } catch (error) {
+    console.warn('Guesty GET reservations-v3 by ids failed', error);
+  }
+
+  try {
+    return firstReservation(
+      await client.guestyGet(`/v1/reservations/${encoded}`),
+    );
+  } catch (error) {
+    console.warn('Guesty GET reservations by id failed', error);
+    return null;
+  }
+};
 
 export const syncPlannerFieldsToGuesty = async (
   reservationId: string,
@@ -218,30 +268,25 @@ export const syncPlannerFieldsToGuesty = async (
     throw new Error('Guesty client is not available.');
   }
 
-  const current = await client.guestyGet(
-    `/v1/reservations-v3/${encodeURIComponent(reservationId)}`,
-  );
+  const encoded = encodeURIComponent(reservationId);
+  const current = await fetchGuestyReservation(client, reservationId);
   const notes = asRecord(current?.notes) ?? {};
 
-  await client.guestyPut(
-    `/v1/reservations-v3/${encodeURIComponent(reservationId)}/notes`,
-    {
-      notes: {
-        guest: asNoteText(notes.guest),
-        keyCode: asNoteText(notes.keyCode),
-        specialRequests: patch.giftCard,
-        cleaning: patch.linen,
-        other: patch.earlyCheckIn,
-      },
+  await client.guestyPut(`/v1/reservations-v3/${encoded}/notes`, {
+    notes: {
+      guest: asNoteText(notes.guest),
+      keyCode: asNoteText(notes.keyCode),
+      specialRequests: patch.giftCard,
+      cleaning: patch.linen,
+      other: patch.earlyCheckIn,
     },
-  );
+  });
 
-  await client.guestyPut(
-    `/v1/reservations-v3/${encodeURIComponent(reservationId)}/custom-fields`,
-    {
+  if (patch.access.trim()) {
+    await client.guestyPut(`/v1/reservations-v3/${encoded}/custom-fields`, {
       customFields: [{ fieldId: ACCESS_FIELD_ID, value: patch.access }],
-    },
-  );
+    });
+  }
 };
 
 export const applyPlannerToReservation = async ({
@@ -304,20 +349,31 @@ export const applyPlannerToReservation = async ({
     isActivePlannerStatus(current.Status) &&
     (Boolean(overrides) ||
       (settings.plannerEnabled &&
-        isInPlannerWindow(toDateOnly(current.CheckInDate), today) &&
-        plannerFieldsChanged(current as BookingPlannerItem, patch)));
+        isInPlannerWindow(toDateOnly(current.CheckInDate), today)));
 
   await persistPlannerFields(bookingsTable, reservationId, patch);
 
+  let syncedToGuesty = false;
+  let guestyError: string | undefined;
   if (shouldWriteGuesty) {
-    await syncPlannerFieldsToGuesty(reservationId, patch);
+    try {
+      await syncPlannerFieldsToGuesty(reservationId, patch);
+      syncedToGuesty = true;
+    } catch (error) {
+      guestyError = error instanceof Error ? error.message : String(error);
+      console.error(
+        `Failed to sync planner fields to Guesty for ${reservationId}`,
+        error,
+      );
+    }
   }
 
   return {
     ok: true as const,
     reservationId,
     patch,
-    syncedToGuesty: shouldWriteGuesty,
+    syncedToGuesty,
+    guestyError,
   };
 };
 
@@ -358,6 +414,9 @@ export const applyPlannerWindow = async ({
         updated += 1;
         if (result.syncedToGuesty) {
           synced += 1;
+        }
+        if (result.guestyError) {
+          errors.push(`${reservationId}: ${result.guestyError}`);
         }
       }
     } catch (error) {

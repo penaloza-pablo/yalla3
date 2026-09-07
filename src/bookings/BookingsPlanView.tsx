@@ -16,12 +16,14 @@ import {
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import {
-  LINEN_OPTIONS,
   LINEN_VALUES,
   PLANNER_WINDOW_DAYS,
   type PlannerWarningCode,
   isCanonicalLinenValue,
+  isDismissablePlannerWarning,
   isEarlyCheckInEnabled,
+  isVerdejoBedListing,
+  linenMenuValuesForListing,
 } from '../../amplify/functions/shared/bookings-planner'
 
 type Props = {
@@ -60,6 +62,8 @@ const LINEN_BADGE_CLASS: Record<string, string> = {
   [LINEN_VALUES.NA]: 'status-neutral',
   [LINEN_VALUES.NO]: 'status-info',
   [LINEN_VALUES.YES]: 'status-success',
+  [LINEN_VALUES.DOUBLE]: 'status-success',
+  [LINEN_VALUES.SINGLE]: 'status-info',
 }
 
 const linenBadgeLabel = (
@@ -74,6 +78,12 @@ const linenBadgeLabel = (
   }
   if (value === LINEN_VALUES.YES) {
     return t('bookingsPlan.linenYes')
+  }
+  if (value === LINEN_VALUES.DOUBLE) {
+    return t('bookingsPlan.linenDouble')
+  }
+  if (value === LINEN_VALUES.SINGLE) {
+    return t('bookingsPlan.linenSingle')
   }
   return t('bookingsPlan.linenUnknown')
 }
@@ -90,7 +100,8 @@ const asWarnings = (value: unknown): PlannerWarningCode[] =>
         (entry): entry is PlannerWarningCode =>
           entry === 'linen_ask_guest' ||
           entry === 'gift_card_access_missing' ||
-          entry === 'single_guest',
+          entry === 'single_guest' ||
+          entry === 'double_or_two_singles_ask',
       )
     : []
 
@@ -151,10 +162,16 @@ const mapRow = (item: Record<string, unknown>): PlanRow => {
 }
 
 const warningsForRow = (row: PlanRow): PlannerWarningCode[] => {
-  if (isCanonicalLinenValue(row.linen) || row.warnings.includes('linen_ask_guest')) {
+  if (isCanonicalLinenValue(row.linen, row.listingId)) {
     return row.warnings
   }
-  return [...row.warnings, 'linen_ask_guest']
+  const missingCode = isVerdejoBedListing(row.listingId)
+    ? 'double_or_two_singles_ask'
+    : 'linen_ask_guest'
+  if (row.warnings.includes(missingCode)) {
+    return row.warnings
+  }
+  return [...row.warnings, missingCode]
 }
 
 const CheckIcon = () => (
@@ -219,12 +236,14 @@ const SwitchToggle = ({
 
 const LinenBadgeSelect = ({
   value,
+  listingId,
   disabled,
   open,
   onToggle,
   onSelect,
 }: {
   value: string
+  listingId: string
   disabled?: boolean
   open: boolean
   onToggle: () => void
@@ -232,6 +251,7 @@ const LinenBadgeSelect = ({
 }) => {
   const { t } = useTranslation()
   const className = LINEN_BADGE_CLASS[value] ?? 'status-warning'
+  const options = linenMenuValuesForListing(listingId)
   return (
     <div className="linen-badge-wrap">
       <button
@@ -245,13 +265,13 @@ const LinenBadgeSelect = ({
       </button>
       {open ? (
         <div className="linen-badge-menu" role="listbox">
-          {LINEN_OPTIONS.map((option) => (
+          {options.map((option) => (
             <button
-              key={option}
+              key={option || 'unknown'}
               type="button"
-              className={`status linen-badge ${LINEN_BADGE_CLASS[option]} ${
-                option === value ? 'is-selected' : ''
-              }`}
+              className={`status linen-badge ${
+                LINEN_BADGE_CLASS[option] ?? 'status-warning'
+              } ${option === value ? 'is-selected' : ''}`}
               role="option"
               aria-selected={option === value}
               onClick={() => onSelect(option)}
@@ -308,6 +328,10 @@ export function BookingsPlanView({
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
+  const [dismissConfirm, setDismissConfirm] = useState<{
+    row: PlanRow
+    code: PlannerWarningCode
+  } | null>(null)
   const accessInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const windowLabel = useMemo(() => {
@@ -402,6 +426,7 @@ export function BookingsPlanView({
       giftCardOn?: boolean
       earlyCheckInOn?: boolean
       access?: string
+      dismissWarning?: PlannerWarningCode
     },
   ) => {
     if (!endpoints.upsertFields) {
@@ -652,7 +677,10 @@ export function BookingsPlanView({
                 filteredRows.map((row) => {
                   const isExpanded = expandedIds.has(row.id)
                   const isSaving = savingId === row.id
-                  const linenReady = isCanonicalLinenValue(row.linen)
+                  const linenReady = isCanonicalLinenValue(
+                    row.linen,
+                    row.listingId,
+                  )
                   const giftReady = Boolean(row.giftCard.trim())
                   const accessReady = Boolean(row.access.trim())
                   const displayWarnings = warningsForRow(row)
@@ -755,10 +783,14 @@ export function BookingsPlanView({
                                 </p>
                                 <LinenBadgeSelect
                                   value={
-                                    isCanonicalLinenValue(row.linen)
+                                    isCanonicalLinenValue(
+                                      row.linen,
+                                      row.listingId,
+                                    )
                                       ? row.linen
                                       : ''
                                   }
+                                  listingId={row.listingId}
                                   disabled={!canEdit || isSaving}
                                   open={openLinenId === row.id}
                                   onToggle={() =>
@@ -829,8 +861,29 @@ export function BookingsPlanView({
                                   </p>
                                   <ul className="planner-warning-list">
                                     {displayWarnings.map((code) => (
-                                      <li key={code}>
-                                        {t(`bookingsPlan.warning.${code}`)}
+                                      <li key={code} className="planner-warning-item">
+                                        <span>
+                                          {t(`bookingsPlan.warning.${code}`)}
+                                        </span>
+                                        {canEdit &&
+                                        isDismissablePlannerWarning(code) ? (
+                                          <button
+                                            type="button"
+                                            className="planner-warning-dismiss"
+                                            disabled={isSaving}
+                                            aria-label={t(
+                                              'bookingsPlan.dismissWarning',
+                                            )}
+                                            onClick={() =>
+                                              setDismissConfirm({
+                                                row,
+                                                code,
+                                              })
+                                            }
+                                          >
+                                            ×
+                                          </button>
+                                        ) : null}
                                       </li>
                                     ))}
                                   </ul>
@@ -912,6 +965,52 @@ export function BookingsPlanView({
                 }}
               >
                 {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {dismissConfirm ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {t('bookingsPlan.dismissSingleGuestTitle')}
+                </h3>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setDismissConfirm(null)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>{t('bookingsPlan.dismissSingleGuestBody')}</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setDismissConfirm(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={savingId === dismissConfirm.row.id}
+                onClick={() => {
+                  const { row, code } = dismissConfirm
+                  setDismissConfirm(null)
+                  void saveFields(row, { dismissWarning: code })
+                }}
+              >
+                {t('bookingsPlan.dismissWarningConfirm')}
               </button>
             </div>
           </div>
