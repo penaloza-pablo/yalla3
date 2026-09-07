@@ -7,6 +7,8 @@ export const getCleaningPlan = defineFunction({
   environment: {
     VISITS_TABLE: 'yalla-visits',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
+    BOOKINGS_TABLE: 'yalla-bookings',
+    PROPERTIES_TABLE: 'yalla-properties',
   },
-  timeoutSeconds: 30,
+  timeoutSeconds: 60,
 });

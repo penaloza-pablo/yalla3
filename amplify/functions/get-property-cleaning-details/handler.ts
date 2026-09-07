@@ -5,7 +5,9 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import {
+  isCleaningSettingsRecord,
   normalizeCleaningTypes,
+  normalizeGapFreeNights,
   scanAllItems,
 } from '../shared/cleaning-plan';
 
@@ -30,7 +32,10 @@ export const handler = async (event: HttpEvent) => {
   }
 
   try {
-    const items = (await scanAllItems(tableName))
+    const allItems = await scanAllItems(tableName);
+    const settingsItem = allItems.find(isCleaningSettingsRecord);
+    const items = allItems
+      .filter((item) => !isCleaningSettingsRecord(item))
       .map((item) => {
         const id = typeof item.id === 'string' ? item.id : '';
         const propertyId =
@@ -51,7 +56,13 @@ export const handler = async (event: HttpEvent) => {
       .sort((a, b) =>
         a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }),
       );
-    return buildHttpResponse(200, { items, count: items.length });
+    return buildHttpResponse(200, {
+      items,
+      count: items.length,
+      settings: {
+        gapFreeNights: normalizeGapFreeNights(settingsItem?.gapFreeNights),
+      },
+    });
   } catch (error) {
     return buildHttpResponse(500, {
       message: 'Failed to read property cleaning details.',

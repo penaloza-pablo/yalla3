@@ -37,6 +37,7 @@ import { isManagementTeam } from './teamColors'
 import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
 import { isSpanishLocale } from '../i18n/display'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   buildApplyTemplateVisitPayload,
@@ -215,6 +216,15 @@ const asRecordString = (item: Record<string, unknown>, keys: string[]) => {
     }
   }
   return ''
+}
+
+const asRecordBoolean = (item: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    if (item[key] === true) {
+      return true
+    }
+  }
+  return false
 }
 
 const resolveBookingPropertyId = (
@@ -812,6 +822,11 @@ export function DailyOperationsView({
             kind: 'check-in',
             propertyId,
             guestName: guestName || listingNickname || reservationId,
+            earlyCheckIn:
+              asRecordBoolean(record, ['EarlyCheckInOn', 'earlyCheckInOn']) ||
+              isEarlyCheckInEnabled(
+                asRecordString(record, ['EarlyCheckIn', 'earlyCheckIn']),
+              ),
           })
         }
         if (

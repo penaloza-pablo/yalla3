@@ -676,10 +676,16 @@ backend.getCleaningPlan.addEnvironment(
   'PROPERTY_CLEANING_DETAILS_TABLE',
   propertyCleaningDetailsTable.tableName,
 );
+backend.getCleaningPlan.addEnvironment('BOOKINGS_TABLE', bookingsTable.tableName);
+backend.getCleaningPlan.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
 backend.upsertCleaningPlan.addEnvironment(
   'PROPERTY_CLEANING_DETAILS_TABLE',
   propertyCleaningDetailsTable.tableName,
 );
+backend.upsertCleaningPlan.addEnvironment('SLACK_SECRET_ID', 'yalla/slack');
 backend.getCleaningIncidents.addEnvironment(
   'TABLE_NAME',
   cleaningIncidentsTable.tableName,
@@ -791,6 +797,7 @@ const slackSecret = Secret.fromSecretNameV2(
 slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
 slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
 slackSecret.grantRead(backend.upsertVisit.resources.lambda);
+slackSecret.grantRead(backend.upsertCleaningPlan.resources.lambda);
 
 const slackNotificationsTable = new Table(dataStack, 'SlackNotificationsTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
@@ -889,6 +896,21 @@ propertyCleaningDetailsTable.grantReadData(
 );
 propertyCleaningDetailsTable.grantReadData(
   backend.upsertCleaningPlan.resources.lambda,
+);
+bookingsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+propertiesTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+backend.getCleaningPlan.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+    ],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
 );
 propertiesTable.grantReadData(
   backend.upsertPropertyCleaningDetails.resources.lambda,

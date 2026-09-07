@@ -4,6 +4,32 @@ import { docClient } from './visit-task-utils';
 export const CLEANING_VISIT_TYPE_ID =
   process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
 
+export const CLEANING_SETTINGS_ID = 'GLOBAL';
+
+export const isCleaningSettingsRecord = (item: Record<string, unknown>) => {
+  const id = typeof item.id === 'string' ? item.id : '';
+  const kind = typeof item.kind === 'string' ? item.kind : '';
+  const propertyId = typeof item.propertyId === 'string' ? item.propertyId : '';
+  return (
+    id === CLEANING_SETTINGS_ID ||
+    kind === 'settings' ||
+    propertyId === CLEANING_SETTINGS_ID
+  );
+};
+
+export const normalizeGapFreeNights = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 export const PLAN_STATUSES = new Set(['DRAFT', 'READY']);
 
 export const isDateOnly = (value?: string) =>

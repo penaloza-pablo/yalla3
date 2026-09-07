@@ -4,7 +4,11 @@ import {
   quoted,
   recordActivityLog,
 } from '../shared/activity-log';
-import { normalizeCleaningTypes } from '../shared/cleaning-plan';
+import {
+  CLEANING_SETTINGS_ID,
+  normalizeCleaningTypes,
+  normalizeGapFreeNights,
+} from '../shared/cleaning-plan';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -24,10 +28,11 @@ type CleaningTypePayload = {
 };
 
 type Payload = {
-  action?: 'upsert' | 'delete';
+  action?: 'upsert' | 'delete' | 'upsertSettings';
   propertyId?: string;
   nickname?: string;
   cleaningTypes?: CleaningTypePayload[];
+  gapFreeNights?: number;
 };
 
 const propertyLabel = (item: Record<string, unknown>, fallbackId: string) => {
@@ -72,14 +77,59 @@ export const handler = async (event: {
     return buildHttpResponse(400, { message: 'Payload is required.' });
   }
 
+  const action = payload.action?.trim().toLowerCase() ?? 'upsert';
   const propertyId = payload.propertyId?.trim();
-  if (!propertyId) {
-    return buildHttpResponse(400, { message: 'propertyId is required.' });
-  }
-
-  const action = payload.action?.trim().toLowerCase() === 'delete' ? 'delete' : 'upsert';
 
   try {
+    if (action === 'upsertsettings') {
+      const gapFreeNights = normalizeGapFreeNights(payload.gapFreeNights);
+      if (gapFreeNights === null) {
+        return buildHttpResponse(400, {
+          message: 'gapFreeNights must be an integer of 0 or more.',
+        });
+      }
+      const existingResult = await docClient.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { id: CLEANING_SETTINGS_ID },
+        }),
+      );
+      const existing = existingResult.Item as Record<string, unknown> | undefined;
+      const timestamp = nowIso();
+      const item: Record<string, unknown> = {
+        id: CLEANING_SETTINGS_ID,
+        propertyId: CLEANING_SETTINGS_ID,
+        kind: 'settings',
+        gapFreeNights,
+        createdAt:
+          (typeof existing?.createdAt === 'string' ? existing.createdAt : undefined) ??
+          timestamp,
+        updatedAt: timestamp,
+      };
+      await putItem(tableName, item);
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.CLEANING_SETTINGS,
+        action: existing ? 'update' : 'create',
+        entityId: CLEANING_SETTINGS_ID,
+        entityName: 'GAP',
+        summary: existing
+          ? `updated cleaning GAP setting to ${gapFreeNights}`
+          : `set cleaning GAP setting to ${gapFreeNights}`,
+      });
+      return buildHttpResponse(200, {
+        settings: { gapFreeNights },
+      });
+    }
+
+    if (!propertyId) {
+      return buildHttpResponse(400, { message: 'propertyId is required.' });
+    }
+    if (propertyId === CLEANING_SETTINGS_ID) {
+      return buildHttpResponse(400, {
+        message: 'GLOBAL is reserved for cleaning settings.',
+      });
+    }
+
     const existingResult = await docClient.send(
       new GetCommand({
         TableName: tableName,

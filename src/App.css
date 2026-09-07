@@ -3167,6 +3167,18 @@ th {
   color: #ffffff;
 }
 
+.operations-day-booking-block.is-check-in.has-early-lead {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.operations-day-booking-block.is-early-check-in {
+  background: #facc15;
+  color: #854d0e;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .operations-day-booking-block.is-check-out {
   background: #667085;
   color: #ffffff;
@@ -5141,6 +5153,46 @@ th {
   gap: 2px;
 }
 
+.cleaning-visit-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cleaning-visit-title-row .status {
+  flex-shrink: 0;
+}
+
+.cleaning-visit-cell .operations-visit-badges {
+  margin-top: 2px;
+}
+
+.cleaning-plan-badge-sofa {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
+.cleaning-plan-badge-guests {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.cleaning-plan-badge-gift {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.cleaning-plan-badge-early {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.cleaning-plan-badge-gap {
+  background: #fef3f2;
+  color: #b42318;
+}
+
 .cleaning-visit-title-btn {
   appearance: none;
   border: 0;
@@ -5194,7 +5246,7 @@ th {
 
 .cleaning-settings-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .summary-card-button {
@@ -5214,6 +5266,17 @@ th {
 .cleaning-type-summary {
   margin: 0;
   padding-left: 16px;
+}
+
+.cleaning-type-summary li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cleaning-type-summary .status {
+  flex-shrink: 0;
 }
 
 .cleaning-plan-modal {

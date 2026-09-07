@@ -9,6 +9,7 @@ import { isPlanDateTooFarAhead } from '../shared/date-range';
 import {
   addHoursToTime,
   getPlanByDate,
+  isCleaningSettingsRecord,
   isDateOnly,
   normalizeCleaningTypes,
   normalizeStartTime,
@@ -25,6 +26,7 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { invokeGuestyTaskSync } from '../shared/guesty-sync';
+import { notifyCleaningPlanReopened } from '../shared/slack-cleaning';
 import {
   docClient,
   getTodayInMadrid,
@@ -149,15 +151,17 @@ export const handler = async (event: {
     );
     const detailItems = detailsTable ? await scanAllItems(detailsTable) : [];
     const detailsByPropertyId = new Map(
-      detailItems.map((item) => {
-        const propertyId =
-          typeof item.propertyId === 'string'
-            ? item.propertyId
-            : typeof item.id === 'string'
-              ? item.id
-              : '';
-        return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
-      }),
+      detailItems
+        .filter((item) => !isCleaningSettingsRecord(item))
+        .map((item) => {
+          const propertyId =
+            typeof item.propertyId === 'string'
+              ? item.propertyId
+              : typeof item.id === 'string'
+                ? item.id
+                : '';
+          return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
+        }),
     );
 
     const incomingItems = Array.isArray(payload.items)
@@ -242,6 +246,14 @@ export const handler = async (event: {
     }
 
     await putItem(plansTable, item);
+
+    if (action === 'reopen' && currentStatus === 'READY') {
+      try {
+        await notifyCleaningPlanReopened(plannedDate as string);
+      } catch (error) {
+        console.error('Failed to notify Slack of cleaning plan reopen', error);
+      }
+    }
 
     try {
       await reconcileCleanerStatsFromPlans();

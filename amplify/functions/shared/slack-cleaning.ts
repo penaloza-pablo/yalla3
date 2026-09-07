@@ -440,3 +440,19 @@ export const notifyVisitClosedWithComments = async (visit: {
     text,
   });
 };
+
+export const notifyCleaningPlanReopened = async (plannedDate: string) => {
+  const { warningsChannelId } = await loadSlackSecrets();
+  if (!warningsChannelId) {
+    console.error(
+      'Cleaning plan reopen notify skipped: missing warningsChannelId in yalla/slack.',
+    );
+    return;
+  }
+  const date = asString(plannedDate);
+  const text = `Se reabrió el plan de limpieza del ${escapeMrkdwn(date)}. Estaba marcado como listo.`;
+  await slackApi('chat.postMessage', {
+    channel: warningsChannelId,
+    text,
+  });
+};

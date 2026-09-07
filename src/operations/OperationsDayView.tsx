@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { addDaysToDateString } from './dateHelpers'
 import { getPropertyLabel } from './propertyHelpers'
@@ -42,6 +42,7 @@ const DAY_LANE_HEIGHT = 34
 const BOOKING_CHECK_IN_START = 15 * 60
 const BOOKING_CHECK_OUT_END = 11 * 60
 const BOOKING_DURATION_MINUTES = 30
+const EARLY_CHECK_IN_DURATION_MINUTES = 15
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
 
@@ -59,6 +60,7 @@ export type DayBookingEvent = {
   kind: 'check-in' | 'check-out'
   propertyId: string
   guestName: string
+  earlyCheckIn?: boolean
 }
 
 type Props = {
@@ -766,6 +768,46 @@ function DayBookingIcon({ kind }: { kind: DayBookingEvent['kind'] }) {
   )
 }
 
+function DayBookingTimeBlock({
+  start,
+  end,
+  timelineWindow,
+  className,
+  title,
+  children,
+}: {
+  start: number
+  end: number
+  timelineWindow: DayTimelineWindow
+  className: string
+  title: string
+  children?: ReactNode
+}) {
+  const clipped = clipVisitToDayWindow(start, end, timelineWindow)
+  if (clipped.visualEnd <= clipped.visualStart) {
+    return null
+  }
+  const left = minutesToPositionPercent(clipped.visualStart, timelineWindow)
+  const width = Math.max(
+    2,
+    minutesToPositionPercent(clipped.visualEnd, timelineWindow) -
+      minutesToPositionPercent(clipped.visualStart, timelineWindow),
+  )
+  return (
+    <div
+      className={className}
+      style={{
+        left: `${left}%`,
+        width: `${width}%`,
+      }}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </div>
+  )
+}
+
 function DayBookingBlock({
   booking,
   timelineWindow,
@@ -781,34 +823,35 @@ function DayBookingBlock({
     booking.kind === 'check-in'
       ? start + BOOKING_DURATION_MINUTES
       : BOOKING_CHECK_OUT_END
-  const clipped = clipVisitToDayWindow(start, end, timelineWindow)
-  if (clipped.visualEnd <= clipped.visualStart) {
-    return null
-  }
-  const left = minutesToPositionPercent(clipped.visualStart, timelineWindow)
-  const width = Math.max(
-    2,
-    minutesToPositionPercent(clipped.visualEnd, timelineWindow) -
-      minutesToPositionPercent(clipped.visualStart, timelineWindow),
-  )
+  const showEarlyCheckIn =
+    booking.kind === 'check-in' && Boolean(booking.earlyCheckIn)
   const label =
     booking.kind === 'check-in'
       ? `Check-in · ${booking.guestName}`
       : `Check-out · ${booking.guestName}`
 
   return (
-    <div
-      className={`operations-day-booking-block ${
-        booking.kind === 'check-in' ? 'is-check-in' : 'is-check-out'
-      }`}
-      style={{
-        left: `${left}%`,
-        width: `${width}%`,
-      }}
-      title={label}
-      aria-label={label}
-    >
-      <DayBookingIcon kind={booking.kind} />
-    </div>
+    <>
+      {showEarlyCheckIn ? (
+        <DayBookingTimeBlock
+          start={start - EARLY_CHECK_IN_DURATION_MINUTES}
+          end={start}
+          timelineWindow={timelineWindow}
+          className="operations-day-booking-block is-early-check-in"
+          title={`Early check-in · ${booking.guestName}`}
+        />
+      ) : null}
+      <DayBookingTimeBlock
+        start={start}
+        end={end}
+        timelineWindow={timelineWindow}
+        className={`operations-day-booking-block ${
+          booking.kind === 'check-in' ? 'is-check-in' : 'is-check-out'
+        }${showEarlyCheckIn ? ' has-early-lead' : ''}`}
+        title={label}
+      >
+        <DayBookingIcon kind={booking.kind} />
+      </DayBookingTimeBlock>
+    </>
   )
 }

@@ -6,12 +6,18 @@ import {
 } from '../shared/dynamo-http';
 import {
   getPlanByDate,
+  isCleaningSettingsRecord,
   isDateOnly,
   normalizeCleaningTypes,
   queryCleaningVisitsForDate,
   resolveCleaningType,
   scanAllItems,
 } from '../shared/cleaning-plan';
+import {
+  type CleaningVisitBookingContext,
+  loadCleaningVisitBookingContexts,
+  resolveAutoCleaningType,
+} from '../shared/cleaning-plan-booking-context';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -34,6 +40,9 @@ const mergePlanRows = (
   visits: Record<string, unknown>[],
   plan: Record<string, unknown> | undefined,
   detailsByPropertyId: Map<string, ReturnType<typeof normalizeCleaningTypes>>,
+  bookingContextByPropertyId: Map<string, CleaningVisitBookingContext>,
+  nicknameByPropertyId: Map<string, string>,
+  applyAutoType: boolean,
 ) => {
   const savedByVisitId = new Map(
     asPlanItems(plan?.items)
@@ -51,15 +60,23 @@ const mergePlanRows = (
           : '';
       const propertyId =
         typeof visit.propertyId === 'string' ? visit.propertyId : '';
+      const visitTitle = typeof visit.title === 'string' ? visit.title : '';
       const cleaningTypes = detailsByPropertyId.get(propertyId) ?? [];
-      const selectedType = resolveCleaningType(
-        cleaningTypes,
-        saved?.cleaningTypeId,
-      );
+      const bookingContext = bookingContextByPropertyId.get(propertyId) ?? null;
+      const selectedType = applyAutoType
+        ? resolveAutoCleaningType(cleaningTypes, bookingContext, {
+            visitTitle,
+            labels: [
+              propertyId,
+              visitTitle,
+              nicknameByPropertyId.get(propertyId),
+            ],
+          })
+        : resolveCleaningType(cleaningTypes, saved?.cleaningTypeId);
       return {
         visitId,
         propertyId,
-        title: typeof visit.title === 'string' ? visit.title : '',
+        title: visitTitle,
         visitStatus: typeof visit.status === 'string' ? visit.status : '',
         visitStartTime: visitStart,
         cleanerId: saved?.cleanerId?.trim() ?? '',
@@ -67,6 +84,7 @@ const mergePlanRows = (
         qualityReview: Boolean(saved?.qualityReview),
         cleaningTypeId: selectedType?.id ?? '',
         cleaningTypes,
+        bookingContext,
         guestyTaskId:
           typeof visit.guestyTaskId === 'string' ? visit.guestyTaskId : '',
       };
@@ -126,24 +144,67 @@ export const handler = async (event: HttpEvent) => {
       getPlanByDate(plansTable, plannedDate as string),
       detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
     ]);
-    const detailsByPropertyId = new Map(
-      detailItems.map((item) => {
-        const propertyId =
-          typeof item.propertyId === 'string'
-            ? item.propertyId
-            : typeof item.id === 'string'
-              ? item.id
-              : '';
-        return [propertyId, normalizeCleaningTypes(item.cleaningTypes)];
-      }),
+    const detailsByPropertyId = new Map<
+      string,
+      ReturnType<typeof normalizeCleaningTypes>
+    >();
+    const nicknameByPropertyId = new Map<string, string>();
+    for (const item of detailItems) {
+      if (isCleaningSettingsRecord(item)) {
+        continue;
+      }
+      const propertyId =
+        typeof item.propertyId === 'string'
+          ? item.propertyId
+          : typeof item.id === 'string'
+            ? item.id
+            : '';
+      if (!propertyId) {
+        continue;
+      }
+      detailsByPropertyId.set(
+        propertyId,
+        normalizeCleaningTypes(item.cleaningTypes),
+      );
+      const nickname =
+        typeof item.nickname === 'string' ? item.nickname.trim() : '';
+      if (nickname) {
+        nicknameByPropertyId.set(propertyId, nickname);
+      }
+    }
+    const planStatus =
+      typeof plan?.status === 'string' ? plan.status : 'DRAFT';
+    let bookingContextByPropertyId = new Map<
+      string,
+      CleaningVisitBookingContext
+    >();
+    try {
+      const loaded = await loadCleaningVisitBookingContexts({
+        plannedDate: plannedDate as string,
+        propertyIds: visits.map((visit) =>
+          typeof visit.propertyId === 'string' ? visit.propertyId : '',
+        ),
+        detailItems,
+        bookingsTable: process.env.BOOKINGS_TABLE,
+        propertiesTable: process.env.PROPERTIES_TABLE,
+      });
+      bookingContextByPropertyId = loaded.contexts;
+    } catch (error) {
+      console.error('Failed to load cleaning plan booking context', error);
+    }
+    const rows = mergePlanRows(
+      visits,
+      plan,
+      detailsByPropertyId,
+      bookingContextByPropertyId,
+      nicknameByPropertyId,
+      planStatus.toUpperCase() !== 'READY',
     );
-    const rows = mergePlanRows(visits, plan, detailsByPropertyId);
 
     return buildHttpResponse(200, {
       plannedDate,
       plan: plan ?? null,
-      status:
-        typeof plan?.status === 'string' ? plan.status : 'DRAFT',
+      status: planStatus,
       rows,
       count: rows.length,
     });

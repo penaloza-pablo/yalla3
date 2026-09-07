@@ -13,11 +13,58 @@ import {
 import type { PropertyOption } from '../operations/types'
 import type {
   CleanerRecord,
+  CleaningPlanBookingContext,
   CleaningPlanRecord,
   CleaningPlanRow,
   CleaningPlanStatus,
   PropertyCleaningType,
 } from './types'
+
+const EARLY_CHECK_IN_CUTOFF = '12:30'
+const EARLY_CHECK_IN_SUGGESTED = '11:00'
+
+const timeToMinutes = (value: string) => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) {
+    return null
+  }
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null
+  }
+  return hours * 60 + minutes
+}
+
+const isAfterEarlyCutoff = (startTime: string) => {
+  const minutes = timeToMinutes(startTime)
+  const cutoff = timeToMinutes(EARLY_CHECK_IN_CUTOFF)
+  return minutes !== null && cutoff !== null && minutes > cutoff
+}
+
+const mapBookingContext = (
+  value: unknown,
+): CleaningPlanBookingContext | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const item = value as Record<string, unknown>
+  return {
+    confirmationCode: String(item.confirmationCode ?? ''),
+    checkInDate: String(item.checkInDate ?? ''),
+    checkOutDate: String(item.checkOutDate ?? ''),
+    sofaBedYes: Boolean(item.sofaBedYes),
+    giftCardLabel: String(item.giftCardLabel ?? ''),
+    guestCount: Number(item.guestCount ?? 0),
+    accommodates:
+      item.accommodates === null || item.accommodates === undefined
+        ? null
+        : Number(item.accommodates),
+    earlyCheckInApplies: Boolean(item.earlyCheckInApplies),
+    hasBookingGap: Boolean(item.hasBookingGap),
+    nightsUntilCheckIn: Number(item.nightsUntilCheckIn ?? 0),
+  }
+}
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -62,6 +109,7 @@ const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => {
     qualityReview: Boolean(item.qualityReview),
     cleaningTypeId,
     cleaningTypes,
+    bookingContext: mapBookingContext(item.bookingContext),
     guestyTaskId:
       typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
   }
@@ -131,6 +179,14 @@ export function CleaningPlanView({
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [skippedEarlyVisitIds, setSkippedEarlyVisitIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [earlyWarning, setEarlyWarning] = useState<{
+    visitId: string
+    title: string
+    resumeAction?: 'save' | 'ready'
+  } | null>(null)
 
   const today = getTodayMadrid()
   const tomorrow = getTomorrowMadrid()
@@ -249,6 +305,8 @@ export function CleaningPlanView({
     setIsDayModalOpen(true)
     setMessage('')
     setError('')
+    setSkippedEarlyVisitIds(new Set())
+    setEarlyWarning(null)
     await loadPlan(date)
   }
 
@@ -272,17 +330,45 @@ export function CleaningPlanView({
     setMessage('')
   }
 
-  const savePlan = async (action: 'save' | 'ready' | 'reopen') => {
+  const needsEarlyWarning = (
+    row: CleaningPlanRow,
+    startTime: string,
+    skipped: Set<string>,
+  ) =>
+    Boolean(row.bookingContext?.earlyCheckInApplies) &&
+    isAfterEarlyCutoff(startTime) &&
+    !skipped.has(row.visitId)
+
+  const savePlan = async (
+    action: 'save' | 'ready' | 'reopen',
+    rowsOverride?: CleaningPlanRow[],
+    skippedOverride?: Set<string>,
+  ) => {
     if (!endpoints.upsertPlan) {
       setError(t('cleaningPlan.missingWrite'))
       return
+    }
+    const planRows = rowsOverride ?? rows
+    const skipped = skippedOverride ?? skippedEarlyVisitIds
+    if (action !== 'reopen') {
+      const pendingEarly = planRows.find((row) =>
+        needsEarlyWarning(row, row.startTime, skipped),
+      )
+      if (pendingEarly) {
+        setEarlyWarning({
+          visitId: pendingEarly.visitId,
+          title: pendingEarly.title,
+          resumeAction: action,
+        })
+        return
+      }
     }
     if (action === 'ready') {
       if (isPlanDateTooFarAhead(plannedDate)) {
         setError(t('cleaningPlan.draftOnlyFuture'))
         return
       }
-      const incomplete = rows.filter((row) => !row.cleanerId || !row.startTime)
+      const incomplete = planRows.filter((row) => !row.cleanerId || !row.startTime)
       if (incomplete.length > 0) {
         setError(t('cleaningPlan.incompleteReady'))
         return
@@ -300,7 +386,7 @@ export function CleaningPlanView({
         body: JSON.stringify({
           plannedDate,
           action,
-          items: rows.map((row) => ({
+          items: planRows.map((row) => ({
             visitId: row.visitId,
             cleanerId: row.cleanerId,
             startTime: row.startTime,
@@ -370,20 +456,53 @@ export function CleaningPlanView({
         <tr key={row.visitId}>
           <td>
             <div className="cleaning-visit-cell">
-              <button
-                type="button"
-                className="cleaning-visit-title-btn"
-                aria-label={t('cleaningPlan.openVisit')}
-                onClick={() => setOpenVisitId(row.visitId)}
-              >
-                {row.title || row.visitId}
-              </button>
-              {row.visitStatus ? (
-                <span className="card-meta">
-                  {t(`operations.visitStatuses.${row.visitStatus}`, {
-                    defaultValue: row.visitStatus,
-                  })}
-                </span>
+              <div className="cleaning-visit-title-row">
+                <button
+                  type="button"
+                  className="cleaning-visit-title-btn"
+                  aria-label={t('cleaningPlan.openVisit')}
+                  onClick={() => setOpenVisitId(row.visitId)}
+                >
+                  {row.title || row.visitId}
+                </button>
+                {row.visitStatus ? (
+                  <span className="status operations-visit-status status-info">
+                    {t(`operations.visitStatuses.${row.visitStatus}`, {
+                      defaultValue: row.visitStatus,
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              {row.bookingContext ? (
+                <div className="operations-visit-badges">
+                  {row.bookingContext.hasBookingGap ? (
+                    <span className="status operations-visit-status cleaning-plan-badge-gap">
+                      {t('cleaningPlan.badgeBookingsGap')}
+                    </span>
+                  ) : null}
+                  {row.bookingContext.sofaBedYes ? (
+                    <span className="status operations-visit-status cleaning-plan-badge-sofa">
+                      {t('cleaningPlan.badgeSofaBed')}
+                    </span>
+                  ) : null}
+                  {Number.isFinite(row.bookingContext.guestCount) ? (
+                    <span className="status operations-visit-status cleaning-plan-badge-guests">
+                      {t('cleaningPlan.badgeGuests', {
+                        count: row.bookingContext.guestCount,
+                      })}
+                    </span>
+                  ) : null}
+                  {row.bookingContext.giftCardLabel ? (
+                    <span className="status operations-visit-status cleaning-plan-badge-gift">
+                      {row.bookingContext.giftCardLabel}
+                    </span>
+                  ) : null}
+                  {row.bookingContext.earlyCheckInApplies ? (
+                    <span className="status operations-visit-status cleaning-plan-badge-early">
+                      {t('cleaningPlan.badgeEarlyCheckIn')}
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </td>
@@ -432,11 +551,16 @@ export function CleaningPlanView({
               type="time"
               value={row.startTime}
               disabled={isReady}
-              onChange={(event) =>
-                updateRow(row.visitId, {
-                  startTime: event.target.value,
-                })
-              }
+              onChange={(event) => {
+                const startTime = event.target.value
+                updateRow(row.visitId, { startTime })
+                if (needsEarlyWarning(row, startTime, skippedEarlyVisitIds)) {
+                  setEarlyWarning({
+                    visitId: row.visitId,
+                    title: row.title,
+                  })
+                }
+              }}
             />
           </td>
           <td className="cleaning-quality-cell">
@@ -881,6 +1005,65 @@ export function CleaningPlanView({
           propertyOptions={propertyOptions}
           onClose={() => setOpenVisitId('')}
         />
+      ) : null}
+
+      {earlyWarning ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {t('cleaningPlan.badgeEarlyCheckIn')}
+                </h3>
+                <p className="modal-subtitle">
+                  {earlyWarning.title || earlyWarning.visitId}
+                </p>
+              </div>
+            </div>
+            <div className="modal-body">
+              <p>{t('cleaningPlan.earlyCheckInWarning')}</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  const visitId = earlyWarning.visitId
+                  const resumeAction = earlyWarning.resumeAction
+                  const nextSkipped = new Set(skippedEarlyVisitIds)
+                  nextSkipped.add(visitId)
+                  setSkippedEarlyVisitIds(nextSkipped)
+                  setEarlyWarning(null)
+                  if (resumeAction) {
+                    void savePlan(resumeAction, rows, nextSkipped)
+                  }
+                }}
+              >
+                {t('cleaningPlan.skipEarlyCheckIn')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  const visitId = earlyWarning.visitId
+                  const resumeAction = earlyWarning.resumeAction
+                  const nextRows = rows.map((row) =>
+                    row.visitId === visitId
+                      ? { ...row, startTime: EARLY_CHECK_IN_SUGGESTED }
+                      : row,
+                  )
+                  setRows(nextRows)
+                  setEarlyWarning(null)
+                  if (resumeAction) {
+                    void savePlan(resumeAction, nextRows)
+                  }
+                }}
+              >
+                {t('common.accept')}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   )

@@ -16,7 +16,7 @@ type Props = {
   propertyOptions: PropertyOption[]
 }
 
-type SettingsSection = 'cleaners' | 'propertyDetails'
+type SettingsSection = 'cleaners' | 'propertyDetails' | 'gap'
 
 type TypeDraft = {
   id: string
@@ -150,6 +150,11 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
   const [typeDrafts, setTypeDrafts] = useState<TypeDraft[]>([emptyTypeDraft(true)])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [defaultConfirmOpen, setDefaultConfirmOpen] = useState(false)
+  const [pendingRemove, setPendingRemove] =
+    useState<PropertyCleaningDetailsRecord | null>(null)
+  const [gapFreeNights, setGapFreeNights] = useState<number | null>(null)
+  const [gapDraft, setGapDraft] = useState('')
 
   const propertyById = useMemo(
     () =>
@@ -204,10 +209,22 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     if (!endpoints.getDetails) {
       return
     }
-    const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
-      endpoints.getDetails,
+    const payload = await fetchJson<{
+      items?: Record<string, unknown>[]
+      settings?: { gapFreeNights?: number | null }
+    }>(endpoints.getDetails)
+    setDetails(
+      (payload.items ?? [])
+        .map(mapDetails)
+        .filter(
+          (item) => item.propertyId && item.propertyId !== 'GLOBAL',
+        ),
     )
-    setDetails((payload.items ?? []).map(mapDetails))
+    const gap = payload.settings?.gapFreeNights
+    const parsedGap =
+      typeof gap === 'number' && Number.isInteger(gap) && gap >= 0 ? gap : null
+    setGapFreeNights(parsedGap)
+    setGapDraft(parsedGap === null ? '' : String(parsedGap))
   }, [endpoints.getDetails])
 
   const loadProperties = useCallback(async () => {
@@ -425,7 +442,16 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     setError('')
   }
 
-  const saveEditingTypes = async () => {
+  const pendingDefaultTypeName = (() => {
+    const named = typeDrafts.filter((draft) => draft.name.trim())
+    return (
+      named.find((draft) => draft.isDefault)?.name.trim() ||
+      named[0]?.name.trim() ||
+      ''
+    )
+  })()
+
+  const saveEditingTypes = async (confirmed = false) => {
     if (!editingPropertyId) {
       return
     }
@@ -438,10 +464,68 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
       setError(t('cleaningSettings.typeNameRequired'))
       return
     }
+    if (
+      named.some((draft) => {
+        const duration = Number(String(draft.durationHours).replace(',', '.'))
+        return !(duration > 0)
+      })
+    ) {
+      setError(t('cleaningSettings.durationRequired'))
+      return
+    }
+    if (
+      named.some((draft) => {
+        const price = Number(draft.price)
+        return !Number.isFinite(price) || price < 0
+      })
+    ) {
+      setError(t('cleaningSettings.priceRequired'))
+      return
+    }
+    if (named.length > 1 && !confirmed) {
+      setDefaultConfirmOpen(true)
+      return
+    }
+    setDefaultConfirmOpen(false)
     const ok = await saveDetails(editingPropertyId, nickname, named)
     if (ok) {
       setEditingPropertyId('')
       setMessage(t('cleaningSettings.detailsUpdated'))
+    }
+  }
+
+  const saveGap = async () => {
+    if (!endpoints.upsertDetails) {
+      setError(t('cleaningSettings.missingDetailsWrite'))
+      return
+    }
+    const parsed = Number(gapDraft.trim())
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      setError(t('cleaningSettings.gapRequired'))
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await fetchJson(endpoints.upsertDetails, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertSettings',
+          gapFreeNights: parsed,
+        }),
+      })
+      setGapFreeNights(parsed)
+      setGapDraft(String(parsed))
+      setMessage(t('cleaningSettings.gapSaved'))
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : t('cleaningSettings.detailsSaveError'),
+      )
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -560,6 +644,21 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
           <p className="card-label">{t('cleaningSettings.detailsCard')}</p>
           <p className="card-value">{isLoading ? '—' : details.length}</p>
           <p className="card-meta">{t('cleaningSettings.detailsCardMeta')}</p>
+        </button>
+        <button
+          type="button"
+          className={`card card-compact summary-card-button ${
+            section === 'gap' ? 'is-selected' : ''
+          }`}
+          onClick={() =>
+            setSection((current) => (current === 'gap' ? null : 'gap'))
+          }
+        >
+          <p className="card-label">{t('cleaningSettings.gapCard')}</p>
+          <p className="card-value">
+            {isLoading ? '—' : gapFreeNights === null ? '—' : gapFreeNights}
+          </p>
+          <p className="card-meta">{t('cleaningSettings.gapCardMeta')}</p>
         </button>
       </section>
 
@@ -970,34 +1069,52 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                             <ul className="cleaning-type-summary">
                               {item.cleaningTypes.map((type) => (
                                 <li key={type.id}>
-                                  {type.name}: {formatPrice(type.price)},{' '}
-                                  {t('cleaningSettings.durationValue', {
-                                    hours: formatDuration(type.durationHours),
-                                  })}
-                                  {type.isDefault
-                                    ? ` · ${t('cleaningSettings.defaultYes')}`
-                                    : ''}
+                                  <span>
+                                    {type.name}: {formatPrice(type.price)},{' '}
+                                    {t('cleaningSettings.durationValue', {
+                                      hours: formatDuration(type.durationHours),
+                                    })}
+                                  </span>
+                                  {type.isDefault ? (
+                                    <span className="status status-info">
+                                      {t('cleaningSettings.defaultBadge')}
+                                    </span>
+                                  ) : null}
                                 </li>
                               ))}
                             </ul>
                           )}
                         </td>
                         <td>
-                          <div className="table-actions">
+                          <div className="action-buttons">
                             <button
-                              className="btn-secondary"
+                              className="btn-icon btn-icon-ghost"
                               type="button"
                               onClick={() => openEditDetails(item)}
+                              aria-label={t('cleaningSettings.editTypesAction')}
+                              title={t('cleaningSettings.editTypesAction')}
                             >
-                              {t('cleaningSettings.editTypesAction')}
+                              ✎
                             </button>
                             <button
-                              className="btn-secondary"
+                              className="btn-icon btn-icon-ghost"
                               type="button"
                               disabled={isSaving}
-                              onClick={() => void removeProperty(item)}
+                              onClick={() => setPendingRemove(item)}
+                              aria-label={t('cleaningSettings.removeProperty')}
+                              title={t('cleaningSettings.removeProperty')}
                             >
-                              {t('cleaningSettings.removeProperty')}
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                width="16"
+                                height="16"
+                              >
+                                <path
+                                  d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
+                                  fill="currentColor"
+                                />
+                              </svg>
                             </button>
                           </div>
                         </td>
@@ -1009,6 +1126,145 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
             </div>
           </section>
         </>
+      ) : null}
+
+      {section === 'gap' ? (
+        <section className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">{t('cleaningSettings.gapTitle')}</h2>
+              <p className="card-subtitle">{t('cleaningSettings.gapSubtitle')}</p>
+            </div>
+          </div>
+          <div className="filters-grid">
+            <label>
+              {t('cleaningSettings.gapFieldLabel')}
+              <input
+                type="number"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                value={gapDraft}
+                onChange={(event) => setGapDraft(event.target.value)}
+              />
+            </label>
+          </div>
+          <p className="card-subtitle" style={{ marginTop: 8 }}>
+            {t('cleaningSettings.gapHelp')}
+          </p>
+          <div className="page-action-bar" style={{ marginTop: 16 }}>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={isSaving}
+              onClick={() => void saveGap()}
+            >
+              {isSaving ? t('common.saving') : t('common.save')}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {defaultConfirmOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {t('cleaningSettings.defaultGapConfirmTitle')}
+                </h3>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setDefaultConfirmOpen(false)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                {t('cleaningSettings.defaultGapConfirmBody', {
+                  typeName: pendingDefaultTypeName,
+                })}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setDefaultConfirmOpen(false)}
+              >
+                {t('common.back')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSaving}
+                onClick={() => void saveEditingTypes(true)}
+              >
+                {isSaving
+                  ? t('common.saving')
+                  : t('cleaningSettings.confirmDefault')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingRemove ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {t('cleaningSettings.removePropertyTitle')}
+                </h3>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setPendingRemove(null)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                {t('cleaningSettings.removePropertyBody', {
+                  property:
+                    propertyById.get(pendingRemove.propertyId) ||
+                    pendingRemove.nickname,
+                })}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setPendingRemove(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  const item = pendingRemove
+                  setPendingRemove(null)
+                  void removeProperty(item)
+                }}
+              >
+                {isSaving
+                  ? t('common.saving')
+                  : t('cleaningSettings.removeProperty')}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   )

@@ -27,6 +27,19 @@ export type CleaningIncidentRecord = {
 
 export type CleaningPlanStatus = 'DRAFT' | 'READY'
 
+export type CleaningPlanBookingContext = {
+  confirmationCode: string
+  checkInDate: string
+  checkOutDate: string
+  sofaBedYes: boolean
+  giftCardLabel: string
+  guestCount: number
+  accommodates: number | null
+  earlyCheckInApplies: boolean
+  hasBookingGap: boolean
+  nightsUntilCheckIn: number
+}
+
 export type CleaningPlanRow = {
   visitId: string
   propertyId: string
@@ -38,6 +51,7 @@ export type CleaningPlanRow = {
   qualityReview: boolean
   cleaningTypeId: string
   cleaningTypes: PropertyCleaningType[]
+  bookingContext?: CleaningPlanBookingContext | null
   guestyTaskId?: string
 }
 
