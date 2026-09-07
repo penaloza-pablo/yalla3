@@ -97,7 +97,7 @@
     "emptyFiltered": "Ninguna reserva coincide con los filtros actuales.",
     "warning": {
       "linen_ask_guest": "Consulta al huésped lo del sofá cama.",
-      "gift_card_access_missing": "Configura Access antes de completar Gift Card.",
+      "gift_card_access_missing": "Configura el código o enlace de Access",
       "single_guest": "Valida con el huésped esta reserva de 1 guest.",
       "double_or_two_singles_ask": "Pregunta al huésped si quiere cama doble o dos individuales."
     },
@@ -129,7 +129,7 @@
     "ruleLinen": "Linen",
     "ruleLinenHelp": "Sofá cama: n/a si está excluida, no si hay 1 huésped, sí si hay 3 o más. 2 huéspedes genera advertencia.",
     "ruleGiftCard": "Gift Card",
-    "ruleGiftCardHelp": "Sin tarjeta si hay 2 noches o menos. Si no, GuestCount - checkout DD/MM. Access vacío genera advertencia.",
+    "ruleGiftCardHelp": "Sin tarjeta si hay 2 noches o menos. Si no, GuestCount - checkout DD/MM.",
     "ruleSingleGuest": "1 guest",
     "ruleSingleGuestHelp": "Advierte si la reserva es para un huésped. Excluye propiedades de 1 pax como Esperanza 9.",
     "ruleDoubleOrTwoSingles": "Double or two singles",

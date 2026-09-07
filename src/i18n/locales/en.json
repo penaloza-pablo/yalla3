@@ -97,7 +97,7 @@
     "emptyFiltered": "No bookings match the current filters.",
     "warning": {
       "linen_ask_guest": "Ask the guest about the sofa bed.",
-      "gift_card_access_missing": "Set Access before completing Gift Card.",
+      "gift_card_access_missing": "Set Access code or link",
       "single_guest": "Validate this 1-guest booking with the guest.",
       "double_or_two_singles_ask": "Ask the guest if they want a double or two singles."
     },
@@ -129,7 +129,7 @@
     "ruleLinen": "Linen",
     "ruleLinenHelp": "Sofa bed: n/a if excluded, no for 1 guest, yes for 3+ guests. 2 guests needs a warning.",
     "ruleGiftCard": "Gift Card",
-    "ruleGiftCardHelp": "No card for 2 nights or fewer. Otherwise GuestCount - checkout DD/MM. Empty Access raises a warning.",
+    "ruleGiftCardHelp": "No card for 2 nights or fewer. Otherwise GuestCount - checkout DD/MM.",
     "ruleSingleGuest": "1 guest",
     "ruleSingleGuestHelp": "Warn when the booking is for one guest. Exclude studio-style properties such as Esperanza 9.",
     "ruleDoubleOrTwoSingles": "Double or two singles",
