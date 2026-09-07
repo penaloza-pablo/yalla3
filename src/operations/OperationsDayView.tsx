@@ -33,7 +33,9 @@ import { getTeamBlockStyle } from './teamColors'
 import {
   buildDayTimelineVisits,
   dayTimelineHasOverlaps,
+  dayVisitExpandsOverlapOnClick,
   formatVisitSummaryLine,
+  layoutDayTimelineVisits,
   type DayTimelineVisit,
 } from './visitOverlapLayout'
 import type { VisitRecord } from './types'
@@ -351,6 +353,12 @@ export function OperationsDayView({
                     teamById={teamById}
                     syncingVisitIds={syncingVisitIds}
                     showRoomLabel={row.showRoomLabel}
+                    expandMtlOnVisitClick={row.canExpand && !row.isExpanded}
+                    onExpandMtlGroup={
+                      row.canExpand && row.mtlPrincipalId
+                        ? () => toggleMtlGroup(row.mtlPrincipalId!)
+                        : undefined
+                    }
                     onVisitClick={onVisitClick}
                     onVisitTimeChange={onVisitTimeChange}
                   />
@@ -373,6 +381,8 @@ type DayTimelineTrackProps = {
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
   showRoomLabel: boolean
+  expandMtlOnVisitClick: boolean
+  onExpandMtlGroup?: () => void
   onVisitClick: (visitId: string) => void
   onVisitTimeChange: (
     visitId: string,
@@ -389,11 +399,17 @@ function DayTimelineTrack({
   teamById,
   syncingVisitIds,
   showRoomLabel,
+  expandMtlOnVisitClick,
+  onExpandMtlGroup,
   onVisitClick,
   onVisitTimeChange,
 }: DayTimelineTrackProps) {
+  const { t } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
+  const [expandedClusterKeys, setExpandedClusterKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [previewRange, setPreviewRange] = useState<{
     visitId: string
     start: number
@@ -402,8 +418,16 @@ function DayTimelineTrack({
   const dragMovedRef = useRef(false)
 
   const overflow = getDayWindowOverflow(propertyVisits, timelineWindow)
-  const timelineVisits = buildDayTimelineVisits(propertyVisits)
+  const { items: timelineVisits, laneCount } = layoutDayTimelineVisits(
+    buildDayTimelineVisits(propertyVisits),
+    expandedClusterKeys,
+    teamById,
+  )
   const hasTimeConflicts = dayTimelineHasOverlaps(timelineVisits)
+  const hasExpandedClusters = timelineVisits.some(
+    (entry) => entry.isClusterExpanded,
+  )
+  const collapseRowHeight = hasExpandedClusters ? 18 : 0
 
   const finishDrag = useCallback(
     (drag: ActiveDrag, nextStart: number, nextEnd: number) => {
@@ -499,10 +523,14 @@ function DayTimelineTrack({
 
   const beginDrag = (
     event: React.PointerEvent,
-    visit: VisitRecord,
+    entry: DayTimelineVisit,
     mode: DragMode,
   ) => {
+    const visit = entry.visit
     if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id)) {
+      return
+    }
+    if (expandMtlOnVisitClick || dayVisitExpandsOverlapOnClick(entry)) {
       return
     }
     const track = trackRef.current
@@ -526,12 +554,28 @@ function DayTimelineTrack({
     setPreviewRange({ visitId: visit.id, start, end })
   }
 
-  const handleBlockClick = (visitId: string) => {
+  const handleBlockClick = (entry: DayTimelineVisit) => {
     if (dragMovedRef.current) {
       dragMovedRef.current = false
       return
     }
-    onVisitClick(visitId)
+    if (expandMtlOnVisitClick) {
+      onExpandMtlGroup?.()
+      return
+    }
+    if (dayVisitExpandsOverlapOnClick(entry)) {
+      setExpandedClusterKeys((current) => {
+        const next = new Set(current)
+        next.add(entry.clusterKey)
+        return next
+      })
+      return
+    }
+    onVisitClick(entry.visit.id)
+  }
+
+  const collapseExpandedClusters = () => {
+    setExpandedClusterKeys(new Set())
   }
 
   return (
@@ -560,8 +604,10 @@ function DayTimelineTrack({
         ref={trackRef}
         className={`operations-day-track${
           hasTimeConflicts ? ' has-time-conflicts' : ''
-        }`}
-        style={{ minHeight: `${DAY_LANE_HEIGHT + 8}px` }}
+        }${hasExpandedClusters ? ' is-overlap-expanded' : ''}`}
+        style={{
+          minHeight: `${laneCount * DAY_LANE_HEIGHT + collapseRowHeight + 8}px`,
+        }}
       >
         {timelineVisits.map((entry) => (
           <DayVisitBlock
@@ -573,7 +619,10 @@ function DayTimelineTrack({
             syncingVisitIds={syncingVisitIds}
             showRoomLabel={showRoomLabel}
             previewRange={previewRange}
-            onVisitClick={onVisitClick}
+            expandMtlOnVisitClick={expandMtlOnVisitClick}
+            lockDrag={
+              expandMtlOnVisitClick || dayVisitExpandsOverlapOnClick(entry)
+            }
             beginDrag={beginDrag}
             handleBlockClick={handleBlockClick}
           />
@@ -585,6 +634,16 @@ function DayTimelineTrack({
             timelineWindow={timelineWindow}
           />
         ))}
+        {hasExpandedClusters ? (
+          <button
+            type="button"
+            className="operations-day-collapse-group"
+            style={{ top: `${laneCount * DAY_LANE_HEIGHT}px` }}
+            onClick={collapseExpandedClusters}
+          >
+            {t('operations.collapseOverlappingVisits')}
+          </button>
+        ) : null}
       </div>
     </div>
   )
@@ -598,13 +657,14 @@ type DayVisitBlockProps = {
   syncingVisitIds: Set<string>
   showRoomLabel: boolean
   previewRange: { visitId: string; start: number; end: number } | null
-  onVisitClick: (visitId: string) => void
+  expandMtlOnVisitClick: boolean
+  lockDrag: boolean
   beginDrag: (
     event: React.PointerEvent,
-    visit: VisitRecord,
+    entry: DayTimelineVisit,
     mode: DragMode,
   ) => void
-  handleBlockClick: (visitId: string) => void
+  handleBlockClick: (entry: DayTimelineVisit) => void
 }
 
 function DayVisitBlock({
@@ -615,10 +675,12 @@ function DayVisitBlock({
   syncingVisitIds,
   showRoomLabel,
   previewRange,
-  onVisitClick,
+  expandMtlOnVisitClick,
+  lockDrag,
   beginDrag,
   handleBlockClick,
 }: DayVisitBlockProps) {
+  const { t } = useTranslation()
   const { visit } = entry
   const isDragging = previewRange?.visitId === visit.id
   const start = isDragging ? previewRange!.start : entry.start
@@ -633,6 +695,25 @@ function DayVisitBlock({
   const isSyncing = syncingVisitIds.has(visit.id)
   const isEditable = !isTerminalVisit(visit)
   const roomLabel = showRoomLabel ? propertyById.get(visit.propertyId) : undefined
+  const expandsOverlap = dayVisitExpandsOverlapOnClick(entry)
+  const isTopOverlapLayer =
+    entry.hasTimeOverlap &&
+    !entry.isClusterExpanded &&
+    entry.stackLayer === entry.overlapCount - 1
+  const clickHint = expandMtlOnVisitClick
+    ? t('operations.expandRoomsOnVisitClick')
+    : expandsOverlap
+      ? t('operations.expandOverlappingVisits')
+      : undefined
+
+  const summaryTitle = `${formatVisitSummaryLine(visit, {
+    roomLabel,
+    endTime: visit.scheduledEndTime,
+  })}${
+    entry.hasTimeOverlap
+      ? ` · Overlaps with ${entry.overlapCount - 1} other visit(s)`
+      : ''
+  }${clickHint ? ` · ${clickHint}` : ''}`
 
   return (
     <div
@@ -644,35 +725,43 @@ function DayVisitBlock({
         clipped.extendsBefore ? ' extends-before' : ''
       }${clipped.extendsAfter ? ' extends-after' : ''}${
         entry.hasTimeOverlap ? ' has-time-overlap' : ''
+      }${expandsOverlap || expandMtlOnVisitClick ? ' is-overlap-group' : ''}${
+        lockDrag ? ' is-click-expand' : ''
       } has-team-solid`}
       style={{
         left: `${left}%`,
         width: `${width}%`,
-        top: 0,
-        zIndex: entry.hasTimeOverlap ? 2 + entry.stackLayer : 1,
+        top: `${entry.laneIndex * DAY_LANE_HEIGHT}px`,
+        zIndex: isDragging
+          ? 5
+          : entry.isClusterExpanded
+            ? 2
+            : entry.hasTimeOverlap
+              ? 2 + entry.stackLayer
+              : 2,
         ...getTeamBlockStyle(visit.teamId, teamById),
       }}
-      title={`${formatVisitSummaryLine(visit, {
-        roomLabel,
-        endTime: visit.scheduledEndTime,
-      })}${entry.hasTimeOverlap ? ` · Overlaps with ${entry.overlapCount - 1} other visit(s)` : ''}`}
+      title={summaryTitle}
     >
       {isEditable ? (
         <>
-          <span
-            className="operations-day-resize-handle operations-day-resize-handle--start"
-            onPointerDown={(event) => beginDrag(event, visit, 'resize-start')}
-            aria-label="Resize start time"
-          />
+          {lockDrag ? null : (
+            <span
+              className="operations-day-resize-handle operations-day-resize-handle--start"
+              onPointerDown={(event) => beginDrag(event, entry, 'resize-start')}
+              aria-label="Resize start time"
+            />
+          )}
           <div
             className="operations-day-block-body"
-            onPointerDown={(event) => beginDrag(event, visit, 'move')}
-            onClick={() => handleBlockClick(visit.id)}
+            onPointerDown={(event) => beginDrag(event, entry, 'move')}
+            onClick={() => handleBlockClick(entry)}
             role="button"
             tabIndex={0}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
-                onVisitClick(visit.id)
+                event.preventDefault()
+                handleBlockClick(entry)
               }
             }}
           >
@@ -688,18 +777,25 @@ function DayVisitBlock({
                 endTime: formatMinutesAsTime(end),
               })}
             </span>
+            {expandsOverlap && isTopOverlapLayer ? (
+              <span className="operations-day-overlap-count">
+                ×{entry.clusterSize}
+              </span>
+            ) : null}
           </div>
-          <span
-            className="operations-day-resize-handle operations-day-resize-handle--end"
-            onPointerDown={(event) => beginDrag(event, visit, 'resize-end')}
-            aria-label="Resize end time"
-          />
+          {lockDrag ? null : (
+            <span
+              className="operations-day-resize-handle operations-day-resize-handle--end"
+              onPointerDown={(event) => beginDrag(event, entry, 'resize-end')}
+              aria-label="Resize end time"
+            />
+          )}
         </>
       ) : (
         <button
           type="button"
           className="operations-day-block-body operations-day-block-body--button"
-          onClick={() => onVisitClick(visit.id)}
+          onClick={() => handleBlockClick(entry)}
         >
           <span className="operations-day-visit-summary">
             {formatVisitSummaryLine(visit, {
@@ -707,14 +803,19 @@ function DayVisitBlock({
               endTime: visit.scheduledEndTime,
             })}
           </span>
+          {expandsOverlap && isTopOverlapLayer ? (
+            <span className="operations-day-overlap-count">
+              ×{entry.clusterSize}
+            </span>
+          ) : null}
         </button>
       )}
-      {entry.hasTimeOverlap ? (
+      {entry.hasTimeOverlap && !entry.isClusterExpanded ? (
         <span
           className="operations-day-time-overlap-badge"
-          title={`Overlaps with ${entry.overlapCount - 1} other visit(s) — reschedule to fix`}
+          title={t('operations.expandOverlappingVisits')}
         >
-          ⚠
+          +
         </span>
       ) : null}
       {isTerminalVisit(visit) ? (

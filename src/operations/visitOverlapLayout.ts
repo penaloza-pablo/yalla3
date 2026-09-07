@@ -20,7 +20,7 @@ const rangesOverlap = (
   bEnd: number,
 ) => aStart < bEnd && bStart < aEnd
 
-const buildTeamOverlapComponents = (visits: VisitRecord[]) => {
+const buildTimeOverlapComponents = (visits: VisitRecord[]) => {
   const sorted = [...visits].sort(
     (a, b) =>
       getVisitTimeRange(a).start - getVisitTimeRange(b).start ||
@@ -69,6 +69,15 @@ const buildTeamOverlapComponents = (visits: VisitRecord[]) => {
 
   return [...components.values()]
 }
+
+const buildTeamOverlapComponents = (visits: VisitRecord[]) =>
+  buildTimeOverlapComponents(visits)
+
+const clusterKeyForVisits = (visits: VisitRecord[]) =>
+  visits
+    .map((visit) => visit.id)
+    .sort()
+    .join('|')
 
 const getUnitHeight = (
   unit: VisitOverlapUnit,
@@ -183,6 +192,11 @@ export type DayTimelineVisit = {
   hasTimeOverlap: boolean
   overlapCount: number
   stackLayer: number
+  clusterKey: string
+  clusterSize: number
+  isMultiTeamOverlap: boolean
+  isClusterExpanded: boolean
+  laneIndex: number
 }
 
 export const buildDayTimelineVisits = (
@@ -195,8 +209,25 @@ export const buildDayTimelineVisits = (
       a.id.localeCompare(b.id),
   )
 
+  const clusterByVisitId = new Map<
+    string,
+    { key: string; isMultiTeam: boolean; size: number }
+  >()
+  buildTimeOverlapComponents(sorted).forEach((component) => {
+    const key = clusterKeyForVisits(component)
+    const isMultiTeam = new Set(component.map((visit) => visit.teamId)).size > 1
+    component.forEach((visit) => {
+      clusterByVisitId.set(visit.id, {
+        key,
+        isMultiTeam,
+        size: component.length,
+      })
+    })
+  })
+
   const items: DayTimelineVisit[] = sorted.map((visit) => {
     const { start, end } = getVisitTimeRange(visit)
+    const cluster = clusterByVisitId.get(visit.id)
     return {
       visit,
       start,
@@ -204,6 +235,11 @@ export const buildDayTimelineVisits = (
       hasTimeOverlap: false,
       overlapCount: 1,
       stackLayer: 0,
+      clusterKey: cluster?.key ?? visit.id,
+      clusterSize: cluster?.size ?? 1,
+      isMultiTeamOverlap: cluster?.isMultiTeam ?? false,
+      isClusterExpanded: false,
+      laneIndex: 0,
     }
   })
 
@@ -238,6 +274,59 @@ export const buildDayTimelineVisits = (
 
   return items
 }
+
+export const layoutDayTimelineVisits = (
+  items: DayTimelineVisit[],
+  expandedClusterKeys: Set<string>,
+  teamById: Map<string, string>,
+): { items: DayTimelineVisit[]; laneCount: number } => {
+  const membersByCluster = new Map<string, DayTimelineVisit[]>()
+  items.forEach((item) => {
+    const members = membersByCluster.get(item.clusterKey) ?? []
+    members.push(item)
+    membersByCluster.set(item.clusterKey, members)
+  })
+
+  const laneByVisitId = new Map<string, number>()
+  const expandedByCluster = new Map<string, boolean>()
+
+  membersByCluster.forEach((members, clusterKey) => {
+    const shouldExpand =
+      members[0]?.isMultiTeamOverlap === true &&
+      expandedClusterKeys.has(clusterKey)
+    expandedByCluster.set(clusterKey, shouldExpand)
+    if (!shouldExpand) {
+      members.forEach((member) => laneByVisitId.set(member.visit.id, 0))
+      return
+    }
+
+    const sortedMembers = [...members].sort(
+      (a, b) =>
+        a.start - b.start ||
+        compareTeamTimeTieBreak(a.visit.teamId, b.visit.teamId, teamById) ||
+        a.visit.id.localeCompare(b.visit.id),
+    )
+    sortedMembers.forEach((member, index) => {
+      laneByVisitId.set(member.visit.id, index)
+    })
+  })
+
+  const nextItems = items.map((item) => ({
+    ...item,
+    isClusterExpanded: expandedByCluster.get(item.clusterKey) ?? false,
+    laneIndex: laneByVisitId.get(item.visit.id) ?? 0,
+  }))
+
+  const laneCount = Math.max(
+    1,
+    ...nextItems.map((item) => item.laneIndex + 1),
+  )
+
+  return { items: nextItems, laneCount }
+}
+
+export const dayVisitExpandsOverlapOnClick = (entry: DayTimelineVisit) =>
+  entry.isMultiTeamOverlap && !entry.isClusterExpanded
 
 export const dayTimelineHasOverlaps = (items: DayTimelineVisit[]) =>
   items.some((item) => item.hasTimeOverlap)

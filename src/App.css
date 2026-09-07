@@ -2986,6 +2986,7 @@ th {
 .operations-day-collapse-group {
   position: absolute;
   left: 0;
+  z-index: 3;
 }
 
 .operations-agenda-visit-chip.is-draggable {
@@ -3339,11 +3340,11 @@ th {
   height: 18px;
   border-radius: 999px;
   background: #ffffff;
-  color: #d92d20;
-  font-size: 0.72rem;
+  color: #344054;
+  font-size: 0.92rem;
   font-weight: 800;
   line-height: 1;
-  box-shadow: 0 0 0 1px rgba(217, 45, 32, 0.35);
+  box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.18);
 }
 
 .operations-day-visit-block {
@@ -3384,13 +3385,30 @@ th {
   text-overflow: ellipsis;
 }
 
+.operations-day-visit-block--compact .operations-day-visit-summary {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.operations-day-visit-block.is-overlap-group,
+.operations-day-visit-block.is-click-expand {
+  cursor: pointer;
+}
+
+.operations-day-visit-block.is-click-expand .operations-day-block-body {
+  cursor: pointer;
+}
+
 .operations-day-visit-block.is-overlap-group {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 10px;
-  cursor: pointer;
+}
+
+.operations-day-visit-block--compact .operations-day-overlap-count {
+  margin-left: 6px;
 }
 
 .operations-day-overlap-expanded {
