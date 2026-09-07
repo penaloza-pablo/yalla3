@@ -14,6 +14,7 @@ import {
   defaultPlannerSettings,
   normalizePlannerSettings,
 } from '../../amplify/functions/shared/bookings-planner'
+import { YallaSwitch } from './YallaSwitch'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -240,17 +241,21 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
               <p className="subtitle">{t('bookingsSettings.plannerHelp')}</p>
             </div>
           </div>
-          <label className="planner-switch">
-            <input
-              type="checkbox"
-              checked={settings.plannerEnabled}
+          <div className="planner-switch">
+            <YallaSwitch
+              on={settings.plannerEnabled}
               disabled={isSaving || isLoading}
-              onChange={(event) =>
+              label={
+                settings.plannerEnabled
+                  ? t('bookingsSettings.on')
+                  : t('bookingsSettings.off')
+              }
+              onToggle={() =>
                 void saveSettings(
-                  { ...settings, plannerEnabled: event.target.checked },
-                  event.target.checked
-                    ? 'bookingsSettings.enabledSuccess'
-                    : 'bookingsSettings.disabled',
+                  { ...settings, plannerEnabled: !settings.plannerEnabled },
+                  settings.plannerEnabled
+                    ? 'bookingsSettings.disabled'
+                    : 'bookingsSettings.enabledSuccess',
                 )
               }
             />
@@ -259,7 +264,7 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
                 ? t('bookingsSettings.on')
                 : t('bookingsSettings.off')}
             </span>
-          </label>
+          </div>
         </section>
       ) : null}
 
@@ -288,15 +293,19 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
                       <p className="table-help">{t(RULE_I18N[rule.id].description)}</p>
                     </td>
                     <td>
-                      <label className="planner-switch compact">
-                        <input
-                          type="checkbox"
-                          checked={rule.enabled}
+                      <div className="planner-switch compact">
+                        <YallaSwitch
+                          on={rule.enabled}
                           disabled={isSaving || isLoading}
-                          onChange={(event) =>
+                          label={
+                            rule.enabled
+                              ? t('bookingsSettings.on')
+                              : t('bookingsSettings.off')
+                          }
+                          onToggle={() =>
                             void saveSettings(
                               updateRule(rule.id, {
-                                enabled: event.target.checked,
+                                enabled: !rule.enabled,
                               }),
                               'bookingsSettings.saved',
                             )
@@ -307,7 +316,7 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
                             ? t('bookingsSettings.on')
                             : t('bookingsSettings.off')}
                         </span>
-                      </label>
+                      </div>
                     </td>
                     <td>
                       <button

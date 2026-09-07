@@ -444,22 +444,27 @@ export const computePlannerFields = ({
     }
   }
 
-  if (giftRule.enabled && !isPropertyExcluded(giftRule, listingId)) {
-    if (giftCardOn === false) {
+  if (giftRule.enabled) {
+    if (isPropertyExcluded(giftRule, listingId)) {
       giftCard = GIFT_CARD_OFF;
-    } else if (
-      overrides?.giftCardOn === true ||
-      !giftCard ||
-      isAutoGiftCardValue(giftCard)
-    ) {
-      giftCard =
-        nights <= 2
-          ? GIFT_CARD_OFF
-          : formatGiftCardValue(guests, asString(item.CheckOutDate));
-      giftCardOn = true;
-    }
-    if (!access) {
-      warnings.push('gift_card_access_missing');
+      giftCardOn = false;
+    } else {
+      if (giftCardOn === false) {
+        giftCard = GIFT_CARD_OFF;
+      } else if (
+        overrides?.giftCardOn === true ||
+        !giftCard ||
+        isAutoGiftCardValue(giftCard)
+      ) {
+        giftCard =
+          nights <= 2
+            ? GIFT_CARD_OFF
+            : formatGiftCardValue(guests, asString(item.CheckOutDate));
+        giftCardOn = true;
+      }
+      if (!access) {
+        warnings.push('gift_card_access_missing');
+      }
     }
   }
 
@@ -492,4 +497,5 @@ export const plannerFieldsChanged = (
   asString(current.Linen) !== next.linen ||
   asString(current.GiftCard) !== next.giftCard ||
   asString(current.EarlyCheckIn) !== next.earlyCheckIn ||
-  asString(current.Access) !== next.access;
+  asString(current.Access) !== next.access ||
+  asBoolean(current.GiftCardOn) !== next.giftCardOn;

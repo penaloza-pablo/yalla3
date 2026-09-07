@@ -431,7 +431,10 @@ async function applyPlannerInline(item) {
     }
   }
 
-  if (giftRule.enabled && !giftRule.excluded.includes(listingId)) {
+  if (giftRule.enabled && giftRule.excluded.includes(listingId)) {
+    giftCard = GIFT_CARD_OFF;
+    giftCardOn = false;
+  } else if (giftRule.enabled && !giftRule.excluded.includes(listingId)) {
     if (giftCardOn === false) {
       giftCard = GIFT_CARD_OFF;
     } else if (!giftCard || isAutoGiftCard(giftCard)) {

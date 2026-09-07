@@ -24,7 +24,9 @@ import {
   isEarlyCheckInEnabled,
   isVerdejoBedListing,
   linenMenuValuesForListing,
+  normalizePlannerSettings,
 } from '../../amplify/functions/shared/bookings-planner'
+import { YallaSwitch } from './YallaSwitch'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -211,29 +213,6 @@ const PlanStatusIcon = ({
   </button>
 )
 
-const SwitchToggle = ({
-  on,
-  disabled,
-  label,
-  onToggle,
-}: {
-  on: boolean
-  disabled?: boolean
-  label: string
-  onToggle: () => void
-}) => (
-  <button
-    type="button"
-    className={`yalla-switch ${on ? 'is-on' : ''}`}
-    aria-pressed={on}
-    aria-label={label}
-    disabled={disabled}
-    onClick={onToggle}
-  >
-    <span className="yalla-switch-knob" />
-  </button>
-)
-
 const LinenBadgeSelect = ({
   value,
   listingId,
@@ -328,6 +307,9 @@ export function BookingsPlanView({
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
+  const [warningsOnly, setWarningsOnly] = useState(false)
+  const [warningsOnlyDraft, setWarningsOnlyDraft] = useState(false)
+  const [giftCardExcludedIds, setGiftCardExcludedIds] = useState<string[]>([])
   const [dismissConfirm, setDismissConfirm] = useState<{
     row: PlanRow
     code: PlannerWarningCode
@@ -385,10 +367,18 @@ export function BookingsPlanView({
       )
 
       if (endpoints.getSettings) {
-        const settings = await fetchJson<{
-          item?: { plannerEnabled?: boolean }
-        }>(endpoints.getSettings)
-        setPlannerEnabled(settings.item?.plannerEnabled === true)
+        const settings = normalizePlannerSettings(
+          (
+            await fetchJson<{
+              item?: Record<string, unknown>
+            }>(endpoints.getSettings)
+          ).item,
+        )
+        setPlannerEnabled(settings.plannerEnabled)
+        setGiftCardExcludedIds(
+          settings.rules.find((rule) => rule.id === 'giftCard')
+            ?.excludedPropertyIds ?? [],
+        )
       }
     } catch (loadError) {
       setError(
@@ -507,10 +497,20 @@ export function BookingsPlanView({
         if (propertyIds.length > 0 && !propertyIds.includes(row.listingId)) {
           return false
         }
+        if (warningsOnly && warningsForRow(row).length === 0) {
+          return false
+        }
         return matchesSearch(searchQuery, row)
       }),
-    [propertyIds, rows, searchQuery],
+    [propertyIds, rows, searchQuery, warningsOnly],
   )
+
+  const activeFilterCount =
+    propertyIds.length + (warningsOnly ? 1 : 0)
+  const hasActiveFilters = activeFilterCount > 0
+  const toggleWarningsQuickFilter = () => {
+    setWarningsOnly((current) => !current)
+  }
 
   const warningCount = filteredRows.reduce(
     (sum, row) => sum + warningsForRow(row).length,
@@ -577,12 +577,13 @@ export function BookingsPlanView({
               </button>
               <button
                 className={`btn-ghost btn-filter ${
-                  isFilterOpen || propertyIds.length > 0 ? 'is-active' : ''
+                  isFilterOpen || hasActiveFilters ? 'is-active' : ''
                 }`}
                 type="button"
                 aria-label={t('common.filters')}
                 onClick={() => {
                   setPropertyDraft(propertyIds)
+                  setWarningsOnlyDraft(warningsOnly)
                   setIsFilterOpen(true)
                 }}
               >
@@ -597,8 +598,8 @@ export function BookingsPlanView({
                     fill="currentColor"
                   />
                 </svg>
-                {propertyIds.length > 0 ? (
-                  <span className="filter-badge">{propertyIds.length}</span>
+                {hasActiveFilters ? (
+                  <span className="filter-badge">{activeFilterCount}</span>
                 ) : null}
               </button>
               <button
@@ -648,6 +649,22 @@ export function BookingsPlanView({
           <table className="data-table data-table-bookings-plan">
             <thead>
               <tr>
+                <th scope="col" className="mobile-quick-filter-col">
+                  <button
+                    className={`btn-quick-filter ${
+                      warningsOnly ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-pressed={warningsOnly}
+                    onClick={toggleWarningsQuickFilter}
+                  >
+                    {t('bookingsPlan.quickFilterWarnings')}
+                    <span
+                      className="quick-filter-indicator"
+                      aria-hidden="true"
+                    />
+                  </button>
+                </th>
                 <th>{t('common.checkIn')}</th>
                 <th>{t('common.guest')}</th>
                 <th>{t('common.property')}</th>
@@ -731,7 +748,7 @@ export function BookingsPlanView({
                           />
                         </td>
                         <td>
-                          <SwitchToggle
+                          <YallaSwitch
                             on={row.earlyCheckInOn}
                             disabled={!canEdit || isSaving}
                             label={t('bookingsPlan.earlyCheckIn')}
@@ -809,9 +826,13 @@ export function BookingsPlanView({
                                   {t('bookingsPlan.giftCard')}
                                 </p>
                                 <div className="plan-detail-control">
-                                  <SwitchToggle
+                                  <YallaSwitch
                                     on={row.giftCardOn}
-                                    disabled={!canEdit || isSaving}
+                                    disabled={
+                                      !canEdit ||
+                                      isSaving ||
+                                      giftCardExcludedIds.includes(row.listingId)
+                                    }
                                     label={t('bookingsPlan.giftCard')}
                                     onToggle={() =>
                                       void saveFields(row, {
@@ -922,6 +943,21 @@ export function BookingsPlanView({
             <div className="modal-body">
               <div className="filter-grid">
                 <div className="filter-group">
+                  <p className="filter-title">{t('bookingsPlan.warnings')}</p>
+                  <div className="filter-options">
+                    <label className="filter-option">
+                      <input
+                        type="checkbox"
+                        checked={warningsOnlyDraft}
+                        onChange={() =>
+                          setWarningsOnlyDraft((current) => !current)
+                        }
+                      />
+                      <span>{t('bookingsPlan.filterWarnings')}</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="filter-group">
                   <p className="filter-title">{t('common.property')}</p>
                   <div className="filter-options filter-options-scroll">
                     {properties.map((property) => (
@@ -951,6 +987,8 @@ export function BookingsPlanView({
                 onClick={() => {
                   setPropertyDraft([])
                   setPropertyIds([])
+                  setWarningsOnlyDraft(false)
+                  setWarningsOnly(false)
                   setIsFilterOpen(false)
                 }}
               >
@@ -961,6 +999,7 @@ export function BookingsPlanView({
                 type="button"
                 onClick={() => {
                   setPropertyIds(propertyDraft)
+                  setWarningsOnly(warningsOnlyDraft)
                   setIsFilterOpen(false)
                 }}
               >
