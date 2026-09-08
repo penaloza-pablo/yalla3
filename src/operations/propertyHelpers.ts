@@ -32,6 +32,13 @@ export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
     ),
   )
 
+const P2_ROOM_NICKNAMES = new Set(
+  Array.from({ length: 12 }, (_, index) => String(201 + index)),
+)
+
+export const isP2RoomNickname = (value: string) =>
+  P2_ROOM_NICKNAMES.has(value.trim())
+
 const isMtlPrincipalType = (type?: string) =>
   (type ?? '').trim().toUpperCase() === 'MTL_PRINCIPAL'
 
@@ -44,12 +51,17 @@ const isYallaP2Property = (property: PropertyOption) => {
   return id === 'planta2' || label === 'p2'
 }
 
+const isP2RoomProperty = (property: PropertyOption) =>
+  isP2RoomNickname(property.nickname) ||
+  isP2RoomNickname(property.listingNickname) ||
+  isP2RoomNickname(property.id)
+
 export const filterTemplateAutoAssignPropertyOptions = (
   properties: PropertyOption[],
 ) =>
   sortPropertyOptions(
     properties.filter((property) => {
-      if (isYallaP2Property(property)) {
+      if (isYallaP2Property(property) || isP2RoomProperty(property)) {
         return true
       }
       return (
@@ -58,22 +70,12 @@ export const filterTemplateAutoAssignPropertyOptions = (
     }),
   )
 
-const P2_ROOM_NICKNAMES = new Set(
-  Array.from({ length: 12 }, (_, index) => String(201 + index)),
-)
-
-export const isP2RoomNickname = (value: string) =>
-  P2_ROOM_NICKNAMES.has(value.trim())
-
 export const filterBookingsPlannerPropertyOptions = (
   properties: PropertyOption[],
 ) =>
   sortPropertyOptions(
     properties.filter((property) => {
-      if (
-        isP2RoomNickname(property.nickname) ||
-        isP2RoomNickname(property.listingNickname)
-      ) {
+      if (isP2RoomProperty(property)) {
         return true
       }
       return (
