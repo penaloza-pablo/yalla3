@@ -24,6 +24,7 @@ import {
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
@@ -2807,7 +2808,7 @@ function App() {
     if (activePage === 'Reviews') {
       void fetchReviews()
     }
-    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates') {
+    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign') {
       void fetchProperties()
     }
     if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Cleaning settings' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings' || activePage === 'Bookings Plan' || activePage === 'Bookings settings') {
@@ -7910,6 +7911,11 @@ function App() {
             onToggleMobileSearch={() =>
               setIsMobileSearchOpen((current) => !current)
             }
+          />
+        ) : activePage === 'Template Auto Assign' ? (
+          <TemplateAutoAssignView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
           />
         ) : activePage === 'Bookings Plan' ? (
           <BookingsPlanView

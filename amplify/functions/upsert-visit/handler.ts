@@ -31,6 +31,7 @@ import {
 } from '../shared/visit-task-utils';
 import { appendUrgentTaskTitles } from '../shared/visit-title';
 import { notifyVisitClosedWithComments } from '../shared/slack-cleaning';
+import { applyVisitTemplateAutoAssign } from '../shared/visit-template-auto-assign';
 
 type VisitPayload = {
   id?: string;
@@ -437,6 +438,18 @@ export const handler = async (event: {
           item,
           tasksToCreate,
         );
+      }
+    }
+
+    if (!isUpdate && createdTasks.length === 0) {
+      try {
+        const autoAssign = await applyVisitTemplateAutoAssign(item);
+        if (autoAssign.applied) {
+          item = autoAssign.item;
+          createdTasks = autoAssign.createdTasks;
+        }
+      } catch (error) {
+        console.error('Failed to auto-assign visit template', error);
       }
     }
 

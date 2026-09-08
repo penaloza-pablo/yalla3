@@ -1,6 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { RemovalPolicy } from 'aws-cdk-lib';
-import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion } from 'aws-cdk-lib/aws-lambda';
+import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion, StartingPosition } from 'aws-cdk-lib/aws-lambda';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import {
   AttributeType,
   BillingMode,
@@ -51,6 +52,9 @@ import { getMyPermissions } from './functions/get-my-permissions/resource';
 import { getVisitTypes } from './functions/get-visit-types/resource';
 import { getVisitTemplates } from './functions/get-visit-templates/resource';
 import { upsertVisitTemplate } from './functions/upsert-visit-template/resource';
+import { getVisitTemplateAutoAssign } from './functions/get-visit-template-auto-assign/resource';
+import { upsertVisitTemplateAutoAssign } from './functions/upsert-visit-template-auto-assign/resource';
+import { applyVisitTemplateAutoAssign } from './functions/apply-visit-template-auto-assign/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
@@ -129,6 +133,9 @@ const backend = defineBackend({
   getVisitTypes,
   getVisitTemplates,
   upsertVisitTemplate,
+  getVisitTemplateAutoAssign,
+  upsertVisitTemplateAutoAssign,
+  applyVisitTemplateAutoAssign,
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
@@ -208,6 +215,8 @@ const lambdaFunctionsWithHttp = [
   backend.getVisitTypes,
   backend.getVisitTemplates,
   backend.upsertVisitTemplate,
+  backend.getVisitTemplateAutoAssign,
+  backend.upsertVisitTemplateAutoAssign,
   backend.upsertVisitType,
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
@@ -296,6 +305,21 @@ const visitTemplatesTable = Table.fromTableName(
   'VisitTemplatesTable',
   'yalla-visit-templates',
 );
+const visitTemplateAutoAssignTable = new Table(
+  dataStack,
+  'VisitTemplateAutoAssignTable',
+  {
+    tableName: 'yalla-visit-template-auto-assign',
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
+visitTemplateAutoAssignTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
   'InventoryExportBucket',
@@ -541,6 +565,95 @@ backend.getVisitTemplates.resources.lambda.addToRolePolicy(
     resources: [`${visitTemplatesTable.tableArn}/index/*`],
   }),
 );
+backend.getVisitTemplateAutoAssign.addEnvironment(
+  'TABLE_NAME',
+  visitTemplateAutoAssignTable.tableName,
+);
+backend.upsertVisitTemplateAutoAssign.addEnvironment(
+  'TABLE_NAME',
+  visitTemplateAutoAssignTable.tableName,
+);
+visitTemplateAutoAssignTable.grantReadData(
+  backend.getVisitTemplateAutoAssign.resources.lambda,
+);
+visitTemplateAutoAssignTable.grantReadWriteData(
+  backend.upsertVisitTemplateAutoAssign.resources.lambda,
+);
+backend.getVisitTemplateAutoAssign.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${visitTemplateAutoAssignTable.tableArn}/index/*`],
+  }),
+);
+
+backend.upsertVisit.addEnvironment(
+  'TEMPLATES_TABLE',
+  'yalla-visit-templates',
+);
+backend.upsertVisit.addEnvironment(
+  'AUTO_ASSIGN_TABLE',
+  visitTemplateAutoAssignTable.tableName,
+);
+backend.applyVisitTemplateAutoAssign.addEnvironment('TABLE_NAME', 'yalla-visits');
+backend.applyVisitTemplateAutoAssign.addEnvironment('VISITS_TABLE', 'yalla-visits');
+backend.applyVisitTemplateAutoAssign.addEnvironment('TASKS_TABLE', 'yalla-tasks');
+backend.applyVisitTemplateAutoAssign.addEnvironment(
+  'TEMPLATES_TABLE',
+  'yalla-visit-templates',
+);
+backend.applyVisitTemplateAutoAssign.addEnvironment(
+  'AUTO_ASSIGN_TABLE',
+  visitTemplateAutoAssignTable.tableName,
+);
+visitTemplateAutoAssignTable.grantReadData(backend.upsertVisit.resources.lambda);
+visitTemplateAutoAssignTable.grantReadData(
+  backend.applyVisitTemplateAutoAssign.resources.lambda,
+);
+visitTemplatesTable.grantReadData(backend.upsertVisit.resources.lambda);
+visitTemplatesTable.grantReadData(
+  backend.applyVisitTemplateAutoAssign.resources.lambda,
+);
+visitsTable.grantReadWriteData(
+  backend.applyVisitTemplateAutoAssign.resources.lambda,
+);
+tasksTable.grantReadWriteData(
+  backend.applyVisitTemplateAutoAssign.resources.lambda,
+);
+backend.upsertVisit.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [
+      `${visitTemplateAutoAssignTable.tableArn}/index/*`,
+      `${tasksTable.tableArn}/index/*`,
+    ],
+  }),
+);
+backend.applyVisitTemplateAutoAssign.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [
+      `${visitTemplateAutoAssignTable.tableArn}/index/*`,
+      `${tasksTable.tableArn}/index/*`,
+    ],
+  }),
+);
+
+const visitsStreamSource = Table.fromTableAttributes(
+  dataStack,
+  'VisitsStreamSource',
+  {
+    tableName: 'yalla-visits',
+    tableStreamArn:
+      'arn:aws:dynamodb:eu-central-1:471112597523:table/yalla-visits/stream/2026-06-09T17:46:42.371',
+  },
+);
+backend.applyVisitTemplateAutoAssign.resources.lambda.addEventSource(
+  new DynamoEventSource(visitsStreamSource, {
+    startingPosition: StartingPosition.LATEST,
+    batchSize: 10,
+    retryAttempts: 2,
+  }),
+);
 inventoryBucket.grantPut(backend.exportInventory.resources.lambda);
 inventoryBucket.grantPut(backend.exportSubtractions.resources.lambda);
 inventoryBucket.grantPut(backend.exportCleaningBilling.resources.lambda);
@@ -561,6 +674,7 @@ const activityLogWriters = [
   backend.upsertVisit,
   backend.upsertTask,
   backend.upsertVisitTemplate,
+  backend.upsertVisitTemplateAutoAssign,
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
   backend.proxyGuestyBookingsSync,
@@ -1389,6 +1503,14 @@ const upsertVisitTemplateUrl =
   backend.upsertVisitTemplate.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getVisitTemplateAutoAssignUrl =
+  backend.getVisitTemplateAutoAssign.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertVisitTemplateAutoAssignUrl =
+  backend.upsertVisitTemplateAutoAssign.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1564,6 +1686,8 @@ backend.addOutput({
     getVisitTypesUrl: getVisitTypesUrl.url,
     getVisitTemplatesUrl: getVisitTemplatesUrl.url,
     upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,
+    getVisitTemplateAutoAssignUrl: getVisitTemplateAutoAssignUrl.url,
+    upsertVisitTemplateAutoAssignUrl: upsertVisitTemplateAutoAssignUrl.url,
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,

@@ -398,6 +398,7 @@
     "Daily Operations": "Resumen diario",
     "Unassigned tasks": "Tareas sin asignar",
     "Visit templates": "Plantillas de visita",
+    "Template Auto Assign": "Template Auto Assign",
     "Finance solution 1": "Solución Finance 1",
     "Finance solution 2": "Solución Finance 2",
     "Finance solution 3": "Solución Finance 3",
@@ -548,7 +549,8 @@
     "Maintenance Billing": "Historial",
     "Maintenance settings": "Ajustes",
     "Unassigned tasks": "Sin asignar",
-    "Visit templates": "Plantillas"
+    "Visit templates": "Plantillas",
+    "Template Auto Assign": "Auto Assign"
   },
   "status": {
     "Billed": "Facturada",
@@ -740,6 +742,30 @@
     "removeTask": "Quitar",
     "comments": "Comentarios",
     "taskDescriptionEs": "Descripción en español"
+  },
+  "templateAutoAssign": {
+    "eyebrow": "Ops / Template Auto Assign",
+    "subtitle": "Si el título de una visita nueva empieza por el prefijo guardado, se asigna la plantilla y sus tareas.",
+    "add": "Añadir asociación",
+    "template": "Plantilla",
+    "titlePrefix": "El título empieza por",
+    "titlePrefixPlaceholder": "p. ej. Clean Baranda",
+    "titlePrefixHelp": "Las visitas nuevas cuyo título empiece por este texto reciben la plantilla seleccionada.",
+    "formHelp": "Elige una propiedad, una de sus plantillas y el prefijo del título de la visita.",
+    "enabled": "Activo",
+    "selectProperty": "Seleccionar propiedad",
+    "selectTemplate": "Seleccionar plantilla",
+    "pickPropertyFirst": "Selecciona primero una propiedad",
+    "required": "Propiedad, plantilla y prefijo del título son obligatorios.",
+    "empty": "Todavía no hay asociaciones de auto-assign.",
+    "missingEndpoint": "Falta el endpoint de Template Auto Assign. Vuelve a desplegar el backend.",
+    "missingWrite": "Falta el endpoint de escritura de Template Auto Assign. Vuelve a desplegar el backend.",
+    "loadError": "No se pudieron cargar las asociaciones.",
+    "saveError": "No se pudo guardar la asociación.",
+    "created": "Asociación creada.",
+    "updated": "Asociación actualizada.",
+    "deleted": "Asociación eliminada.",
+    "deleteConfirm": "¿Eliminar esta asociación de auto-assign?"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",

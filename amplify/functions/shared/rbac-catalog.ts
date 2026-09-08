@@ -17,6 +17,7 @@ export const NAVIGATION: NavGroup[] = [
       'Reviews',
       'Unassigned tasks',
       'Visit templates',
+      'Template Auto Assign',
     ],
   },
   {
@@ -217,6 +218,7 @@ export const ROLE_SEEDS: {
         'Reviews',
         'Unassigned tasks',
         'Visit templates',
+        'Template Auto Assign',
         'Cleaning Plan',
         'Cleaning Incidents',
         'Cleaning Billing',

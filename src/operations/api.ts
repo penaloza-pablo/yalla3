@@ -1,6 +1,7 @@
 import type {
   TaskRecord,
   VisitRecord,
+  VisitTemplateAutoAssignRule,
   VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
@@ -162,6 +163,31 @@ export const saveVisitTemplate = (
 
 export const saveVisitType = (endpoint: string, payload: Record<string, unknown>) =>
   fetchJson<ListResponse<VisitTypeRecord>>(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const mapVisitTemplateAutoAssign = (
+  item: Record<string, unknown>,
+): VisitTemplateAutoAssignRule => ({
+  id: String(item.id ?? ''),
+  propertyId: String(item.propertyId ?? ''),
+  templateId: String(item.templateId ?? ''),
+  titlePrefix: String(item.titlePrefix ?? '').trim(),
+  enabled: item.enabled !== false,
+})
+
+export const getVisitTemplateAutoAssignRules = async (endpoint: string) => {
+  const payload = await fetchJson<ListResponse<Record<string, unknown>>>(endpoint)
+  return (payload.items ?? []).map(mapVisitTemplateAutoAssign)
+}
+
+export const saveVisitTemplateAutoAssign = (
+  endpoint: string,
+  payload: Record<string, unknown>,
+) =>
+  fetchJson<ListResponse<Record<string, unknown>>>(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),

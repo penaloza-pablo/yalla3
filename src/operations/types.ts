@@ -99,6 +99,14 @@ export type VisitTemplateRecord = {
   tasks: VisitTemplateTask[]
 }
 
+export type VisitTemplateAutoAssignRule = {
+  id: string
+  propertyId: string
+  templateId: string
+  titlePrefix: string
+  enabled: boolean
+}
+
 export type VisitDraftTask = {
   title: string
   titleEs?: string
