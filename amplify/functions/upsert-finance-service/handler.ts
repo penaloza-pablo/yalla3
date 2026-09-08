@@ -5,13 +5,17 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import {
+  asNumber,
   asString,
   generateOccurrences,
   isDateOnly,
   mergeOccurrences,
+  normalizePriceMode,
   normalizeRecurrence,
   normalizeServiceType,
   parseOccurrences,
+  roundMoney,
+  IVA_MULTIPLIER,
 } from '../shared/finance-services';
 import {
   buildHttpResponse,
@@ -35,6 +39,10 @@ type ServicePayload = {
   title?: string;
   recurrence?: string;
   startDate?: string;
+  priceMode?: string;
+  price?: number | string;
+  appliesIva?: boolean;
+  priceEffectiveFrom?: string;
   items?: unknown[];
   action?: string;
 };
@@ -138,6 +146,28 @@ export const handler = async (event: {
       type === 'apartment'
         ? asString(payload.propertyId) || asString(existing?.propertyId)
         : '';
+    const priceMode =
+      normalizePriceMode(
+        asString(payload.priceMode) || asString(existing?.priceMode),
+      ) || (asNumber(existing?.price) ? 'fixed' : 'variable');
+    const appliesIva =
+      priceMode === 'fixed'
+        ? typeof payload.appliesIva === 'boolean'
+          ? payload.appliesIva
+          : Boolean(existing?.appliesIva)
+        : false;
+    const price =
+      priceMode === 'fixed'
+        ? roundMoney(
+            Math.max(
+              0,
+              asNumber(payload.price) ?? asNumber(existing?.price) ?? 0,
+            ),
+          )
+        : 0;
+    const priceWithIva = roundMoney(
+      appliesIva ? price * IVA_MULTIPLIER : price,
+    );
 
     if (!type) {
       return buildHttpResponse(400, {
@@ -163,15 +193,32 @@ export const handler = async (event: {
     const id =
       asString(existing?.id) || (await getNextSequentialId(tableName, 'SVC'));
     const existingItems = parseOccurrences(existing?.items, id);
-    const generated = generateOccurrences(id, startDate, recurrence);
+    const stamp =
+      priceMode === 'fixed' ? { price, appliesIva } : null;
+    const generated = generateOccurrences(id, startDate, recurrence, 24, stamp);
+    const previousMode =
+      normalizePriceMode(asString(existing?.priceMode)) || 'variable';
+    const previousPrice = roundMoney(asNumber(existing?.price) ?? 0);
+    const previousAppliesIva = Boolean(existing?.appliesIva);
+    const priceChanged =
+      Boolean(existing) &&
+      (previousMode !== priceMode ||
+        previousPrice !== price ||
+        previousAppliesIva !== appliesIva);
+    const effectiveFrom =
+      asString(payload.priceEffectiveFrom) || timestamp.slice(0, 10);
     const shouldRegenerate =
       existingItems.length === 0 ||
       asString(existing?.recurrence) !== recurrence ||
-      asString(existing?.startDate) !== startDate;
+      asString(existing?.startDate) !== startDate ||
+      priceChanged;
     const items = Array.isArray(payload.items)
       ? parseOccurrences(payload.items, id)
       : shouldRegenerate
-        ? mergeOccurrences(generated, existingItems)
+        ? mergeOccurrences(generated, existingItems, {
+            stamp,
+            overwriteFrom: priceChanged ? effectiveFrom : null,
+          })
         : existingItems;
     const propertyName = propertyId
       ? await resolvePropertyName(
@@ -188,6 +235,10 @@ export const handler = async (event: {
       title,
       recurrence,
       startDate,
+      priceMode,
+      price,
+      appliesIva,
+      priceWithIva,
       items,
       createdAt: asString(existing?.createdAt) || timestamp,
       updatedAt: timestamp,

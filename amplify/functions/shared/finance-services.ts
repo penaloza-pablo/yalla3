@@ -13,6 +13,14 @@ export const RECURRENCES = [
 ] as const;
 export type FinanceRecurrence = (typeof RECURRENCES)[number];
 
+export const PRICE_MODES = ['fixed', 'variable'] as const;
+export type FinancePriceMode = (typeof PRICE_MODES)[number];
+
+export type OccurrencePrice = {
+  price: number;
+  appliesIva: boolean;
+};
+
 export type FinanceServiceOccurrence = {
   id: string;
   period: string;
@@ -56,6 +64,26 @@ export const normalizeRecurrence = (value: string): FinanceRecurrence | '' => {
     : '';
 };
 
+export const normalizePriceMode = (value: string): FinancePriceMode | '' => {
+  const mode = value.trim().toLowerCase();
+  return PRICE_MODES.includes(mode as FinancePriceMode)
+    ? (mode as FinancePriceMode)
+    : '';
+};
+
+export const stampedOccurrence = (
+  item: FinanceServiceOccurrence,
+  stamp: OccurrencePrice,
+): FinanceServiceOccurrence => {
+  const price = roundMoney(Math.max(0, stamp.price));
+  return {
+    ...item,
+    price,
+    appliesIva: stamp.appliesIva,
+    priceWithIva: occurrencePriceWithIva(price, stamp.appliesIva),
+  };
+};
+
 export const intervalMonths = (recurrence: FinanceRecurrence) => {
   if (recurrence === 'monthly') return 1;
   if (recurrence === 'bimonthly') return 2;
@@ -81,7 +109,7 @@ export const addMonthsToDate = (iso: string, months: number) => {
   return `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`;
 };
 
-const occurrencePriceWithIva = (price: number, appliesIva: boolean) =>
+export const occurrencePriceWithIva = (price: number, appliesIva: boolean) =>
   roundMoney(appliesIva ? price * IVA_MULTIPLIER : price);
 
 export const normalizeOccurrence = (
@@ -117,6 +145,7 @@ export const generateOccurrences = (
   startDate: string,
   recurrence: FinanceRecurrence,
   horizonMonths = 24,
+  stamp?: OccurrencePrice | null,
 ): FinanceServiceOccurrence[] => {
   if (!isDateOnly(startDate)) {
     return [];
@@ -127,14 +156,15 @@ export const generateOccurrences = (
   let current = startDate;
   while (current < endDate) {
     const period = current.slice(0, 7);
-    items.push({
+    const base: FinanceServiceOccurrence = {
       id: `${serviceId}-${period}`,
       period,
       billingDate: current,
       price: 0,
       appliesIva: false,
       priceWithIva: 0,
-    });
+    };
+    items.push(stamp ? stampedOccurrence(base, stamp) : base);
     if (interval <= 0) {
       break;
     }
@@ -146,14 +176,34 @@ export const generateOccurrences = (
 export const mergeOccurrences = (
   generated: FinanceServiceOccurrence[],
   existing: FinanceServiceOccurrence[],
+  options?: {
+    stamp?: OccurrencePrice | null;
+    overwriteFrom?: string | null;
+  },
 ) => {
   const byPeriod = new Map(existing.map((item) => [item.period, item]));
+  const stamp = options?.stamp;
+  const overwriteFrom = options?.overwriteFrom;
   const merged = generated.map((item) => {
     const previous = byPeriod.get(item.period);
     if (!previous) {
-      return item;
+      return stamp ? stampedOccurrence(item, stamp) : item;
     }
     byPeriod.delete(item.period);
+    const shouldOverwrite =
+      Boolean(stamp) &&
+      Boolean(overwriteFrom) &&
+      previous.billingDate >= (overwriteFrom ?? '');
+    if (shouldOverwrite && stamp) {
+      return stampedOccurrence(
+        {
+          ...item,
+          id: previous.id || item.id,
+          billingDate: previous.billingDate || item.billingDate,
+        },
+        stamp,
+      );
+    }
     return {
       ...item,
       id: previous.id || item.id,

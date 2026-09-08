@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  addMonthsToDate,
-  intervalMonths,
-  IVA_MULTIPLIER,
+  occurrencePriceWithIva,
   parseOccurrences,
   roundMoney,
+  type FinancePriceMode,
   type FinanceRecurrence,
   type FinanceServiceOccurrence,
   type FinanceServiceType,
 } from '../../amplify/functions/shared/finance-services'
+import { YallaSwitch } from '../bookings/YallaSwitch'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
-import { getTodayMadrid } from '../operations/dateHelpers'
+import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
 import {
   filterMovementsPropertyOptions,
   getPropertyLabel,
@@ -36,7 +36,20 @@ type ServiceRow = {
   title: string
   recurrence: FinanceRecurrence
   startDate: string
+  priceMode: FinancePriceMode
+  price: number
+  appliesIva: boolean
+  priceWithIva: number
   items: FinanceServiceOccurrence[]
+}
+
+type BillingItem = FinanceServiceOccurrence & {
+  serviceId: string
+  type: FinanceServiceType
+  propertyId: string
+  propertyName: string
+  title: string
+  recurrence: FinanceRecurrence
 }
 
 type FormState = {
@@ -45,6 +58,24 @@ type FormState = {
   title: string
   recurrence: FinanceRecurrence
   startDate: string
+  priceMode: FinancePriceMode
+  price: string
+  appliesIva: boolean
+}
+
+type ItemFormState = {
+  serviceId: string
+  itemId: string
+  billingDate: string
+  price: string
+  appliesIva: boolean
+}
+
+type Filters = {
+  propertyIds: string[]
+  types: FinanceServiceType[]
+  dateFrom: string
+  dateTo: string
 }
 
 const RECURRENCE_KEYS: Record<FinanceRecurrence, string> = {
@@ -56,13 +87,40 @@ const RECURRENCE_KEYS: Record<FinanceRecurrence, string> = {
   other: 'services.recurrenceOther',
 }
 
+const SERVICE_TYPES: FinanceServiceType[] = ['apartment', 'ops']
+
 const emptyForm = (): FormState => ({
   type: 'apartment',
   propertyId: '',
   title: '',
   recurrence: 'monthly',
   startDate: getTodayMadrid(),
+  priceMode: 'fixed',
+  price: '',
+  appliesIva: false,
 })
+
+const emptyFilters = (): Filters => ({
+  propertyIds: [],
+  types: [],
+  dateFrom: '',
+  dateTo: '',
+})
+
+const calendarMonthRange = (monthOffset: number) => {
+  const today = getTodayMadrid()
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7))
+  const total = year * 12 + (month - 1) + monthOffset
+  const nextYear = Math.floor(total / 12)
+  const nextMonth = (total % 12) + 1
+  const lastDay = new Date(Date.UTC(nextYear, nextMonth, 0)).getUTCDate()
+  const mm = String(nextMonth).padStart(2, '0')
+  return {
+    dateFrom: `${nextYear}-${mm}-01`,
+    dateTo: `${nextYear}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
 
 const mapService = (item: Record<string, unknown>): ServiceRow => {
   const id = String(item.id ?? '')
@@ -71,6 +129,9 @@ const mapService = (item: Record<string, unknown>): ServiceRow => {
   ).includes(item.recurrence as FinanceRecurrence)
     ? (item.recurrence as FinanceRecurrence)
     : 'monthly'
+  const price = Number(item.price ?? 0)
+  const appliesIva = Boolean(item.appliesIva)
+  const storedWithIva = Number(item.priceWithIva)
   return {
     id,
     type: item.type === 'ops' ? 'ops' : 'apartment',
@@ -79,6 +140,17 @@ const mapService = (item: Record<string, unknown>): ServiceRow => {
     title: String(item.title ?? ''),
     recurrence,
     startDate: String(item.startDate ?? '').slice(0, 10),
+    priceMode:
+      item.priceMode === 'fixed' || item.priceMode === 'variable'
+        ? item.priceMode
+        : Number(item.price) > 0
+          ? 'fixed'
+          : 'variable',
+    price: Number.isFinite(price) ? price : 0,
+    appliesIva,
+    priceWithIva: Number.isFinite(storedWithIva)
+      ? storedWithIva
+      : occurrencePriceWithIva(price, appliesIva),
     items: parseOccurrences(item.items, id),
   }
 }
@@ -115,10 +187,12 @@ export function ServicesSubscriptionsView({
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [editingId, setEditingId] = useState('')
   const [form, setForm] = useState<FormState>(emptyForm)
-  const [expandedId, setExpandedId] = useState('')
-  const [draftItems, setDraftItems] = useState<FinanceServiceOccurrence[]>([])
+  const [itemForm, setItemForm] = useState<ItemFormState | null>(null)
+  const [filters, setFilters] = useState<Filters>(emptyFilters)
+  const [filterDraft, setFilterDraft] = useState<Filters>(emptyFilters)
 
   const money = useMemo(
     () =>
@@ -128,6 +202,15 @@ export function ServicesSubscriptionsView({
       }),
     [i18n.language],
   )
+
+  const formPrice = Number(form.price)
+  const formPriceWithIva = Number.isFinite(formPrice)
+    ? occurrencePriceWithIva(formPrice, form.appliesIva)
+    : 0
+  const itemPrice = Number(itemForm?.price)
+  const itemPriceWithIva = Number.isFinite(itemPrice)
+    ? occurrencePriceWithIva(itemPrice, Boolean(itemForm?.appliesIva))
+    : 0
 
   const loadRows = useCallback(async () => {
     if (!endpoints.get) {
@@ -154,25 +237,117 @@ export function ServicesSubscriptionsView({
     void loadRows()
   }, [loadRows])
 
-  const filteredRows = useMemo(() => {
+  const allItems = useMemo<BillingItem[]>(
+    () =>
+      rows
+        .flatMap((row) =>
+          row.items.map((item) => ({
+            ...item,
+            serviceId: row.id,
+            type: row.type,
+            propertyId: row.propertyId,
+            propertyName:
+              propertyById.get(row.propertyId) || row.propertyName || '',
+            title: row.title,
+            recurrence: row.recurrence,
+          })),
+        )
+        .sort((left, right) => {
+          if (left.billingDate !== right.billingDate) {
+            return left.billingDate.localeCompare(right.billingDate)
+          }
+          if (left.propertyName !== right.propertyName) {
+            return left.propertyName.localeCompare(right.propertyName)
+          }
+          return left.title.localeCompare(right.title)
+        }),
+    [propertyById, rows],
+  )
+
+  const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    if (!query) {
-      return rows
-    }
-    return rows.filter((row) =>
-      [
-        row.id,
-        row.title,
-        row.type,
-        row.recurrence,
-        row.propertyName,
-        propertyById.get(row.propertyId) ?? '',
+    return allItems.filter((item) => {
+      if (
+        filters.propertyIds.length > 0 &&
+        !filters.propertyIds.includes(item.propertyId)
+      ) {
+        return false
+      }
+      if (filters.types.length > 0 && !filters.types.includes(item.type)) {
+        return false
+      }
+      if (filters.dateFrom && item.billingDate < filters.dateFrom) {
+        return false
+      }
+      if (filters.dateTo && item.billingDate > filters.dateTo) {
+        return false
+      }
+      if (!query) {
+        return true
+      }
+      return [
+        item.title,
+        item.propertyName,
+        item.type,
+        item.recurrence,
+        item.billingDate,
+        item.serviceId,
       ]
         .join(' ')
         .toLowerCase()
-        .includes(query),
-    )
-  }, [propertyById, rows, searchQuery])
+        .includes(query)
+    })
+  }, [allItems, filters, searchQuery])
+
+  const totals = useMemo(() => {
+    const apartment = filteredItems.filter((item) => item.type === 'apartment')
+    const ops = filteredItems.filter((item) => item.type === 'ops')
+    return {
+      count: filteredItems.length,
+      apartment: apartment.length,
+      ops: ops.length,
+      cost: filteredItems.reduce((sum, item) => sum + item.price, 0),
+      costWithIva: filteredItems.reduce((sum, item) => sum + item.priceWithIva, 0),
+    }
+  }, [filteredItems])
+
+  const activeFilterCount =
+    filters.propertyIds.length +
+    filters.types.length +
+    (filters.dateFrom ? 1 : 0) +
+    (filters.dateTo ? 1 : 0)
+
+  const currentMonthRange = calendarMonthRange(0)
+  const previousMonthRange = calendarMonthRange(-1)
+  const isCurrentMonthQuickFilterActive =
+    filters.dateFrom === currentMonthRange.dateFrom &&
+    filters.dateTo === currentMonthRange.dateTo
+  const isPreviousMonthQuickFilterActive =
+    filters.dateFrom === previousMonthRange.dateFrom &&
+    filters.dateTo === previousMonthRange.dateTo
+
+  const applyMonthRange = (range: { dateFrom: string; dateTo: string } | null) => {
+    setFilters((current) => ({
+      ...current,
+      dateFrom: range?.dateFrom ?? '',
+      dateTo: range?.dateTo ?? '',
+    }))
+    setFilterDraft((current) => ({
+      ...current,
+      dateFrom: range?.dateFrom ?? '',
+      dateTo: range?.dateTo ?? '',
+    }))
+  }
+
+  const toggleDraftValue = (key: 'propertyIds' | 'types', value: string) => {
+    setFilterDraft((current) => {
+      const selected = current[key] as string[]
+      const next = selected.includes(value)
+        ? selected.filter((entry) => entry !== value)
+        : [...selected, value]
+      return { ...current, [key]: next }
+    })
+  }
 
   const openCreate = () => {
     setEditingId('')
@@ -190,20 +365,25 @@ export function ServicesSubscriptionsView({
       title: row.title,
       recurrence: row.recurrence,
       startDate: row.startDate || getTodayMadrid(),
+      priceMode: row.priceMode,
+      price: row.priceMode === 'fixed' ? String(row.price) : '',
+      appliesIva: row.appliesIva,
     })
     setIsFormOpen(true)
     setMessage(null)
     setError(null)
   }
 
-  const toggleExpand = (row: ServiceRow) => {
-    if (expandedId === row.id) {
-      setExpandedId('')
-      setDraftItems([])
-      return
-    }
-    setExpandedId(row.id)
-    setDraftItems(row.items)
+  const openItemEdit = (item: BillingItem) => {
+    setItemForm({
+      serviceId: item.serviceId,
+      itemId: item.id,
+      billingDate: item.billingDate,
+      price: String(item.price),
+      appliesIva: item.appliesIva,
+    })
+    setMessage(null)
+    setError(null)
   }
 
   const saveForm = async () => {
@@ -219,50 +399,12 @@ export function ServicesSubscriptionsView({
       setError(t('services.validationProperty'))
       return
     }
-    setIsSaving(true)
-    setError(null)
-    setMessage(null)
-    try {
-      const payload = await fetchJson<{ item?: Record<string, unknown> }>(
-        endpoints.upsert,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            ...(editingId ? { id: editingId } : {}),
-            type: form.type,
-            propertyId: form.type === 'apartment' ? form.propertyId : '',
-            propertyName:
-              form.type === 'apartment'
-                ? propertyById.get(form.propertyId) || form.propertyId
-                : '',
-            title: form.title.trim(),
-            recurrence: form.recurrence,
-            startDate: form.startDate,
-          }),
-        },
-      )
-      setIsFormOpen(false)
-      setMessage(t('services.saved'))
-      await loadRows()
-      const savedId = String(payload.item?.id ?? editingId)
-      if (savedId) {
-        const mapped = payload.item ? mapService(payload.item) : null
-        setExpandedId(savedId)
-        setDraftItems(mapped?.items ?? [])
-      }
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : t('services.saveError'),
-      )
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const saveOccurrences = async (row: ServiceRow) => {
-    if (!endpoints.upsert) {
-      setError(t('services.missingWrite'))
+    const price = Number(form.price)
+    if (
+      form.priceMode === 'fixed' &&
+      (!Number.isFinite(price) || price < 0)
+    ) {
+      setError(t('services.validationPrice'))
       return
     }
     setIsSaving(true)
@@ -273,17 +415,83 @@ export function ServicesSubscriptionsView({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          id: row.id,
-          type: row.type,
-          propertyId: row.propertyId,
-          propertyName: row.propertyName,
-          title: row.title,
-          recurrence: row.recurrence,
-          startDate: row.startDate,
-          items: draftItems,
+          ...(editingId ? { id: editingId } : {}),
+          type: form.type,
+          propertyId: form.type === 'apartment' ? form.propertyId : '',
+          propertyName:
+            form.type === 'apartment'
+              ? propertyById.get(form.propertyId) || form.propertyId
+              : '',
+          title: form.title.trim(),
+          recurrence: form.recurrence,
+          startDate: form.startDate,
+          priceMode: form.priceMode,
+          price: form.priceMode === 'fixed' ? price : 0,
+          appliesIva: form.priceMode === 'fixed' ? form.appliesIva : false,
+          priceEffectiveFrom: getTodayMadrid(),
         }),
       })
-      setMessage(t('services.occurrencesSaved'))
+      setIsFormOpen(false)
+      setMessage(t('services.saved'))
+      await loadRows()
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : t('services.saveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const saveItem = async () => {
+    if (!endpoints.upsert || !itemForm) {
+      setError(t('services.missingWrite'))
+      return
+    }
+    const service = rows.find((row) => row.id === itemForm.serviceId)
+    if (!service) {
+      setError(t('services.saveError'))
+      return
+    }
+    const price = Number(itemForm.price)
+    if (!itemForm.billingDate || !Number.isFinite(price) || price < 0) {
+      setError(t('services.validationItem'))
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await fetchJson(endpoints.upsert, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: service.id,
+          type: service.type,
+          propertyId: service.propertyId,
+          propertyName: service.propertyName,
+          title: service.title,
+          recurrence: service.recurrence,
+          startDate: service.startDate,
+          priceMode: service.priceMode,
+          price: service.price,
+          appliesIva: service.appliesIva,
+          items: service.items.map((item) =>
+            item.id === itemForm.itemId
+              ? {
+                  ...item,
+                  billingDate: itemForm.billingDate,
+                  period: itemForm.billingDate.slice(0, 7),
+                  price: roundMoney(price),
+                  appliesIva: itemForm.appliesIva,
+                  priceWithIva: occurrencePriceWithIva(price, itemForm.appliesIva),
+                }
+              : item,
+          ),
+        }),
+      })
+      setItemForm(null)
+      setMessage(t('services.itemSaved'))
       await loadRows()
     } catch (saveError) {
       setError(
@@ -308,10 +516,6 @@ export function ServicesSubscriptionsView({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: row.id, action: 'delete' }),
       })
-      if (expandedId === row.id) {
-        setExpandedId('')
-        setDraftItems([])
-      }
       setMessage(t('services.deleted'))
       await loadRows()
     } catch (deleteError) {
@@ -323,54 +527,6 @@ export function ServicesSubscriptionsView({
     } finally {
       setIsSaving(false)
     }
-  }
-
-  const updateDraft = (
-    index: number,
-    patch: Partial<FinanceServiceOccurrence>,
-  ) => {
-    setDraftItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) {
-          return item
-        }
-        const next = { ...item, ...patch }
-        const price = Math.max(0, Number(next.price) || 0)
-        return {
-          ...next,
-          price: roundMoney(price),
-          priceWithIva: roundMoney(
-            next.appliesIva ? price * IVA_MULTIPLIER : price,
-          ),
-        }
-      }),
-    )
-  }
-
-  const addOccurrence = (row: ServiceRow) => {
-    const last = draftItems[draftItems.length - 1]
-    const months = intervalMonths(row.recurrence) || 1
-    const nextDate = last
-      ? addMonthsToDate(last.billingDate, months)
-      : row.startDate || getTodayMadrid()
-    const period = nextDate.slice(0, 7)
-    setDraftItems((current) =>
-      [
-        ...current,
-        {
-          id: `${row.id}-${period}-${current.length + 1}`,
-          period,
-          billingDate: nextDate,
-          price: last?.price ?? 0,
-          appliesIva: last?.appliesIva ?? false,
-          priceWithIva: last?.priceWithIva ?? 0,
-        },
-      ].sort((left, right) => left.billingDate.localeCompare(right.billingDate)),
-    )
-  }
-
-  const removeOccurrence = (index: number) => {
-    setDraftItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
   }
 
   return (
@@ -408,6 +564,60 @@ export function ServicesSubscriptionsView({
             />
             <div className="header-actions">
               <button
+                className={`btn-ghost btn-filter ${isFilterOpen ? 'is-active' : ''}`}
+                type="button"
+                aria-label={t('common.filters')}
+                onClick={() => {
+                  setFilterDraft({
+                    propertyIds: [...filters.propertyIds],
+                    types: [...filters.types],
+                    dateFrom: filters.dateFrom,
+                    dateTo: filters.dateTo,
+                  })
+                  setIsFilterOpen(true)
+                }}
+              >
+                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
+                  <path
+                    d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                    fill="currentColor"
+                  />
+                </svg>
+                {activeFilterCount > 0 ? (
+                  <span className="filter-badge">{activeFilterCount}</span>
+                ) : null}
+              </button>
+              <button
+                className={`btn-ghost btn-filter ${
+                  isCurrentMonthQuickFilterActive ? 'is-active' : ''
+                }`}
+                type="button"
+                aria-pressed={isCurrentMonthQuickFilterActive}
+                aria-label={t('common.quickFilterCurrentMonth')}
+                onClick={() =>
+                  applyMonthRange(
+                    isCurrentMonthQuickFilterActive ? null : currentMonthRange,
+                  )
+                }
+              >
+                {t('common.quickFilterCurrentMonth')}
+              </button>
+              <button
+                className={`btn-ghost btn-filter ${
+                  isPreviousMonthQuickFilterActive ? 'is-active' : ''
+                }`}
+                type="button"
+                aria-pressed={isPreviousMonthQuickFilterActive}
+                aria-label={t('common.quickFilterPreviousMonth')}
+                onClick={() =>
+                  applyMonthRange(
+                    isPreviousMonthQuickFilterActive ? null : previousMonthRange,
+                  )
+                }
+              >
+                {t('common.quickFilterPreviousMonth')}
+              </button>
+              <button
                 className="btn-ghost"
                 type="button"
                 onClick={openCreate}
@@ -440,23 +650,21 @@ export function ServicesSubscriptionsView({
 
       <section className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}>
         <div className="card card-compact">
-          <p className="card-label">{t('services.totalCard')}</p>
-          <p className="card-value">{isLoading ? '—' : filteredRows.length}</p>
+          <p className="card-label">{t('services.itemsCard')}</p>
+          <p className="card-value">{isLoading ? '—' : totals.count}</p>
         </div>
         <div className="card card-compact">
           <p className="card-label">{t('services.apartmentCard')}</p>
-          <p className="card-value">
-            {isLoading
-              ? '—'
-              : filteredRows.filter((row) => row.type === 'apartment').length}
-          </p>
+          <p className="card-value">{isLoading ? '—' : totals.apartment}</p>
         </div>
         <div className="card card-compact">
           <p className="card-label">{t('services.opsCard')}</p>
+          <p className="card-value">{isLoading ? '—' : totals.ops}</p>
+        </div>
+        <div className="card card-compact">
+          <p className="card-label">{t('services.costCard')}</p>
           <p className="card-value">
-            {isLoading
-              ? '—'
-              : filteredRows.filter((row) => row.type === 'ops').length}
+            {isLoading ? '—' : money.format(totals.costWithIva)}
           </p>
         </div>
       </section>
@@ -464,8 +672,8 @@ export function ServicesSubscriptionsView({
       <section className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title">{t('services.cardTitle')}</h2>
-            <p className="card-subtitle">{t('services.cardSubtitle')}</p>
+            <h2 className="card-title">{t('services.itemsTitle')}</h2>
+            <p className="card-subtitle">{t('services.itemsSubtitle')}</p>
           </div>
           <button className="btn-primary" type="button" onClick={openCreate}>
             {t('services.add')}
@@ -475,183 +683,258 @@ export function ServicesSubscriptionsView({
           <table className="data-table">
             <thead>
               <tr>
+                <th>{t('services.billingDate')}</th>
                 <th>{t('services.type')}</th>
                 <th>{t('services.property')}</th>
                 <th>{t('services.title')}</th>
                 <th>{t('services.recurrence')}</th>
-                <th>{t('services.occurrences')}</th>
+                <th>{t('services.price')}</th>
+                <th>{t('services.appliesIva')}</th>
+                <th>{t('services.priceWithIva')}</th>
                 <th>{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6}>{t('common.loading')}</td>
+                  <td colSpan={9}>{t('common.loading')}</td>
                 </tr>
-              ) : filteredRows.length === 0 ? (
+              ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
-                    {rows.length === 0
-                      ? t('services.empty')
+                  <td colSpan={9}>
+                    {allItems.length === 0
+                      ? t('services.emptyItems')
                       : t('services.emptyFiltered')}
                   </td>
                 </tr>
               ) : (
-                filteredRows.flatMap((row) => {
-                  const expanded = expandedId === row.id
-                  const items = expanded ? draftItems : row.items
-                  const propertyLabel =
-                    propertyById.get(row.propertyId) || row.propertyName || '—'
-                  const main = (
-                    <tr key={row.id}>
-                      <td>
-                        {row.type === 'ops'
-                          ? t('services.typeOps')
-                          : t('services.typeApartment')}
-                      </td>
-                      <td>{row.type === 'apartment' ? propertyLabel : '—'}</td>
-                      <td>{row.title}</td>
-                      <td>{t(RECURRENCE_KEYS[row.recurrence])}</td>
-                      <td>{row.items.length}</td>
-                      <td>
-                        <div className="table-actions">
-                          <button
-                            className="btn-secondary"
-                            type="button"
-                            onClick={() => toggleExpand(row)}
-                          >
-                            {expanded
-                              ? t('services.hideItems')
-                              : t('services.showItems')}
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            type="button"
-                            onClick={() => openEdit(row)}
-                          >
-                            {t('common.edit')}
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            type="button"
-                            disabled={isSaving}
-                            onClick={() => void deleteRow(row)}
-                          >
-                            {t('common.delete')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                  if (!expanded) {
-                    return [main]
-                  }
-                  return [
-                    main,
-                    <tr key={`${row.id}-items`} className="detail-row">
-                      <td colSpan={6}>
-                        <div className="nested-table-wrap">
-                          <table className="nested-data-table">
-                            <thead>
-                              <tr>
-                                <th>{t('services.billingDate')}</th>
-                                <th>{t('services.price')}</th>
-                                <th>{t('services.appliesIva')}</th>
-                                <th>{t('services.priceWithIva')}</th>
-                                <th>{t('common.actions')}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.length === 0 ? (
-                                <tr>
-                                  <td colSpan={5}>
-                                    {t('services.emptyOccurrences')}
-                                  </td>
-                                </tr>
-                              ) : (
-                                items.map((item, index) => (
-                                  <tr key={item.id}>
-                                    <td>
-                                      <input
-                                        type="date"
-                                        value={item.billingDate}
-                                        onChange={(event) =>
-                                          updateDraft(index, {
-                                            billingDate: event.target.value,
-                                            period: event.target.value.slice(0, 7),
-                                          })
-                                        }
-                                      />
-                                    </td>
-                                    <td>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={item.price}
-                                        onChange={(event) =>
-                                          updateDraft(index, {
-                                            price: Number(event.target.value),
-                                          })
-                                        }
-                                      />
-                                    </td>
-                                    <td>
-                                      <label className="filter-option">
-                                        <input
-                                          type="checkbox"
-                                          checked={item.appliesIva}
-                                          onChange={(event) =>
-                                            updateDraft(index, {
-                                              appliesIva: event.target.checked,
-                                            })
-                                          }
-                                        />
-                                        <span>{t('services.appliesIva')}</span>
-                                      </label>
-                                    </td>
-                                    <td>{money.format(item.priceWithIva)}</td>
-                                    <td>
-                                      <button
-                                        className="btn-secondary"
-                                        type="button"
-                                        onClick={() => removeOccurrence(index)}
-                                      >
-                                        {t('common.delete')}
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                          <div className="table-actions nested-table-actions">
-                            <button
-                              className="btn-secondary"
-                              type="button"
-                              onClick={() => addOccurrence(row)}
-                            >
-                              {t('services.addOccurrence')}
-                            </button>
-                            <button
-                              className="btn-primary"
-                              type="button"
-                              disabled={isSaving}
-                              onClick={() => void saveOccurrences(row)}
-                            >
-                              {t('services.saveOccurrences')}
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>,
-                  ]
-                })
+                filteredItems.map((item) => (
+                  <tr key={`${item.serviceId}-${item.id}`}>
+                    <td>{formatDateOnlyLabel(item.billingDate, i18n.language)}</td>
+                    <td>
+                      {item.type === 'ops'
+                        ? t('services.typeOps')
+                        : t('services.typeApartment')}
+                    </td>
+                    <td>
+                      {item.type === 'apartment'
+                        ? item.propertyName || '—'
+                        : '—'}
+                    </td>
+                    <td>{item.title}</td>
+                    <td>{t(RECURRENCE_KEYS[item.recurrence])}</td>
+                    <td>{money.format(item.price)}</td>
+                    <td>{item.appliesIva ? t('common.yes') : t('common.no')}</td>
+                    <td>{money.format(item.priceWithIva)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => openItemEdit(item)}
+                        >
+                          {t('common.edit')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">{t('services.templatesTitle')}</h2>
+            <p className="card-subtitle">{t('services.templatesSubtitle')}</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('services.type')}</th>
+                <th>{t('services.property')}</th>
+                <th>{t('services.title')}</th>
+                <th>{t('services.recurrence')}</th>
+                <th>{t('services.priceMode')}</th>
+                <th>{t('services.price')}</th>
+                <th>{t('common.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && !isLoading ? (
+                <tr>
+                  <td colSpan={7}>{t('services.empty')}</td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      {row.type === 'ops'
+                        ? t('services.typeOps')
+                        : t('services.typeApartment')}
+                    </td>
+                    <td>
+                      {row.type === 'apartment'
+                        ? propertyById.get(row.propertyId) || row.propertyName || '—'
+                        : '—'}
+                    </td>
+                    <td>{row.title}</td>
+                    <td>{t(RECURRENCE_KEYS[row.recurrence])}</td>
+                    <td>
+                      {row.priceMode === 'fixed'
+                        ? t('services.priceFixed')
+                        : t('services.priceVariable')}
+                    </td>
+                    <td>
+                      {row.priceMode === 'fixed' ? money.format(row.price) : '—'}
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => openEdit(row)}
+                        >
+                          {t('common.edit')}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => void deleteRow(row)}
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {isFilterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal modal-scrollable">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">{t('services.filterSubtitle')}</p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                aria-label={t('common.closeFilters')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('services.property')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {properties.map((property) => (
+                      <label className="filter-option" key={property.id}>
+                        <input
+                          type="checkbox"
+                          checked={filterDraft.propertyIds.includes(property.id)}
+                          onChange={() =>
+                            toggleDraftValue('propertyIds', property.id)
+                          }
+                        />
+                        <span>{getPropertyLabel(property)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('services.type')}</p>
+                  <div className="filter-options">
+                    {SERVICE_TYPES.map((type) => (
+                      <label className="filter-option" key={type}>
+                        <input
+                          type="checkbox"
+                          checked={filterDraft.types.includes(type)}
+                          onChange={() => toggleDraftValue('types', type)}
+                        />
+                        <span>
+                          {type === 'ops'
+                            ? t('services.typeOps')
+                            : t('services.typeApartment')}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('common.dateRange')}</p>
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>{t('common.from')}</span>
+                      <input
+                        type="date"
+                        value={filterDraft.dateFrom}
+                        onChange={(event) =>
+                          setFilterDraft((current) => ({
+                            ...current,
+                            dateFrom: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('common.to')}</span>
+                      <input
+                        type="date"
+                        value={filterDraft.dateTo}
+                        onChange={(event) =>
+                          setFilterDraft((current) => ({
+                            ...current,
+                            dateTo: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setFilterDraft(emptyFilters())}
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setFilters({
+                    propertyIds: [...filterDraft.propertyIds],
+                    types: [...filterDraft.types],
+                    dateFrom: filterDraft.dateFrom,
+                    dateTo: filterDraft.dateTo,
+                  })
+                  setIsFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -763,6 +1046,67 @@ export function ServicesSubscriptionsView({
                     }
                   />
                 </label>
+                <div className="planner-switch">
+                  <span>{t('services.priceVariable')}</span>
+                  <YallaSwitch
+                    on={form.priceMode === 'fixed'}
+                    label={
+                      form.priceMode === 'fixed'
+                        ? t('services.priceFixed')
+                        : t('services.priceVariable')
+                    }
+                    onToggle={() =>
+                      setForm((current) => ({
+                        ...current,
+                        priceMode:
+                          current.priceMode === 'fixed' ? 'variable' : 'fixed',
+                      }))
+                    }
+                  />
+                  <span>{t('services.priceFixed')}</span>
+                </div>
+                {form.priceMode === 'fixed' ? (
+                  <>
+                    <label>
+                      {t('services.price')}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.price}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            price: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="filter-option">
+                      <input
+                        type="checkbox"
+                        checked={form.appliesIva}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            appliesIva: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>{t('services.appliesIva')}</span>
+                    </label>
+                    <label>
+                      {t('services.priceWithIva')}
+                      <input
+                        type="text"
+                        readOnly
+                        value={money.format(formPriceWithIva || 0)}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <p className="modal-subtitle">{t('services.variableHelp')}</p>
+                )}
               </div>
             </div>
             <div className="modal-footer">
@@ -778,6 +1122,100 @@ export function ServicesSubscriptionsView({
                 type="button"
                 disabled={isSaving}
                 onClick={() => void saveForm()}
+              >
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {itemForm ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('services.editItemTitle')}</h3>
+                <p className="modal-subtitle">{t('services.editItemSubtitle')}</p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setItemForm(null)}
+                aria-label={t('common.closeForm')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filters-grid">
+                <label>
+                  {t('services.billingDate')}
+                  <input
+                    type="date"
+                    value={itemForm.billingDate}
+                    onChange={(event) =>
+                      setItemForm((current) =>
+                        current
+                          ? { ...current, billingDate: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  {t('services.price')}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={itemForm.price}
+                    onChange={(event) =>
+                      setItemForm((current) =>
+                        current
+                          ? { ...current, price: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={itemForm.appliesIva}
+                    onChange={(event) =>
+                      setItemForm((current) =>
+                        current
+                          ? { ...current, appliesIva: event.target.checked }
+                          : current,
+                      )
+                    }
+                  />
+                  <span>{t('services.appliesIva')}</span>
+                </label>
+                <label>
+                  {t('services.priceWithIva')}
+                  <input
+                    type="text"
+                    readOnly
+                    value={money.format(itemPriceWithIva || 0)}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setItemForm(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSaving}
+                onClick={() => void saveItem()}
               >
                 {t('common.save')}
               </button>
