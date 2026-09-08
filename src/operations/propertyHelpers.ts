@@ -32,6 +32,32 @@ export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
     ),
   )
 
+const isMtlPrincipalType = (type?: string) =>
+  (type ?? '').trim().toUpperCase() === 'MTL_PRINCIPAL'
+
+const isYallaP2Property = (property: PropertyOption) => {
+  if (isMtlPrincipalType(property.type)) {
+    return true
+  }
+  const id = property.id.trim().toLowerCase()
+  const label = getPropertyLabel(property).trim().toLowerCase()
+  return id === 'planta2' || label === 'p2'
+}
+
+export const filterTemplateAutoAssignPropertyOptions = (
+  properties: PropertyOption[],
+) =>
+  sortPropertyOptions(
+    properties.filter((property) => {
+      if (isYallaP2Property(property)) {
+        return true
+      }
+      return (
+        !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim()
+      )
+    }),
+  )
+
 const P2_ROOM_NICKNAMES = new Set(
   Array.from({ length: 12 }, (_, index) => String(201 + index)),
 )

@@ -9,7 +9,7 @@ import {
   saveVisitTemplateAutoAssign,
 } from './api'
 import {
-  filterPropertySelectOptions,
+  filterTemplateAutoAssignPropertyOptions,
   getPropertyLabel,
   sortPropertyOptions,
 } from './propertyHelpers'
@@ -69,7 +69,7 @@ export function TemplateAutoAssignView({
   const [form, setForm] = useState(emptyForm)
 
   const properties = useMemo(
-    () => sortPropertyOptions(filterPropertySelectOptions(propertyOptions)),
+    () => filterTemplateAutoAssignPropertyOptions(propertyOptions),
     [propertyOptions],
   )
   const allProperties = useMemo(
