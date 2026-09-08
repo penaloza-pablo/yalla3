@@ -64,6 +64,15 @@ type ExpenseLine = {
   amountInclIva: number
 }
 
+type ServiceLine = {
+  id: string
+  title: string
+  recurrence: string
+  date: string
+  price: number
+  priceWithIva: number
+}
+
 const PHASE1_NICKNAME = 'esperanza 9'
 const PHASE1_MONTH_IDS = ['2026-08']
 
@@ -122,6 +131,7 @@ export function PropertyReportsView({
   const [cleaningTotal, setCleaningTotal] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
+  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,6 +141,7 @@ export function PropertyReportsView({
     cleaning: false,
     maintenance: false,
     expenses: false,
+    services: false,
   })
 
   const money = useMemo(
@@ -169,13 +180,30 @@ export function PropertyReportsView({
     }),
     [expenses],
   )
+  const serviceTotals = useMemo(
+    () => ({
+      count: serviceLines.length,
+      cost: serviceLines.reduce((sum, line) => sum + line.price, 0),
+      costWithIva: serviceLines.reduce((sum, line) => sum + line.priceWithIva, 0),
+    }),
+    [serviceLines],
+  )
 
   const originLabel = (origin: string) => {
     if (origin === 'subtraction') {
       return t('propertyReports.originSubtraction')
     }
+    if (origin === 'movement') {
+      return t('propertyReports.originMovement')
+    }
     return origin
   }
+
+  const recurrenceLabel = (value: string) =>
+    t(
+      `services.recurrence${value.charAt(0).toUpperCase()}${value.slice(1)}`,
+      { defaultValue: value },
+    )
 
   const toggleTable = (key: keyof typeof openTables) => {
     setOpenTables((current) => ({ ...current, [key]: !current[key] }))
@@ -241,6 +269,9 @@ export function PropertyReportsView({
         expenses?: {
           lines?: ExpenseLine[]
         }
+        services?: {
+          lines?: ServiceLine[]
+        }
       }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}&month=${encodeURIComponent(monthId)}`,
       )
@@ -254,6 +285,7 @@ export function PropertyReportsView({
       setCleaningTotal(Number(payload.cleaning?.total ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
       setExpenses(payload.expenses?.lines ?? [])
+      setServiceLines(payload.services?.lines ?? [])
     },
     [endpoints.get, t],
   )
@@ -288,6 +320,7 @@ export function PropertyReportsView({
       cleaning: false,
       maintenance: false,
       expenses: false,
+      services: false,
     })
     setIsLoading(true)
     setError(null)
@@ -357,6 +390,7 @@ export function PropertyReportsView({
                     setReport(null)
                     setBookings([])
                     setExpenses([])
+                    setServiceLines([])
                     return
                   }
                   setSelectedPropertyId('')
@@ -764,6 +798,75 @@ export function PropertyReportsView({
                 </button>
               </p>
             )}
+          </section>
+
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">{t('propertyReports.servicesTitle')}</h2>
+                <div className="report-metrics">
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.servicesCount')}
+                    </p>
+                    <p className="card-value">{serviceTotals.count}</p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.cost')}</p>
+                    <p className="card-value">
+                      {money.format(serviceTotals.cost)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.costWithIva')}</p>
+                    <p className="card-value">
+                      {money.format(serviceTotals.costWithIva)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => toggleTable('services')}
+              >
+                {openTables.services
+                  ? t('propertyReports.hideTable')
+                  : t('propertyReports.showTable')}
+              </button>
+            </div>
+            {openTables.services ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.serviceTitle')}</th>
+                      <th>{t('propertyReports.recurrence')}</th>
+                      <th>{t('propertyReports.date')}</th>
+                      <th>{t('propertyReports.cost')}</th>
+                      <th>{t('propertyReports.costWithIva')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serviceLines.length === 0 && !isLoading ? (
+                      <tr>
+                        <td colSpan={5}>{t('propertyReports.emptyServices')}</td>
+                      </tr>
+                    ) : (
+                      serviceLines.map((line) => (
+                        <tr key={line.id}>
+                          <td>{line.title || '—'}</td>
+                          <td>{recurrenceLabel(line.recurrence)}</td>
+                          <td>{dateLabel(line.date)}</td>
+                          <td>{money.format(line.price)}</td>
+                          <td>{money.format(line.priceWithIva)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
 
           <section className="card">

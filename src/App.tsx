@@ -38,6 +38,8 @@ import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { PropertyReportsView } from './finance/PropertyReportsView'
+import { MovementsView } from './finance/MovementsView'
+import { ServicesSubscriptionsView } from './finance/ServicesSubscriptionsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
@@ -2844,7 +2846,7 @@ function App() {
     if (activePage === 'Reviews') {
       void fetchReviews()
     }
-    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign' || activePage === 'Property Reports') {
+    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign' || activePage === 'Property Reports' || activePage === 'Movements' || activePage === 'Services & Subscriptions') {
       void fetchProperties()
     }
     if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Cleaning settings' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings' || activePage === 'Bookings Plan' || activePage === 'Bookings settings') {
@@ -8107,6 +8109,28 @@ function App() {
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
             onNavigate={navigateToPage}
+          />
+        ) : activePage === 'Movements' ? (
+          <MovementsView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+          />
+        ) : activePage === 'Services & Subscriptions' ? (
+          <ServicesSubscriptionsView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
           />
         ) : (
           <section className="card">

@@ -57,6 +57,10 @@ import { upsertVisitTemplateAutoAssign } from './functions/upsert-visit-template
 import { applyVisitTemplateAutoAssign } from './functions/apply-visit-template-auto-assign/resource';
 import { getPropertyReport } from './functions/get-property-report/resource';
 import { upsertPropertyReport } from './functions/upsert-property-report/resource';
+import { getFinanceMovements } from './functions/get-finance-movements/resource';
+import { upsertFinanceMovement } from './functions/upsert-finance-movement/resource';
+import { getFinanceServices } from './functions/get-finance-services/resource';
+import { upsertFinanceService } from './functions/upsert-finance-service/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
@@ -140,6 +144,10 @@ const backend = defineBackend({
   applyVisitTemplateAutoAssign,
   getPropertyReport,
   upsertPropertyReport,
+  getFinanceMovements,
+  upsertFinanceMovement,
+  getFinanceServices,
+  upsertFinanceService,
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
@@ -223,6 +231,10 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitTemplateAutoAssign,
   backend.getPropertyReport,
   backend.upsertPropertyReport,
+  backend.getFinanceMovements,
+  backend.upsertFinanceMovement,
+  backend.getFinanceServices,
+  backend.upsertFinanceService,
   backend.upsertVisitType,
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
@@ -332,6 +344,29 @@ const propertyReportsTable = new Table(dataStack, 'PropertyReportsTable', {
   sortKey: { name: 'monthId', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
   removalPolicy: RemovalPolicy.RETAIN,
+});
+const financeMovementsTable = new Table(dataStack, 'FinanceMovementsTable', {
+  tableName: 'yalla-finance-movements',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+financeMovementsTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-date-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  sortKey: { name: 'date', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+const financeServicesTable = new Table(dataStack, 'FinanceServicesTable', {
+  tableName: 'yalla-finance-services',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+financeServicesTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
 });
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
@@ -689,6 +724,8 @@ const activityLogWriters = [
   backend.upsertVisitTemplate,
   backend.upsertVisitTemplateAutoAssign,
   backend.upsertPropertyReport,
+  backend.upsertFinanceMovement,
+  backend.upsertFinanceService,
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
   backend.proxyGuestyBookingsSync,
@@ -1271,6 +1308,38 @@ backend.getPropertyReport.addEnvironment(
   'SUBTRACTIONS_TABLE',
   substractionsTable.tableName,
 );
+backend.getPropertyReport.addEnvironment(
+  'MOVEMENTS_TABLE',
+  financeMovementsTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'SERVICES_TABLE',
+  financeServicesTable.tableName,
+);
+backend.getFinanceMovements.addEnvironment(
+  'TABLE_NAME',
+  financeMovementsTable.tableName,
+);
+backend.upsertFinanceMovement.addEnvironment(
+  'TABLE_NAME',
+  financeMovementsTable.tableName,
+);
+backend.upsertFinanceMovement.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
+backend.getFinanceServices.addEnvironment(
+  'TABLE_NAME',
+  financeServicesTable.tableName,
+);
+backend.upsertFinanceService.addEnvironment(
+  'TABLE_NAME',
+  financeServicesTable.tableName,
+);
+backend.upsertFinanceService.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
 backend.upsertPropertyReport.addEnvironment(
   'TABLE_NAME',
   propertyReportsTable.tableName,
@@ -1311,6 +1380,36 @@ maintenanceProvidersTable.grantReadData(
 );
 visitTypesTable.grantReadData(backend.getPropertyReport.resources.lambda);
 substractionsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+financeMovementsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:Scan'],
+    resources: [
+      financeMovementsTable.tableArn,
+      `${financeMovementsTable.tableArn}/index/propertyId-date-index`,
+    ],
+  }),
+);
+financeMovementsTable.grantReadData(backend.getFinanceMovements.resources.lambda);
+financeMovementsTable.grantReadWriteData(
+  backend.upsertFinanceMovement.resources.lambda,
+);
+propertiesTable.grantReadData(backend.upsertFinanceMovement.resources.lambda);
+financeServicesTable.grantReadData(backend.getPropertyReport.resources.lambda);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:Scan'],
+    resources: [
+      financeServicesTable.tableArn,
+      `${financeServicesTable.tableArn}/index/propertyId-index`,
+    ],
+  }),
+);
+financeServicesTable.grantReadData(backend.getFinanceServices.resources.lambda);
+financeServicesTable.grantReadWriteData(
+  backend.upsertFinanceService.resources.lambda,
+);
+propertiesTable.grantReadData(backend.upsertFinanceService.resources.lambda);
 
 maintenanceProvidersTable.grantReadWriteData(
   backend.getMaintenanceProviders.resources.lambda,
@@ -1607,6 +1706,22 @@ const upsertPropertyReportUrl =
   backend.upsertPropertyReport.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getFinanceMovementsUrl =
+  backend.getFinanceMovements.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertFinanceMovementUrl =
+  backend.upsertFinanceMovement.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const getFinanceServicesUrl =
+  backend.getFinanceServices.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertFinanceServiceUrl =
+  backend.upsertFinanceService.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1786,6 +1901,10 @@ backend.addOutput({
     upsertVisitTemplateAutoAssignUrl: upsertVisitTemplateAutoAssignUrl.url,
     getPropertyReportUrl: getPropertyReportUrl.url,
     upsertPropertyReportUrl: upsertPropertyReportUrl.url,
+    getFinanceMovementsUrl: getFinanceMovementsUrl.url,
+    upsertFinanceMovementUrl: upsertFinanceMovementUrl.url,
+    getFinanceServicesUrl: getFinanceServicesUrl.url,
+    upsertFinanceServiceUrl: upsertFinanceServiceUrl.url,
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,

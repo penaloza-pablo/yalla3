@@ -32,7 +32,7 @@ export type PropertyReportBooking = {
   currency: string;
 };
 
-export type PropertyReportExpenseOrigin = 'subtraction';
+export type PropertyReportExpenseOrigin = 'subtraction' | 'movement';
 
 export type PropertyReportExpense = {
   id: string;
@@ -289,8 +289,8 @@ export const loadPendingBillingExpenses = async (
       origin: 'subtraction',
       itemName: asString(item['Item name']) || asString(item.itemName),
       date: dateIso,
-      amountExclIva,
-      amountInclIva: roundMoney(amountExclIva * IVA_MULTIPLIER),
+      amountExclIva: roundMoney(-Math.abs(amountExclIva)),
+      amountInclIva: roundMoney(-Math.abs(amountExclIva * IVA_MULTIPLIER)),
     });
   }
 
@@ -301,6 +301,152 @@ export const loadPendingBillingExpenses = async (
     return left.id.localeCompare(right.id);
   });
   return expenses;
+};
+
+export const loadFinanceMovements = async (
+  tableName: string,
+  property: Record<string, unknown>,
+  monthId: string,
+): Promise<PropertyReportExpense[]> => {
+  const propertyId = asString(property.id);
+  if (!propertyId) {
+    return [];
+  }
+
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: 'propertyId-date-index',
+        KeyConditionExpression:
+          'propertyId = :propertyId AND begins_with(#date, :monthId)',
+        ExpressionAttributeNames: { '#date': 'date' },
+        ExpressionAttributeValues: {
+          ':propertyId': propertyId,
+          ':monthId': monthId,
+        },
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+
+  const expenses: PropertyReportExpense[] = [];
+  for (const item of items) {
+    const date = asString(item.date).slice(0, 10);
+    if (!date || date.slice(0, 7) !== monthId) {
+      continue;
+    }
+    const status = asString(item.status) || 'Pending Billing';
+    if (status === 'Not Billable') {
+      continue;
+    }
+    const amount = Math.abs(asNumber(item.amount) ?? 0);
+    const appliesIva = Boolean(item.appliesIva);
+    const storedTotal = asNumber(item.totalAmount);
+    const totalAmount =
+      storedTotal ?? roundMoney(appliesIva ? amount * IVA_MULTIPLIER : amount);
+    const sign = asString(item.kind).toLowerCase() === 'income' ? 1 : -1;
+    expenses.push({
+      id: asString(item.id) || `${date}-${asString(item.description)}`,
+      origin: 'movement',
+      itemName: asString(item.description),
+      date,
+      amountExclIva: roundMoney(sign * amount),
+      amountInclIva: roundMoney(sign * totalAmount),
+    });
+  }
+
+  expenses.sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+    return left.id.localeCompare(right.id);
+  });
+  return expenses;
+};
+
+export type PropertyReportServiceLine = {
+  id: string;
+  title: string;
+  recurrence: string;
+  date: string;
+  price: number;
+  priceWithIva: number;
+};
+
+export const loadFinanceServices = async (
+  tableName: string,
+  property: Record<string, unknown>,
+  monthId: string,
+): Promise<PropertyReportServiceLine[]> => {
+  const propertyId = asString(property.id);
+  if (!propertyId) {
+    return [];
+  }
+
+  const services: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: 'propertyId-index',
+        KeyConditionExpression: 'propertyId = :propertyId',
+        ExpressionAttributeValues: { ':propertyId': propertyId },
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    services.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+
+  const lines: PropertyReportServiceLine[] = [];
+  for (const service of services) {
+    const title = asString(service.title);
+    const recurrence = asString(service.recurrence);
+    const occurrences = Array.isArray(service.items) ? service.items : [];
+    for (const entry of occurrences) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const item = entry as Record<string, unknown>;
+      const date = asString(item.billingDate).slice(0, 10);
+      if (!date || date.slice(0, 7) !== monthId) {
+        continue;
+      }
+      const price = Math.max(0, asNumber(item.price) ?? 0);
+      const appliesIva = Boolean(item.appliesIva);
+      const storedWithIva = asNumber(item.priceWithIva);
+      lines.push({
+        id:
+          asString(item.id) ||
+          `${asString(service.id)}-${date}`,
+        title,
+        recurrence,
+        date,
+        price,
+        priceWithIva:
+          storedWithIva ??
+          roundMoney(appliesIva ? price * IVA_MULTIPLIER : price),
+      });
+    }
+  }
+
+  lines.sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+    return left.title.localeCompare(right.title);
+  });
+  return lines;
 };
 
 export const listingMatchesProperty = (

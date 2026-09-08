@@ -953,6 +953,49 @@ button.today-card {
   flex-wrap: wrap;
 }
 
+.nested-table-wrap {
+  overflow-x: auto;
+  padding: 4px 0 8px;
+}
+
+.nested-data-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+
+.nested-data-table th,
+.nested-data-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid #eaecf0;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.nested-data-table th {
+  color: #667085;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.nested-data-table input[type='date'],
+.nested-data-table input[type='number'] {
+  width: 100%;
+  max-width: 160px;
+  min-width: 0;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.nested-table-actions {
+  margin-top: 12px;
+}
+
 .search-input {
   border: 1px solid #d0d5dd;
   border-radius: 10px;
@@ -4503,6 +4546,19 @@ th {
 
   .data-table tbody tr.detail-row td::before {
     display: none;
+  }
+
+  .nested-table-wrap {
+    margin-top: 4px;
+  }
+
+  .nested-data-table {
+    min-width: 520px;
+  }
+
+  .nested-data-table input[type='date'],
+  .nested-data-table input[type='number'] {
+    max-width: none;
   }
 
   .data-table td.table-empty {

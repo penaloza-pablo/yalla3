@@ -83,3 +83,23 @@ export const filterBookingsPlannerPropertyOptions = (
       )
     }),
   )
+
+export const filterMovementsPropertyOptions = (properties: PropertyOption[]) => {
+  const eligible = properties.filter((property) => {
+    if (isP2RoomProperty(property)) {
+      return false
+    }
+    if (isYallaP2Property(property) || isOtherProperty(property)) {
+      return true
+    }
+    return !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim()
+  })
+  const p2 = sortPropertyOptions(eligible.filter(isYallaP2Property))
+  const other = eligible.filter(isOtherProperty)
+  const rest = sortPropertyOptions(
+    eligible.filter(
+      (property) => !isYallaP2Property(property) && !isOtherProperty(property),
+    ),
+  )
+  return [...p2, ...rest, ...other]
+}

@@ -7,6 +7,8 @@ const LEGACY_PAGE_MAP: Record<string, string> = {
   Today: 'Daily Operations',
   Chatbot: 'Daily Operations',
   'Finance solution 1': 'Property Reports',
+  'Finance solution 2': 'Movements',
+  'Finance solution 3': 'Services & Subscriptions',
 }
 
 type StoredPage = {

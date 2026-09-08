@@ -17,6 +17,8 @@ import {
   isPhase1Month,
   isPhase1Property,
   listingMatchesProperty,
+  loadFinanceMovements,
+  loadFinanceServices,
   loadPendingBillingExpenses,
   mapReportBooking,
   PHASE1_MONTH_IDS,
@@ -99,6 +101,8 @@ export const handler = async (event: HttpEvent) => {
   const providersTable = process.env.PROVIDERS_TABLE;
   const visitTypesTable = process.env.VISIT_TYPES_TABLE;
   const subtractionsTable = process.env.SUBTRACTIONS_TABLE;
+  const movementsTable = process.env.MOVEMENTS_TABLE;
+  const servicesTable = process.env.SERVICES_TABLE;
 
   if (
     !reportsTable ||
@@ -111,7 +115,9 @@ export const handler = async (event: HttpEvent) => {
     !maintenanceSettingsTable ||
     !providersTable ||
     !visitTypesTable ||
-    !subtractionsTable
+    !subtractionsTable ||
+    !movementsTable ||
+    !servicesTable
   ) {
     return buildHttpResponse(500, {
       message: 'Property report tables are not configured.',
@@ -161,29 +167,46 @@ export const handler = async (event: HttpEvent) => {
     const stored = await getReportRecord(reportsTable, propertyId, monthId);
     const report = reportMonthSummary(monthId, stored);
 
-    const [bookings, cleaningDetail, maintenanceDetail, expenses] =
-      await Promise.all([
-        loadPayoutBookings(bookingsTable, property, monthId),
-        buildCleaningMonthDetail({
-          monthId,
-          billingTable: cleaningBillingTable,
-          visitsTable,
-          plansTable: cleaningPlansTable,
-          detailsTable: cleaningDetailsTable || '',
-          persistSummary: false,
-        }),
-        buildMaintenanceMonthDetail({
-          monthId,
-          persistSummary: false,
-          billingTable: maintenanceBillingTable,
-          visitsTable,
-          settingsTable: maintenanceSettingsTable,
-          providersTable,
-          visitTypesTable,
-          propertiesTable,
-        }),
-        loadPendingBillingExpenses(subtractionsTable, property, monthId),
-      ]);
+    const [
+      bookings,
+      cleaningDetail,
+      maintenanceDetail,
+      subtractionExpenses,
+      movementExpenses,
+      serviceLines,
+    ] = await Promise.all([
+      loadPayoutBookings(bookingsTable, property, monthId),
+      buildCleaningMonthDetail({
+        monthId,
+        billingTable: cleaningBillingTable,
+        visitsTable,
+        plansTable: cleaningPlansTable,
+        detailsTable: cleaningDetailsTable || '',
+        persistSummary: false,
+      }),
+      buildMaintenanceMonthDetail({
+        monthId,
+        persistSummary: false,
+        billingTable: maintenanceBillingTable,
+        visitsTable,
+        settingsTable: maintenanceSettingsTable,
+        providersTable,
+        visitTypesTable,
+        propertiesTable,
+      }),
+      loadPendingBillingExpenses(subtractionsTable, property, monthId),
+      loadFinanceMovements(movementsTable, property, monthId),
+      loadFinanceServices(servicesTable, property, monthId),
+    ]);
+
+    const expenses = [...subtractionExpenses, ...movementExpenses].sort(
+      (left, right) => {
+        if (left.date !== right.date) {
+          return left.date.localeCompare(right.date);
+        }
+        return left.id.localeCompare(right.id);
+      },
+    );
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';
@@ -228,6 +251,14 @@ export const handler = async (event: HttpEvent) => {
         ),
         totalCostWithIva: roundMoney(
           expenses.reduce((sum, line) => sum + line.amountInclIva, 0),
+        ),
+      },
+      services: {
+        lines: serviceLines,
+        count: serviceLines.length,
+        cost: roundMoney(serviceLines.reduce((sum, line) => sum + line.price, 0)),
+        costWithIva: roundMoney(
+          serviceLines.reduce((sum, line) => sum + line.priceWithIva, 0),
         ),
       },
     });

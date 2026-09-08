@@ -52,6 +52,8 @@ const FEATURE_OPTIONS = [
   'Maintenance Billing',
   'Maintenance settings',
   'Property Reports',
+  'Movements',
+  'Services & Subscriptions',
   'Slack',
 ] as const
 

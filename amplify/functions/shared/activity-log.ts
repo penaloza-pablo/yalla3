@@ -27,6 +27,8 @@ export const LOG_FEATURES = {
   MAINTENANCE_INCIDENTS: 'Maintenance Incidents',
   MAINTENANCE_BILLING: 'Maintenance Billing',
   PROPERTY_REPORTS: 'Property Reports',
+  MOVEMENTS: 'Movements',
+  SERVICES: 'Services & Subscriptions',
   SLACK: 'Slack',
 } as const;
 

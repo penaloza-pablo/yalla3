@@ -12,6 +12,8 @@ export const getPropertyReport = defineFunction({
     MAINTENANCE_TEAM_ID: 'team_maintenance',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
     SUBTRACTIONS_TABLE: 'yalla-substractions',
+    MOVEMENTS_TABLE: 'yalla-finance-movements',
+    SERVICES_TABLE: 'yalla-finance-services',
   },
   timeoutSeconds: 40,
   memoryMB: 512,
