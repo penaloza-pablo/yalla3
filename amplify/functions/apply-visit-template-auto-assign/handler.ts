@@ -39,8 +39,7 @@ type StreamRecord = {
   };
 };
 
-const shouldHandleRecord = (eventName?: string) =>
-  eventName === 'INSERT' || eventName === 'MODIFY';
+const shouldHandleRecord = (eventName?: string) => eventName === 'INSERT';
 
 export const handler = async (event: { Records?: StreamRecord[] }) => {
   for (const record of event.Records ?? []) {
