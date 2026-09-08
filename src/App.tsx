@@ -37,6 +37,7 @@ import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView
 import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
+import { PropertyReportsView } from './finance/PropertyReportsView'
 import { LogsPanel } from './LogsPanel'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
@@ -1650,6 +1651,7 @@ function App() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [deepLinkVisitId, setDeepLinkVisitId] = useState('')
+  const [billingMonthDeepLink, setBillingMonthDeepLink] = useState('')
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [titleProgress, setTitleProgress] = useState(0)
@@ -2808,7 +2810,7 @@ function App() {
     if (activePage === 'Reviews') {
       void fetchReviews()
     }
-    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign') {
+    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign' || activePage === 'Property Reports') {
       void fetchProperties()
     }
     if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Cleaning settings' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings' || activePage === 'Bookings Plan' || activePage === 'Bookings settings') {
@@ -4180,7 +4182,7 @@ function App() {
 
   const navigateToPage = (
     page: string,
-    options?: { inventoryStatuses?: string[] },
+    options?: { inventoryStatuses?: string[]; billingMonth?: string },
   ) => {
     setActivePage(page)
     rememberActivePage(page)
@@ -4188,6 +4190,7 @@ function App() {
     setIsSummaryInfoOpen(false)
     setIsMobileSearchOpen(false)
     setTableSearchQuery('')
+    setBillingMonthDeepLink(options?.billingMonth?.trim() || '')
     const section = sectionForPage(page)
     if (section) {
       setCollapsedSections((current) => {
@@ -7961,6 +7964,7 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
             propertyOptions={activeManagedPropertyOptions}
+            initialMonthId={billingMonthDeepLink}
           />
         ) : activePage === 'Cleaning settings' ? (
           <CleaningSettingsView
@@ -7995,6 +7999,7 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
             propertyOptions={activeManagedPropertyOptions}
+            initialMonthId={billingMonthDeepLink}
           />
         ) : activePage === 'Maintenance settings' ? (
           <MaintenanceSettingsView getEndpoint={getEndpoint} />
@@ -8032,6 +8037,12 @@ function App() {
           />
         ) : activePage === 'Slack' ? (
           <SlackPanel getEndpoint={getEndpoint} />
+        ) : activePage === 'Property Reports' ? (
+          <PropertyReportsView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            onNavigate={navigateToPage}
+          />
         ) : (
           <section className="card">
             <h1 className="page-title">

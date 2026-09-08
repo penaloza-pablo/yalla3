@@ -55,6 +55,8 @@ import { upsertVisitTemplate } from './functions/upsert-visit-template/resource'
 import { getVisitTemplateAutoAssign } from './functions/get-visit-template-auto-assign/resource';
 import { upsertVisitTemplateAutoAssign } from './functions/upsert-visit-template-auto-assign/resource';
 import { applyVisitTemplateAutoAssign } from './functions/apply-visit-template-auto-assign/resource';
+import { getPropertyReport } from './functions/get-property-report/resource';
+import { upsertPropertyReport } from './functions/upsert-property-report/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
@@ -136,6 +138,8 @@ const backend = defineBackend({
   getVisitTemplateAutoAssign,
   upsertVisitTemplateAutoAssign,
   applyVisitTemplateAutoAssign,
+  getPropertyReport,
+  upsertPropertyReport,
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
@@ -217,6 +221,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitTemplate,
   backend.getVisitTemplateAutoAssign,
   backend.upsertVisitTemplateAutoAssign,
+  backend.getPropertyReport,
+  backend.upsertPropertyReport,
   backend.upsertVisitType,
   backend.proxyGuestyListings,
   backend.proxyGuestyReviewsSync,
@@ -319,6 +325,13 @@ visitTemplateAutoAssignTable.addGlobalSecondaryIndex({
   indexName: 'propertyId-index',
   partitionKey: { name: 'propertyId', type: AttributeType.STRING },
   projectionType: ProjectionType.ALL,
+});
+const propertyReportsTable = new Table(dataStack, 'PropertyReportsTable', {
+  tableName: 'yalla-property-reports',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  sortKey: { name: 'monthId', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
 });
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
@@ -675,6 +688,7 @@ const activityLogWriters = [
   backend.upsertTask,
   backend.upsertVisitTemplate,
   backend.upsertVisitTemplateAutoAssign,
+  backend.upsertPropertyReport,
   backend.upsertVisitType,
   backend.proxyGuestyReviewsSync,
   backend.proxyGuestyBookingsSync,
@@ -1224,6 +1238,75 @@ backend.exportMaintenanceBilling.addEnvironment(
   maintenanceBillingTable.tableName,
 );
 
+backend.getPropertyReport.addEnvironment(
+  'TABLE_NAME',
+  propertyReportsTable.tableName,
+);
+backend.getPropertyReport.addEnvironment('BOOKINGS_TABLE', bookingsTable.tableName);
+backend.getPropertyReport.addEnvironment(
+  'CLEANING_BILLING_TABLE',
+  cleaningBillingTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'MAINTENANCE_BILLING_TABLE',
+  maintenanceBillingTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
+backend.getPropertyReport.addEnvironment(
+  'PROVIDERS_TABLE',
+  maintenanceProvidersTable.tableName,
+);
+backend.upsertPropertyReport.addEnvironment(
+  'TABLE_NAME',
+  propertyReportsTable.tableName,
+);
+backend.upsertPropertyReport.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
+propertyReportsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+propertyReportsTable.grantReadWriteData(
+  backend.upsertPropertyReport.resources.lambda,
+);
+bookingsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
+);
+propertiesTable.grantReadData(backend.getPropertyReport.resources.lambda);
+propertiesTable.grantReadData(backend.upsertPropertyReport.resources.lambda);
+cleaningBillingTable.grantReadData(backend.getPropertyReport.resources.lambda);
+cleaningPlansTable.grantReadData(backend.getPropertyReport.resources.lambda);
+propertyCleaningDetailsTable.grantReadData(
+  backend.getPropertyReport.resources.lambda,
+);
+visitsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+maintenanceBillingTable.grantReadData(backend.getPropertyReport.resources.lambda);
+maintenanceBillingDetailsTable.grantReadData(
+  backend.getPropertyReport.resources.lambda,
+);
+maintenanceProvidersTable.grantReadData(
+  backend.getPropertyReport.resources.lambda,
+);
+visitTypesTable.grantReadData(backend.getPropertyReport.resources.lambda);
+
 maintenanceProvidersTable.grantReadWriteData(
   backend.getMaintenanceProviders.resources.lambda,
 );
@@ -1511,6 +1594,14 @@ const upsertVisitTemplateAutoAssignUrl =
   backend.upsertVisitTemplateAutoAssign.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getPropertyReportUrl =
+  backend.getPropertyReport.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertPropertyReportUrl =
+  backend.upsertPropertyReport.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1688,6 +1779,8 @@ backend.addOutput({
     upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,
     getVisitTemplateAutoAssignUrl: getVisitTemplateAutoAssignUrl.url,
     upsertVisitTemplateAutoAssignUrl: upsertVisitTemplateAutoAssignUrl.url,
+    getPropertyReportUrl: getPropertyReportUrl.url,
+    upsertPropertyReportUrl: upsertPropertyReportUrl.url,
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,

@@ -52,7 +52,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Finance',
-    items: ['Finance solution 1', 'Finance solution 2', 'Finance solution 3'],
+    items: ['Property Reports', 'Finance solution 2', 'Finance solution 3'],
   },
 ]
 
@@ -64,6 +64,7 @@ export const ALL_PAGES: string[] = [
 export const pagePermission = (page: string) => `page:${page}`
 
 export const ACTION_KEYS = {
+  propertyReportsCloseMonth: 'action:propertyReports.closeMonth',
   cleaningCloseMonth: 'action:cleaningBilling.closeMonth',
   maintenanceCloseMonth: 'action:maintenanceBilling.closeMonth',
   maintenanceCheckAfterEstimate: 'action:maintenanceBilling.checkAfterEstimate',
@@ -86,6 +87,10 @@ export const ACTION_KEYS = {
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
+  {
+    key: ACTION_KEYS.propertyReportsCloseMonth,
+    i18nKey: 'rbac.actions.propertyReportsCloseMonth',
+  },
   {
     key: ACTION_KEYS.cleaningCloseMonth,
     i18nKey: 'rbac.actions.cleaningCloseMonth',
@@ -195,7 +200,8 @@ export const ROLE_SEEDS: {
             page !== 'Users' &&
             page !== 'Roles' &&
             !page.startsWith('Grow solution') &&
-            !page.startsWith('Finance solution'),
+            !page.startsWith('Finance solution') &&
+            page !== 'Property Reports',
         ),
       ),
       ...ALL_ACTION_KEYS,

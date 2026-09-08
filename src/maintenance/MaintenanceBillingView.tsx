@@ -43,6 +43,7 @@ type Props = {
   propertyOptions: PropertyOption[]
   isSummaryInfoOpen: boolean
   onToggleSummaryInfo: () => void
+  initialMonthId?: string
 }
 
 type LineDraft = {
@@ -187,6 +188,7 @@ export function MaintenanceBillingView({
   propertyOptions,
   isSummaryInfoOpen,
   onToggleSummaryInfo,
+  initialMonthId,
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
@@ -215,7 +217,7 @@ export function MaintenanceBillingView({
 
   const [months, setMonths] = useState<MaintenanceBillingMonth[]>([])
   const [remainingHours, setRemainingHours] = useState<number | null>(null)
-  const [selectedMonthId, setSelectedMonthId] = useState('')
+  const [selectedMonthId, setSelectedMonthId] = useState(initialMonthId ?? '')
   const [month, setMonth] = useState<MaintenanceBillingMonth | null>(null)
   const [lines, setLines] = useState<MaintenanceBillingLine[]>([])
   const [settings, setSettings] = useState<MaintenanceSettings | null>(null)
@@ -384,6 +386,12 @@ export function MaintenanceBillingView({
     }
     void refreshList()
   }, [refreshList, refreshMonth, selectedMonthId])
+
+  useEffect(() => {
+    if (initialMonthId) {
+      setSelectedMonthId(initialMonthId)
+    }
+  }, [initialMonthId])
 
   useEffect(() => {
     setIsSelecting(false)

@@ -37,6 +37,7 @@ type Props = {
   propertyOptions: PropertyOption[]
   isSummaryInfoOpen: boolean
   onToggleSummaryInfo: () => void
+  initialMonthId?: string
 }
 
 type LineDraft = {
@@ -119,6 +120,7 @@ export function CleaningBillingView({
   propertyOptions,
   isSummaryInfoOpen,
   onToggleSummaryInfo,
+  initialMonthId,
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
@@ -146,7 +148,7 @@ export function CleaningBillingView({
   )
 
   const [months, setMonths] = useState<CleaningBillingMonth[]>([])
-  const [selectedMonthId, setSelectedMonthId] = useState('')
+  const [selectedMonthId, setSelectedMonthId] = useState(initialMonthId ?? '')
   const [month, setMonth] = useState<CleaningBillingMonth | null>(null)
   const [lines, setLines] = useState<CleaningBillingLine[]>([])
   const [details, setDetails] = useState<PropertyCleaningDetailsRecord[]>([])
@@ -289,6 +291,12 @@ export function CleaningBillingView({
     }
     void refreshList()
   }, [refreshList, refreshMonth, selectedMonthId])
+
+  useEffect(() => {
+    if (initialMonthId) {
+      setSelectedMonthId(initialMonthId)
+    }
+  }, [initialMonthId])
 
   const save = async (body: Record<string, unknown>) => {
     if (!endpoints.upsertBilling) {

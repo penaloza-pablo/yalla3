@@ -82,7 +82,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       roleName,
       bootstrap,
       can: (key: string) => permissions.has(key),
-      canPage: (page: string) => permissions.has(pagePermission(page)),
+      canPage: (page: string) =>
+        permissions.has(pagePermission(page)) ||
+        (page === 'Property Reports' &&
+          permissions.has(pagePermission('Finance solution 1'))),
       refresh: load,
     }),
     [bootstrap, load, permissions, ready, roleId, roleName],

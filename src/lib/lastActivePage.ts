@@ -6,6 +6,7 @@ const FALLBACK_PAGE = 'Daily Operations'
 const LEGACY_PAGE_MAP: Record<string, string> = {
   Today: 'Daily Operations',
   Chatbot: 'Daily Operations',
+  'Finance solution 1': 'Property Reports',
 }
 
 type StoredPage = {
