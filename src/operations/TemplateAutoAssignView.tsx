@@ -13,7 +13,11 @@ import {
   getPropertyLabel,
   sortPropertyOptions,
 } from './propertyHelpers'
-import { activeTemplatesForProperty, mapVisitTemplate } from './visitTemplateHelpers'
+import {
+  activeTemplatesForProperty,
+  mapVisitTemplate,
+  templateMatchesProperty,
+} from './visitTemplateHelpers'
 import type {
   PropertyOption,
   TeamRecord,
@@ -27,6 +31,11 @@ type Props = {
   propertyOptions: PropertyOption[]
 }
 
+type AutoAssignFilters = {
+  propertyIds: string[]
+  teamIds: string[]
+}
+
 const emptyForm = () => ({
   id: '',
   propertyId: '',
@@ -34,6 +43,16 @@ const emptyForm = () => ({
   titlePrefix: '',
   enabled: true,
 })
+
+const emptyFilters = (): AutoAssignFilters => ({
+  propertyIds: [],
+  teamIds: [],
+})
+
+const toggleListValue = (values: string[], value: string) =>
+  values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value]
 
 export function TemplateAutoAssignView({
   getEndpoint,
@@ -66,7 +85,10 @@ export function TemplateAutoAssignView({
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [filters, setFilters] = useState<AutoAssignFilters>(emptyFilters)
+  const [filterDraft, setFilterDraft] = useState<AutoAssignFilters>(emptyFilters)
 
   const properties = useMemo(
     () => filterTemplateAutoAssignPropertyOptions(propertyOptions),
@@ -95,13 +117,38 @@ export function TemplateAutoAssignView({
     () => new Map(teams.map((team) => [team.id, team.name])),
     [teams],
   )
-  const propertyTemplates = useMemo(
+  const sortedTeams = useMemo(
     () =>
-      form.propertyId
-        ? activeTemplatesForProperty(templates, form.propertyId)
-        : [],
-    [form.propertyId, templates],
+      [...teams].sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
+      ),
+    [teams],
   )
+  const formPropertyOptions = useMemo(() => {
+    if (!form.propertyId) {
+      return properties
+    }
+    if (properties.some((property) => property.id === form.propertyId)) {
+      return properties
+    }
+    const extra = allProperties.find((property) => property.id === form.propertyId)
+    return extra ? [extra, ...properties] : properties
+  }, [allProperties, form.propertyId, properties])
+  const propertyTemplates = useMemo(() => {
+    if (!form.propertyId) {
+      return []
+    }
+    const active = activeTemplatesForProperty(templates, form.propertyId)
+    const current = templateById.get(form.templateId)
+    if (
+      current &&
+      templateMatchesProperty(current, form.propertyId) &&
+      !active.some((template) => template.id === current.id)
+    ) {
+      return [current, ...active]
+    }
+    return active
+  }, [form.propertyId, form.templateId, templateById, templates])
   const selectedTemplate = templateById.get(form.templateId)
   const sortedRules = useMemo(() => {
     return [...rules].sort((left, right) => {
@@ -120,6 +167,26 @@ export function TemplateAutoAssignView({
       })
     })
   }, [propertyById, rules])
+  const filteredRules = useMemo(() => {
+    return sortedRules.filter((rule) => {
+      if (
+        filters.propertyIds.length > 0 &&
+        !filters.propertyIds.includes(rule.propertyId)
+      ) {
+        return false
+      }
+      if (filters.teamIds.length > 0) {
+        const template = templateById.get(rule.templateId)
+        const teamId = template?.teamId ?? ''
+        if (!filters.teamIds.includes(teamId)) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [filters.propertyIds, filters.teamIds, sortedRules, templateById])
+  const activeFilterCount = filters.propertyIds.length + filters.teamIds.length
+  const hasActiveFilters = activeFilterCount > 0
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -186,7 +253,30 @@ export function TemplateAutoAssignView({
     setIsFormOpen(true)
   }
 
-  const saveRule = async (payload: Record<string, unknown>, successKey: string) => {
+  const openEdit = (rule: VisitTemplateAutoAssignRule) => {
+    setForm({
+      id: rule.id,
+      propertyId: rule.propertyId,
+      templateId: rule.templateId,
+      titlePrefix: rule.titlePrefix,
+      enabled: rule.enabled,
+    })
+    setIsFormOpen(true)
+  }
+
+  const openFilters = () => {
+    setFilterDraft({
+      propertyIds: [...filters.propertyIds],
+      teamIds: [...filters.teamIds],
+    })
+    setIsFilterOpen(true)
+  }
+
+  const saveRule = async (
+    payload: Record<string, unknown>,
+    successKey: string,
+    options?: { closeForm?: boolean },
+  ) => {
     if (!endpoints.upsert) {
       setError(t('templateAutoAssign.missingWrite'))
       return
@@ -208,7 +298,9 @@ export function TemplateAutoAssignView({
         })
       }
       setMessage(t(successKey))
-      setIsFormOpen(false)
+      if (options?.closeForm !== false) {
+        setIsFormOpen(false)
+      }
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -250,6 +342,7 @@ export function TemplateAutoAssignView({
         enabled: !rule.enabled,
       },
       'templateAutoAssign.updated',
+      { closeForm: false },
     )
   }
 
@@ -264,6 +357,28 @@ export function TemplateAutoAssignView({
           <p className="subtitle">{t('templateAutoAssign.subtitle')}</p>
         </div>
         <div className="header-actions">
+          <button
+            className={`btn-ghost btn-filter ${hasActiveFilters ? 'is-active' : ''}`}
+            type="button"
+            aria-label={t('common.filters')}
+            title={t('common.filters')}
+            onClick={openFilters}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              width="16"
+              height="16"
+            >
+              <path
+                d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
+                fill="currentColor"
+              />
+            </svg>
+            {hasActiveFilters ? (
+              <span className="filter-badge">{activeFilterCount}</span>
+            ) : null}
+          </button>
           <button
             className="btn-ghost"
             type="button"
@@ -297,12 +412,16 @@ export function TemplateAutoAssignView({
               </tr>
             </thead>
             <tbody>
-              {sortedRules.length === 0 && !isLoading ? (
+              {filteredRules.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={7}>{t('templateAutoAssign.empty')}</td>
+                  <td colSpan={7}>
+                    {rules.length > 0 && hasActiveFilters
+                      ? t('templateAutoAssign.emptyFiltered')
+                      : t('templateAutoAssign.empty')}
+                  </td>
                 </tr>
               ) : (
-                sortedRules.map((rule) => {
+                filteredRules.map((rule) => {
                   const template = templateById.get(rule.templateId)
                   return (
                     <tr key={rule.id} className={rule.enabled ? '' : 'muted-row'}>
@@ -346,6 +465,15 @@ export function TemplateAutoAssignView({
                           <button
                             type="button"
                             className="btn-icon btn-icon-ghost"
+                            aria-label={t('templateAutoAssign.edit')}
+                            title={t('templateAutoAssign.edit')}
+                            onClick={() => openEdit(rule)}
+                          >
+                            <span aria-hidden="true">✎</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon btn-icon-ghost"
                             aria-label={t('common.delete')}
                             title={t('common.delete')}
                             onClick={() => {
@@ -372,12 +500,116 @@ export function TemplateAutoAssignView({
         </div>
       </section>
 
+      {isFilterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal modal-scrollable">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">
+                  {t('templateAutoAssign.filterSubtitle')}
+                </p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                aria-label={t('common.closeFilters')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.property')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {properties.map((property) => {
+                      const isChecked = filterDraft.propertyIds.includes(
+                        property.id,
+                      )
+                      return (
+                        <label className="filter-option" key={property.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                propertyIds: toggleListValue(
+                                  current.propertyIds,
+                                  property.id,
+                                ),
+                              }))
+                            }
+                          />
+                          <span>{getPropertyLabel(property)}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('operations.team')}</p>
+                  <div className="filter-options filter-options-scroll">
+                    {sortedTeams.map((team) => {
+                      const isChecked = filterDraft.teamIds.includes(team.id)
+                      return (
+                        <label className="filter-option" key={team.id}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() =>
+                              setFilterDraft((current) => ({
+                                ...current,
+                                teamIds: toggleListValue(current.teamIds, team.id),
+                              }))
+                            }
+                          />
+                          <span>{team.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setFilterDraft(emptyFilters())}
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setFilters({
+                    propertyIds: [...filterDraft.propertyIds],
+                    teamIds: [...filterDraft.teamIds],
+                  })
+                  setIsFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {isFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">{t('templateAutoAssign.add')}</h3>
+                <h3 className="modal-title">
+                  {form.id
+                    ? t('templateAutoAssign.edit')
+                    : t('templateAutoAssign.add')}
+                </h3>
                 <p className="modal-subtitle">
                   {t('templateAutoAssign.formHelp')}
                 </p>
@@ -405,7 +637,7 @@ export function TemplateAutoAssignView({
                   }
                 >
                   <option value="">{t('templateAutoAssign.selectProperty')}</option>
-                  {properties.map((property) => (
+                  {formPropertyOptions.map((property) => (
                     <option key={property.id} value={property.id}>
                       {getPropertyLabel(property)}
                     </option>

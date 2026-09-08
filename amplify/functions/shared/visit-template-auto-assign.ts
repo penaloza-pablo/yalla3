@@ -25,10 +25,16 @@ export type VisitTemplateAutoAssignRule = {
 export const normalizeTitlePrefix = (value: string) =>
   value.trim().replace(/\s+/g, ' ');
 
+const EXTRA_TASKS_SEPARATOR = '+';
+
 export const titleMatchesPrefix = (title: string, prefix: string) => {
   const normalizedTitle = normalizeTitlePrefix(title).toLowerCase();
   const normalizedPrefix = normalizeTitlePrefix(prefix).toLowerCase();
-  return Boolean(normalizedPrefix) && normalizedTitle.startsWith(normalizedPrefix);
+  if (!normalizedPrefix || !normalizedTitle.startsWith(normalizedPrefix)) {
+    return false;
+  }
+  const remainder = normalizedTitle.slice(normalizedPrefix.length).trim();
+  return remainder === '' || remainder.startsWith(EXTRA_TASKS_SEPARATOR);
 };
 
 export const pickMatchingAutoAssignRule = (
