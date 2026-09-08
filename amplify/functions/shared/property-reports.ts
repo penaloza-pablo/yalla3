@@ -1,4 +1,4 @@
-import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import {
   currentMonthId as billingCurrentMonthId,
   datesInMonth,
@@ -16,6 +16,10 @@ export type PropertyReportStatus =
   | 'READY_TO_CLOSE'
   | 'CLOSED';
 
+export const IVA_MULTIPLIER = 1.21;
+
+export const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
 export type PropertyReportBooking = {
   bookingId: string;
   reservationId: string;
@@ -26,6 +30,17 @@ export type PropertyReportBooking = {
   fareCleaning: number | null;
   hostServiceFee: number | null;
   currency: string;
+};
+
+export type PropertyReportExpenseOrigin = 'subtraction';
+
+export type PropertyReportExpense = {
+  id: string;
+  origin: PropertyReportExpenseOrigin;
+  itemName: string;
+  date: string;
+  amountExclIva: number;
+  amountInclIva: number;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -131,7 +146,11 @@ export const bookingHasPayout = (
   item: Record<string, unknown>,
 ) => {
   const status = asString(item.Status || reservation?.status).toLowerCase();
-  if (status === 'canceled' || status === 'cancelled') {
+  if (
+    status === 'canceled' ||
+    status === 'cancelled' ||
+    status === 'inquiry'
+  ) {
     return false;
   }
   const money = moneyFromReservation(reservation);
@@ -181,6 +200,107 @@ export const mapReportBooking = (
     hostServiceFee: money.hostServiceFee,
     currency: money.currency || asString(item.Currency) || 'EUR',
   };
+};
+
+export const subtractionDateToIso = (value: string) => {
+  const trimmed = value.trim();
+  const slash = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slash) {
+    const [, day, month, year] = slash;
+    return `${year}-${month}-${day}`;
+  }
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  }
+  return '';
+};
+
+export const subtractionMatchesProperty = (
+  item: Record<string, unknown>,
+  property: Record<string, unknown>,
+) => {
+  const propertyId = asString(property.id);
+  const subtractionPropertyIds = [
+    asString(item['Property id']),
+    asString(item.propertyId),
+    asString(item['Property ID']),
+  ].filter(Boolean);
+  if (propertyId && subtractionPropertyIds.includes(propertyId)) {
+    return true;
+  }
+  const location = normalizeNickname(
+    asString(item.Location) || asString(item.location),
+  );
+  const names = [
+    asString(property.nickname),
+    asString(property.listingNickname),
+    asString(property.title),
+    asString(property.name),
+  ]
+    .map(normalizeNickname)
+    .filter(Boolean);
+  return Boolean(location) && names.includes(location);
+};
+
+export const loadPendingBillingExpenses = async (
+  tableName: string,
+  property: Record<string, unknown>,
+  monthId: string,
+): Promise<PropertyReportExpense[]> => {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+
+  const expenses: PropertyReportExpense[] = [];
+  for (const item of items) {
+    const status = asString(item.Status || item.status);
+    if (status !== 'Pending Billing') {
+      continue;
+    }
+    if (!subtractionMatchesProperty(item, property)) {
+      continue;
+    }
+    const dateIso = subtractionDateToIso(
+      asString(item.Date) || asString(item.date),
+    );
+    if (!dateIso || dateIso.slice(0, 7) !== monthId) {
+      continue;
+    }
+    const amountExclIva =
+      asNumber(item['Price excl. IVA']) ??
+      asNumber(item.priceExclIva) ??
+      roundMoney(
+        (asNumber(item.Cost) ?? asNumber(item.cost) ?? 0) / IVA_MULTIPLIER,
+      );
+    expenses.push({
+      id: asString(item.id) || `${dateIso}-${asString(item['Item name'])}`,
+      origin: 'subtraction',
+      itemName: asString(item['Item name']) || asString(item.itemName),
+      date: dateIso,
+      amountExclIva,
+      amountInclIva: roundMoney(amountExclIva * IVA_MULTIPLIER),
+    });
+  }
+
+  expenses.sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+    return left.id.localeCompare(right.id);
+  });
+  return expenses;
 };
 
 export const listingMatchesProperty = (

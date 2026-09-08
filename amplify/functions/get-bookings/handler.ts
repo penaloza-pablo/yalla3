@@ -227,12 +227,45 @@ const compareCheckIn = (
   );
 };
 
+const isInquiryStatus = (item: Record<string, unknown>) =>
+  String(item.Status ?? '')
+    .trim()
+    .toLowerCase() === 'inquiry';
+
+const parseListingIds = (value?: string) =>
+  new Set(
+    (value ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+
+const matchesListingIds = (
+  item: Record<string, unknown>,
+  listingIds: Set<string>,
+) => {
+  if (listingIds.size === 0) {
+    return true;
+  }
+  const listingId = String(item.ListingID ?? '').trim();
+  return Boolean(listingId) && listingIds.has(listingId);
+};
+
 const matchesStatus = (item: Record<string, unknown>, status: string | null) => {
   if (!status) {
     return true;
   }
   return String(item.Status ?? '').trim().toLowerCase() === status;
 };
+
+const keepBooking = (
+  item: Record<string, unknown>,
+  status: string | null,
+  listingIds: Set<string>,
+) =>
+  !isInquiryStatus(item) &&
+  matchesStatus(item, status) &&
+  matchesListingIds(item, listingIds);
 
 const scanCheckOutDate = async (
   tableName: string,
@@ -277,17 +310,21 @@ const collectBookingsOnDate = async (
   tableName: string,
   dateIso: string,
   status: string | null,
+  listingIds: Set<string>,
 ) => {
   const checkIns = await queryCheckInDate(tableName, dateIso);
   const checkOuts = await scanCheckOutDate(tableName, dateIso, status);
   const byId = new Map<string, Record<string, unknown>>();
   for (const item of checkIns.items) {
-    if (!matchesStatus(item, status)) {
+    if (!keepBooking(item, status, listingIds)) {
       continue;
     }
     byId.set(String(item.ReservationID ?? ''), item);
   }
   for (const item of checkOuts.items) {
+    if (!keepBooking(item, status, listingIds)) {
+      continue;
+    }
     byId.set(String(item.ReservationID ?? ''), item);
   }
   const items = [...byId.values()].sort(compareCheckIn);
@@ -402,6 +439,7 @@ const scanPage = async (
   limit: number,
   startKey?: Record<string, unknown>,
   useIndex = true,
+  listingIds: Set<string> = new Set(),
 ) => {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey = startKey;
@@ -421,6 +459,9 @@ const scanPage = async (
     const page = (result.Items as Record<string, unknown>[] | undefined) ?? [];
     scannedCount += result.ScannedCount ?? page.length;
     for (const item of page) {
+      if (!keepBooking(item, null, listingIds)) {
+        continue;
+      }
       if (items.length < limit) {
         items.push(item);
       }
@@ -488,7 +529,8 @@ export const handler = async (event: HttpEvent) => {
   const statusFilter = String(event.queryStringParameters?.status ?? '')
     .trim()
     .toLowerCase();
-  const status = statusFilter || null;
+  const status = statusFilter && statusFilter !== 'inquiry' ? statusFilter : null;
+  const listingIds = parseListingIds(event.queryStringParameters?.listingIds);
   const checkInFrom = parseIsoDate(event.queryStringParameters?.checkInFrom);
   const checkInTo = parseIsoDate(event.queryStringParameters?.checkInTo);
   const fromIso = checkInFrom ? toIsoDate(checkInFrom) : null;
@@ -500,6 +542,7 @@ export const handler = async (event: HttpEvent) => {
         tableName,
         toIsoDate(onDate),
         status,
+        listingIds,
       );
       const items = await hydratePlannerFields(tableName, collected.items);
       const payload = {
@@ -534,12 +577,12 @@ export const handler = async (event: HttpEvent) => {
           useIndex: false,
         });
       }
-      if (status) {
-        collected = {
-          ...collected,
-          items: collected.items.filter((item) => matchesStatus(item, status)),
-        };
-      }
+      collected = {
+        ...collected,
+        items: collected.items.filter((item) =>
+          keepBooking(item, status, listingIds),
+        ),
+      };
       const payload = paginate(
         collected.items,
         collected.scannedCount,
@@ -552,7 +595,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     try {
-      const scanned = await scanPage(tableName, limit, cursor, true);
+      const scanned = await scanPage(tableName, limit, cursor, true, listingIds);
       const items = await hydratePlannerFields(tableName, scanned.items);
       const payload = {
         items,
@@ -566,7 +609,7 @@ export const handler = async (event: HttpEvent) => {
       if (!isIndexUnavailableError(error)) {
         throw error;
       }
-      const scanned = await scanPage(tableName, limit, cursor, false);
+      const scanned = await scanPage(tableName, limit, cursor, false, listingIds);
       const items = await hydratePlannerFields(tableName, scanned.items);
       const payload = {
         items,

@@ -1267,6 +1267,10 @@ backend.getPropertyReport.addEnvironment(
   'PROVIDERS_TABLE',
   maintenanceProvidersTable.tableName,
 );
+backend.getPropertyReport.addEnvironment(
+  'SUBTRACTIONS_TABLE',
+  substractionsTable.tableName,
+);
 backend.upsertPropertyReport.addEnvironment(
   'TABLE_NAME',
   propertyReportsTable.tableName,
@@ -1306,6 +1310,7 @@ maintenanceProvidersTable.grantReadData(
   backend.getPropertyReport.resources.lambda,
 );
 visitTypesTable.grantReadData(backend.getPropertyReport.resources.lambda);
+substractionsTable.grantReadData(backend.getPropertyReport.resources.lambda);
 
 maintenanceProvidersTable.grantReadWriteData(
   backend.getMaintenanceProviders.resources.lambda,

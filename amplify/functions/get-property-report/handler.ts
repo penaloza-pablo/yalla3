@@ -17,11 +17,13 @@ import {
   isPhase1Month,
   isPhase1Property,
   listingMatchesProperty,
+  loadPendingBillingExpenses,
   mapReportBooking,
   PHASE1_MONTH_IDS,
   queryBookingsByCheckInDate,
   reportMonthSummary,
   reservationFromPayload,
+  roundMoney,
 } from '../shared/property-reports';
 
 type HttpEvent = {
@@ -47,6 +49,10 @@ const loadPayoutBookings = async (
         Boolean(asString(summary.ListingID)) ||
         Boolean(asString(summary.ListingNickname));
       if (listingKnown && !listingMatchesProperty(summary, property)) {
+        continue;
+      }
+      if (asString(summary.Status).toLowerCase() === 'inquiry') {
+        seen.add(reservationId);
         continue;
       }
       seen.add(reservationId);
@@ -92,6 +98,7 @@ export const handler = async (event: HttpEvent) => {
   const maintenanceSettingsTable = process.env.SETTINGS_TABLE;
   const providersTable = process.env.PROVIDERS_TABLE;
   const visitTypesTable = process.env.VISIT_TYPES_TABLE;
+  const subtractionsTable = process.env.SUBTRACTIONS_TABLE;
 
   if (
     !reportsTable ||
@@ -103,7 +110,8 @@ export const handler = async (event: HttpEvent) => {
     !maintenanceBillingTable ||
     !maintenanceSettingsTable ||
     !providersTable ||
-    !visitTypesTable
+    !visitTypesTable ||
+    !subtractionsTable
   ) {
     return buildHttpResponse(500, {
       message: 'Property report tables are not configured.',
@@ -153,27 +161,29 @@ export const handler = async (event: HttpEvent) => {
     const stored = await getReportRecord(reportsTable, propertyId, monthId);
     const report = reportMonthSummary(monthId, stored);
 
-    const [bookings, cleaningDetail, maintenanceDetail] = await Promise.all([
-      loadPayoutBookings(bookingsTable, property, monthId),
-      buildCleaningMonthDetail({
-        monthId,
-        billingTable: cleaningBillingTable,
-        visitsTable,
-        plansTable: cleaningPlansTable,
-        detailsTable: cleaningDetailsTable || '',
-        persistSummary: false,
-      }),
-      buildMaintenanceMonthDetail({
-        monthId,
-        persistSummary: false,
-        billingTable: maintenanceBillingTable,
-        visitsTable,
-        settingsTable: maintenanceSettingsTable,
-        providersTable,
-        visitTypesTable,
-        propertiesTable,
-      }),
-    ]);
+    const [bookings, cleaningDetail, maintenanceDetail, expenses] =
+      await Promise.all([
+        loadPayoutBookings(bookingsTable, property, monthId),
+        buildCleaningMonthDetail({
+          monthId,
+          billingTable: cleaningBillingTable,
+          visitsTable,
+          plansTable: cleaningPlansTable,
+          detailsTable: cleaningDetailsTable || '',
+          persistSummary: false,
+        }),
+        buildMaintenanceMonthDetail({
+          monthId,
+          persistSummary: false,
+          billingTable: maintenanceBillingTable,
+          visitsTable,
+          settingsTable: maintenanceSettingsTable,
+          providersTable,
+          visitTypesTable,
+          propertiesTable,
+        }),
+        loadPendingBillingExpenses(subtractionsTable, property, monthId),
+      ]);
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';
@@ -209,6 +219,16 @@ export const handler = async (event: HttpEvent) => {
         closed: maintenanceClosed,
         lines: maintenanceLines,
         total: maintenanceLines.reduce((sum, line) => sum + (line.price ?? 0), 0),
+      },
+      expenses: {
+        lines: expenses,
+        count: expenses.length,
+        totalCost: roundMoney(
+          expenses.reduce((sum, line) => sum + line.amountExclIva, 0),
+        ),
+        totalCostWithIva: roundMoney(
+          expenses.reduce((sum, line) => sum + line.amountInclIva, 0),
+        ),
       },
     });
   } catch (error) {

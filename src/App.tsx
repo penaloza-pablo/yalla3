@@ -242,6 +242,7 @@ type BookingRow = {
   confirmationCode: string
   guestName: string
   property: string
+  listingId: string
   checkInRaw: string
   checkIn: string
   checkOutRaw: string
@@ -446,6 +447,7 @@ const bookingFieldMap = {
     'unitName',
     'nickname',
   ],
+  listingId: ['ListingID', 'listingId', 'listing_id'],
   checkIn: [
     'checkIn',
     'checkin',
@@ -1150,6 +1152,10 @@ const defaultBookingsCheckInRange = () => {
 }
 
 const DEFAULT_BOOKING_STATUSES = ['confirmed']
+const EXCLUDED_BOOKING_STATUSES = new Set(['inquiry'])
+
+const isExcludedBookingStatus = (status: string) =>
+  EXCLUDED_BOOKING_STATUSES.has(status.trim().toLowerCase())
 
 const listsMatchBookingStatuses = (left: string[], right: string[]) =>
   left.length === right.length &&
@@ -1159,6 +1165,7 @@ const listsMatchBookingStatuses = (left: string[], right: string[]) =>
 
 const defaultBookingsFilters = () => ({
   statuses: [...DEFAULT_BOOKING_STATUSES],
+  propertyId: '',
   ...defaultBookingsCheckInRange(),
 })
 
@@ -1201,6 +1208,7 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
     ),
     guestName: getStringValue(getItemValue(item, bookingFieldMap.guestName)) || '—',
     property: getStringValue(getItemValue(item, bookingFieldMap.property)) || '—',
+    listingId: getStringValue(getItemValue(item, bookingFieldMap.listingId)),
     checkInRaw,
     checkIn: formatUpdatedDate(checkInRaw),
     checkOutRaw,
@@ -1551,11 +1559,13 @@ function App() {
   const [isBookingsFilterOpen, setIsBookingsFilterOpen] = useState(false)
   const [bookingsFilters, setBookingsFilters] = useState<{
     statuses: string[]
+    propertyId: string
     checkInFrom: string
     checkInTo: string
   }>(defaultBookingsFilters)
   const [bookingsFilterDraft, setBookingsFilterDraft] = useState<{
     statuses: string[]
+    propertyId: string
     checkInFrom: string
     checkInTo: string
   }>(defaultBookingsFilters)
@@ -2251,6 +2261,9 @@ function App() {
         if (bookingsFilters.checkInTo) {
           query.set('checkInTo', bookingsFilters.checkInTo)
         }
+        if (bookingsFilters.propertyId) {
+          query.set('listingIds', bookingsFilters.propertyId)
+        }
 
         const response = await authFetch(`${endpoint}?${query.toString()}`)
         if (!response.ok) {
@@ -2266,10 +2279,30 @@ function App() {
           mapBookingRow(normalizeInventoryItem(entry)),
         )
         const uniqueStatuses = Array.from(
-          new Set(mappedRows.map((row) => row.status).filter(Boolean)),
+          new Set(
+            mappedRows
+              .map((row) => row.status)
+              .filter((status) => status && !isExcludedBookingStatus(status)),
+          ),
         )
         setBookingsAvailableStatuses(uniqueStatuses)
+        const selectedProperty = activeManagedPropertyOptions.find(
+          (property) => property.id === bookingsFilters.propertyId,
+        )
         const filteredRows = mappedRows.filter((row) => {
+          if (isExcludedBookingStatus(row.status)) {
+            return false
+          }
+          if (bookingsFilters.propertyId) {
+            const matchesId = row.listingId === bookingsFilters.propertyId
+            const matchesName =
+              selectedProperty != null &&
+              row.property.trim().toLowerCase() ===
+                selectedProperty.nickname.trim().toLowerCase()
+            if (!matchesId && !matchesName) {
+              return false
+            }
+          }
           if (bookingsFilters.statuses.length === 0) {
             return true
           }
@@ -2298,7 +2331,7 @@ function App() {
         setIsBookingsLoading(false)
       }
     },
-    [bookingsFilters, bookingsPageSize],
+    [activeManagedPropertyOptions, bookingsFilters, bookingsPageSize],
   )
 
   const refreshBookingsFromGuesty = useCallback(async () => {
@@ -2805,6 +2838,7 @@ function App() {
       void fetchProperties()
     }
     if (activePage === 'Bookings') {
+      void fetchProperties()
       void fetchBookings(bookingsCurrentCursor)
     }
     if (activePage === 'Reviews') {
@@ -3317,7 +3351,9 @@ function App() {
       ...bookingsAvailableStatuses,
       ...bookingRows.map((row) => row.status).filter(Boolean),
     ])
-    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+    return Array.from(unique)
+      .filter((status) => !isExcludedBookingStatus(status))
+      .sort((a, b) => a.localeCompare(b))
   }, [bookingRows, bookingsAvailableStatuses])
 
   const bookingsActiveFilterCount = useMemo(() => {
@@ -3329,12 +3365,14 @@ function App() {
       : 1
     return (
       statusCount +
+      (bookingsFilters.propertyId ? 1 : 0) +
       (bookingsFilters.checkInFrom ? 1 : 0) +
       (bookingsFilters.checkInTo ? 1 : 0)
     )
   }, [
     bookingsFilters.checkInFrom,
     bookingsFilters.checkInTo,
+    bookingsFilters.propertyId,
     bookingsFilters.statuses,
   ])
 
@@ -6918,6 +6956,7 @@ function App() {
                   onClick={() => {
                     setBookingsFilterDraft({
                       statuses: [...bookingsFilters.statuses],
+                      propertyId: bookingsFilters.propertyId,
                       checkInFrom: bookingsFilters.checkInFrom,
                       checkInTo: bookingsFilters.checkInTo,
                     })
@@ -7021,7 +7060,7 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Filter bookings by status and check-in date range.
+                          {t('bookings.filterSubtitle')}
                         </p>
                       </div>
                       <button
@@ -7036,6 +7075,31 @@ function App() {
 
                     <div className="modal-body">
                       <div className="filter-grid">
+                        <div className="filter-group">
+                          <p className="filter-title">{t('common.property')}</p>
+                          <div className="filter-options">
+                            <label className="form-field">
+                              <span>{t('common.property')}</span>
+                              <select
+                                className="select-input"
+                                value={bookingsFilterDraft.propertyId}
+                                onChange={(event) =>
+                                  setBookingsFilterDraft((current) => ({
+                                    ...current,
+                                    propertyId: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">{t('common.allProperties')}</option>
+                                {activeManagedPropertyOptions.map((property) => (
+                                  <option key={property.id} value={property.id}>
+                                    {property.nickname || property.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </div>
                         <div className="filter-group">
                           <p className="filter-title">{t('common.status')}</p>
                           <div className="filter-options">
@@ -7120,6 +7184,7 @@ function App() {
                         onClick={() => {
                           setBookingsFilters({
                             statuses: [...bookingsFilterDraft.statuses],
+                            propertyId: bookingsFilterDraft.propertyId,
                             checkInFrom: bookingsFilterDraft.checkInFrom,
                             checkInTo: bookingsFilterDraft.checkInTo,
                           })

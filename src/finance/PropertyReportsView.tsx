@@ -55,6 +55,15 @@ type MaintenanceLine = {
   price: number | null
 }
 
+type ExpenseLine = {
+  id: string
+  origin: string
+  itemName: string
+  date: string
+  amountExclIva: number
+  amountInclIva: number
+}
+
 const PHASE1_NICKNAME = 'esperanza 9'
 const PHASE1_MONTH_IDS = ['2026-08']
 
@@ -112,10 +121,17 @@ export function PropertyReportsView({
   const [maintenanceLines, setMaintenanceLines] = useState<MaintenanceLine[]>([])
   const [cleaningTotal, setCleaningTotal] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
+  const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [openTables, setOpenTables] = useState({
+    bookings: false,
+    cleaning: false,
+    maintenance: false,
+    expenses: false,
+  })
 
   const money = useMemo(
     () =>
@@ -125,6 +141,45 @@ export function PropertyReportsView({
       }),
     [i18n.language],
   )
+
+  const bookingTotals = useMemo(
+    () => ({
+      count: bookings.length,
+      payout: bookings.reduce((sum, booking) => sum + (booking.hostPayout ?? 0), 0),
+      cleaningFee: bookings.reduce(
+        (sum, booking) => sum + (booking.fareCleaning ?? 0),
+        0,
+      ),
+      serviceFee: bookings.reduce(
+        (sum, booking) => sum + (booking.hostServiceFee ?? 0),
+        0,
+      ),
+    }),
+    [bookings],
+  )
+  const cleaningPriceWithIva = cleaningTotal * 1.21
+  const expenseTotals = useMemo(
+    () => ({
+      count: expenses.length,
+      totalCost: expenses.reduce((sum, line) => sum + line.amountExclIva, 0),
+      totalCostWithIva: expenses.reduce(
+        (sum, line) => sum + line.amountInclIva,
+        0,
+      ),
+    }),
+    [expenses],
+  )
+
+  const originLabel = (origin: string) => {
+    if (origin === 'subtraction') {
+      return t('propertyReports.originSubtraction')
+    }
+    return origin
+  }
+
+  const toggleTable = (key: keyof typeof openTables) => {
+    setOpenTables((current) => ({ ...current, [key]: !current[key] }))
+  }
 
   const selectedProperty = properties.find(
     (property) => property.id === selectedPropertyId,
@@ -183,6 +238,9 @@ export function PropertyReportsView({
           lines?: MaintenanceLine[]
           total?: number
         }
+        expenses?: {
+          lines?: ExpenseLine[]
+        }
       }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}&month=${encodeURIComponent(monthId)}`,
       )
@@ -195,6 +253,7 @@ export function PropertyReportsView({
       setMaintenanceLines(payload.maintenance?.lines ?? [])
       setCleaningTotal(Number(payload.cleaning?.total ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
+      setExpenses(payload.expenses?.lines ?? [])
     },
     [endpoints.get, t],
   )
@@ -224,6 +283,12 @@ export function PropertyReportsView({
     if (!selectedPropertyId || !selectedMonthId) {
       return
     }
+    setOpenTables({
+      bookings: false,
+      cleaning: false,
+      maintenance: false,
+      expenses: false,
+    })
     setIsLoading(true)
     setError(null)
     void loadDetail(selectedPropertyId, selectedMonthId)
@@ -291,6 +356,7 @@ export function PropertyReportsView({
                     setSelectedMonthId('')
                     setReport(null)
                     setBookings([])
+                    setExpenses([])
                     return
                   }
                   setSelectedPropertyId('')
@@ -434,62 +500,133 @@ export function PropertyReportsView({
           ) : null}
 
           <section className="card">
-            <h2>{t('propertyReports.bookingsTitle')}</h2>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t('propertyReports.bookingId')}</th>
-                    <th>{t('propertyReports.guestName')}</th>
-                    <th>{t('propertyReports.checkIn')}</th>
-                    <th>{t('propertyReports.checkOut')}</th>
-                    <th>{t('propertyReports.hostPayout')}</th>
-                    <th>{t('propertyReports.fareCleaning')}</th>
-                    <th>{t('propertyReports.hostServiceFee')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.length === 0 && !isLoading ? (
-                    <tr>
-                      <td colSpan={7}>{t('propertyReports.emptyBookings')}</td>
-                    </tr>
-                  ) : (
-                    bookings.map((booking) => (
-                      <tr key={booking.reservationId || booking.bookingId}>
-                        <td>{booking.bookingId}</td>
-                        <td>{booking.guestName || '—'}</td>
-                        <td>{dateLabel(booking.checkInDate)}</td>
-                        <td>{dateLabel(booking.checkOutDate)}</td>
-                        <td>
-                          {booking.hostPayout === null
-                            ? '—'
-                            : money.format(booking.hostPayout)}
-                        </td>
-                        <td>
-                          {booking.fareCleaning === null
-                            ? '—'
-                            : money.format(booking.fareCleaning)}
-                        </td>
-                        <td>
-                          {booking.hostServiceFee === null
-                            ? '—'
-                            : money.format(booking.hostServiceFee)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">{t('propertyReports.bookingsTitle')}</h2>
+                <div className="report-metrics">
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.bookingsCount')}</p>
+                    <p className="card-value">{bookingTotals.count}</p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.payout')}</p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.payout)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.cleaningFee')}</p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.cleaningFee)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.serviceFee')}</p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.serviceFee)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => toggleTable('bookings')}
+              >
+                {openTables.bookings
+                  ? t('propertyReports.hideTable')
+                  : t('propertyReports.showTable')}
+              </button>
             </div>
+            {openTables.bookings ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.bookingId')}</th>
+                      <th>{t('propertyReports.guestName')}</th>
+                      <th>{t('propertyReports.checkIn')}</th>
+                      <th>{t('propertyReports.checkOut')}</th>
+                      <th>{t('propertyReports.hostPayout')}</th>
+                      <th>{t('propertyReports.fareCleaning')}</th>
+                      <th>{t('propertyReports.hostServiceFee')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookings.length === 0 && !isLoading ? (
+                      <tr>
+                        <td colSpan={7}>{t('propertyReports.emptyBookings')}</td>
+                      </tr>
+                    ) : (
+                      bookings.map((booking) => (
+                        <tr key={booking.reservationId || booking.bookingId}>
+                          <td>{booking.bookingId}</td>
+                          <td>{booking.guestName || '—'}</td>
+                          <td>{dateLabel(booking.checkInDate)}</td>
+                          <td>{dateLabel(booking.checkOutDate)}</td>
+                          <td>
+                            {booking.hostPayout === null
+                              ? '—'
+                              : money.format(booking.hostPayout)}
+                          </td>
+                          <td>
+                            {booking.fareCleaning === null
+                              ? '—'
+                              : money.format(booking.fareCleaning)}
+                          </td>
+                          <td>
+                            {booking.hostServiceFee === null
+                              ? '—'
+                              : money.format(booking.hostServiceFee)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
 
           <section className="card">
-            <h2>{t('propertyReports.cleaningTitle')}</h2>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">{t('propertyReports.cleaningTitle')}</h2>
+                {cleaningClosed ? (
+                  <div className="report-metrics">
+                    <div className="report-metric">
+                      <p className="card-label">
+                        {t('propertyReports.cleaningsCount')}
+                      </p>
+                      <p className="card-value">{cleaningLines.length}</p>
+                    </div>
+                    <div className="report-metric">
+                      <p className="card-label">{t('propertyReports.price')}</p>
+                      <p className="card-value">{money.format(cleaningTotal)}</p>
+                    </div>
+                    <div className="report-metric">
+                      <p className="card-label">{t('propertyReports.priceWithIva')}</p>
+                      <p className="card-value">
+                        {money.format(cleaningPriceWithIva)}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              {cleaningClosed ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => toggleTable('cleaning')}
+                >
+                  {openTables.cleaning
+                    ? t('propertyReports.hideTable')
+                    : t('propertyReports.showTable')}
+                </button>
+              ) : null}
+            </div>
             {cleaningClosed ? (
-              <>
-                <p className="table-help">
-                  {t('propertyReports.total')}: {money.format(cleaningTotal)}
-                </p>
+              openTables.cleaning ? (
                 <div className="table-wrap">
                   <table className="data-table">
                     <thead>
@@ -522,7 +659,7 @@ export function PropertyReportsView({
                     </tbody>
                   </table>
                 </div>
-              </>
+              ) : null
             ) : (
               <p className="notice">
                 {t('propertyReports.cleaningPending')}{' '}
@@ -542,12 +679,40 @@ export function PropertyReportsView({
           </section>
 
           <section className="card">
-            <h2>{t('propertyReports.maintenanceTitle')}</h2>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">
+                  {t('propertyReports.maintenanceTitle')}
+                </h2>
+                {maintenanceClosed ? (
+                  <div className="report-metrics">
+                    <div className="report-metric">
+                      <p className="card-label">{t('propertyReports.visitsCount')}</p>
+                      <p className="card-value">{maintenanceLines.length}</p>
+                    </div>
+                    <div className="report-metric">
+                      <p className="card-label">{t('propertyReports.price')}</p>
+                      <p className="card-value">
+                        {money.format(maintenanceTotal)}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              {maintenanceClosed ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => toggleTable('maintenance')}
+                >
+                  {openTables.maintenance
+                    ? t('propertyReports.hideTable')
+                    : t('propertyReports.showTable')}
+                </button>
+              ) : null}
+            </div>
             {maintenanceClosed ? (
-              <>
-                <p className="table-help">
-                  {t('propertyReports.total')}: {money.format(maintenanceTotal)}
-                </p>
+              openTables.maintenance ? (
                 <div className="table-wrap">
                   <table className="data-table">
                     <thead>
@@ -582,7 +747,7 @@ export function PropertyReportsView({
                     </tbody>
                   </table>
                 </div>
-              </>
+              ) : null
             ) : (
               <p className="notice">
                 {t('propertyReports.maintenancePending')}{' '}
@@ -599,6 +764,77 @@ export function PropertyReportsView({
                 </button>
               </p>
             )}
+          </section>
+
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">{t('propertyReports.expensesTitle')}</h2>
+                <div className="report-metrics">
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.expensesCount')}
+                    </p>
+                    <p className="card-value">{expenseTotals.count}</p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.totalCost')}</p>
+                    <p className="card-value">
+                      {money.format(expenseTotals.totalCost)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.totalCostWithIva')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(expenseTotals.totalCostWithIva)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => toggleTable('expenses')}
+              >
+                {openTables.expenses
+                  ? t('propertyReports.hideTable')
+                  : t('propertyReports.showTable')}
+              </button>
+            </div>
+            {openTables.expenses ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.origin')}</th>
+                      <th>{t('propertyReports.item')}</th>
+                      <th>{t('propertyReports.date')}</th>
+                      <th>{t('propertyReports.amountExclIva')}</th>
+                      <th>{t('propertyReports.amountInclIva')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenses.length === 0 && !isLoading ? (
+                      <tr>
+                        <td colSpan={5}>{t('propertyReports.emptyExpenses')}</td>
+                      </tr>
+                    ) : (
+                      expenses.map((line) => (
+                        <tr key={line.id}>
+                          <td>{originLabel(line.origin)}</td>
+                          <td>{line.itemName || '—'}</td>
+                          <td>{dateLabel(line.date)}</td>
+                          <td>{money.format(line.amountExclIva)}</td>
+                          <td>{money.format(line.amountInclIva)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}

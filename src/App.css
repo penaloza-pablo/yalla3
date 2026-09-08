@@ -915,6 +915,26 @@ button.today-card {
   margin-bottom: 16px;
 }
 
+.report-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 28px;
+  margin-top: 12px;
+}
+
+.report-metric {
+  min-width: 110px;
+}
+
+.report-metric .card-label {
+  margin: 0;
+}
+
+.report-metric .card-value {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+}
+
 .card-title {
   margin: 0;
   font-size: 1.2rem;
