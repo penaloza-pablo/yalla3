@@ -12,6 +12,13 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import {
+  occurrencePriceWithIva,
+  persistIvaFields,
+  resolveIvaRateFromInput,
+  roundMoney,
+  type IvaRate,
+} from '../shared/iva';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -37,6 +44,7 @@ type SubtractionPayload = {
   billable?: boolean;
   markup?: boolean;
   markupApplied?: boolean;
+  ivaRate?: number;
   note?: string;
   date?: string;
   status?: string;
@@ -79,6 +87,8 @@ type SubtractionItem = {
   'Price excl. IVA': number;
   IVA: number;
   'Total Price': number;
+  ivaRate: IvaRate;
+  appliesIva: boolean;
   Note: string;
   Date: string;
   Status: string;
@@ -259,32 +269,18 @@ const parseBillable = (payload: SubtractionPayload) => {
   return true;
 };
 
-const parseMarkupApplied = (payload: SubtractionPayload) => {
-  if (typeof payload.markupApplied === 'boolean') {
-    return payload.markupApplied;
-  }
-  if (typeof payload.markup === 'boolean') {
-    return payload.markup;
-  }
-  if (typeof payload['Markup applied'] === 'boolean') {
-    return payload['Markup applied'];
-  }
-  return false;
-};
-
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
-
 const computeSubtractionPricing = (
-  costInclIva: number,
-  markupApplied: boolean,
+  priceExclIva: number,
+  ivaRate: IvaRate,
 ) => {
-  const safeCost = Number.isFinite(costInclIva) ? Math.max(0, costInclIva) : 0;
-  const markup = markupApplied ? roundMoney(safeCost * 0.12) : 0;
-  const ivaMarkup = roundMoney(markup * 0.21);
-  const totalPrice = roundMoney(safeCost + markup + ivaMarkup);
-  const priceExclIva = roundMoney(totalPrice / 1.21);
-  const iva = roundMoney(priceExclIva * 0.21);
-  return { markup, ivaMarkup, priceExclIva, iva, totalPrice };
+  const safeExcl = Number.isFinite(priceExclIva) ? Math.max(0, priceExclIva) : 0;
+  const totalPrice = occurrencePriceWithIva(safeExcl, ivaRate);
+  const iva = roundMoney(totalPrice - safeExcl);
+  return {
+    priceExclIva: roundMoney(safeExcl),
+    iva,
+    totalPrice,
+  };
 };
 
 const resolveCreateStatus = (billable: boolean) =>
@@ -488,8 +484,9 @@ export const handler = async (event: {
 
     const unitsValue = Number(units) || 0;
     const costValue = Number(cost) || 0;
-    const markupApplied = parseMarkupApplied(payload);
-    const pricing = computeSubtractionPricing(costValue, markupApplied);
+    const ivaRate = resolveIvaRateFromInput(payload);
+    const pricing = computeSubtractionPricing(costValue, ivaRate);
+    const ivaFields = persistIvaFields(ivaRate);
     // Creates always allocate a new id. Status changes use action=mark_billed|reverse.
     if (existingId) {
       const message =
@@ -516,14 +513,16 @@ export const handler = async (event: {
       'Property id': String(propertyId).trim(),
       Location: String(location).trim(),
       Units: unitsValue,
-      Cost: costValue,
+      Cost: pricing.priceExclIva,
       Billable: billable,
-      'Markup applied': markupApplied,
-      Markup: pricing.markup,
-      'IVA Markup': pricing.ivaMarkup,
+      'Markup applied': false,
+      Markup: 0,
+      'IVA Markup': 0,
       'Price excl. IVA': pricing.priceExclIva,
       IVA: pricing.iva,
       'Total Price': pricing.totalPrice,
+      ivaRate: ivaFields.ivaRate,
+      appliesIva: ivaFields.appliesIva,
       Note: String(note).trim(),
       Date: formatDateForStorage(date ? String(date) : undefined),
       Status: statusValue,

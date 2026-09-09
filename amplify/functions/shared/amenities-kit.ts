@@ -363,6 +363,15 @@ export const attachAmenitiesKitsToLines = async <
   }
 
   return lines.map((line) => {
+    const persisted = Boolean(
+      (line as { kitPersisted?: boolean }).kitPersisted,
+    );
+    if (persisted) {
+      return {
+        ...line,
+        kit: kitFromUnknown((line as { kit?: unknown }).kit),
+      };
+    }
     const bookingContext = line.isManual
       ? null
       : (contextsByDate.get(line.date)?.get(line.propertyId) ?? null);

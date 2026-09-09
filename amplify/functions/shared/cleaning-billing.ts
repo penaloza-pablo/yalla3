@@ -59,6 +59,7 @@ export type BillingLine = {
   warnings: BillingWarning[];
   cleaningTypes: CleaningTypeRecord[];
   kit?: AmenitiesKit;
+  kitPersisted?: boolean;
 };
 
 const asString = (value: unknown) =>
@@ -264,6 +265,10 @@ const linesForMonth = (
       cleaningTypeName,
       price,
     };
+    const persistedKit =
+      visit.kit !== undefined && visit.kit !== null
+        ? kitFromUnknown(visit.kit)
+        : undefined;
     return {
       id: visitId,
       source: 'visit' as const,
@@ -279,6 +284,9 @@ const linesForMonth = (
       isManual: false,
       warnings: warningsForLine(base),
       cleaningTypes: types,
+      ...(persistedKit
+        ? { kit: persistedKit, kitPersisted: true as const }
+        : {}),
     };
   });
 

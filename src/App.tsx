@@ -61,6 +61,14 @@ import {
   asStringList,
   isReportGroupType,
 } from '../amplify/functions/shared/property-groups'
+import {
+  IVA_RATES,
+  occurrencePriceWithIva,
+  parseIvaRate,
+  persistIvaFields,
+  resolveIvaRate,
+  type IvaRate,
+} from '../amplify/functions/shared/finance-services'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
@@ -132,6 +140,7 @@ type SubtractionRow = {
   markupApplied: boolean
   markup: number
   ivaMarkup: number
+  ivaRate: IvaRate
   priceExclIva: number
   iva: number
   totalPrice: number
@@ -184,7 +193,7 @@ type SubtractionFormState = {
   units: string
   cost: string
   billable: boolean
-  markup: boolean
+  ivaRate: IvaRate
   note: string
 }
 
@@ -393,6 +402,7 @@ const subtractionFieldMap = {
   ivaMarkup: ['IVA Markup', 'ivaMarkup', 'Iva Markup'],
   priceExclIva: ['Price excl. IVA', 'priceExclIva', 'Price excl IVA'],
   iva: ['IVA', 'iva'],
+  ivaRate: ['ivaRate', 'IVA rate', 'IvaRate'],
   totalPrice: ['Total Price', 'totalPrice', 'Total price'],
   note: ['Note', 'note'],
   date: ['Date', 'date', 'Substraction date', 'Subtraction date'],
@@ -413,6 +423,14 @@ const computeSubtractionPricing = (
   const priceExclIva = roundMoney(totalPrice / 1.21)
   const iva = roundMoney(priceExclIva * 0.21)
   return { markup, ivaMarkup, priceExclIva, iva, totalPrice }
+}
+
+/** Pricing breakdown from price excl. IVA and selected IVA rate. */
+const computeIvaPricing = (priceExclIva: number, ivaRate: IvaRate) => {
+  const safeExcl = Number.isFinite(priceExclIva) ? Math.max(0, priceExclIva) : 0
+  const totalPrice = occurrencePriceWithIva(safeExcl, ivaRate)
+  const iva = roundMoney(totalPrice - safeExcl)
+  return { priceExclIva: roundMoney(safeExcl), iva, totalPrice }
 }
 
 const propertyFieldMap = {
@@ -1034,16 +1052,36 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
 
 const mapSubtractionRow = (item: Record<string, unknown>): SubtractionRow => {
   const dateRaw = getStringValue(getItemValue(item, subtractionFieldMap.date))
-  const cost = getNumberValue(getItemValue(item, subtractionFieldMap.cost))
-  const markupApplied = getBooleanValue(
-    getItemValue(item, subtractionFieldMap.markupApplied),
-  )
-  const storedMarkup = getItemValue(item, subtractionFieldMap.markup)
-  const storedIvaMarkup = getItemValue(item, subtractionFieldMap.ivaMarkup)
   const storedPriceExclIva = getItemValue(item, subtractionFieldMap.priceExclIva)
   const storedIva = getItemValue(item, subtractionFieldMap.iva)
   const storedTotalPrice = getItemValue(item, subtractionFieldMap.totalPrice)
-  const computed = computeSubtractionPricing(cost, markupApplied)
+  const cost = getNumberValue(getItemValue(item, subtractionFieldMap.cost))
+  const priceExclIva =
+    storedPriceExclIva === undefined || storedPriceExclIva === null
+      ? cost
+      : getNumberValue(storedPriceExclIva)
+  const storedIvaAmount =
+    storedIva === undefined || storedIva === null
+      ? null
+      : getNumberValue(storedIva)
+  let ivaRate = resolveIvaRate({
+    ivaRate: getItemValue(item, subtractionFieldMap.ivaRate),
+    appliesIva: getItemValue(item, ['appliesIva', 'AppliesIva']),
+  })
+  if (
+    ivaRate === 0 &&
+    storedIvaAmount !== null &&
+    storedIvaAmount > 0 &&
+    priceExclIva > 0
+  ) {
+    const ratio = storedIvaAmount / priceExclIva
+    if (Math.abs(ratio - 0.21) < 0.02) {
+      ivaRate = 21
+    } else if (Math.abs(ratio - 0.1) < 0.02) {
+      ivaRate = 10
+    }
+  }
+  const computed = computeIvaPricing(priceExclIva, ivaRate)
 
   return {
     id: getStringValue(getItemValue(item, subtractionFieldMap.id)) || '—',
@@ -1059,21 +1097,13 @@ const mapSubtractionRow = (item: Record<string, unknown>): SubtractionRow => {
     location:
       getStringValue(getItemValue(item, subtractionFieldMap.location)) || '—',
     units: getNumberValue(getItemValue(item, subtractionFieldMap.units)),
-    cost,
+    cost: priceExclIva,
     billable: getBooleanValue(getItemValue(item, subtractionFieldMap.billable)),
-    markupApplied,
-    markup:
-      storedMarkup === undefined || storedMarkup === null
-        ? computed.markup
-        : getNumberValue(storedMarkup),
-    ivaMarkup:
-      storedIvaMarkup === undefined || storedIvaMarkup === null
-        ? computed.ivaMarkup
-        : getNumberValue(storedIvaMarkup),
-    priceExclIva:
-      storedPriceExclIva === undefined || storedPriceExclIva === null
-        ? computed.priceExclIva
-        : getNumberValue(storedPriceExclIva),
+    markupApplied: false,
+    markup: 0,
+    ivaMarkup: 0,
+    ivaRate,
+    priceExclIva,
     iva:
       storedIva === undefined || storedIva === null
         ? computed.iva
@@ -1478,7 +1508,7 @@ const emptySubtractionFormState: SubtractionFormState = {
   units: '1',
   cost: '',
   billable: true,
-  markup: false,
+  ivaRate: 21,
   note: '',
 }
 
@@ -3057,7 +3087,7 @@ function App() {
       units: '1',
       cost: row.unitPrice ? String(row.unitPrice) : '0',
       billable: true,
-      markup: false,
+      ivaRate: 21,
       note: '',
     })
     setSubtractionFormError(null)
@@ -4019,10 +4049,11 @@ function App() {
       return
     }
 
-    const pricing = computeSubtractionPricing(
+    const pricing = computeIvaPricing(
       costValue,
-      subtractionFormValues.markup,
+      subtractionFormValues.ivaRate,
     )
+    const ivaFields = persistIvaFields(subtractionFormValues.ivaRate)
 
     setIsSubtractionSaving(true)
     setSubtractionFormError(null)
@@ -4034,11 +4065,13 @@ function App() {
       'Property id': subtractionFormValues.propertyId.trim(),
       Location: subtractionFormValues.location.trim(),
       Units: unitsValue,
-      Cost: costValue,
+      Cost: pricing.priceExclIva,
       Billable: subtractionFormValues.billable,
-      'Markup applied': subtractionFormValues.markup,
-      Markup: pricing.markup,
-      'IVA Markup': pricing.ivaMarkup,
+      ivaRate: ivaFields.ivaRate,
+      appliesIva: ivaFields.appliesIva,
+      'Markup applied': false,
+      Markup: 0,
+      'IVA Markup': 0,
       'Price excl. IVA': pricing.priceExclIva,
       IVA: pricing.iva,
       'Total Price': pricing.totalPrice,
@@ -6614,26 +6647,22 @@ function App() {
                                     </div>
                                     <div>
                                       <p className="detail-label">
-                                        {t('common.markup')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {formatUnitPrice(row.markup)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('common.ivaMarkup')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {formatUnitPrice(row.ivaMarkup)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
                                         {t('common.priceExclIva')}
                                       </p>
                                       <p className="detail-value">
                                         {formatUnitPrice(row.priceExclIva)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('movements.appliesIva')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {row.ivaRate === 10
+                                          ? t('common.iva10')
+                                          : row.ivaRate === 21
+                                            ? t('common.iva21')
+                                            : t('common.ivaNone')}
                                       </p>
                                     </div>
                                     <div>
@@ -9024,7 +9053,7 @@ function App() {
                     </select>
                   </label>
                   <label className="form-field">
-                    <span>{t('common.priceInclIva')}</span>
+                    <span>{t('common.priceExclIva')}</span>
                     <input
                       type="number"
                       min="0"
@@ -9039,6 +9068,28 @@ function App() {
                       placeholder="0.00"
                     />
                   </label>
+                  <label className="form-field">
+                    <span>{t('movements.appliesIva')}</span>
+                    <select
+                      value={String(subtractionFormValues.ivaRate)}
+                      onChange={(event) =>
+                        setSubtractionFormValues((current) => ({
+                          ...current,
+                          ivaRate: parseIvaRate(event.target.value) ?? 0,
+                        }))
+                      }
+                    >
+                      {IVA_RATES.map((rate) => (
+                        <option key={rate} value={rate}>
+                          {rate === 10
+                            ? t('common.iva10')
+                            : rate === 21
+                              ? t('common.iva21')
+                              : t('common.ivaNone')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="form-field-span subtraction-checkboxes">
                     <label className="form-field-checkbox">
                       <input
@@ -9052,19 +9103,6 @@ function App() {
                         }
                       />
                       <span>{t('common.shouldBeBilled')}</span>
-                    </label>
-                    <label className="form-field-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={subtractionFormValues.markup}
-                        onChange={(event) =>
-                          setSubtractionFormValues((current) => ({
-                            ...current,
-                            markup: event.target.checked,
-                          }))
-                        }
-                      />
-                      <span>{t('common.markup')}</span>
                     </label>
                   </div>
                   <label className="form-field form-field-span">
@@ -9084,24 +9122,12 @@ function App() {
                 </div>
                 {(() => {
                   const costValue = Number(subtractionFormValues.cost)
-                  const pricing = computeSubtractionPricing(
+                  const pricing = computeIvaPricing(
                     Number.isFinite(costValue) ? costValue : 0,
-                    subtractionFormValues.markup,
+                    subtractionFormValues.ivaRate,
                   )
                   return (
                     <div className="subtraction-pricing-grid">
-                      <div className="subtraction-pricing-item">
-                        <p className="detail-label">{t('common.markup')}</p>
-                        <p className="detail-value">
-                          {formatUnitPrice(pricing.markup)}
-                        </p>
-                      </div>
-                      <div className="subtraction-pricing-item">
-                        <p className="detail-label">{t('common.ivaMarkup')}</p>
-                        <p className="detail-value">
-                          {formatUnitPrice(pricing.ivaMarkup)}
-                        </p>
-                      </div>
                       <div className="subtraction-pricing-item">
                         <p className="detail-label">{t('common.priceExclIva')}</p>
                         <p className="detail-value">

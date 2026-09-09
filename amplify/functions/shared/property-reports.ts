@@ -425,16 +425,23 @@ export const loadPendingBillingExpenses = async (
     const amountExclIva =
       asNumber(item['Price excl. IVA']) ??
       asNumber(item.priceExclIva) ??
-      roundMoney(
-        (asNumber(item.Cost) ?? asNumber(item.cost) ?? 0) / IVA_MULTIPLIER,
-      );
+      asNumber(item.Cost) ??
+      asNumber(item.cost) ??
+      0;
+    const storedTotal =
+      asNumber(item['Total Price']) ??
+      asNumber(item['Total price']) ??
+      asNumber(item.totalPrice);
+    const amountInclIva =
+      storedTotal ??
+      occurrencePriceWithIva(amountExclIva, resolveIvaRate(item));
     expenses.push({
       id: asString(item.id) || `${dateIso}-${asString(item['Item name'])}`,
       origin: 'subtraction',
       itemName: asString(item['Item name']) || asString(item.itemName),
       date: dateIso,
       amountExclIva: roundMoney(-Math.abs(amountExclIva)),
-      amountInclIva: roundMoney(-Math.abs(amountExclIva * IVA_MULTIPLIER)),
+      amountInclIva: roundMoney(-Math.abs(amountInclIva)),
     });
   }
 

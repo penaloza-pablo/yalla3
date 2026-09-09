@@ -16,6 +16,7 @@ import {
 import {
   amenitiesRulesByPropertyId,
   computeAmenitiesKit,
+  kitFromUnknown,
   loadInventoryPriceMap,
   type InventoryPriceItem,
 } from '../shared/amenities-kit';
@@ -220,14 +221,20 @@ export const handler = async (event: HttpEvent) => {
       }
     }
     const rulesByProperty = amenitiesRulesByPropertyId(detailItems);
-    const rowsWithKit = rows.map((row) => ({
-      ...row,
-      kit: computeAmenitiesKit({
-        rules: rulesByProperty.get(row.propertyId) ?? [],
-        bookingContext: bookingContextByPropertyId.get(row.propertyId) ?? null,
-        inventoryById,
-      }),
-    }));
+    const rowsWithKit = rows.map((row) => {
+      const visit = visits.find((item) => item.id === row.visitId);
+      if (visit?.kit !== undefined && visit.kit !== null) {
+        return { ...row, kit: kitFromUnknown(visit.kit) };
+      }
+      return {
+        ...row,
+        kit: computeAmenitiesKit({
+          rules: rulesByProperty.get(row.propertyId) ?? [],
+          bookingContext: bookingContextByPropertyId.get(row.propertyId) ?? null,
+          inventoryById,
+        }),
+      };
+    });
 
     return buildHttpResponse(200, {
       plannedDate,
