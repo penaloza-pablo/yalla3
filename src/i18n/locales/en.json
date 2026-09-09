@@ -780,7 +780,7 @@
   },
   "propertyReports": {
     "eyebrow": "Finance / Property Reports",
-    "subtitle": "Open a property, then a month. This first phase only includes Esperanza 9 and August.",
+    "subtitle": "Open a property, then a month. Months run from August 2026 through the current month. P2 and rooms 201-212 are grouped as Planta 2.",
     "monthsSubtitle": "Choose a month to see payouts, cleaning, maintenance, services, and other movements for this property.",
     "monthSubtitle": "Payouts, services, other movements, cleaning and maintenance. If billing is still open, the figures are preliminary.",
     "open": "Open",
@@ -837,7 +837,7 @@
     "visitType": "Visit type",
     "price": "Price",
     "total": "Total",
-    "emptyProperties": "No properties are available in this Property Reports phase.",
+    "emptyProperties": "No properties are available in Property Reports.",
     "emptyMonths": "No months are available for this property yet.",
     "emptyBookings": "No bookings with payouts started in this month.",
     "emptyCleaning": "No cleaning visits for this property in this month.",

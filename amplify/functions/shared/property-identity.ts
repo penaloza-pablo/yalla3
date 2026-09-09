@@ -18,6 +18,13 @@ export const P2_ROOM_DISPLAY_BY_ID: Record<string, string> = {
 };
 
 export const P2_BUILDING_ID = 'planta2';
+export const PLANTA_2_REPORT_NAME = 'Planta 2';
+export const PROPERTY_REPORTS_START_MONTH = '2026-08';
+
+export const P2_REPORT_MEMBER_IDS = [
+  P2_BUILDING_ID,
+  ...Object.keys(P2_ROOM_DISPLAY_BY_ID),
+];
 
 export const P2_ROOM_NICKNAMES = new Set(Object.values(P2_ROOM_DISPLAY_BY_ID));
 
@@ -107,3 +114,28 @@ export const collectGuestyNicknameMismatches = (
   }
   return aliases;
 };
+
+const foldedIdentityText = (input: PropertyIdentityInput) =>
+  [input.id, input.nickname, input.listingNickname, input.title]
+    .map((value) => (value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+
+export const isOtherPropertyIdentity = (input: PropertyIdentityInput) =>
+  (input.id ?? '').trim().toLowerCase() === 'other';
+
+export const isJclStorageIdentity = (input: PropertyIdentityInput) => {
+  const id = (input.id ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (id === 'jclstorage') {
+    return true;
+  }
+  const folded = foldedIdentityText(input);
+  return /jcl\s*storage/.test(folded) || folded.replace(/[\s_-]+/g, '').includes('jclstorage');
+};
+
+export const isP2ReportGroupId = (id?: string | null) => isP2BuildingId(id);
+
+export const isP2ReportMemberId = (id?: string | null) =>
+  isP2BuildingId(id) || isP2RoomListingId(id);
+
+export const p2ReportMemberIds = () => [...P2_REPORT_MEMBER_IDS];

@@ -13,17 +13,22 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { docClient, putItem } from '../shared/visit-task-utils';
-import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 import {
   asString,
   deriveReportStatus,
   emptyReportRecord,
   getPropertyById,
   isMonthIdValue,
-  isPhase1Month,
-  isPhase1Property,
+  isPropertyReportEligible,
+  isReportableMonth,
+  reportScopeForProperty,
+  syntheticPlanta2Property,
   type PropertyReportStatus,
 } from '../shared/property-reports';
+import {
+  isP2BuildingId,
+  isP2RoomListingId,
+} from '../shared/property-identity';
 
 type Payload = {
   propertyId?: string;
@@ -59,16 +64,25 @@ export const handler = async (event: {
   const propertyId = payload.propertyId?.trim() ?? '';
   const monthId = payload.monthId?.trim() ?? '';
   const action = asString(payload.action).toLowerCase();
-  if (!propertyId || !isMonthIdValue(monthId) || !isPhase1Month(monthId)) {
+  if (!propertyId || !isMonthIdValue(monthId) || !isReportableMonth(monthId)) {
     return buildHttpResponse(400, {
-      message: 'propertyId and a phase-1 monthId are required.',
+      message: 'propertyId and a reportable monthId are required.',
     });
   }
 
-  const property = await getPropertyById(propertiesTable, propertyId);
-  if (!property || !isPhase1Property(property)) {
+  if (isP2RoomListingId(propertyId)) {
+    return buildHttpResponse(400, {
+      message: 'P2 rooms are reported together under Planta 2.',
+    });
+  }
+
+  const storedProperty = await getPropertyById(propertiesTable, propertyId);
+  const property =
+    storedProperty ??
+    (isP2BuildingId(propertyId) ? syntheticPlanta2Property() : undefined);
+  if (!property || !isPropertyReportEligible(property)) {
     return buildHttpResponse(404, {
-      message: 'Property is not available in this Property Reports phase.',
+      message: 'Property is not available in Property Reports.',
     });
   }
 
@@ -125,7 +139,7 @@ export const handler = async (event: {
 
   try {
     await putItem(tableName, item);
-    const name = `${resolveYallaPropertyLabelFromRecord(property, propertyId)} ${monthId}`;
+    const name = `${reportScopeForProperty(property).name} ${monthId}`;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PROPERTY_REPORTS,
       action: nextStatus === 'CLOSED' ? 'close' : action,

@@ -3,8 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { fetchJson } from '../operations/api'
-import { formatDateOnlyLabel } from '../operations/dateHelpers'
-import { getPropertyLabel } from '../operations/propertyHelpers'
+import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
+import {
+  filterPropertyReportsOptions,
+  listPropertyReportMonthIds,
+  propertyReportsLabel,
+} from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 
 type Props = {
@@ -74,19 +78,11 @@ type ServiceLine = {
   priceWithIva: number
 }
 
-const PHASE1_NICKNAME = 'esperanza 9'
-const PHASE1_MONTH_IDS = ['2026-08']
-
-const isPhase1Property = (property: PropertyOption) =>
-  [property.nickname, property.listingNickname, property.title]
-    .map((value) => value.trim().toLowerCase())
-    .includes(PHASE1_NICKNAME)
-
 const fallbackMonths = (): ReportMonth[] =>
-  PHASE1_MONTH_IDS.map((id) => ({
+  listPropertyReportMonthIds(getTodayMadrid()).map((id) => ({
     id,
-    status: 'PENDING_TO_CLOSE',
-    canMarkReady: true,
+    status: id >= getTodayMadrid().slice(0, 7) ? 'CURRENT' : 'PENDING_TO_CLOSE',
+    canMarkReady: id < getTodayMadrid().slice(0, 7),
     canClose: false,
     canReopen: false,
   }))
@@ -116,7 +112,7 @@ export function PropertyReportsView({
   )
 
   const properties = useMemo(
-    () => propertyOptions.filter(isPhase1Property),
+    () => filterPropertyReportsOptions(propertyOptions),
     [propertyOptions],
   )
 
@@ -216,7 +212,7 @@ export function PropertyReportsView({
     (property) => property.id === selectedPropertyId,
   )
   const propertyLabel = selectedProperty
-    ? getPropertyLabel(selectedProperty)
+    ? propertyReportsLabel(selectedProperty)
     : selectedPropertyId
 
   const dateLabel = (value: string) => formatDateOnlyLabel(value, i18n.language)
@@ -493,7 +489,7 @@ export function PropertyReportsView({
                 ) : (
                   properties.map((property) => (
                     <tr key={property.id}>
-                      <td>{getPropertyLabel(property)}</td>
+                      <td>{propertyReportsLabel(property)}</td>
                       <td>
                         <button
                           type="button"

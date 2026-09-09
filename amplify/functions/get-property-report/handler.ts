@@ -14,20 +14,26 @@ import {
   getPropertyById,
   getReportRecord,
   isMonthIdValue,
-  isPhase1Month,
-  isPhase1Property,
+  isPropertyReportEligible,
+  isReportableMonth,
   listingMatchesProperty,
+  listReportMonthIds,
   loadFinanceMovements,
   loadFinanceServices,
   loadPendingBillingExpenses,
   mapReportBooking,
-  PHASE1_MONTH_IDS,
   queryBookingsByCheckInDate,
   reportMonthSummary,
+  reportScopeForProperty,
   reservationFromPayload,
   roundMoney,
+  syntheticPlanta2Property,
 } from '../shared/property-reports';
-import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
+import {
+  isP2BuildingId,
+  isP2RoomListingId,
+  P2_BUILDING_ID,
+} from '../shared/property-identity';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -132,15 +138,25 @@ export const handler = async (event: HttpEvent) => {
   }
 
   try {
-    const property = await getPropertyById(propertiesTable, propertyId);
-    if (!property || !isPhase1Property(property)) {
+    if (isP2RoomListingId(propertyId)) {
       return buildHttpResponse(404, {
-        message: 'Property is not available in this Property Reports phase.',
+        message: 'P2 rooms are reported together under Planta 2.',
       });
     }
 
+    const storedProperty = await getPropertyById(propertiesTable, propertyId);
+    const property =
+      storedProperty ??
+      (isP2BuildingId(propertyId) ? syntheticPlanta2Property() : undefined);
+    if (!property || !isPropertyReportEligible(property)) {
+      return buildHttpResponse(404, {
+        message: 'Property is not available in Property Reports.',
+      });
+    }
+
+    const scope = reportScopeForProperty(property);
     const months = [];
-    for (const id of PHASE1_MONTH_IDS) {
+    for (const id of listReportMonthIds()) {
       const stored = await getReportRecord(reportsTable, propertyId, id);
       months.push(reportMonthSummary(id, stored));
     }
@@ -148,16 +164,16 @@ export const handler = async (event: HttpEvent) => {
     if (!monthId) {
       return buildHttpResponse(200, {
         property: {
-          id: propertyId,
-          name: resolveYallaPropertyLabelFromRecord(property, propertyId),
+          id: scope.id || P2_BUILDING_ID,
+          name: scope.name,
         },
         months,
       });
     }
 
-    if (!isMonthIdValue(monthId) || !isPhase1Month(monthId)) {
+    if (!isMonthIdValue(monthId) || !isReportableMonth(monthId)) {
       return buildHttpResponse(404, {
-        message: 'Month is not available in this Property Reports phase.',
+        message: 'Month is not available in Property Reports.',
       });
     }
 
@@ -207,11 +223,11 @@ export const handler = async (event: HttpEvent) => {
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';
-    const cleaningLines = cleaningDetail.lines.filter(
-      (line) => line.propertyId === propertyId,
+    const cleaningLines = cleaningDetail.lines.filter((line) =>
+      scope.memberIds.includes(line.propertyId),
     );
     const maintenanceLines = maintenanceDetail.lines.filter(
-      (line) => line.propertyId === propertyId && !line.dismissed,
+      (line) => scope.memberIds.includes(line.propertyId) && !line.dismissed,
     );
     const cleaningKitCost = roundMoney(
       cleaningLines.reduce((sum, line) => sum + (line.kit?.cost ?? 0), 0),
@@ -225,8 +241,8 @@ export const handler = async (event: HttpEvent) => {
 
     return buildHttpResponse(200, {
       property: {
-        id: propertyId,
-        name: resolveYallaPropertyLabelFromRecord(property, propertyId),
+        id: scope.id || P2_BUILDING_ID,
+        name: scope.name,
       },
       months,
       report,

@@ -780,7 +780,7 @@
   },
   "propertyReports": {
     "eyebrow": "Finanzas / Property Reports",
-    "subtitle": "Abre una propiedad y luego un mes. Esta primera fase solo incluye Esperanza 9 y agosto.",
+    "subtitle": "Abre una propiedad y luego un mes. Los meses van desde agosto 2026 hasta el mes en curso. P2 y las habitaciones 201-212 se agrupan como Planta 2.",
     "monthsSubtitle": "Elige un mes para ver payouts, cleaning, maintenance, services y other movements de esta propiedad.",
     "monthSubtitle": "Payouts, services, other movements, limpiezas y mantenimiento. Si el billing sigue abierto, las cifras son preliminares.",
     "open": "Abrir",
@@ -837,7 +837,7 @@
     "visitType": "Tipo de visita",
     "price": "Precio",
     "total": "Total",
-    "emptyProperties": "No hay propiedades disponibles en esta fase de Property Reports.",
+    "emptyProperties": "No hay propiedades disponibles en Property Reports.",
     "emptyMonths": "Aún no hay meses disponibles para esta propiedad.",
     "emptyBookings": "No hay reservas con payouts que empezaran este mes.",
     "emptyCleaning": "No hay visitas de limpieza de esta propiedad en este mes.",

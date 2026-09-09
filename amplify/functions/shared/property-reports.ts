@@ -3,13 +3,25 @@ import {
   currentMonthId as billingCurrentMonthId,
   datesInMonth,
   isMonthId,
+  shiftMonthId,
 } from './cleaning-billing';
 import { nowIso } from './dynamo-http';
-import { resolveYallaPropertyLabelFromRecord } from './property-identity';
+import {
+  isJclStorageIdentity,
+  isOtherPropertyIdentity,
+  isP2BuildingId,
+  isP2RoomListingId,
+  isP2RoomNickname,
+  p2ReportMemberIds,
+  PLANTA_2_REPORT_NAME,
+  P2_BUILDING_ID,
+  PROPERTY_REPORTS_START_MONTH,
+  resolveYallaPropertyLabelFromRecord,
+  yallaAliasForListingId,
+} from './property-identity';
 import { docClient } from './visit-task-utils';
 
-export const PHASE1_PROPERTY_NICKNAMES = ['esperanza 9'];
-export const PHASE1_MONTH_IDS = ['2026-08'];
+export { PROPERTY_REPORTS_START_MONTH };
 
 export type PropertyReportStatus =
   | 'CURRENT'
@@ -65,29 +77,93 @@ export const asNumber = (value: unknown): number | null => {
   return null;
 };
 
+const normalizeNickname = (value: string) => value.trim().toLowerCase();
+
 export const isMonthIdValue = isMonthId;
 export const currentReportMonthId = billingCurrentMonthId;
 export const datesInReportMonth = datesInMonth;
 
-const normalizeNickname = (value: string) => value.trim().toLowerCase();
-
-export const isPhase1PropertyName = (value: string) =>
-  PHASE1_PROPERTY_NICKNAMES.includes(normalizeNickname(value));
-
-export const isPhase1Property = (property: Record<string, unknown>) => {
-  const names = [
-    asString(property.nickname),
-    asString(property.listingNickname),
-    asString(property.ListingNickname),
-    asString(property.title),
-    asString(property.name),
-    resolveYallaPropertyLabelFromRecord(property, asString(property.id)),
-  ];
-  return names.some((name) => isPhase1PropertyName(name));
+export const listReportMonthIds = () => {
+  const current = currentReportMonthId();
+  if (current < PROPERTY_REPORTS_START_MONTH) {
+    return [];
+  }
+  const ids: string[] = [];
+  let cursor = PROPERTY_REPORTS_START_MONTH;
+  while (cursor <= current) {
+    ids.push(cursor);
+    cursor = shiftMonthId(cursor, 1);
+  }
+  return ids.reverse();
 };
 
-export const isPhase1Month = (monthId: string) =>
-  PHASE1_MONTH_IDS.includes(monthId.trim());
+export const isReportableMonth = (monthId: string) => {
+  const value = monthId.trim();
+  if (!isMonthId(value)) {
+    return false;
+  }
+  return value >= PROPERTY_REPORTS_START_MONTH && value <= currentReportMonthId();
+};
+
+const identityFromProperty = (property: Record<string, unknown>) => ({
+  id: asString(property.id),
+  nickname: asString(property.nickname) || asString(property.Nickname),
+  listingNickname:
+    asString(property.ListingNickname) || asString(property.listingNickname),
+  title: asString(property.title) || asString(property.name),
+});
+
+const isActiveManagedProperty = (property: Record<string, unknown>) => {
+  if (property.active === false || property.Active === false) {
+    return false;
+  }
+  if (asString(property.active).toLowerCase() === 'false') {
+    return false;
+  }
+  return true;
+};
+
+export const isPropertyReportEligible = (property: Record<string, unknown>) => {
+  const identity = identityFromProperty(property);
+  if (!identity.id) {
+    return false;
+  }
+  if (!isActiveManagedProperty(property)) {
+    return false;
+  }
+  if (isOtherPropertyIdentity(identity) || isJclStorageIdentity(identity)) {
+    return false;
+  }
+  if (isP2RoomListingId(identity.id) || isP2RoomNickname(identity.nickname)) {
+    return false;
+  }
+  const type = asString(property.type || property.Type).toUpperCase();
+  if (type === 'MTL') {
+    return false;
+  }
+  return true;
+};
+
+export const reportScopeForProperty = (property: Record<string, unknown>) => {
+  const id = asString(property.id);
+  const isGroup = isP2BuildingId(id);
+  return {
+    id,
+    isGroup,
+    memberIds: isGroup ? p2ReportMemberIds() : [id].filter(Boolean),
+    name: isGroup
+      ? PLANTA_2_REPORT_NAME
+      : resolveYallaPropertyLabelFromRecord(property, id),
+  };
+};
+
+export const syntheticPlanta2Property = (): Record<string, unknown> => ({
+  id: P2_BUILDING_ID,
+  nickname: PLANTA_2_REPORT_NAME,
+  title: PLANTA_2_REPORT_NAME,
+  type: 'MTL_PRINCIPAL',
+  active: true,
+});
 
 export const deriveReportStatus = (
   monthId: string,
@@ -222,28 +298,39 @@ export const subtractionMatchesProperty = (
   item: Record<string, unknown>,
   property: Record<string, unknown>,
 ) => {
-  const propertyId = asString(property.id);
+  const scope = reportScopeForProperty(property);
   const subtractionPropertyIds = [
     asString(item['Property id']),
     asString(item.propertyId),
     asString(item['Property ID']),
   ].filter(Boolean);
-  if (propertyId && subtractionPropertyIds.includes(propertyId)) {
+  if (subtractionPropertyIds.some((id) => scope.memberIds.includes(id))) {
     return true;
   }
   const location = normalizeNickname(
     asString(item.Location) || asString(item.location),
   );
-  const names = [
-    asString(property.nickname),
-    asString(property.listingNickname),
-    asString(property.title),
-    asString(property.name),
-    resolveYallaPropertyLabelFromRecord(property, propertyId),
-  ]
-    .map(normalizeNickname)
-    .filter(Boolean);
-  return Boolean(location) && names.includes(location);
+  if (!location) {
+    return false;
+  }
+  const names = new Set(
+    [
+      asString(property.nickname),
+      asString(property.listingNickname),
+      asString(property.title),
+      asString(property.name),
+      scope.name,
+      ...scope.memberIds.map((id) => yallaAliasForListingId(id) || id),
+    ]
+      .map(normalizeNickname)
+      .filter(Boolean),
+  );
+  if (scope.isGroup) {
+    names.add('p2');
+    names.add('planta 2');
+    names.add('planta2');
+  }
+  return names.has(location);
 };
 
 export const loadPendingBillingExpenses = async (
@@ -311,33 +398,35 @@ export const loadFinanceMovements = async (
   property: Record<string, unknown>,
   monthId: string,
 ): Promise<PropertyReportExpense[]> => {
-  const propertyId = asString(property.id);
-  if (!propertyId) {
+  const memberIds = reportScopeForProperty(property).memberIds;
+  if (memberIds.length === 0) {
     return [];
   }
 
   const items: Record<string, unknown>[] = [];
-  let exclusiveStartKey: Record<string, unknown> | undefined;
-  do {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: tableName,
-        IndexName: 'propertyId-date-index',
-        KeyConditionExpression:
-          'propertyId = :propertyId AND begins_with(#date, :monthId)',
-        ExpressionAttributeNames: { '#date': 'date' },
-        ExpressionAttributeValues: {
-          ':propertyId': propertyId,
-          ':monthId': monthId,
-        },
-        ExclusiveStartKey: exclusiveStartKey,
-      }),
-    );
-    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
-    exclusiveStartKey = result.LastEvaluatedKey as
-      | Record<string, unknown>
-      | undefined;
-  } while (exclusiveStartKey);
+  for (const propertyId of memberIds) {
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const result = await docClient.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: 'propertyId-date-index',
+          KeyConditionExpression:
+            'propertyId = :propertyId AND begins_with(#date, :monthId)',
+          ExpressionAttributeNames: { '#date': 'date' },
+          ExpressionAttributeValues: {
+            ':propertyId': propertyId,
+            ':monthId': monthId,
+          },
+          ExclusiveStartKey: exclusiveStartKey,
+        }),
+      );
+      items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+      exclusiveStartKey = result.LastEvaluatedKey as
+        | Record<string, unknown>
+        | undefined;
+    } while (exclusiveStartKey);
+  }
 
   const expenses: PropertyReportExpense[] = [];
   for (const item of items) {
@@ -388,28 +477,30 @@ export const loadFinanceServices = async (
   property: Record<string, unknown>,
   monthId: string,
 ): Promise<PropertyReportServiceLine[]> => {
-  const propertyId = asString(property.id);
-  if (!propertyId) {
+  const memberIds = reportScopeForProperty(property).memberIds;
+  if (memberIds.length === 0) {
     return [];
   }
 
   const services: Record<string, unknown>[] = [];
-  let exclusiveStartKey: Record<string, unknown> | undefined;
-  do {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: tableName,
-        IndexName: 'propertyId-index',
-        KeyConditionExpression: 'propertyId = :propertyId',
-        ExpressionAttributeValues: { ':propertyId': propertyId },
-        ExclusiveStartKey: exclusiveStartKey,
-      }),
-    );
-    services.push(...((result.Items as Record<string, unknown>[]) ?? []));
-    exclusiveStartKey = result.LastEvaluatedKey as
-      | Record<string, unknown>
-      | undefined;
-  } while (exclusiveStartKey);
+  for (const propertyId of memberIds) {
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const result = await docClient.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: 'propertyId-index',
+          KeyConditionExpression: 'propertyId = :propertyId',
+          ExpressionAttributeValues: { ':propertyId': propertyId },
+          ExclusiveStartKey: exclusiveStartKey,
+        }),
+      );
+      services.push(...((result.Items as Record<string, unknown>[]) ?? []));
+      exclusiveStartKey = result.LastEvaluatedKey as
+        | Record<string, unknown>
+        | undefined;
+    } while (exclusiveStartKey);
+  }
 
   const lines: PropertyReportServiceLine[] = [];
   for (const service of services) {
@@ -458,14 +549,14 @@ export const listingMatchesProperty = (
 ) => {
   const reservation = reservationFromPayload(item.RawPayload);
   const listing = asRecord(reservation?.listing);
-  const propertyId = asString(property.id);
+  const scope = reportScopeForProperty(property);
   const listingIds = [
     asString(item.ListingID),
     asString(reservation?.listingId),
     asString(listing?._id),
     asString(listing?.id),
   ].filter(Boolean);
-  if (propertyId && listingIds.includes(propertyId)) {
+  if (listingIds.some((id) => scope.memberIds.includes(id))) {
     return true;
   }
   const listingNicknames = [
@@ -475,15 +566,23 @@ export const listingMatchesProperty = (
   ]
     .map(normalizeNickname)
     .filter(Boolean);
-  const names = [
-    asString(property.nickname),
-    asString(property.listingNickname),
-    asString(property.title),
-    resolveYallaPropertyLabelFromRecord(property, propertyId),
-  ]
-    .map(normalizeNickname)
-    .filter(Boolean);
-  return listingNicknames.some((nickname) => names.includes(nickname));
+  const names = new Set(
+    [
+      asString(property.nickname),
+      asString(property.listingNickname),
+      asString(property.title),
+      scope.name,
+      ...scope.memberIds.map((id) => yallaAliasForListingId(id) || id),
+    ]
+      .map(normalizeNickname)
+      .filter(Boolean),
+  );
+  if (scope.isGroup) {
+    names.add('p2');
+    names.add('planta 2');
+    names.add('planta2');
+  }
+  return listingNicknames.some((nickname) => names.has(nickname));
 };
 
 export const queryBookingsByCheckInDate = async (
