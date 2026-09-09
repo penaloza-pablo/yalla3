@@ -1,4 +1,22 @@
-export const IVA_MULTIPLIER = 1.21;
+import {
+  occurrencePriceWithIva,
+  resolveIvaRate,
+  roundMoney,
+  type IvaRate,
+} from './iva';
+
+export {
+  IVA_MULTIPLIER,
+  IVA_RATES,
+  occurrencePriceWithIva,
+  parseIvaRate,
+  persistIvaFields,
+  priceFromGross,
+  resolveIvaRate,
+  resolveIvaRateFromInput,
+  roundMoney,
+  type IvaRate,
+} from './iva';
 
 export const SERVICE_TYPES = ['apartment', 'ops'] as const;
 export type FinanceServiceType = (typeof SERVICE_TYPES)[number];
@@ -28,11 +46,10 @@ export type FinanceServiceOccurrence = {
   period: string;
   billingDate: string;
   price: number;
+  ivaRate: IvaRate;
   appliesIva: boolean;
   priceWithIva: number;
 };
-
-export const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 export const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
@@ -79,12 +96,6 @@ export const normalizePriceMode = (value: string): FinancePriceMode | '' => {
     ? (mode as FinancePriceMode)
     : '';
 };
-
-export const occurrencePriceWithIva = (price: number, appliesIva: boolean) =>
-  roundMoney(appliesIva ? price * IVA_MULTIPLIER : price);
-
-export const priceFromGross = (priceWithIva: number) =>
-  roundMoney(Math.max(0, priceWithIva) / IVA_MULTIPLIER);
 
 export const intervalMonths = (recurrence: FinanceRecurrence) => {
   if (recurrence === 'monthly') return 1;
@@ -241,7 +252,7 @@ export const normalizeOccurrence = (
     return null;
   }
   const price = Math.max(0, asNumber(item.price) ?? 0);
-  const appliesIva = Boolean(item.appliesIva);
+  const ivaRate = resolveIvaRate(item);
   const date = isDateOnly(billingDate) ? billingDate : `${period}-01`;
   const storedWithIva = asNumber(item.priceWithIva);
   return {
@@ -249,9 +260,10 @@ export const normalizeOccurrence = (
     period: isMonthId(period) ? period : date.slice(0, 7),
     billingDate: date,
     price: roundMoney(price),
-    appliesIva,
+    ivaRate,
+    appliesIva: ivaRate > 0,
     priceWithIva:
-      storedWithIva ?? occurrencePriceWithIva(price, appliesIva),
+      storedWithIva ?? occurrencePriceWithIva(price, ivaRate),
   };
 };
 

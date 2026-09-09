@@ -18,8 +18,12 @@ import {
   putItem,
 } from '../shared/visit-task-utils';
 import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
-
-const IVA_MULTIPLIER = 1.21;
+import {
+  occurrencePriceWithIva,
+  persistIvaFields,
+  resolveIvaRateFromInput,
+  roundMoney,
+} from '../shared/iva';
 
 type MovementPayload = {
   id?: string;
@@ -27,6 +31,7 @@ type MovementPayload = {
   propertyName?: string;
   description?: string;
   amount?: number | string;
+  ivaRate?: number | string;
   appliesIva?: boolean;
   totalAmount?: number | string;
   kind?: string;
@@ -50,8 +55,6 @@ const asNumber = (value: unknown): number | null => {
   }
   return null;
 };
-
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -161,10 +164,8 @@ export const handler = async (event: {
     const status =
       normalizeStatus(asString(payload.status) || asString(existing?.status)) ||
       'Pending Billing';
-    const appliesIva =
-      typeof payload.appliesIva === 'boolean'
-        ? payload.appliesIva
-        : Boolean(existing?.appliesIva);
+    const ivaRate = resolveIvaRateFromInput(payload, existing);
+    const { appliesIva } = persistIvaFields(ivaRate);
 
     if (!propertyId) {
       return buildHttpResponse(400, { message: 'propertyId is required.' });
@@ -189,11 +190,10 @@ export const handler = async (event: {
       asString(payload.propertyName) || asString(existing?.propertyName),
     );
     const payloadTotal = asNumber(payload.totalAmount);
-    const totalAmount = appliesIva
-      ? payloadTotal !== null && payloadTotal >= 0
+    const totalAmount =
+      payloadTotal !== null && payloadTotal >= 0
         ? roundMoney(payloadTotal)
-        : roundMoney(amount * IVA_MULTIPLIER)
-      : roundMoney(amount);
+        : occurrencePriceWithIva(roundMoney(amount), ivaRate);
     const timestamp = nowIso();
     const item = {
       id: asString(existing?.id) || (await getNextSequentialId(tableName, 'MOV')),
@@ -201,6 +201,7 @@ export const handler = async (event: {
       propertyName,
       description,
       amount: roundMoney(amount),
+      ivaRate,
       appliesIva,
       totalAmount,
       kind,

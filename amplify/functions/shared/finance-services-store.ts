@@ -9,6 +9,8 @@ import {
   isDateOnly,
   isScheduleRecord,
   occurrencePriceWithIva,
+  persistIvaFields,
+  resolveIvaRate,
   roundMoney,
   type FinanceCustomUnit,
   type FinanceRecurrence,
@@ -34,7 +36,7 @@ const asScheduleLike = (item: Record<string, unknown>) => ({
       ? ('fixed' as const)
       : ('variable' as const),
   price: roundMoney(Math.max(0, asNumber(item.price) ?? 0)),
-  appliesIva: Boolean(item.appliesIva),
+  ivaRate: resolveIvaRate(item),
 });
 
 export const billingItemFromSchedule = (
@@ -43,7 +45,7 @@ export const billingItemFromSchedule = (
 ) => {
   const parsed = asScheduleLike(schedule);
   const price = parsed.priceMode === 'fixed' ? parsed.price : 0;
-  const appliesIva = parsed.priceMode === 'fixed' ? parsed.appliesIva : false;
+  const ivaRate = parsed.priceMode === 'fixed' ? parsed.ivaRate : 0;
   const timestamp = nowIso();
   return {
     id: generatedBillingItemId(parsed.id, billingDate),
@@ -59,8 +61,8 @@ export const billingItemFromSchedule = (
     billingDate,
     period: billingDate.slice(0, 7),
     price,
-    appliesIva,
-    priceWithIva: occurrencePriceWithIva(price, appliesIva),
+    ...persistIvaFields(ivaRate),
+    priceWithIva: occurrencePriceWithIva(price, ivaRate),
     createdAt: timestamp,
     updatedAt: timestamp,
   };

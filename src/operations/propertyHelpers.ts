@@ -101,24 +101,75 @@ export const filterBookingsPlannerPropertyOptions = (
     }),
   )
 
+const toGroupOption = (
+  group: ReturnType<typeof resolveReportGroups>[number],
+  properties: PropertyOption[],
+): PropertyOption => {
+  const stored = properties.find((property) => property.id === group.id)
+  return {
+    id: group.id,
+    nickname: group.name,
+    listingNickname: stored?.listingNickname || group.name,
+    title: stored?.title || group.name,
+    type:
+      stored?.type ||
+      (group.id === P2_BUILDING_ID ? 'MTL_PRINCIPAL' : 'REPORT_GROUP'),
+    mtlPrincipalId: stored?.mtlPrincipalId,
+    memberIds: group.memberIds,
+  }
+}
+
+export const isFinanceGroupProperty = (property: PropertyOption) =>
+  isReportGroupType(property.type) || isYallaP2Property(property)
+
 export const filterMovementsPropertyOptions = (properties: PropertyOption[]) => {
+  const groups = resolveReportGroups(properties)
+  const groupIds = new Set(groups.map((group) => group.id))
   const eligible = properties.filter((property) => {
-    if (isP2RoomProperty(property) || isReportGroupType(property.type)) {
+    if (isP2RoomProperty(property)) {
       return false
     }
-    if (isYallaP2Property(property) || isOtherProperty(property)) {
+    if (isFinanceGroupProperty(property) || groupIds.has(property.id)) {
+      return true
+    }
+    if (isOtherProperty(property)) {
       return true
     }
     return !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim()
   })
-  const p2 = sortPropertyOptions(eligible.filter(isYallaP2Property))
-  const other = eligible.filter(isOtherProperty)
-  const rest = sortPropertyOptions(
-    eligible.filter(
-      (property) => !isYallaP2Property(property) && !isOtherProperty(property),
+  const eligibleIds = new Set(eligible.map((property) => property.id))
+  const missingGroups = groups
+    .filter((group) => !eligibleIds.has(group.id))
+    .map((group) => toGroupOption(group, properties))
+  const all = [...eligible, ...missingGroups]
+  const p2 = sortPropertyOptions(all.filter(isYallaP2Property))
+  const groupOptions = sortPropertyOptions(
+    all.filter(
+      (property) =>
+        !isYallaP2Property(property) &&
+        (isReportGroupType(property.type) || groupIds.has(property.id)),
     ),
   )
-  return [...p2, ...rest, ...other]
+  const other = all.filter(isOtherProperty)
+  const rest = sortPropertyOptions(
+    all.filter(
+      (property) =>
+        !isYallaP2Property(property) &&
+        !isOtherProperty(property) &&
+        !isReportGroupType(property.type) &&
+        !groupIds.has(property.id),
+    ),
+  )
+  return [...p2, ...groupOptions, ...rest, ...other]
+}
+
+export const partitionFinancePropertyOptions = (properties: PropertyOption[]) => {
+  const groups = properties.filter(isFinanceGroupProperty)
+  const other = properties.filter(isOtherProperty)
+  const listings = properties.filter(
+    (property) => !isFinanceGroupProperty(property) && !isOtherProperty(property),
+  )
+  return { groups, listings, other }
 }
 
 const shiftMonthId = (monthId: string, offset: number) => {

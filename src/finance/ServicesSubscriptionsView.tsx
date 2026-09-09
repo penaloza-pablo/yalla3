@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  IVA_RATES,
   occurrencePriceWithIva,
+  parseIvaRate,
+  persistIvaFields,
   priceFromGross,
+  resolveIvaRate,
   roundMoney,
   type FinanceCustomUnit,
   type FinancePriceMode,
   type FinanceRecurrence,
   type FinanceServiceType,
+  type IvaRate,
 } from '../../amplify/functions/shared/finance-services'
 import { YallaSwitch } from '../bookings/YallaSwitch'
 import { MobileBodyPortal } from '../MobileBodyPortal'
@@ -18,6 +23,7 @@ import {
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
+import { FinancePropertySelectOptions } from './FinancePropertySelectOptions'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -40,7 +46,7 @@ type ServiceRow = {
   customUnit: FinanceCustomUnit
   priceMode: FinancePriceMode
   price: number
-  appliesIva: boolean
+  ivaRate: IvaRate
   priceWithIva: number
 }
 
@@ -54,7 +60,7 @@ type BillingItem = {
   recurrence: FinanceRecurrence
   billingDate: string
   price: number
-  appliesIva: boolean
+  ivaRate: IvaRate
   priceWithIva: number
 }
 
@@ -68,7 +74,7 @@ type ScheduleFormState = {
   customUnit: FinanceCustomUnit
   priceMode: FinancePriceMode
   price: string
-  appliesIva: boolean
+  ivaRate: IvaRate
   priceWithIva: string
 }
 
@@ -79,7 +85,7 @@ type ItemFormState = {
   title: string
   billingDate: string
   price: string
-  appliesIva: boolean
+  ivaRate: IvaRate
   priceWithIva: string
 }
 
@@ -121,7 +127,7 @@ const emptyScheduleForm = (): ScheduleFormState => ({
   customUnit: 'months',
   priceMode: 'fixed',
   price: '',
-  appliesIva: false,
+  ivaRate: 0,
   priceWithIva: '',
 })
 
@@ -132,7 +138,7 @@ const emptyItemForm = (): ItemFormState => ({
   title: '',
   billingDate: getTodayMadrid(),
   price: '',
-  appliesIva: false,
+  ivaRate: 0,
   priceWithIva: '',
 })
 
@@ -168,7 +174,7 @@ const asCustomUnit = (value: unknown): FinanceCustomUnit =>
 
 const mapSchedule = (item: Record<string, unknown>): ServiceRow => {
   const price = Number(item.price ?? 0)
-  const appliesIva = Boolean(item.appliesIva)
+  const ivaRate = resolveIvaRate(item)
   const storedWithIva = Number(item.priceWithIva)
   return {
     id: String(item.id ?? ''),
@@ -187,16 +193,16 @@ const mapSchedule = (item: Record<string, unknown>): ServiceRow => {
           ? 'fixed'
           : 'variable',
     price: Number.isFinite(price) ? price : 0,
-    appliesIva,
+    ivaRate,
     priceWithIva: Number.isFinite(storedWithIva)
       ? storedWithIva
-      : occurrencePriceWithIva(price, appliesIva),
+      : occurrencePriceWithIva(price, ivaRate),
   }
 }
 
 const mapBillingItem = (item: Record<string, unknown>): BillingItem => {
   const price = Number(item.price ?? 0)
-  const appliesIva = Boolean(item.appliesIva)
+  const ivaRate = resolveIvaRate(item)
   const storedWithIva = Number(item.priceWithIva)
   return {
     id: String(item.id ?? ''),
@@ -208,33 +214,33 @@ const mapBillingItem = (item: Record<string, unknown>): BillingItem => {
     recurrence: asRecurrence(item.recurrence),
     billingDate: String(item.billingDate ?? '').slice(0, 10),
     price: Number.isFinite(price) ? price : 0,
-    appliesIva,
+    ivaRate,
     priceWithIva: Number.isFinite(storedWithIva)
       ? storedWithIva
-      : occurrencePriceWithIva(price, appliesIva),
+      : occurrencePriceWithIva(price, ivaRate),
   }
 }
 
-const syncFromNet = (price: string, appliesIva: boolean) => {
+const syncFromNet = (price: string, ivaRate: IvaRate) => {
   const parsed = Number(price)
   if (!Number.isFinite(parsed) || price.trim() === '') {
-    return { price, appliesIva, priceWithIva: '' }
+    return { price, ivaRate, priceWithIva: '' }
   }
   return {
     price,
-    appliesIva,
-    priceWithIva: String(occurrencePriceWithIva(parsed, appliesIva)),
+    ivaRate,
+    priceWithIva: String(occurrencePriceWithIva(parsed, ivaRate)),
   }
 }
 
-const syncFromGross = (priceWithIva: string) => {
+const syncFromGross = (priceWithIva: string, ivaRate: IvaRate) => {
   const parsed = Number(priceWithIva)
   if (!Number.isFinite(parsed) || priceWithIva.trim() === '') {
-    return { price: '', appliesIva: true, priceWithIva }
+    return { price: '', ivaRate, priceWithIva }
   }
   return {
-    price: String(priceFromGross(parsed)),
-    appliesIva: true,
+    price: String(priceFromGross(parsed, ivaRate)),
+    ivaRate,
     priceWithIva,
   }
 }
@@ -429,7 +435,7 @@ export function ServicesSubscriptionsView({
       customUnit: row.customUnit,
       priceMode: row.priceMode,
       price: row.priceMode === 'fixed' ? String(row.price) : '',
-      appliesIva: row.appliesIva,
+      ivaRate: row.ivaRate,
       priceWithIva:
         row.priceMode === 'fixed' ? String(row.priceWithIva) : '',
     })
@@ -452,7 +458,7 @@ export function ServicesSubscriptionsView({
       title: item.title,
       billingDate: item.billingDate,
       price: String(item.price),
-      appliesIva: item.appliesIva,
+      ivaRate: item.ivaRate,
       priceWithIva: String(item.priceWithIva),
     })
     setMessage(null)
@@ -518,12 +524,15 @@ export function ServicesSubscriptionsView({
               : undefined,
           priceMode: scheduleForm.priceMode,
           price: scheduleForm.priceMode === 'fixed' ? price : 0,
+          ivaRate: scheduleForm.priceMode === 'fixed' ? scheduleForm.ivaRate : 0,
           appliesIva:
-            scheduleForm.priceMode === 'fixed' ? scheduleForm.appliesIva : false,
+            scheduleForm.priceMode === 'fixed'
+              ? persistIvaFields(scheduleForm.ivaRate).appliesIva
+              : false,
           priceWithIva:
             scheduleForm.priceMode === 'fixed'
               ? Number(scheduleForm.priceWithIva) ||
-                occurrencePriceWithIva(price, scheduleForm.appliesIva)
+                occurrencePriceWithIva(price, scheduleForm.ivaRate)
               : 0,
         }),
       })
@@ -577,10 +586,11 @@ export function ServicesSubscriptionsView({
           recurrence: itemForm.id ? undefined : 'oneoff',
           billingDate: itemForm.billingDate,
           price: roundMoney(price),
-          appliesIva: itemForm.appliesIva,
+          ivaRate: itemForm.ivaRate,
+          appliesIva: persistIvaFields(itemForm.ivaRate).appliesIva,
           priceWithIva:
             Number(itemForm.priceWithIva) ||
-            occurrencePriceWithIva(price, itemForm.appliesIva),
+            occurrencePriceWithIva(price, itemForm.ivaRate),
         }),
       })
       setItemForm(null)
@@ -658,11 +668,11 @@ export function ServicesSubscriptionsView({
 
   const ivaRow = (
     price: string,
-    appliesIva: boolean,
+    ivaRate: IvaRate,
     priceWithIva: string,
     onChange: (next: {
       price: string
-      appliesIva: boolean
+      ivaRate: IvaRate
       priceWithIva: string
     }) => void,
   ) => (
@@ -675,19 +685,30 @@ export function ServicesSubscriptionsView({
           step="0.01"
           value={price}
           onChange={(event) =>
-            onChange(syncFromNet(event.target.value, appliesIva))
+            onChange(syncFromNet(event.target.value, ivaRate))
           }
         />
       </label>
-      <label className="services-iva-check">
-        <input
-          type="checkbox"
-          checked={appliesIva}
-          onChange={(event) =>
-            onChange(syncFromNet(price, event.target.checked))
-          }
-        />
+      <label className="form-field">
         <span>{t('services.appliesIva')}</span>
+        <select
+          value={String(ivaRate)}
+          onChange={(event) =>
+            onChange(
+              syncFromNet(price, parseIvaRate(event.target.value) ?? 0),
+            )
+          }
+        >
+          {IVA_RATES.map((rate) => (
+            <option key={rate} value={rate}>
+              {rate === 10
+                ? t('common.iva10')
+                : rate === 21
+                  ? t('common.iva21')
+                  : t('common.ivaNone')}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="form-field">
         <span>{t('services.priceWithIva')}</span>
@@ -696,7 +717,9 @@ export function ServicesSubscriptionsView({
           min="0"
           step="0.01"
           value={priceWithIva}
-          onChange={(event) => onChange(syncFromGross(event.target.value))}
+          onChange={(event) =>
+            onChange(syncFromGross(event.target.value, ivaRate))
+          }
         />
       </label>
     </div>
@@ -860,13 +883,14 @@ export function ServicesSubscriptionsView({
                   <th>{t('services.recurrence')}</th>
                   <th>{t('services.priceMode')}</th>
                   <th>{t('services.price')}</th>
+                  <th>{t('services.appliesIva')}</th>
                   <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {schedules.length === 0 && !isLoading ? (
                   <tr>
-                    <td colSpan={7}>{t('services.empty')}</td>
+                    <td colSpan={8}>{t('services.empty')}</td>
                   </tr>
                 ) : (
                   schedules.map((row) => (
@@ -901,6 +925,15 @@ export function ServicesSubscriptionsView({
                       <td>
                         {row.priceMode === 'fixed'
                           ? money.format(row.price)
+                          : '—'}
+                      </td>
+                      <td>
+                        {row.priceMode === 'fixed'
+                          ? row.ivaRate === 10
+                            ? t('common.iva10')
+                            : row.ivaRate === 21
+                              ? t('common.iva21')
+                              : t('common.ivaNone')
                           : '—'}
                       </td>
                       <td>
@@ -999,7 +1032,13 @@ export function ServicesSubscriptionsView({
                     <td>{item.title}</td>
                     <td>{recurrenceLabel(item)}</td>
                     <td>{money.format(item.price)}</td>
-                    <td>{item.appliesIva ? t('common.yes') : t('common.no')}</td>
+                    <td>
+                      {item.ivaRate === 10
+                        ? t('common.iva10')
+                        : item.ivaRate === 21
+                          ? t('common.iva21')
+                          : t('common.ivaNone')}
+                    </td>
                     <td>{money.format(item.priceWithIva)}</td>
                     <td>
                       <div className="table-actions">
@@ -1219,11 +1258,7 @@ export function ServicesSubscriptionsView({
                       }
                     >
                       <option value="">{t('services.selectProperty')}</option>
-                      {properties.map((property) => (
-                        <option key={property.id} value={property.id}>
-                          {getPropertyLabel(property)}
-                        </option>
-                      ))}
+                      <FinancePropertySelectOptions properties={properties} />
                     </select>
                   </label>
                 ) : null}
@@ -1343,7 +1378,7 @@ export function ServicesSubscriptionsView({
                 {scheduleForm.priceMode === 'fixed' ? (
                   ivaRow(
                     scheduleForm.price,
-                    scheduleForm.appliesIva,
+                    scheduleForm.ivaRate,
                     scheduleForm.priceWithIva,
                     (next) =>
                       setScheduleForm((current) =>
@@ -1442,11 +1477,7 @@ export function ServicesSubscriptionsView({
                       }
                     >
                       <option value="">{t('services.selectProperty')}</option>
-                      {properties.map((property) => (
-                        <option key={property.id} value={property.id}>
-                          {getPropertyLabel(property)}
-                        </option>
-                      ))}
+                      <FinancePropertySelectOptions properties={properties} />
                     </select>
                   </label>
                 ) : null}
@@ -1478,7 +1509,7 @@ export function ServicesSubscriptionsView({
                 </label>
                 {ivaRow(
                   itemForm.price,
-                  itemForm.appliesIva,
+                  itemForm.ivaRate,
                   itemForm.priceWithIva,
                   (next) =>
                     setItemForm((current) =>

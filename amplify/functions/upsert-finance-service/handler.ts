@@ -14,8 +14,9 @@ import {
   normalizeRecurrence,
   normalizeServiceType,
   occurrencePriceWithIva,
+  persistIvaFields,
+  resolveIvaRateFromInput,
   roundMoney,
-  IVA_MULTIPLIER,
 } from '../shared/finance-services';
 import {
   deleteFinanceRecord,
@@ -50,6 +51,7 @@ type ServicePayload = {
   customUnit?: string;
   priceMode?: string;
   price?: number | string;
+  ivaRate?: number | string;
   appliesIva?: boolean;
   priceWithIva?: number | string;
   billingDate?: string;
@@ -75,10 +77,7 @@ const resolvePropertyName = async (propertyId: string, fallback: string) => {
 };
 
 const moneyFields = (payload: ServicePayload, existing?: Record<string, unknown>) => {
-  const appliesIva =
-    typeof payload.appliesIva === 'boolean'
-      ? payload.appliesIva
-      : Boolean(existing?.appliesIva);
+  const ivaRate = resolveIvaRateFromInput(payload, existing);
   const price = roundMoney(
     Math.max(0, asNumber(payload.price) ?? asNumber(existing?.price) ?? 0),
   );
@@ -86,8 +85,8 @@ const moneyFields = (payload: ServicePayload, existing?: Record<string, unknown>
   const priceWithIva =
     storedGross !== null
       ? roundMoney(Math.max(0, storedGross))
-      : occurrencePriceWithIva(price, appliesIva);
-  return { price, appliesIva, priceWithIva };
+      : occurrencePriceWithIva(price, ivaRate);
+  return { price, ivaRate, priceWithIva, ...persistIvaFields(ivaRate) };
 };
 
 export const handler = async (event: {
@@ -177,7 +176,10 @@ export const handler = async (event: {
           message: 'propertyId is required for apartment services.',
         });
       }
-      const { price, appliesIva, priceWithIva } = moneyFields(payload, existing);
+      const { price, ivaRate, priceWithIva, appliesIva } = moneyFields(
+        payload,
+        existing,
+      );
       const timestamp = nowIso();
       const id =
         asString(existing?.id) || (await getNextSequentialId(tableName, 'SIT'));
@@ -205,6 +207,7 @@ export const handler = async (event: {
         billingDate,
         period: billingDate.slice(0, 7),
         price,
+        ivaRate,
         appliesIva,
         priceWithIva,
         createdAt: asString(existing?.createdAt) || timestamp,
@@ -250,12 +253,8 @@ export const handler = async (event: {
       normalizeCustomUnit(
         asString(payload.customUnit) || asString(existing?.customUnit),
       ) || 'months';
-    const appliesIva =
-      priceMode === 'fixed'
-        ? typeof payload.appliesIva === 'boolean'
-          ? payload.appliesIva
-          : Boolean(existing?.appliesIva)
-        : false;
+    const ivaRate =
+      priceMode === 'fixed' ? resolveIvaRateFromInput(payload, existing) : 0;
     const price =
       priceMode === 'fixed'
         ? roundMoney(
@@ -270,8 +269,9 @@ export const handler = async (event: {
       priceMode === 'fixed'
         ? storedGross !== null
           ? roundMoney(Math.max(0, storedGross))
-          : roundMoney(appliesIva ? price * IVA_MULTIPLIER : price)
+          : occurrencePriceWithIva(price, ivaRate)
         : 0;
+    const { appliesIva } = persistIvaFields(ivaRate);
 
     if (!type) {
       return buildHttpResponse(400, {
@@ -321,6 +321,7 @@ export const handler = async (event: {
       customUnit: recurrence === 'other' ? customUnit : undefined,
       priceMode,
       price,
+      ivaRate,
       appliesIva,
       priceWithIva,
       items: [],

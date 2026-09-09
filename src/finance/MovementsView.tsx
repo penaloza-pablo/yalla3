@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  IVA_RATES,
   occurrencePriceWithIva,
+  parseIvaRate,
+  persistIvaFields,
   priceFromGross,
+  resolveIvaRate,
+  type IvaRate,
 } from '../../amplify/functions/shared/finance-services'
 import { translateStatus } from '../i18n/display'
 import { MobileBodyPortal } from '../MobileBodyPortal'
@@ -13,6 +18,7 @@ import {
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
+import { FinancePropertySelectOptions } from './FinancePropertySelectOptions'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -33,7 +39,7 @@ type MovementRow = {
   propertyName: string
   description: string
   amount: number
-  appliesIva: boolean
+  ivaRate: IvaRate
   totalAmount: number
   kind: MovementKind
   date: string
@@ -44,7 +50,7 @@ type FormState = {
   propertyId: string
   description: string
   amount: string
-  appliesIva: boolean
+  ivaRate: IvaRate
   totalAmount: string
   kind: MovementKind
   date: string
@@ -68,33 +74,33 @@ const emptyForm = (): FormState => ({
   propertyId: '',
   description: '',
   amount: '',
-  appliesIva: false,
+  ivaRate: 0,
   totalAmount: '',
   kind: 'outcome',
   date: getTodayMadrid(),
   status: 'Pending Billing',
 })
 
-const syncFromNet = (amount: string, appliesIva: boolean) => {
+const syncFromNet = (amount: string, ivaRate: IvaRate) => {
   const parsed = Number(amount)
   if (!Number.isFinite(parsed) || amount.trim() === '') {
-    return { amount, appliesIva, totalAmount: '' }
+    return { amount, ivaRate, totalAmount: '' }
   }
   return {
     amount,
-    appliesIva,
-    totalAmount: String(occurrencePriceWithIva(parsed, appliesIva)),
+    ivaRate,
+    totalAmount: String(occurrencePriceWithIva(parsed, ivaRate)),
   }
 }
 
-const syncFromGross = (totalAmount: string) => {
+const syncFromGross = (totalAmount: string, ivaRate: IvaRate) => {
   const parsed = Number(totalAmount)
   if (!Number.isFinite(parsed) || totalAmount.trim() === '') {
-    return { amount: '', appliesIva: true, totalAmount }
+    return { amount: '', ivaRate, totalAmount }
   }
   return {
-    amount: String(priceFromGross(parsed)),
-    appliesIva: true,
+    amount: String(priceFromGross(parsed, ivaRate)),
+    ivaRate,
     totalAmount,
   }
 }
@@ -111,9 +117,25 @@ const defaultFilters = (): Filters => ({
   statuses: ['Pending Billing'],
 })
 
-const IVA_MULTIPLIER = 1.21
-
-const roundMoney = (value: number) => Math.round(value * 100) / 100
+const mapMovement = (item: Record<string, unknown>): MovementRow => {
+  const amount = Number(item.amount ?? 0)
+  const ivaRate = resolveIvaRate(item)
+  const storedTotal = Number(item.totalAmount)
+  return {
+    id: String(item.id ?? ''),
+    propertyId: String(item.propertyId ?? ''),
+    propertyName: String(item.propertyName ?? item.propertyId ?? ''),
+    description: String(item.description ?? ''),
+    amount: Number.isFinite(amount) ? amount : 0,
+    ivaRate,
+    totalAmount: Number.isFinite(storedTotal)
+      ? storedTotal
+      : occurrencePriceWithIva(Number.isFinite(amount) ? amount : 0, ivaRate),
+    kind: String(item.kind ?? 'outcome') === 'income' ? 'income' : 'outcome',
+    date: String(item.date ?? '').slice(0, 10),
+    status: normalizeStatus(item.status),
+  }
+}
 
 const normalizeStatus = (value: unknown): MovementStatus => {
   const status = String(value ?? '').trim()
@@ -144,26 +166,6 @@ const calendarMonthRange = (monthOffset: number) => {
   return {
     dateFrom: `${nextYear}-${mm}-01`,
     dateTo: `${nextYear}-${mm}-${String(lastDay).padStart(2, '0')}`,
-  }
-}
-
-const mapMovement = (item: Record<string, unknown>): MovementRow => {
-  const amount = Number(item.amount ?? 0)
-  const appliesIva = Boolean(item.appliesIva)
-  const storedTotal = Number(item.totalAmount)
-  return {
-    id: String(item.id ?? ''),
-    propertyId: String(item.propertyId ?? ''),
-    propertyName: String(item.propertyName ?? item.propertyId ?? ''),
-    description: String(item.description ?? ''),
-    amount: Number.isFinite(amount) ? amount : 0,
-    appliesIva,
-    totalAmount: Number.isFinite(storedTotal)
-      ? storedTotal
-      : roundMoney(appliesIva ? amount * IVA_MULTIPLIER : amount),
-    kind: String(item.kind ?? 'outcome') === 'income' ? 'income' : 'outcome',
-    date: String(item.date ?? '').slice(0, 10),
-    status: normalizeStatus(item.status),
   }
 }
 
@@ -361,7 +363,7 @@ export function MovementsView({
       propertyId: row.propertyId,
       description: row.description,
       amount: String(row.amount),
-      appliesIva: row.appliesIva,
+      ivaRate: row.ivaRate,
       totalAmount: String(row.totalAmount),
       kind: row.kind,
       date: row.date || getTodayMadrid(),
@@ -399,7 +401,8 @@ export function MovementsView({
           propertyName: propertyById.get(form.propertyId) || form.propertyId,
           description: form.description.trim(),
           amount,
-          appliesIva: form.appliesIva,
+          ivaRate: form.ivaRate,
+          appliesIva: persistIvaFields(form.ivaRate).appliesIva,
           totalAmount: Number.isFinite(Number(form.totalAmount))
             ? Number(form.totalAmount)
             : undefined,
@@ -670,7 +673,11 @@ export function MovementsView({
                     </td>
                     <td>{money.format(row.amount)}</td>
                     <td>
-                      {row.appliesIva ? t('common.yes') : t('common.no')}
+                      {row.ivaRate === 10
+                        ? t('common.iva10')
+                        : row.ivaRate === 21
+                          ? t('common.iva21')
+                          : t('common.ivaNone')}
                     </td>
                     <td>{money.format(row.totalAmount)}</td>
                     <td>
@@ -845,11 +852,7 @@ export function MovementsView({
                     }
                   >
                     <option value="">{t('movements.selectProperty')}</option>
-                    {properties.map((property) => (
-                      <option key={property.id} value={property.id}>
-                        {getPropertyLabel(property)}
-                      </option>
-                    ))}
+                    <FinancePropertySelectOptions properties={properties} />
                   </select>
                 </label>
                 <label>
@@ -922,23 +925,35 @@ export function MovementsView({
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
-                          ...syncFromNet(event.target.value, current.appliesIva),
+                          ...syncFromNet(event.target.value, current.ivaRate),
                         }))
                       }
                     />
                   </label>
-                  <label className="services-iva-check">
-                    <input
-                      type="checkbox"
-                      checked={form.appliesIva}
+                  <label className="form-field">
+                    <span>{t('movements.appliesIva')}</span>
+                    <select
+                      value={String(form.ivaRate)}
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
-                          ...syncFromNet(current.amount, event.target.checked),
+                          ...syncFromNet(
+                            current.amount,
+                            parseIvaRate(event.target.value) ?? 0,
+                          ),
                         }))
                       }
-                    />
-                    <span>{t('movements.appliesIva')}</span>
+                    >
+                      {IVA_RATES.map((rate) => (
+                        <option key={rate} value={rate}>
+                          {rate === 10
+                            ? t('common.iva10')
+                            : rate === 21
+                              ? t('common.iva21')
+                              : t('common.ivaNone')}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="form-field">
                     <span>{t('movements.priceWithIva')}</span>
@@ -950,7 +965,7 @@ export function MovementsView({
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
-                          ...syncFromGross(event.target.value),
+                          ...syncFromGross(event.target.value, current.ivaRate),
                         }))
                       }
                     />

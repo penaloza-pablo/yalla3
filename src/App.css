@@ -1697,7 +1697,7 @@ th {
 
 .services-iva-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, 0.8fr) minmax(0, 1fr);
   gap: 12px;
   align-items: end;
   grid-column: 1 / -1;

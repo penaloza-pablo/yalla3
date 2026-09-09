@@ -30,6 +30,10 @@ import {
   resolveReportGroups,
   type ResolvedReportGroup,
 } from './property-groups';
+import {
+  occurrencePriceWithIva,
+  resolveIvaRate,
+} from './iva';
 import { docClient } from './visit-task-utils';
 
 export { PROPERTY_REPORTS_START_MONTH };
@@ -489,10 +493,10 @@ export const loadFinanceMovements = async (
       continue;
     }
     const amount = Math.abs(asNumber(item.amount) ?? 0);
-    const appliesIva = Boolean(item.appliesIva);
+    const ivaRate = resolveIvaRate(item);
     const storedTotal = asNumber(item.totalAmount);
     const totalAmount =
-      storedTotal ?? roundMoney(appliesIva ? amount * IVA_MULTIPLIER : amount);
+      storedTotal ?? occurrencePriceWithIva(amount, ivaRate);
     const sign = asString(item.kind).toLowerCase() === 'income' ? 1 : -1;
     expenses.push({
       id: asString(item.id) || `${date}-${asString(item.description)}`,
@@ -656,7 +660,7 @@ export const loadFinanceServices = async (
       continue;
     }
     const price = Math.max(0, asNumber(service.price) ?? 0);
-    const appliesIva = Boolean(service.appliesIva);
+    const ivaRate = resolveIvaRate(service);
     const storedWithIva = asNumber(service.priceWithIva);
     lines.push({
       id: asString(service.id) || `${asString(service.scheduleId)}-${date}`,
@@ -665,8 +669,7 @@ export const loadFinanceServices = async (
       date,
       price,
       priceWithIva:
-        storedWithIva ??
-        roundMoney(appliesIva ? price * IVA_MULTIPLIER : price),
+        storedWithIva ?? occurrencePriceWithIva(price, ivaRate),
     });
   }
 
