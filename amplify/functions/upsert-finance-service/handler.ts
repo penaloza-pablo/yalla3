@@ -86,7 +86,7 @@ const moneyFields = (payload: ServicePayload, existing?: Record<string, unknown>
     storedGross !== null
       ? roundMoney(Math.max(0, storedGross))
       : occurrencePriceWithIva(price, ivaRate);
-  return { price, ivaRate, priceWithIva, ...persistIvaFields(ivaRate) };
+  return { price, priceWithIva, ...persistIvaFields(ivaRate) };
 };
 
 export const handler = async (event: {
