@@ -27,6 +27,10 @@ import { DailyOperationsView } from './operations/DailyOperationsView'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
+import {
+  readDismissedGuestyNameMismatches,
+  rememberDismissedGuestyNameMismatches,
+} from './lib/dismissedGuestyNameMismatches'
 import { CleaningPlanView } from './cleaning/CleaningPlanView'
 import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
@@ -1557,6 +1561,8 @@ function App() {
     Set<string>
   >(new Set())
   const [propertyRows, setPropertyRows] = useState<PropertyRow[]>([])
+  const [dismissedGuestyNameMismatches, setDismissedGuestyNameMismatches] =
+    useState<string[]>(() => readDismissedGuestyNameMismatches())
   const [isPropertiesLoading, setIsPropertiesLoading] = useState(false)
   const [propertiesError, setPropertiesError] = useState<string | null>(null)
   const [propertiesLastUpdated, setPropertiesLastUpdated] = useState<
@@ -1924,14 +1930,27 @@ function App() {
     [propertyRows],
   )
 
+  const visibleGuestyNameMismatches = useMemo(() => {
+    const dismissed = new Set(dismissedGuestyNameMismatches)
+    return guestyNameMismatches.filter((name) => !dismissed.has(name))
+  }, [dismissedGuestyNameMismatches, guestyNameMismatches])
+
   const guestyNameMismatchMessage = useMemo(() => {
-    if (guestyNameMismatches.length === 0) {
+    if (visibleGuestyNameMismatches.length === 0) {
       return null
     }
     return t('properties.guestyNameMismatch', {
-      name: guestyNameMismatches.join(', '),
+      name: visibleGuestyNameMismatches.join(', '),
     })
-  }, [guestyNameMismatches, t])
+  }, [t, visibleGuestyNameMismatches])
+
+  const dismissGuestyNameMismatch = useCallback(() => {
+    const next = [
+      ...new Set([...dismissedGuestyNameMismatches, ...guestyNameMismatches]),
+    ]
+    setDismissedGuestyNameMismatches(next)
+    rememberDismissedGuestyNameMismatches(next)
+  }, [dismissedGuestyNameMismatches, guestyNameMismatches])
 
   const subtractionsFilteredRows = useMemo(() => {
     const fromDate = subtractionsFilters.dateFrom
@@ -4736,8 +4755,18 @@ function App() {
 
       <main className="main">
         {guestyNameMismatchMessage ? (
-          <div className="alert" role="alert">
-            {guestyNameMismatchMessage}
+          <div className="alert alert-banner" role="alert">
+            <span className="alert-banner-message">
+              {guestyNameMismatchMessage}
+            </span>
+            <button
+              className="alert-banner-close"
+              type="button"
+              aria-label={t('properties.dismissGuestyNameMismatch')}
+              onClick={dismissGuestyNameMismatch}
+            >
+              ×
+            </button>
           </div>
         ) : null}
         {!permissionsReady ? (

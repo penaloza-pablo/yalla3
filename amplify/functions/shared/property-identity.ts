@@ -93,8 +93,9 @@ export const guestyNicknameMismatchAlias = (
   if (!alias) {
     return null;
   }
-  const guesty = (input.listingNickname ?? '').trim();
-  if (!guesty || guesty === alias) {
+  const yallaName = (input.nickname ?? '').trim();
+  // Canonical alias already applied in Yalla; Guesty may keep a different listing nickname.
+  if (!yallaName || yallaName === alias) {
     return null;
   }
   return alias;

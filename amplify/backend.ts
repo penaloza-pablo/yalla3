@@ -61,6 +61,7 @@ import { getFinanceMovements } from './functions/get-finance-movements/resource'
 import { upsertFinanceMovement } from './functions/upsert-finance-movement/resource';
 import { getFinanceServices } from './functions/get-finance-services/resource';
 import { upsertFinanceService } from './functions/upsert-finance-service/resource';
+import { materializeFinanceServices } from './functions/materialize-finance-services/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
@@ -148,6 +149,7 @@ const backend = defineBackend({
   upsertFinanceMovement,
   getFinanceServices,
   upsertFinanceService,
+  materializeFinanceServices,
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
@@ -1364,6 +1366,10 @@ backend.upsertFinanceService.addEnvironment(
   'PROPERTIES_TABLE',
   propertiesTable.tableName,
 );
+backend.materializeFinanceServices.addEnvironment(
+  'TABLE_NAME',
+  financeServicesTable.tableName,
+);
 backend.upsertPropertyReport.addEnvironment(
   'TABLE_NAME',
   propertyReportsTable.tableName,
@@ -1429,9 +1435,14 @@ backend.getPropertyReport.resources.lambda.addToRolePolicy(
     ],
   }),
 );
-financeServicesTable.grantReadData(backend.getFinanceServices.resources.lambda);
+financeServicesTable.grantReadWriteData(
+  backend.getFinanceServices.resources.lambda,
+);
 financeServicesTable.grantReadWriteData(
   backend.upsertFinanceService.resources.lambda,
+);
+financeServicesTable.grantReadWriteData(
+  backend.materializeFinanceServices.resources.lambda,
 );
 propertiesTable.grantReadData(backend.upsertFinanceService.resources.lambda);
 

@@ -10,16 +10,18 @@ export const RECURRENCES = [
   'semiannual',
   'annual',
   'other',
+  'oneoff',
 ] as const;
 export type FinanceRecurrence = (typeof RECURRENCES)[number];
+
+export const CUSTOM_UNITS = ['days', 'weeks', 'months'] as const;
+export type FinanceCustomUnit = (typeof CUSTOM_UNITS)[number];
 
 export const PRICE_MODES = ['fixed', 'variable'] as const;
 export type FinancePriceMode = (typeof PRICE_MODES)[number];
 
-export type OccurrencePrice = {
-  price: number;
-  appliesIva: boolean;
-};
+export const RECORD_TYPES = ['schedule', 'item'] as const;
+export type FinanceRecordType = (typeof RECORD_TYPES)[number];
 
 export type FinanceServiceOccurrence = {
   id: string;
@@ -64,6 +66,13 @@ export const normalizeRecurrence = (value: string): FinanceRecurrence | '' => {
     : '';
 };
 
+export const normalizeCustomUnit = (value: string): FinanceCustomUnit | '' => {
+  const unit = value.trim().toLowerCase();
+  return CUSTOM_UNITS.includes(unit as FinanceCustomUnit)
+    ? (unit as FinanceCustomUnit)
+    : '';
+};
+
 export const normalizePriceMode = (value: string): FinancePriceMode | '' => {
   const mode = value.trim().toLowerCase();
   return PRICE_MODES.includes(mode as FinancePriceMode)
@@ -71,18 +80,11 @@ export const normalizePriceMode = (value: string): FinancePriceMode | '' => {
     : '';
 };
 
-export const stampedOccurrence = (
-  item: FinanceServiceOccurrence,
-  stamp: OccurrencePrice,
-): FinanceServiceOccurrence => {
-  const price = roundMoney(Math.max(0, stamp.price));
-  return {
-    ...item,
-    price,
-    appliesIva: stamp.appliesIva,
-    priceWithIva: occurrencePriceWithIva(price, stamp.appliesIva),
-  };
-};
+export const occurrencePriceWithIva = (price: number, appliesIva: boolean) =>
+  roundMoney(appliesIva ? price * IVA_MULTIPLIER : price);
+
+export const priceFromGross = (priceWithIva: number) =>
+  roundMoney(Math.max(0, priceWithIva) / IVA_MULTIPLIER);
 
 export const intervalMonths = (recurrence: FinanceRecurrence) => {
   if (recurrence === 'monthly') return 1;
@@ -109,8 +111,119 @@ export const addMonthsToDate = (iso: string, months: number) => {
   return `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`;
 };
 
-export const occurrencePriceWithIva = (price: number, appliesIva: boolean) =>
-  roundMoney(appliesIva ? price * IVA_MULTIPLIER : price);
+export const addDaysToDate = (iso: string, days: number) => {
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return iso;
+  }
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+};
+
+export const addByCustomUnit = (
+  iso: string,
+  interval: number,
+  unit: FinanceCustomUnit,
+) => {
+  const step = Math.max(1, interval);
+  if (unit === 'days') {
+    return addDaysToDate(iso, step);
+  }
+  if (unit === 'weeks') {
+    return addDaysToDate(iso, step * 7);
+  }
+  return addMonthsToDate(iso, step);
+};
+
+export const monthDateRange = (monthId: string) => {
+  const [year, month] = monthId.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    start: `${monthId}-01`,
+    end: `${monthId}-${String(lastDay).padStart(2, '0')}`,
+  };
+};
+
+export const generatedBillingItemId = (scheduleId: string, billingDate: string) =>
+  `${scheduleId}#${billingDate}`;
+
+export const isBillingItemRecord = (item: Record<string, unknown>) =>
+  asString(item.recordType) === 'item' ||
+  asString(item.id).includes('#') ||
+  asString(item.id).toUpperCase().startsWith('SIT-');
+
+export const isScheduleRecord = (item: Record<string, unknown>) =>
+  !isBillingItemRecord(item);
+
+export type ScheduleDueInput = {
+  startDate: string;
+  recurrence: FinanceRecurrence;
+  customInterval?: number;
+  customUnit?: FinanceCustomUnit | '';
+};
+
+export const dueBillingDatesInMonth = (
+  schedule: ScheduleDueInput,
+  monthId: string,
+) => {
+  if (!isMonthId(monthId) || !isDateOnly(schedule.startDate)) {
+    return [] as string[];
+  }
+  const { start: monthStart, end: monthEnd } = monthDateRange(monthId);
+  if (schedule.startDate > monthEnd) {
+    return [] as string[];
+  }
+
+  const dates: string[] = [];
+  const pushIfDue = (date: string) => {
+    if (
+      isDateOnly(date) &&
+      date >= schedule.startDate &&
+      date >= monthStart &&
+      date <= monthEnd
+    ) {
+      dates.push(date);
+    }
+  };
+
+  if (schedule.recurrence === 'other') {
+    const interval = Math.max(1, Math.floor(schedule.customInterval ?? 0));
+    const unit = schedule.customUnit || 'months';
+    if (!interval || !unit) {
+      return [];
+    }
+    let current = schedule.startDate;
+    for (let guard = 0; guard < 400 && current <= monthEnd; guard += 1) {
+      pushIfDue(current);
+      const next = addByCustomUnit(current, interval, unit);
+      if (next <= current) {
+        break;
+      }
+      current = next;
+    }
+    return dates;
+  }
+
+  const interval = intervalMonths(schedule.recurrence);
+  if (interval <= 0) {
+    return [];
+  }
+  let current = schedule.startDate;
+  for (let guard = 0; guard < 120 && current <= monthEnd; guard += 1) {
+    if (current.slice(0, 7) === monthId) {
+      pushIfDue(current);
+    }
+    const next = addMonthsToDate(current, interval);
+    if (next <= current) {
+      break;
+    }
+    current = next;
+  }
+  return dates;
+};
 
 export const normalizeOccurrence = (
   value: unknown,
@@ -130,93 +243,16 @@ export const normalizeOccurrence = (
   const price = Math.max(0, asNumber(item.price) ?? 0);
   const appliesIva = Boolean(item.appliesIva);
   const date = isDateOnly(billingDate) ? billingDate : `${period}-01`;
+  const storedWithIva = asNumber(item.priceWithIva);
   return {
     id: asString(item.id) || fallbackId,
     period: isMonthId(period) ? period : date.slice(0, 7),
     billingDate: date,
     price: roundMoney(price),
     appliesIva,
-    priceWithIva: occurrencePriceWithIva(price, appliesIva),
+    priceWithIva:
+      storedWithIva ?? occurrencePriceWithIva(price, appliesIva),
   };
-};
-
-export const generateOccurrences = (
-  serviceId: string,
-  startDate: string,
-  recurrence: FinanceRecurrence,
-  horizonMonths = 24,
-  stamp?: OccurrencePrice | null,
-): FinanceServiceOccurrence[] => {
-  if (!isDateOnly(startDate)) {
-    return [];
-  }
-  const interval = intervalMonths(recurrence);
-  const endDate = addMonthsToDate(startDate, horizonMonths);
-  const items: FinanceServiceOccurrence[] = [];
-  let current = startDate;
-  while (current < endDate) {
-    const period = current.slice(0, 7);
-    const base: FinanceServiceOccurrence = {
-      id: `${serviceId}-${period}`,
-      period,
-      billingDate: current,
-      price: 0,
-      appliesIva: false,
-      priceWithIva: 0,
-    };
-    items.push(stamp ? stampedOccurrence(base, stamp) : base);
-    if (interval <= 0) {
-      break;
-    }
-    current = addMonthsToDate(current, interval);
-  }
-  return items;
-};
-
-export const mergeOccurrences = (
-  generated: FinanceServiceOccurrence[],
-  existing: FinanceServiceOccurrence[],
-  options?: {
-    stamp?: OccurrencePrice | null;
-    overwriteFrom?: string | null;
-  },
-) => {
-  const byPeriod = new Map(existing.map((item) => [item.period, item]));
-  const stamp = options?.stamp;
-  const overwriteFrom = options?.overwriteFrom;
-  const merged = generated.map((item) => {
-    const previous = byPeriod.get(item.period);
-    if (!previous) {
-      return stamp ? stampedOccurrence(item, stamp) : item;
-    }
-    byPeriod.delete(item.period);
-    const shouldOverwrite =
-      Boolean(stamp) &&
-      Boolean(overwriteFrom) &&
-      previous.billingDate >= (overwriteFrom ?? '');
-    if (shouldOverwrite && stamp) {
-      return stampedOccurrence(
-        {
-          ...item,
-          id: previous.id || item.id,
-          billingDate: previous.billingDate || item.billingDate,
-        },
-        stamp,
-      );
-    }
-    return {
-      ...item,
-      id: previous.id || item.id,
-      billingDate: previous.billingDate || item.billingDate,
-      price: previous.price,
-      appliesIva: previous.appliesIva,
-      priceWithIva: occurrencePriceWithIva(previous.price, previous.appliesIva),
-    };
-  });
-  const extras = [...byPeriod.values()].sort((left, right) =>
-    left.billingDate.localeCompare(right.billingDate),
-  );
-  return [...merged, ...extras];
 };
 
 export const parseOccurrences = (value: unknown, serviceId: string) => {
@@ -225,7 +261,10 @@ export const parseOccurrences = (value: unknown, serviceId: string) => {
   }
   return value
     .map((entry, index) =>
-      normalizeOccurrence(entry, `${serviceId}-${String(index + 1).padStart(3, '0')}`),
+      normalizeOccurrence(
+        entry,
+        `${serviceId}-${String(index + 1).padStart(3, '0')}`,
+      ),
     )
     .filter((entry): entry is FinanceServiceOccurrence => Boolean(entry))
     .sort((left, right) => left.billingDate.localeCompare(right.billingDate));

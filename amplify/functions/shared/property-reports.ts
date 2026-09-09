@@ -504,34 +504,29 @@ export const loadFinanceServices = async (
 
   const lines: PropertyReportServiceLine[] = [];
   for (const service of services) {
-    const title = asString(service.title);
-    const recurrence = asString(service.recurrence);
-    const occurrences = Array.isArray(service.items) ? service.items : [];
-    for (const entry of occurrences) {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-        continue;
-      }
-      const item = entry as Record<string, unknown>;
-      const date = asString(item.billingDate).slice(0, 10);
-      if (!date || date.slice(0, 7) !== monthId) {
-        continue;
-      }
-      const price = Math.max(0, asNumber(item.price) ?? 0);
-      const appliesIva = Boolean(item.appliesIva);
-      const storedWithIva = asNumber(item.priceWithIva);
-      lines.push({
-        id:
-          asString(item.id) ||
-          `${asString(service.id)}-${date}`,
-        title,
-        recurrence,
-        date,
-        price,
-        priceWithIva:
-          storedWithIva ??
-          roundMoney(appliesIva ? price * IVA_MULTIPLIER : price),
-      });
+    const isItem =
+      asString(service.recordType) === 'item' ||
+      asString(service.id).includes('#');
+    if (!isItem) {
+      continue;
     }
+    const date = asString(service.billingDate).slice(0, 10);
+    if (!date || date.slice(0, 7) !== monthId) {
+      continue;
+    }
+    const price = Math.max(0, asNumber(service.price) ?? 0);
+    const appliesIva = Boolean(service.appliesIva);
+    const storedWithIva = asNumber(service.priceWithIva);
+    lines.push({
+      id: asString(service.id) || `${asString(service.scheduleId)}-${date}`,
+      title: asString(service.title),
+      recurrence: asString(service.recurrence),
+      date,
+      price,
+      priceWithIva:
+        storedWithIva ??
+        roundMoney(appliesIva ? price * IVA_MULTIPLIER : price),
+    });
   }
 
   lines.sort((left, right) => {

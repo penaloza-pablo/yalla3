@@ -871,6 +871,39 @@ button.today-card {
   font-size: 0.95rem;
 }
 
+.alert-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alert-banner-message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.alert-banner-close {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  padding: 0;
+  border: 1px solid #fecdca;
+  border-radius: 999px;
+  background: #fff8f7;
+  color: #b42318;
+  font-size: 18px;
+  line-height: 26px;
+  cursor: pointer;
+}
+
+.alert-banner-close:hover,
+.alert-banner-close:focus-visible {
+  background: #fee4e2;
+}
+
 .card {
   background: #ffffff;
   border: 1px solid #e4e7ec;
@@ -1648,6 +1681,29 @@ th {
 
 .form-field-span {
   grid-column: span 2;
+}
+
+.services-iva-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+  grid-column: 1 / -1;
+}
+
+.services-iva-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  white-space: nowrap;
+  color: #344054;
+  font-size: 0.9rem;
+}
+
+.services-iva-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
 }
 
 .rule-form-grid {
@@ -4845,6 +4901,15 @@ th {
   .filters-grid select {
     min-height: 44px;
     font-size: 16px;
+  }
+
+  .services-iva-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .services-iva-check {
+    padding-bottom: 0;
   }
 
   .operations-kanban {

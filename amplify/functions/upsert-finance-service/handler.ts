@@ -1,4 +1,4 @@
-import { DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   LOG_FEATURES,
   quoted,
@@ -7,16 +7,20 @@ import {
 import {
   asNumber,
   asString,
-  generateOccurrences,
+  isBillingItemRecord,
   isDateOnly,
-  mergeOccurrences,
+  normalizeCustomUnit,
   normalizePriceMode,
   normalizeRecurrence,
   normalizeServiceType,
-  parseOccurrences,
+  occurrencePriceWithIva,
   roundMoney,
   IVA_MULTIPLIER,
 } from '../shared/finance-services';
+import {
+  deleteFinanceRecord,
+  materializeCurrentMonth,
+} from '../shared/finance-services-store';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -34,17 +38,21 @@ import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity
 
 type ServicePayload = {
   id?: string;
+  recordType?: string;
+  scheduleId?: string;
   type?: string;
   propertyId?: string;
   propertyName?: string;
   title?: string;
   recurrence?: string;
   startDate?: string;
+  customInterval?: number | string;
+  customUnit?: string;
   priceMode?: string;
   price?: number | string;
   appliesIva?: boolean;
-  priceEffectiveFrom?: string;
-  items?: unknown[];
+  priceWithIva?: number | string;
+  billingDate?: string;
   action?: string;
 };
 
@@ -64,6 +72,22 @@ const resolvePropertyName = async (propertyId: string, fallback: string) => {
   );
   const property = result.Item as Record<string, unknown> | undefined;
   return resolveYallaPropertyLabelFromRecord(property, propertyId);
+};
+
+const moneyFields = (payload: ServicePayload, existing?: Record<string, unknown>) => {
+  const appliesIva =
+    typeof payload.appliesIva === 'boolean'
+      ? payload.appliesIva
+      : Boolean(existing?.appliesIva);
+  const price = roundMoney(
+    Math.max(0, asNumber(payload.price) ?? asNumber(existing?.price) ?? 0),
+  );
+  const storedGross = asNumber(payload.priceWithIva);
+  const priceWithIva =
+    storedGross !== null
+      ? roundMoney(Math.max(0, storedGross))
+      : occurrencePriceWithIva(price, appliesIva);
+  return { price, appliesIva, priceWithIva };
 };
 
 export const handler = async (event: {
@@ -93,6 +117,8 @@ export const handler = async (event: {
 
   const action = asString(payload.action).toLowerCase();
   const isDelete = action === 'delete';
+  const isItemWrite =
+    asString(payload.recordType) === 'item' || action === 'item';
   const isUpdate = Boolean(asString(payload.id));
   let existing: Record<string, unknown> | undefined;
 
@@ -111,20 +137,88 @@ export const handler = async (event: {
 
   try {
     if (isDelete && existing) {
-      await docClient.send(
-        new DeleteCommand({
-          TableName: tableName,
-          Key: { id: asString(existing.id) },
-        }),
-      );
+      await deleteFinanceRecord(tableName, asString(existing.id));
       await recordActivityLog(event, {
         feature: LOG_FEATURES.SERVICES,
         action: 'delete',
         entityId: asString(existing.id),
         entityName: asString(existing.title),
-        summary: `deleted service ${quoted(asString(existing.id))}`,
+        summary: `deleted ${
+          isBillingItemRecord(existing) ? 'billing item' : 'scheduled service'
+        } ${quoted(asString(existing.id))}`,
       });
       return buildHttpResponse(200, { deleted: true, id: existing.id });
+    }
+
+    if (isItemWrite || (existing && isBillingItemRecord(existing))) {
+      const type = normalizeServiceType(
+        asString(payload.type) || asString(existing?.type),
+      );
+      const title = asString(payload.title) || asString(existing?.title);
+      const billingDate =
+        asString(payload.billingDate) || asString(existing?.billingDate);
+      const propertyId =
+        type === 'apartment'
+          ? asString(payload.propertyId) || asString(existing?.propertyId)
+          : '';
+      if (!type) {
+        return buildHttpResponse(400, {
+          message: 'type must be apartment or ops.',
+        });
+      }
+      if (!title) {
+        return buildHttpResponse(400, { message: 'title is required.' });
+      }
+      if (!billingDate || !isDateOnly(billingDate)) {
+        return buildHttpResponse(400, { message: 'billingDate is required.' });
+      }
+      if (type === 'apartment' && !propertyId) {
+        return buildHttpResponse(400, {
+          message: 'propertyId is required for apartment services.',
+        });
+      }
+      const { price, appliesIva, priceWithIva } = moneyFields(payload, existing);
+      const timestamp = nowIso();
+      const id =
+        asString(existing?.id) || (await getNextSequentialId(tableName, 'SIT'));
+      const propertyName = propertyId
+        ? await resolvePropertyName(
+            propertyId,
+            asString(payload.propertyName) || asString(existing?.propertyName),
+          )
+        : '';
+      const item = {
+        id,
+        recordType: 'item',
+        scheduleId:
+          asString(payload.scheduleId) ||
+          asString(existing?.scheduleId) ||
+          undefined,
+        type,
+        propertyId: propertyId || undefined,
+        propertyName: propertyName || undefined,
+        title,
+        recurrence:
+          normalizeRecurrence(
+            asString(payload.recurrence) || asString(existing?.recurrence),
+          ) || 'oneoff',
+        billingDate,
+        period: billingDate.slice(0, 7),
+        price,
+        appliesIva,
+        priceWithIva,
+        createdAt: asString(existing?.createdAt) || timestamp,
+        updatedAt: timestamp,
+      };
+      await putItem(tableName, item);
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.SERVICES,
+        action: isUpdate ? 'update' : 'create',
+        entityId: item.id,
+        entityName: item.title,
+        summary: `${isUpdate ? 'updated' : 'created'} billing item ${quoted(item.id)}`,
+      });
+      return buildHttpResponse(200, { item });
     }
 
     const type = normalizeServiceType(
@@ -144,6 +238,18 @@ export const handler = async (event: {
       normalizePriceMode(
         asString(payload.priceMode) || asString(existing?.priceMode),
       ) || (asNumber(existing?.price) ? 'fixed' : 'variable');
+    const customInterval = Math.max(
+      1,
+      Math.floor(
+        asNumber(payload.customInterval) ??
+          asNumber(existing?.customInterval) ??
+          1,
+      ),
+    );
+    const customUnit =
+      normalizeCustomUnit(
+        asString(payload.customUnit) || asString(existing?.customUnit),
+      ) || 'months';
     const appliesIva =
       priceMode === 'fixed'
         ? typeof payload.appliesIva === 'boolean'
@@ -159,9 +265,13 @@ export const handler = async (event: {
             ),
           )
         : 0;
-    const priceWithIva = roundMoney(
-      appliesIva ? price * IVA_MULTIPLIER : price,
-    );
+    const storedGross = asNumber(payload.priceWithIva);
+    const priceWithIva =
+      priceMode === 'fixed'
+        ? storedGross !== null
+          ? roundMoney(Math.max(0, storedGross))
+          : roundMoney(appliesIva ? price * IVA_MULTIPLIER : price)
+        : 0;
 
     if (!type) {
       return buildHttpResponse(400, {
@@ -171,8 +281,13 @@ export const handler = async (event: {
     if (!title) {
       return buildHttpResponse(400, { message: 'title is required.' });
     }
-    if (!recurrence) {
+    if (!recurrence || recurrence === 'oneoff') {
       return buildHttpResponse(400, { message: 'recurrence is required.' });
+    }
+    if (recurrence === 'other' && customInterval < 1) {
+      return buildHttpResponse(400, {
+        message: 'customInterval is required for Other recurrence.',
+      });
     }
     if (!startDate || !isDateOnly(startDate)) {
       return buildHttpResponse(400, { message: 'startDate is required.' });
@@ -186,34 +301,6 @@ export const handler = async (event: {
     const timestamp = nowIso();
     const id =
       asString(existing?.id) || (await getNextSequentialId(tableName, 'SVC'));
-    const existingItems = parseOccurrences(existing?.items, id);
-    const stamp =
-      priceMode === 'fixed' ? { price, appliesIva } : null;
-    const generated = generateOccurrences(id, startDate, recurrence, 24, stamp);
-    const previousMode =
-      normalizePriceMode(asString(existing?.priceMode)) || 'variable';
-    const previousPrice = roundMoney(asNumber(existing?.price) ?? 0);
-    const previousAppliesIva = Boolean(existing?.appliesIva);
-    const priceChanged =
-      Boolean(existing) &&
-      (previousMode !== priceMode ||
-        previousPrice !== price ||
-        previousAppliesIva !== appliesIva);
-    const effectiveFrom =
-      asString(payload.priceEffectiveFrom) || timestamp.slice(0, 10);
-    const shouldRegenerate =
-      existingItems.length === 0 ||
-      asString(existing?.recurrence) !== recurrence ||
-      asString(existing?.startDate) !== startDate ||
-      priceChanged;
-    const items = Array.isArray(payload.items)
-      ? parseOccurrences(payload.items, id)
-      : shouldRegenerate
-        ? mergeOccurrences(generated, existingItems, {
-            stamp,
-            overwriteFrom: priceChanged ? effectiveFrom : null,
-          })
-        : existingItems;
     const propertyName = propertyId
       ? await resolvePropertyName(
           propertyId,
@@ -223,28 +310,32 @@ export const handler = async (event: {
 
     const item = {
       id,
+      recordType: 'schedule',
       type,
       propertyId: propertyId || undefined,
       propertyName: propertyName || undefined,
       title,
       recurrence,
       startDate,
+      customInterval: recurrence === 'other' ? customInterval : undefined,
+      customUnit: recurrence === 'other' ? customUnit : undefined,
       priceMode,
       price,
       appliesIva,
       priceWithIva,
-      items,
+      items: [],
       createdAt: asString(existing?.createdAt) || timestamp,
       updatedAt: timestamp,
     };
 
     await putItem(tableName, item);
+    await materializeCurrentMonth(tableName, id);
     await recordActivityLog(event, {
       feature: LOG_FEATURES.SERVICES,
       action: isUpdate ? 'update' : 'create',
       entityId: item.id,
       entityName: item.title,
-      summary: `${isUpdate ? 'updated' : 'created'} service ${quoted(item.id)}`,
+      summary: `${isUpdate ? 'updated' : 'created'} scheduled service ${quoted(item.id)}`,
     });
     return buildHttpResponse(200, { item });
   } catch (error) {
