@@ -1057,6 +1057,36 @@ button.today-card {
   gap: 16px;
 }
 
+.report-settings-modal {
+  width: min(760px, 100%);
+}
+
+.report-settings-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.report-settings-conditions > .btn-secondary {
+  align-self: start;
+}
+
+.report-settings-conditions .card-title {
+  font-size: 1rem;
+}
+
+.report-settings-condition {
+  display: grid;
+  grid-template-columns: 1.4fr 1.4fr minmax(7.5rem, 0.8fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.report-settings-condition .form-field {
+  min-width: 0;
+}
+
 .card-title {
   margin: 0;
   font-size: 1.2rem;
@@ -3853,6 +3883,14 @@ th {
 
   .template-task-row {
     grid-template-columns: 1fr;
+  }
+
+  .report-settings-condition {
+    grid-template-columns: 1fr;
+  }
+
+  .report-settings-condition .btn-icon {
+    justify-self: end;
   }
 }
 

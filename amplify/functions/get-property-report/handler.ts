@@ -31,6 +31,10 @@ import {
   resolveReportProperty,
   roundMoney,
 } from '../shared/property-reports';
+import {
+  parseReportSettings,
+  REPORT_SETTINGS_MONTH_ID,
+} from '../shared/property-report-settings';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -132,6 +136,9 @@ export const handler = async (event: HttpEvent) => {
 
   const propertyId = event.queryStringParameters?.propertyId?.trim();
   const monthId = event.queryStringParameters?.month?.trim();
+  const settingsOnly =
+    event.queryStringParameters?.settings === '1' ||
+    event.queryStringParameters?.settings === 'true';
   if (!propertyId) {
     return buildHttpResponse(400, { message: 'propertyId is required.' });
   }
@@ -152,6 +159,25 @@ export const handler = async (event: HttpEvent) => {
     }
 
     const scope = reportScopeForProperty(property);
+    const loadSettings = async () => {
+      const stored = await getReportRecord(
+        reportsTable,
+        propertyId,
+        REPORT_SETTINGS_MONTH_ID,
+      );
+      return parseReportSettings(stored);
+    };
+
+    if (settingsOnly) {
+      return buildHttpResponse(200, {
+        property: {
+          id: scope.id,
+          name: scope.name,
+        },
+        settings: await loadSettings(),
+      });
+    }
+
     const months = [];
     for (const id of listReportMonthIds()) {
       const stored = await getReportRecord(reportsTable, propertyId, id);
@@ -165,6 +191,7 @@ export const handler = async (event: HttpEvent) => {
           name: scope.name,
         },
         months,
+        settings: await loadSettings(),
       });
     }
 

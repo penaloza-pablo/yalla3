@@ -15,6 +15,7 @@ import {
   propertyReportsLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
+import { PropertyReportSettingsModal } from './PropertyReportSettingsModal'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -264,6 +265,17 @@ const ReportDocumentIcon = () => (
   </svg>
 )
 
+const SettingsGearIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
+    <path
+      fill="currentColor"
+      fillRule="evenodd"
+      d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.33 1.64a6.97 6.97 0 0 1 1.24.72l1.55-.83a1 1 0 0 1 1.22.22l1.67 1.67a1 1 0 0 1 .22 1.22l-.83 1.55c.3.38.54.8.72 1.24l1.64.33a1 1 0 0 1 .804.98v2.36a1 1 0 0 1-.804.98l-1.64.33a6.95 6.95 0 0 1-.72 1.24l.83 1.55a1 1 0 0 1-.22 1.22l-1.67 1.67a1 1 0 0 1-1.22.22l-1.55-.83a6.97 6.97 0 0 1-1.24.72l-.33 1.64a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.33-1.64a6.97 6.97 0 0 1-1.24-.72l-1.55.83a1 1 0 0 1-1.22-.22L2.83 14.87a1 1 0 0 1-.22-1.22l.83-1.55a6.95 6.95 0 0 1-.72-1.24l-1.64-.33A1 1 0 0 1 1 9.18V6.82a1 1 0 0 1 .804-.98l1.64-.33c.18-.44.42-.86.72-1.24l-.83-1.55a1 1 0 0 1 .22-1.22L5.22 1.83a1 1 0 0 1 1.22-.22l1.55.83c.38-.3.8-.54 1.24-.72l.33-1.64ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+      clipRule="evenodd"
+    />
+  </svg>
+)
+
 const AllocationChip = ({
   value,
   disabled,
@@ -353,6 +365,10 @@ export function PropertyReportsView({
     Record<string, CostAllocation>
   >({})
   const [isReportOpen, setIsReportOpen] = useState(false)
+  const [settingsProperty, setSettingsProperty] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -900,23 +916,41 @@ export function PropertyReportsView({
                 : t('propertyReports.subtitle')}
           </p>
         </div>
-        {selectedMonthId && report ? (
+        {(selectedPropertyId || (selectedMonthId && report)) ? (
           <div className="header-actions">
-            <button
-              className={`btn-icon${canOpenReport ? '' : ' is-disabled'}`}
-              type="button"
-              disabled={!canOpenReport}
-              aria-label={t('propertyReports.openReport')}
-              title={
-                canOpenReport
-                  ? t('propertyReports.openReport')
-                  : t('propertyReports.reportLocked')
-              }
-              onClick={() => setIsReportOpen(true)}
-            >
-              <ReportDocumentIcon />
-            </button>
-            {canChangeStatus && report.status === 'PENDING_TO_CLOSE' ? (
+            {selectedPropertyId ? (
+              <button
+                className="btn-icon btn-icon-ghost"
+                type="button"
+                aria-label={t('propertyReports.openSettings')}
+                title={t('propertyReports.openSettings')}
+                onClick={() =>
+                  setSettingsProperty({
+                    id: selectedPropertyId,
+                    name: propertyLabel,
+                  })
+                }
+              >
+                <SettingsGearIcon />
+              </button>
+            ) : null}
+            {selectedMonthId && report ? (
+              <button
+                className={`btn-icon${canOpenReport ? '' : ' is-disabled'}`}
+                type="button"
+                disabled={!canOpenReport}
+                aria-label={t('propertyReports.openReport')}
+                title={
+                  canOpenReport
+                    ? t('propertyReports.openReport')
+                    : t('propertyReports.reportLocked')
+                }
+                onClick={() => setIsReportOpen(true)}
+              >
+                <ReportDocumentIcon />
+              </button>
+            ) : null}
+            {selectedMonthId && report && canChangeStatus && report.status === 'PENDING_TO_CLOSE' ? (
               <button
                 className="btn-secondary"
                 type="button"
@@ -933,7 +967,7 @@ export function PropertyReportsView({
                 {t('propertyReports.markReady')}
               </button>
             ) : null}
-            {canChangeStatus && report.canClose ? (
+            {selectedMonthId && report && canChangeStatus && report.canClose ? (
               <button
                 className="btn-primary"
                 type="button"
@@ -943,7 +977,7 @@ export function PropertyReportsView({
                 {t('propertyReports.closeMonth')}
               </button>
             ) : null}
-            {canChangeStatus && report.canReopen ? (
+            {selectedMonthId && report && canChangeStatus && report.canReopen ? (
               <button
                 className="btn-secondary"
                 type="button"
@@ -990,13 +1024,31 @@ export function PropertyReportsView({
                     <tr key={property.id}>
                       <td>{propertyReportsLabel(property)}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() => setSelectedPropertyId(property.id)}
-                        >
-                          {t('propertyReports.open')}
-                        </button>
+                        <div className="action-buttons">
+                          <button
+                            className="btn-icon btn-icon-ghost"
+                            type="button"
+                            aria-label={t('propertyReports.openMonths')}
+                            title={t('propertyReports.openMonths')}
+                            onClick={() => setSelectedPropertyId(property.id)}
+                          >
+                            <ReportDocumentIcon />
+                          </button>
+                          <button
+                            className="btn-icon btn-icon-ghost"
+                            type="button"
+                            aria-label={t('propertyReports.openSettings')}
+                            title={t('propertyReports.openSettings')}
+                            onClick={() =>
+                              setSettingsProperty({
+                                id: property.id,
+                                name: propertyReportsLabel(property),
+                              })
+                            }
+                          >
+                            <SettingsGearIcon />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1831,6 +1883,20 @@ export function PropertyReportsView({
             </div>
           </div>
         </div>
+      ) : null}
+      {settingsProperty ? (
+        <PropertyReportSettingsModal
+          propertyId={settingsProperty.id}
+          propertyName={settingsProperty.name}
+          getUrl={endpoints.get}
+          upsertUrl={endpoints.upsert}
+          onClose={() => setSettingsProperty(null)}
+          onSaved={() => {
+            setSettingsProperty(null)
+            setMessage(t('propertyReports.settingsSaved'))
+            setError(null)
+          }}
+        />
       ) : null}
     </>
   )

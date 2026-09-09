@@ -35,12 +35,21 @@ import {
   type CostAllocation,
   type PropertyReportStatus,
 } from '../shared/property-reports';
+import {
+  parseReportSettings,
+  REPORT_SETTINGS_MONTH_ID,
+  validateReportSettings,
+} from '../shared/property-report-settings';
 
 type Payload = {
   propertyId?: string;
   monthId?: string;
   action?: string;
   lineAllocations?: Record<string, CostAllocation>;
+  businessModel?: string;
+  commissionPercent?: number | string | null;
+  fixedRent?: number | string | null;
+  conditions?: unknown[];
 };
 
 const monthIsClosed = async (
@@ -84,11 +93,10 @@ export const handler = async (event: {
   }
 
   const propertyId = payload.propertyId?.trim() ?? '';
-  const monthId = payload.monthId?.trim() ?? '';
   const action = asString(payload.action).toLowerCase();
-  if (!propertyId || !isMonthIdValue(monthId) || !isReportableMonth(monthId)) {
+  if (!propertyId) {
     return buildHttpResponse(400, {
-      message: 'propertyId and a reportable monthId are required.',
+      message: 'propertyId is required.',
     });
   }
 
@@ -103,6 +111,70 @@ export const handler = async (event: {
   if (!property || !isPropertyReportEligible(property, resolved.groups)) {
     return buildHttpResponse(404, {
       message: 'Property is not available in Property Reports.',
+    });
+  }
+
+  if (action === 'settings') {
+    const parsed = validateReportSettings(
+      parseReportSettings({
+        businessModel: payload.businessModel,
+        commissionPercent: payload.commissionPercent,
+        fixedRent: payload.fixedRent,
+        conditions: payload.conditions,
+      } as Record<string, unknown>),
+    );
+    if (!parsed.ok) {
+      return buildHttpResponse(400, { message: parsed.message });
+    }
+
+    const foundSettings = await docClient.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { propertyId, monthId: REPORT_SETTINGS_MONTH_ID },
+      }),
+    );
+    const existingSettings = foundSettings.Item as
+      | Record<string, unknown>
+      | undefined;
+    const timestamp = nowIso();
+    const item = {
+      propertyId,
+      monthId: REPORT_SETTINGS_MONTH_ID,
+      kind: 'settings',
+      businessModel: parsed.settings.businessModel,
+      commissionPercent: parsed.settings.commissionPercent,
+      fixedRent: parsed.settings.fixedRent,
+      conditions: parsed.settings.conditions,
+      createdAt: asString(existingSettings?.createdAt) || timestamp,
+      updatedAt: timestamp,
+    };
+
+    try {
+      await putItem(tableName, item);
+      const name = reportScopeForProperty(property).name;
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.PROPERTY_REPORTS,
+        action: 'settings',
+        entityId: `${propertyId}#${REPORT_SETTINGS_MONTH_ID}`,
+        entityName: name,
+        summary: `updated property report settings ${quoted(name)}`,
+      });
+      return buildHttpResponse(200, {
+        item,
+        settings: parseReportSettings(item),
+      });
+    } catch (error) {
+      return buildHttpResponse(500, {
+        message: 'Failed to update the property report settings.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const monthId = payload.monthId?.trim() ?? '';
+  if (!isMonthIdValue(monthId) || !isReportableMonth(monthId)) {
+    return buildHttpResponse(400, {
+      message: 'propertyId and a reportable monthId are required.',
     });
   }
 
@@ -167,7 +239,7 @@ export const handler = async (event: {
     nextAllocations = parseLineAllocations(payload.lineAllocations);
   } else {
     return buildHttpResponse(400, {
-      message: 'action must be ready, close, reopen, or allocate.',
+      message: 'action must be ready, close, reopen, allocate, or settings.',
     });
   }
 
