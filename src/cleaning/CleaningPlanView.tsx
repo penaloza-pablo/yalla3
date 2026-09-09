@@ -12,6 +12,7 @@ import {
 } from '../operations/dateHelpers'
 import type { PropertyOption } from '../operations/types'
 import type {
+  AmenitiesKit,
   CleanerRecord,
   CleaningPlanBookingContext,
   CleaningPlanRecord,
@@ -40,6 +41,43 @@ const isAfterEarlyCutoff = (startTime: string) => {
   const minutes = timeToMinutes(startTime)
   const cutoff = timeToMinutes(EARLY_CHECK_IN_CUTOFF)
   return minutes !== null && cutoff !== null && minutes > cutoff
+}
+
+const mapKit = (value: unknown): AmenitiesKit | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const item = value as Record<string, unknown>
+  const items = Array.isArray(item.items)
+    ? item.items
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return null
+          }
+          const row = entry as Record<string, unknown>
+          const inventoryId = String(row.inventoryId ?? '').trim()
+          const qty = Number(row.qty)
+          if (!inventoryId || !Number.isFinite(qty) || qty <= 0) {
+            return null
+          }
+          return {
+            inventoryId,
+            name: String(row.name ?? inventoryId),
+            qty,
+            unitPrice: Number(row.unitPrice ?? 0),
+            cost: Number(row.cost ?? 0),
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    : []
+  if (items.length === 0) {
+    return null
+  }
+  return {
+    items,
+    cost: Number(item.cost ?? 0),
+    costWithIva: Number(item.costWithIva ?? 0),
+  }
 }
 
 const mapBookingContext = (
@@ -110,6 +148,7 @@ const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => {
     cleaningTypeId,
     cleaningTypes,
     bookingContext: mapBookingContext(item.bookingContext),
+    kit: mapKit(item.kit),
     guestyTaskId:
       typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
   }
@@ -164,6 +203,7 @@ export function CleaningPlanView({
   const [plannedDate, setPlannedDate] = useState('')
   const [isDayModalOpen, setIsDayModalOpen] = useState(false)
   const [openVisitId, setOpenVisitId] = useState('')
+  const [openKitRow, setOpenKitRow] = useState<CleaningPlanRow | null>(null)
   const [status, setStatus] = useState<CleaningPlanStatus>('DRAFT')
   const [rows, setRows] = useState<CleaningPlanRow[]>([])
   const [history, setHistory] = useState<CleaningPlanRecord[]>([])
@@ -473,34 +513,44 @@ export function CleaningPlanView({
                   </span>
                 ) : null}
               </div>
-              {row.bookingContext ? (
+              {row.bookingContext || (row.kit && row.kit.items.length > 0) ? (
                 <div className="operations-visit-badges">
-                  {row.bookingContext.hasBookingGap ? (
+                  {row.bookingContext?.hasBookingGap ? (
                     <span className="status operations-visit-status cleaning-plan-badge-gap">
                       {t('cleaningPlan.badgeBookingsGap')}
                     </span>
                   ) : null}
-                  {row.bookingContext.sofaBedYes ? (
+                  {row.bookingContext?.sofaBedYes ? (
                     <span className="status operations-visit-status cleaning-plan-badge-sofa">
                       {t('cleaningPlan.badgeSofaBed')}
                     </span>
                   ) : null}
-                  {Number.isFinite(row.bookingContext.guestCount) ? (
+                  {row.bookingContext &&
+                  Number.isFinite(row.bookingContext.guestCount) ? (
                     <span className="status operations-visit-status cleaning-plan-badge-guests">
                       {t('cleaningPlan.badgeGuests', {
                         count: row.bookingContext.guestCount,
                       })}
                     </span>
                   ) : null}
-                  {row.bookingContext.giftCardLabel ? (
+                  {row.bookingContext?.giftCardLabel ? (
                     <span className="status operations-visit-status cleaning-plan-badge-gift">
                       {row.bookingContext.giftCardLabel}
                     </span>
                   ) : null}
-                  {row.bookingContext.earlyCheckInApplies ? (
+                  {row.bookingContext?.earlyCheckInApplies ? (
                     <span className="status operations-visit-status cleaning-plan-badge-early">
                       {t('cleaningPlan.badgeEarlyCheckIn')}
                     </span>
+                  ) : null}
+                  {row.kit && row.kit.items.length > 0 ? (
+                    <button
+                      type="button"
+                      className="status operations-visit-status cleaning-plan-badge-kit"
+                      onClick={() => setOpenKitRow(row)}
+                    >
+                      {t('cleaningPlan.badgeKit')}
+                    </button>
                   ) : null}
                 </div>
               ) : null}
@@ -1061,6 +1111,67 @@ export function CleaningPlanView({
               >
                 {t('common.accept')}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {openKitRow?.kit ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('cleaningPlan.kitTitle')}</h3>
+                <p className="modal-subtitle">
+                  {openKitRow.title || openKitRow.visitId}
+                </p>
+              </div>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setOpenKitRow(null)}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('cleaningPlan.kitItem')}</th>
+                      <th>{t('cleaningPlan.kitQty')}</th>
+                      <th>{t('cleaningPlan.kitCost')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openKitRow.kit.items.map((item) => (
+                      <tr key={item.inventoryId}>
+                        <td>{item.name}</td>
+                        <td>
+                          {item.qty.toLocaleString(
+                            i18n.language.startsWith('es') ? 'es-ES' : 'en-GB',
+                            { maximumFractionDigits: 4 },
+                          )}
+                        </td>
+                        <td>
+                          {item.cost.toLocaleString(
+                            i18n.language.startsWith('es') ? 'es-ES' : 'en-GB',
+                            { style: 'currency', currency: 'EUR' },
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="card-subtitle" style={{ marginTop: 12 }}>
+                {t('cleaningPlan.kitTotal', {
+                  amount: openKitRow.kit.cost.toLocaleString(
+                    i18n.language.startsWith('es') ? 'es-ES' : 'en-GB',
+                    { style: 'currency', currency: 'EUR' },
+                  ),
+                })}
+              </p>
             </div>
           </div>
         </div>

@@ -410,6 +410,10 @@ substractionsTable.grantReadData(backend.getSubtractions.resources.lambda);
 substractionsTable.grantReadData(backend.exportSubtractions.resources.lambda);
 substractionsTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
 inventoryTable.grantReadWriteData(backend.upsertSubtraction.resources.lambda);
+inventoryTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+inventoryTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+inventoryTable.grantReadData(backend.upsertCleaningBilling.resources.lambda);
+inventoryTable.grantReadData(backend.getPropertyReport.resources.lambda);
 propertiesTable.grantReadData(backend.getProperties.resources.lambda);
 propertiesTable.grantReadWriteData(backend.upsertProperty.resources.lambda);
 propertiesTable.grantReadWriteData(backend.deleteProperty.resources.lambda);
@@ -1075,6 +1079,26 @@ backend.getCleaningPlan.resources.lambda.addToRolePolicy(
       bookingsTable.tableArn,
       `${bookingsTable.tableArn}/index/CheckInDate-index`,
     ],
+  }),
+);
+const bookingsCheckInResources = [
+  bookingsTable.tableArn,
+  `${bookingsTable.tableArn}/index/CheckInDate-index`,
+];
+bookingsTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+bookingsTable.grantReadData(backend.upsertCleaningBilling.resources.lambda);
+propertiesTable.grantReadData(backend.getCleaningBilling.resources.lambda);
+propertiesTable.grantReadData(backend.upsertCleaningBilling.resources.lambda);
+backend.getCleaningBilling.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    resources: bookingsCheckInResources,
+  }),
+);
+backend.upsertCleaningBilling.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    resources: bookingsCheckInResources,
   }),
 );
 propertiesTable.grantReadData(

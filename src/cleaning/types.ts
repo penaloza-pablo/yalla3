@@ -52,6 +52,7 @@ export type CleaningPlanRow = {
   cleaningTypeId: string
   cleaningTypes: PropertyCleaningType[]
   bookingContext?: CleaningPlanBookingContext | null
+  kit?: AmenitiesKit | null
   guestyTaskId?: string
 }
 
@@ -83,11 +84,46 @@ export type PropertyCleaningType = {
   isDefault: boolean
 }
 
+export const AMENITY_RULE_TYPES = [
+  'per_reservation',
+  'per_guest',
+  'solo_or_fixed',
+  'solo_or_per_guest',
+] as const
+
+export type AmenityRuleType = (typeof AMENITY_RULE_TYPES)[number]
+
+export type AmenityRule = {
+  inventoryId: string
+  booking: {
+    type: AmenityRuleType
+    n?: number
+    soloQty?: number
+    groupQty?: number
+  }
+  gapQty: number
+}
+
+export type AmenitiesKitItem = {
+  inventoryId: string
+  name: string
+  qty: number
+  unitPrice: number
+  cost: number
+}
+
+export type AmenitiesKit = {
+  items: AmenitiesKitItem[]
+  cost: number
+  costWithIva: number
+}
+
 export type PropertyCleaningDetailsRecord = {
   id: string
   propertyId: string
   nickname: string
   cleaningTypes: PropertyCleaningType[]
+  amenitiesRules: AmenityRule[]
   createdAt?: string
   updatedAt?: string
 }

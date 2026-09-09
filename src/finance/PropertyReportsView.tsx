@@ -45,6 +45,7 @@ type CleaningLine = {
   cleaningTypeName: string
   status: string
   price: number | null
+  kitCost: number
 }
 
 type MaintenanceLine = {
@@ -129,6 +130,8 @@ export function PropertyReportsView({
   const [cleaningLines, setCleaningLines] = useState<CleaningLine[]>([])
   const [maintenanceLines, setMaintenanceLines] = useState<MaintenanceLine[]>([])
   const [cleaningTotal, setCleaningTotal] = useState(0)
+  const [cleaningKitCost, setCleaningKitCost] = useState(0)
+  const [cleaningKitCostWithIva, setCleaningKitCostWithIva] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
@@ -258,8 +261,10 @@ export function PropertyReportsView({
         bookings?: ReportBooking[]
         cleaning?: {
           closed?: boolean
-          lines?: CleaningLine[]
+          lines?: Record<string, unknown>[]
           total?: number
+          kitCost?: number
+          kitCostWithIva?: number
         }
         maintenance?: {
           closed?: boolean
@@ -280,9 +285,30 @@ export function PropertyReportsView({
       setBookings(payload.bookings ?? [])
       setCleaningClosed(Boolean(payload.cleaning?.closed))
       setMaintenanceClosed(Boolean(payload.maintenance?.closed))
-      setCleaningLines(payload.cleaning?.lines ?? [])
+      setCleaningLines(
+        (payload.cleaning?.lines ?? []).map((item) => {
+          const kit =
+            item.kit && typeof item.kit === 'object'
+              ? (item.kit as Record<string, unknown>)
+              : null
+          const price = item.price
+          return {
+            id: String(item.id ?? ''),
+            date: String(item.date ?? ''),
+            cleaningTypeName: String(item.cleaningTypeName ?? ''),
+            status: String(item.status ?? ''),
+            price:
+              price === null || price === undefined || price === ''
+                ? null
+                : Number(price),
+            kitCost: Number(kit?.cost ?? item.kitCost ?? 0),
+          }
+        }),
+      )
       setMaintenanceLines(payload.maintenance?.lines ?? [])
       setCleaningTotal(Number(payload.cleaning?.total ?? 0))
+      setCleaningKitCost(Number(payload.cleaning?.kitCost ?? 0))
+      setCleaningKitCostWithIva(Number(payload.cleaning?.kitCostWithIva ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
       setExpenses(payload.expenses?.lines ?? [])
       setServiceLines(payload.services?.lines ?? [])
@@ -625,29 +651,61 @@ export function PropertyReportsView({
           <section className="card">
             <div className="card-header">
               <div>
-                <h2 className="card-title">{t('propertyReports.cleaningTitle')}</h2>
-                {cleaningClosed ? (
-                  <div className="report-metrics">
-                    <div className="report-metric">
-                      <p className="card-label">
-                        {t('propertyReports.cleaningsCount')}
-                      </p>
-                      <p className="card-value">{cleaningLines.length}</p>
-                    </div>
-                    <div className="report-metric">
-                      <p className="card-label">{t('propertyReports.price')}</p>
-                      <p className="card-value">{money.format(cleaningTotal)}</p>
-                    </div>
-                    <div className="report-metric">
-                      <p className="card-label">{t('propertyReports.priceWithIva')}</p>
-                      <p className="card-value">
-                        {money.format(cleaningPriceWithIva)}
-                      </p>
-                    </div>
+                <div className="card-title-row">
+                  <h2 className="card-title">
+                    {t('propertyReports.cleaningTitle')}
+                  </h2>
+                  {!cleaningClosed ? (
+                    <span className="report-billing-warning" role="status">
+                      {t('propertyReports.billingPendingWarning')}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="report-metrics">
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.cleaningsCount')}
+                    </p>
+                    <p className="card-value">{cleaningLines.length}</p>
                   </div>
-                ) : null}
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.price')}</p>
+                    <p className="card-value">{money.format(cleaningTotal)}</p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.priceWithIva')}</p>
+                    <p className="card-value">
+                      {money.format(cleaningPriceWithIva)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.kitCost')}</p>
+                    <p className="card-value">{money.format(cleaningKitCost)}</p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.kitCostWithIva')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(cleaningKitCostWithIva)}
+                    </p>
+                  </div>
+                </div>
               </div>
-              {cleaningClosed ? (
+              <div className="table-actions">
+                {!cleaningClosed ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      onNavigate('Cleaning Billing', {
+                        billingMonth: selectedMonthId,
+                      })
+                    }
+                  >
+                    {t('propertyReports.openCleaningBilling')}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-secondary"
@@ -657,83 +715,90 @@ export function PropertyReportsView({
                     ? t('propertyReports.hideTable')
                     : t('propertyReports.showTable')}
                 </button>
-              ) : null}
+              </div>
             </div>
-            {cleaningClosed ? (
-              openTables.cleaning ? (
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
+            {openTables.cleaning ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.date')}</th>
+                      <th>{t('propertyReports.cleaningType')}</th>
+                      <th>{t('propertyReports.visitStatus')}</th>
+                      <th>{t('propertyReports.price')}</th>
+                      <th>{t('propertyReports.kitCost')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cleaningLines.length === 0 ? (
                       <tr>
-                        <th>{t('propertyReports.date')}</th>
-                        <th>{t('propertyReports.cleaningType')}</th>
-                        <th>{t('propertyReports.visitStatus')}</th>
-                        <th>{t('propertyReports.price')}</th>
+                        <td colSpan={5}>{t('propertyReports.emptyCleaning')}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {cleaningLines.length === 0 ? (
-                        <tr>
-                          <td colSpan={4}>{t('propertyReports.emptyCleaning')}</td>
+                    ) : (
+                      cleaningLines.map((line) => (
+                        <tr key={line.id}>
+                          <td>{dateLabel(line.date)}</td>
+                          <td>{line.cleaningTypeName || '—'}</td>
+                          <td>{line.status || '—'}</td>
+                          <td>
+                            {line.price === null
+                              ? '—'
+                              : money.format(line.price)}
+                          </td>
+                          <td>
+                            {line.kitCost
+                              ? money.format(line.kitCost)
+                              : '—'}
+                          </td>
                         </tr>
-                      ) : (
-                        cleaningLines.map((line) => (
-                          <tr key={line.id}>
-                            <td>{dateLabel(line.date)}</td>
-                            <td>{line.cleaningTypeName || '—'}</td>
-                            <td>{line.status || '—'}</td>
-                            <td>
-                              {line.price === null
-                                ? '—'
-                                : money.format(line.price)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null
-            ) : (
-              <p className="notice">
-                {t('propertyReports.cleaningPending')}{' '}
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    onNavigate('Cleaning Billing', {
-                      billingMonth: selectedMonthId,
-                    })
-                  }
-                >
-                  {t('propertyReports.openCleaningBilling')}
-                </button>
-              </p>
-            )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
 
           <section className="card">
             <div className="card-header">
               <div>
-                <h2 className="card-title">
-                  {t('propertyReports.maintenanceTitle')}
-                </h2>
-                {maintenanceClosed ? (
-                  <div className="report-metrics">
-                    <div className="report-metric">
-                      <p className="card-label">{t('propertyReports.visitsCount')}</p>
-                      <p className="card-value">{maintenanceLines.length}</p>
-                    </div>
-                    <div className="report-metric">
-                      <p className="card-label">{t('propertyReports.price')}</p>
-                      <p className="card-value">
-                        {money.format(maintenanceTotal)}
-                      </p>
-                    </div>
+                <div className="card-title-row">
+                  <h2 className="card-title">
+                    {t('propertyReports.maintenanceTitle')}
+                  </h2>
+                  {!maintenanceClosed ? (
+                    <span className="report-billing-warning" role="status">
+                      {t('propertyReports.billingPendingWarning')}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="report-metrics">
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.visitsCount')}</p>
+                    <p className="card-value">{maintenanceLines.length}</p>
                   </div>
-                ) : null}
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.price')}</p>
+                    <p className="card-value">
+                      {money.format(maintenanceTotal)}
+                    </p>
+                  </div>
+                </div>
               </div>
-              {maintenanceClosed ? (
+              <div className="table-actions">
+                {!maintenanceClosed ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      onNavigate('Maintenance Billing', {
+                        billingMonth: selectedMonthId,
+                      })
+                    }
+                  >
+                    {t('propertyReports.openMaintenanceBilling')}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-secondary"
@@ -743,61 +808,44 @@ export function PropertyReportsView({
                     ? t('propertyReports.hideTable')
                     : t('propertyReports.showTable')}
                 </button>
-              ) : null}
+              </div>
             </div>
-            {maintenanceClosed ? (
-              openTables.maintenance ? (
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
+            {openTables.maintenance ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.date')}</th>
+                      <th>{t('propertyReports.visitTitle')}</th>
+                      <th>{t('propertyReports.visitType')}</th>
+                      <th>{t('propertyReports.price')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {maintenanceLines.length === 0 ? (
                       <tr>
-                        <th>{t('propertyReports.date')}</th>
-                        <th>{t('propertyReports.visitTitle')}</th>
-                        <th>{t('propertyReports.visitType')}</th>
-                        <th>{t('propertyReports.price')}</th>
+                        <td colSpan={4}>
+                          {t('propertyReports.emptyMaintenance')}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {maintenanceLines.length === 0 ? (
-                        <tr>
-                          <td colSpan={4}>
-                            {t('propertyReports.emptyMaintenance')}
+                    ) : (
+                      maintenanceLines.map((line) => (
+                        <tr key={line.id}>
+                          <td>{dateLabel(line.date)}</td>
+                          <td>{line.title || '—'}</td>
+                          <td>{line.visitTypeName || '—'}</td>
+                          <td>
+                            {line.price === null
+                              ? '—'
+                              : money.format(line.price)}
                           </td>
                         </tr>
-                      ) : (
-                        maintenanceLines.map((line) => (
-                          <tr key={line.id}>
-                            <td>{dateLabel(line.date)}</td>
-                            <td>{line.title || '—'}</td>
-                            <td>{line.visitTypeName || '—'}</td>
-                            <td>
-                              {line.price === null
-                                ? '—'
-                                : money.format(line.price)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null
-            ) : (
-              <p className="notice">
-                {t('propertyReports.maintenancePending')}{' '}
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    onNavigate('Maintenance Billing', {
-                      billingMonth: selectedMonthId,
-                    })
-                  }
-                >
-                  {t('propertyReports.openMaintenanceBilling')}
-                </button>
-              </p>
-            )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
 
           <section className="card">

@@ -6,6 +6,7 @@ export const getPropertyReport = defineFunction({
   entry: './handler.ts',
   environment: {
     VISITS_TABLE: 'yalla-visits',
+    BOOKINGS_TABLE: 'yalla-bookings',
     PROPERTIES_TABLE: 'yalla-properties',
     VISIT_TYPES_TABLE: 'yalla-visit_types',
     MAINTENANCE_VISIT_TYPE_ID: 'visit_type_maintenance',
@@ -14,7 +15,8 @@ export const getPropertyReport = defineFunction({
     SUBTRACTIONS_TABLE: 'yalla-substractions',
     MOVEMENTS_TABLE: 'yalla-finance-movements',
     SERVICES_TABLE: 'yalla-finance-services',
+    INVENTORY_TABLE: 'yalla-inventory',
   },
-  timeoutSeconds: 40,
+  timeoutSeconds: 60,
   memoryMB: 512,
 });

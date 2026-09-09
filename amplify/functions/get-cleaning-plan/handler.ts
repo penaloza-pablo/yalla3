@@ -14,6 +14,12 @@ import {
   scanAllItems,
 } from '../shared/cleaning-plan';
 import {
+  amenitiesRulesByPropertyId,
+  computeAmenitiesKit,
+  loadInventoryPriceMap,
+  type InventoryPriceItem,
+} from '../shared/amenities-kit';
+import {
   type CleaningVisitBookingContext,
   loadCleaningVisitBookingContexts,
   resolveAutoCleaningType,
@@ -200,13 +206,31 @@ export const handler = async (event: HttpEvent) => {
       nicknameByPropertyId,
       planStatus.toUpperCase() !== 'READY',
     );
+    let inventoryById = new Map<string, InventoryPriceItem>();
+    const inventoryTable = process.env.INVENTORY_TABLE;
+    if (inventoryTable) {
+      try {
+        inventoryById = await loadInventoryPriceMap(inventoryTable);
+      } catch (error) {
+        console.error('Failed to load inventory prices for amenities kit', error);
+      }
+    }
+    const rulesByProperty = amenitiesRulesByPropertyId(detailItems);
+    const rowsWithKit = rows.map((row) => ({
+      ...row,
+      kit: computeAmenitiesKit({
+        rules: rulesByProperty.get(row.propertyId) ?? [],
+        bookingContext: bookingContextByPropertyId.get(row.propertyId) ?? null,
+        inventoryById,
+      }),
+    }));
 
     return buildHttpResponse(200, {
       plannedDate,
       plan: plan ?? null,
       status: planStatus,
-      rows,
-      count: rows.length,
+      rows: rowsWithKit,
+      count: rowsWithKit.length,
     });
   } catch (error) {
     return buildHttpResponse(500, {

@@ -940,6 +940,25 @@ button.today-card {
   font-size: 1.2rem;
 }
 
+.card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-billing-warning {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b54708;
+  background: #fffaeb;
+  border-radius: 999px;
+  padding: 4px 10px;
+  line-height: 1.2;
+}
+
 .card-subtitle {
   margin: 6px 0 0;
   color: #667085;
@@ -5285,6 +5304,29 @@ th {
 .cleaning-plan-badge-gap {
   background: #fef3f2;
   color: #b42318;
+}
+
+.cleaning-plan-badge-kit {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  background: #f4ebff;
+  color: #6941c6;
+}
+
+.amenities-rule-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.amenities-rule-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 88px;
+  font-size: 0.78rem;
+  color: #667085;
 }
 
 .cleaning-visit-title-btn {

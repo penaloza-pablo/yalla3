@@ -9,6 +9,7 @@ export const getCleaningPlan = defineFunction({
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
     BOOKINGS_TABLE: 'yalla-bookings',
     PROPERTIES_TABLE: 'yalla-properties',
+    INVENTORY_TABLE: 'yalla-inventory',
   },
   timeoutSeconds: 60,
 });

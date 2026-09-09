@@ -5,10 +5,13 @@ import { fetchJson } from '../operations/api'
 import { getPropertyLabel } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import type {
+  AmenityRule,
+  AmenityRuleType,
   CleanerRecord,
   PropertyCleaningDetailsRecord,
   PropertyCleaningType,
 } from './types'
+import { AMENITY_RULE_TYPES } from './types'
 import { StarRating } from './StarRating'
 
 type Props = {
@@ -16,7 +19,7 @@ type Props = {
   propertyOptions: PropertyOption[]
 }
 
-type SettingsSection = 'cleaners' | 'propertyDetails' | 'gap'
+type SettingsSection = 'cleaners' | 'propertyDetails' | 'amenities' | 'gap'
 
 type TypeDraft = {
   id: string
@@ -32,13 +35,120 @@ const emptyCleanerForm = () => ({
   active: true,
 })
 
-const emptyTypeDraft = (isDefault = false): TypeDraft => ({
-  id: '',
-  name: '',
-  price: '',
-  durationHours: '',
-  isDefault,
+type AmenityDraft = {
+  inventoryId: string
+  type: AmenityRuleType
+  n: string
+  soloQty: string
+  groupQty: string
+  gapQty: string
+}
+
+type InventoryOption = {
+  id: string
+  name: string
+}
+
+const emptyAmenityDraft = (): AmenityDraft => ({
+  inventoryId: '',
+  type: 'per_reservation',
+  n: '1',
+  soloQty: '1',
+  groupQty: '2',
+  gapQty: '1',
 })
+
+const ruleToDraft = (rule: AmenityRule): AmenityDraft => ({
+  inventoryId: rule.inventoryId,
+  type: rule.booking.type,
+  n: rule.booking.n == null ? '' : String(rule.booking.n),
+  soloQty: rule.booking.soloQty == null ? '' : String(rule.booking.soloQty),
+  groupQty: rule.booking.groupQty == null ? '' : String(rule.booking.groupQty),
+  gapQty: String(rule.gapQty),
+})
+
+const parseNonNegative = (value: string) => {
+  const numeric = Number(String(value).replace(',', '.'))
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return null
+  }
+  return numeric
+}
+
+const draftsToRules = (drafts: AmenityDraft[]): AmenityRule[] | null => {
+  const rules: AmenityRule[] = []
+  const seen = new Set<string>()
+  for (const draft of drafts) {
+    const inventoryId = draft.inventoryId.trim()
+    if (!inventoryId || seen.has(inventoryId)) {
+      return null
+    }
+    seen.add(inventoryId)
+    const gapQty = parseNonNegative(draft.gapQty)
+    if (gapQty === null) {
+      return null
+    }
+    if (draft.type === 'per_reservation' || draft.type === 'per_guest') {
+      const n = parseNonNegative(draft.n)
+      if (n === null) {
+        return null
+      }
+      rules.push({ inventoryId, booking: { type: draft.type, n }, gapQty })
+      continue
+    }
+    if (draft.type === 'solo_or_fixed') {
+      const soloQty = parseNonNegative(draft.soloQty)
+      const groupQty = parseNonNegative(draft.groupQty)
+      if (soloQty === null || groupQty === null) {
+        return null
+      }
+      rules.push({
+        inventoryId,
+        booking: { type: draft.type, soloQty, groupQty },
+        gapQty,
+      })
+      continue
+    }
+    const n = parseNonNegative(draft.n)
+    const soloQty = parseNonNegative(draft.soloQty)
+    if (n === null || soloQty === null) {
+      return null
+    }
+    rules.push({
+      inventoryId,
+      booking: { type: draft.type, n, soloQty },
+      gapQty,
+    })
+  }
+  return rules
+}
+
+const mapAmenityRule = (item: Record<string, unknown>): AmenityRule | null => {
+  const inventoryId = String(item.inventoryId ?? '').trim()
+  const booking = (item.booking ?? {}) as Record<string, unknown>
+  const type = String(booking.type ?? '') as AmenityRuleType
+  if (!inventoryId || !AMENITY_RULE_TYPES.includes(type)) {
+    return null
+  }
+  const gapQty = Number(item.gapQty)
+  if (!Number.isFinite(gapQty) || gapQty < 0) {
+    return null
+  }
+  return {
+    inventoryId,
+    booking: {
+      type,
+      n: Number.isFinite(Number(booking.n)) ? Number(booking.n) : undefined,
+      soloQty: Number.isFinite(Number(booking.soloQty))
+        ? Number(booking.soloQty)
+        : undefined,
+      groupQty: Number.isFinite(Number(booking.groupQty))
+        ? Number(booking.groupQty)
+        : undefined,
+    },
+    gapQty,
+  }
+}
 
 const toNumber = (value: unknown) => {
   const numeric = typeof value === 'number' ? value : Number(value)
@@ -75,6 +185,11 @@ const mapDetails = (
   cleaningTypes: Array.isArray(item.cleaningTypes)
     ? (item.cleaningTypes as Record<string, unknown>[]).map(mapCleaningType)
     : [],
+  amenitiesRules: Array.isArray(item.amenitiesRules)
+    ? (item.amenitiesRules as Record<string, unknown>[])
+        .map(mapAmenityRule)
+        .filter((rule): rule is AmenityRule => Boolean(rule))
+    : [],
   createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
   updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined,
 })
@@ -92,6 +207,14 @@ const formatPrice = (price: number) => {
   }
   return `${price}€`
 }
+
+const emptyTypeDraft = (isDefault = false): TypeDraft => ({
+  id: '',
+  name: '',
+  price: '',
+  durationHours: '',
+  isDefault,
+})
 
 const typesToDrafts = (types: PropertyCleaningType[]): TypeDraft[] => {
   if (types.length === 0) {
@@ -128,6 +251,10 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
         'upsertPropertyCleaningDetailsUrl',
         import.meta.env.VITE_UPSERT_PROPERTY_CLEANING_DETAILS_URL,
       ),
+      getInventory: getEndpoint(
+        'getInventoryUrl',
+        import.meta.env.VITE_GET_INVENTORY_URL,
+      ),
       properties: getEndpoint(
         'getPropertiesUrl',
         import.meta.env.VITE_GET_PROPERTIES_URL,
@@ -155,6 +282,13 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     useState<PropertyCleaningDetailsRecord | null>(null)
   const [gapFreeNights, setGapFreeNights] = useState<number | null>(null)
   const [gapDraft, setGapDraft] = useState('')
+  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([])
+  const [editingAmenitiesPropertyId, setEditingAmenitiesPropertyId] =
+    useState('')
+  const [amenityDrafts, setAmenityDrafts] = useState<AmenityDraft[]>([
+    emptyAmenityDraft(),
+  ])
+  const [duplicateTargetId, setDuplicateTargetId] = useState('')
 
   const propertyById = useMemo(
     () =>
@@ -180,6 +314,44 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
   )
   const editingDetails = details.find(
     (item) => item.propertyId === editingPropertyId,
+  )
+  const amenityProperties = useMemo(
+    () =>
+      details
+        .filter((item) => item.amenitiesRules.length > 0)
+        .sort((a, b) =>
+          (propertyById.get(a.propertyId) || a.nickname).localeCompare(
+            propertyById.get(b.propertyId) || b.nickname,
+            undefined,
+            { sensitivity: 'base' },
+          ),
+        ),
+    [details, propertyById],
+  )
+  const editingAmenitiesDetails = details.find(
+    (item) => item.propertyId === editingAmenitiesPropertyId,
+  )
+  const inventoryNameById = useMemo(
+    () => new Map(inventoryOptions.map((item) => [item.id, item.name])),
+    [inventoryOptions],
+  )
+  const sortedProperties = useMemo(
+    () =>
+      [...properties]
+        .filter((property) => property.id)
+        .sort((a, b) =>
+          getPropertyLabel(a).localeCompare(getPropertyLabel(b), undefined, {
+            sensitivity: 'base',
+          }),
+        ),
+    [properties],
+  )
+  const duplicateTargets = useMemo(
+    () =>
+      sortedProperties.filter(
+        (property) => property.id !== editingAmenitiesPropertyId,
+      ),
+    [editingAmenitiesPropertyId, sortedProperties],
   )
   const activeCleanersCount = cleaners.filter((cleaner) => cleaner.active).length
 
@@ -248,11 +420,45 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     )
   }, [endpoints.properties])
 
+  const loadInventory = useCallback(async () => {
+    if (!endpoints.getInventory) {
+      return
+    }
+    const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
+      endpoints.getInventory,
+    )
+    const options = (payload.items ?? [])
+      .map((item) => {
+        const id = String(item.id ?? item.ID ?? '').trim()
+        if (!id) {
+          return null
+        }
+        const name = String(
+          item['Item name'] ??
+            item.name ??
+            item.itemName ??
+            item.Name ??
+            id,
+        )
+        return { id, name }
+      })
+      .filter((item): item is InventoryOption => Boolean(item))
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+      )
+    setInventoryOptions(options)
+  }, [endpoints.getInventory])
+
   const refreshAll = useCallback(async () => {
     setIsLoading(true)
     setError('')
     try {
-      await Promise.all([loadCleaners(), loadDetails(), loadProperties()])
+      await Promise.all([
+        loadCleaners(),
+        loadDetails(),
+        loadProperties(),
+        loadInventory(),
+      ])
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -262,7 +468,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     } finally {
       setIsLoading(false)
     }
-  }, [loadCleaners, loadDetails, loadProperties, t])
+  }, [loadCleaners, loadDetails, loadInventory, loadProperties, t])
 
   useEffect(() => {
     setProperties(propertyOptions)
@@ -440,6 +646,100 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     setIsAddPropertyOpen(false)
     setMessage('')
     setError('')
+  }
+
+  const openAmenitiesEditor = (propertyId: string) => {
+    const current = details.find((item) => item.propertyId === propertyId)
+    setEditingAmenitiesPropertyId(propertyId)
+    setAmenityDrafts(
+      current && current.amenitiesRules.length > 0
+        ? current.amenitiesRules.map(ruleToDraft)
+        : [emptyAmenityDraft()],
+    )
+    setDuplicateTargetId('')
+    setMessage('')
+    setError('')
+  }
+
+  const saveAmenities = async () => {
+    if (!endpoints.upsertDetails) {
+      setError(t('cleaningSettings.missingDetailsWrite'))
+      return
+    }
+    if (!editingAmenitiesPropertyId) {
+      setError(t('cleaningSettings.propertyRequired'))
+      return
+    }
+    const rules =
+      amenityDrafts.length === 0 ? [] : draftsToRules(amenityDrafts)
+    if (!rules) {
+      setError(t('cleaningSettings.amenitiesValidation'))
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await fetchJson(endpoints.upsertDetails, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertAmenities',
+          propertyId: editingAmenitiesPropertyId,
+          nickname:
+            editingAmenitiesDetails?.nickname ||
+            propertyById.get(editingAmenitiesPropertyId) ||
+            editingAmenitiesPropertyId,
+          amenitiesRules: rules,
+        }),
+      })
+      await loadDetails()
+      setMessage(t('cleaningSettings.amenitiesSaved'))
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : t('cleaningSettings.detailsSaveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const duplicateAmenities = async () => {
+    if (!endpoints.upsertDetails) {
+      setError(t('cleaningSettings.missingDetailsWrite'))
+      return
+    }
+    if (!editingAmenitiesPropertyId || !duplicateTargetId) {
+      setError(t('cleaningSettings.duplicatePropertyRequired'))
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await fetchJson(endpoints.upsertDetails, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'duplicateAmenities',
+          propertyId: editingAmenitiesPropertyId,
+          targetPropertyId: duplicateTargetId,
+        }),
+      })
+      const nextPropertyId = duplicateTargetId
+      await loadDetails()
+      setEditingAmenitiesPropertyId(nextPropertyId)
+      setDuplicateTargetId('')
+      setMessage(t('cleaningSettings.amenitiesDuplicated'))
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : t('cleaningSettings.detailsSaveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const pendingDefaultTypeName = (() => {
@@ -644,6 +944,23 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
           <p className="card-label">{t('cleaningSettings.detailsCard')}</p>
           <p className="card-value">{isLoading ? '—' : details.length}</p>
           <p className="card-meta">{t('cleaningSettings.detailsCardMeta')}</p>
+        </button>
+        <button
+          type="button"
+          className={`card card-compact summary-card-button ${
+            section === 'amenities' ? 'is-selected' : ''
+          }`}
+          onClick={() =>
+            setSection((current) =>
+              current === 'amenities' ? null : 'amenities',
+            )
+          }
+        >
+          <p className="card-label">{t('cleaningSettings.amenitiesCard')}</p>
+          <p className="card-value">
+            {isLoading ? '—' : amenityProperties.length}
+          </p>
+          <p className="card-meta">{t('cleaningSettings.amenitiesCardMeta')}</p>
         </button>
         <button
           type="button"
@@ -1117,6 +1434,368 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                               </svg>
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {section === 'amenities' ? (
+        <>
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">
+                  {editingAmenitiesPropertyId
+                    ? t('cleaningSettings.editAmenities', {
+                        property:
+                          editingAmenitiesDetails?.nickname ||
+                          propertyById.get(editingAmenitiesPropertyId) ||
+                          editingAmenitiesPropertyId,
+                      })
+                    : t('cleaningSettings.amenitiesTitle')}
+                </h2>
+                <p className="card-subtitle">
+                  {t('cleaningSettings.amenitiesSubtitle')}
+                </p>
+              </div>
+              {editingAmenitiesPropertyId ? (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    setEditingAmenitiesPropertyId('')
+                    setDuplicateTargetId('')
+                  }}
+                >
+                  {t('common.cancel')}
+                </button>
+              ) : null}
+            </div>
+            {!editingAmenitiesPropertyId ? (
+              <div className="filters-grid">
+                <label>
+                  {t('cleaningSettings.property')}
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      if (event.target.value) {
+                        openAmenitiesEditor(event.target.value)
+                      }
+                    }}
+                  >
+                    <option value="">
+                      {t('cleaningSettings.selectProperty')}
+                    </option>
+                    {sortedProperties.map((property) => (
+                      <option key={property.id} value={property.id}>
+                        {getPropertyLabel(property)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>{t('cleaningSettings.inventoryItem')}</th>
+                        <th>{t('cleaningSettings.bookingRule')}</th>
+                        <th>{t('cleaningSettings.ruleValues')}</th>
+                        <th>{t('cleaningSettings.gapQty')}</th>
+                        <th>{t('common.actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {amenityDrafts.length === 0 ? (
+                        <tr>
+                          <td colSpan={5}>
+                            {t('cleaningSettings.emptyAmenityDrafts')}
+                          </td>
+                        </tr>
+                      ) : (
+                      amenityDrafts.map((draft, index) => (
+                        <tr key={`${draft.inventoryId}-${index}`}>
+                          <td>
+                            <select
+                              value={draft.inventoryId}
+                              onChange={(event) =>
+                                setAmenityDrafts((current) =>
+                                  current.map((entry, draftIndex) =>
+                                    draftIndex === index
+                                      ? {
+                                          ...entry,
+                                          inventoryId: event.target.value,
+                                        }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">
+                                {t('cleaningSettings.selectInventory')}
+                              </option>
+                              {inventoryOptions.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} ({item.id})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              value={draft.type}
+                              onChange={(event) =>
+                                setAmenityDrafts((current) =>
+                                  current.map((entry, draftIndex) =>
+                                    draftIndex === index
+                                      ? {
+                                          ...entry,
+                                          type: event.target
+                                            .value as AmenityRuleType,
+                                        }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                            >
+                              {AMENITY_RULE_TYPES.map((type) => (
+                                <option key={type} value={type}>
+                                  {t(`cleaningSettings.ruleType.${type}`)}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <div className="amenities-rule-fields">
+                              {draft.type === 'per_reservation' ||
+                              draft.type === 'per_guest' ||
+                              draft.type === 'solo_or_per_guest' ? (
+                                <label>
+                                  {t('cleaningSettings.ruleN')}
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    value={draft.n}
+                                    onChange={(event) =>
+                                      setAmenityDrafts((current) =>
+                                        current.map((entry, draftIndex) =>
+                                          draftIndex === index
+                                            ? { ...entry, n: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                              ) : null}
+                              {draft.type === 'solo_or_fixed' ||
+                              draft.type === 'solo_or_per_guest' ? (
+                                <label>
+                                  {t('cleaningSettings.ruleSolo')}
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    value={draft.soloQty}
+                                    onChange={(event) =>
+                                      setAmenityDrafts((current) =>
+                                        current.map((entry, draftIndex) =>
+                                          draftIndex === index
+                                            ? {
+                                                ...entry,
+                                                soloQty: event.target.value,
+                                              }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                              ) : null}
+                              {draft.type === 'solo_or_fixed' ? (
+                                <label>
+                                  {t('cleaningSettings.ruleGroup')}
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    value={draft.groupQty}
+                                    onChange={(event) =>
+                                      setAmenityDrafts((current) =>
+                                        current.map((entry, draftIndex) =>
+                                          draftIndex === index
+                                            ? {
+                                                ...entry,
+                                                groupQty: event.target.value,
+                                              }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={draft.gapQty}
+                              onChange={(event) =>
+                                setAmenityDrafts((current) =>
+                                  current.map((entry, draftIndex) =>
+                                    draftIndex === index
+                                      ? { ...entry, gapQty: event.target.value }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              onClick={() =>
+                                setAmenityDrafts((current) =>
+                                  current.filter(
+                                    (_, draftIndex) => draftIndex !== index,
+                                  ),
+                                )
+                              }
+                            >
+                              {t('cleaningSettings.removeType')}
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="page-action-bar" style={{ marginTop: 16 }}>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() =>
+                      setAmenityDrafts((current) => [
+                        ...current,
+                        emptyAmenityDraft(),
+                      ])
+                    }
+                  >
+                    {t('cleaningSettings.addAmenity')}
+                  </button>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => void saveAmenities()}
+                  >
+                    {isSaving
+                      ? t('common.saving')
+                      : t('common.save')}
+                  </button>
+                </div>
+                <div className="filters-grid" style={{ marginTop: 16 }}>
+                  <label>
+                    {t('cleaningSettings.duplicateTo')}
+                    <select
+                      value={duplicateTargetId}
+                      onChange={(event) =>
+                        setDuplicateTargetId(event.target.value)
+                      }
+                    >
+                      <option value="">
+                        {t('cleaningSettings.selectProperty')}
+                      </option>
+                      {duplicateTargets.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {getPropertyLabel(property)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="page-action-bar">
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      disabled={isSaving || !duplicateTargetId}
+                      onClick={() => void duplicateAmenities()}
+                    >
+                      {t('cleaningSettings.duplicateAmenities')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">
+                  {t('cleaningSettings.amenitiesListTitle')}
+                </h2>
+                <p className="card-subtitle">
+                  {t('cleaningSettings.amenitiesListSubtitle')}
+                </p>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('cleaningSettings.property')}</th>
+                    <th>{t('cleaningSettings.amenitiesCount')}</th>
+                    <th>{t('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={3}>{t('common.loading')}</td>
+                    </tr>
+                  ) : amenityProperties.length === 0 ? (
+                    <tr>
+                      <td colSpan={3}>
+                        {t('cleaningSettings.emptyAmenities')}
+                      </td>
+                    </tr>
+                  ) : (
+                    amenityProperties.map((item) => (
+                      <tr key={item.propertyId}>
+                        <td>
+                          {propertyById.get(item.propertyId) || item.nickname}
+                        </td>
+                        <td>
+                          {item.amenitiesRules
+                            .map(
+                              (rule) =>
+                                inventoryNameById.get(rule.inventoryId) ||
+                                rule.inventoryId,
+                            )
+                            .join(', ')}
+                        </td>
+                        <td>
+                          <button
+                            className="btn-secondary"
+                            type="button"
+                            onClick={() => openAmenitiesEditor(item.propertyId)}
+                          >
+                            {t('cleaningSettings.edit')}
+                          </button>
                         </td>
                       </tr>
                     ))

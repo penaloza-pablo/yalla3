@@ -1,5 +1,10 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  attachAmenitiesKitsToLines,
+  kitFromUnknown,
+  type AmenitiesKit,
+} from './amenities-kit';
+import {
   CLEANING_VISIT_TYPE_ID,
   getPlanByDate,
   normalizeCleaningTypes,
@@ -52,6 +57,7 @@ export type BillingLine = {
   isManual: boolean;
   warnings: BillingWarning[];
   cleaningTypes: CleaningTypeRecord[];
+  kit?: AmenitiesKit;
 };
 
 const asString = (value: unknown) =>
@@ -359,7 +365,10 @@ export const buildMonthDetail = async (params: {
   const today = getTodayInMadrid();
 
   if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-    const lines = stored.snapshotLines as BillingLine[];
+    const lines = (stored.snapshotLines as BillingLine[]).map((line) => ({
+      ...line,
+      kit: kitFromUnknown(line.kit),
+    }));
     const summary = summarizeLines(lines);
     return {
       month: {
@@ -394,13 +403,18 @@ export const buildMonthDetail = async (params: {
     dates.map(async (date) => [date, await getPlanByDate(plansTable, date)] as const),
   );
   const planByDate = new Map(plans);
-  const lines = linesForMonth(
+  const unsortedLines = linesForMonth(
     visits,
     detailsByPropertyId,
     planByDate,
     stored,
     today,
-  ).sort((a, b) => {
+  );
+  const linesWithKit = await attachAmenitiesKitsToLines(
+    unsortedLines,
+    detailItems,
+  );
+  const lines = linesWithKit.sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
     }

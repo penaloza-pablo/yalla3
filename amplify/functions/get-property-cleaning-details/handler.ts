@@ -4,6 +4,7 @@ import {
   isHttpRequest,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
+import { normalizeAmenitiesRules } from '../shared/amenities-kit';
 import {
   isCleaningSettingsRecord,
   normalizeCleaningTypes,
@@ -49,6 +50,7 @@ export const handler = async (event: HttpEvent) => {
           propertyId,
           nickname,
           cleaningTypes: normalizeCleaningTypes(item.cleaningTypes),
+          amenitiesRules: normalizeAmenitiesRules(item.amenitiesRules),
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
         };

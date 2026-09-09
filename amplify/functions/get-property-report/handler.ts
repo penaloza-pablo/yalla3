@@ -210,14 +210,21 @@ export const handler = async (event: HttpEvent) => {
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';
-    const cleaningLines = cleaningClosed
-      ? cleaningDetail.lines.filter((line) => line.propertyId === propertyId)
-      : [];
-    const maintenanceLines = maintenanceClosed
-      ? maintenanceDetail.lines.filter(
-          (line) => line.propertyId === propertyId && !line.dismissed,
-        )
-      : [];
+    const cleaningLines = cleaningDetail.lines.filter(
+      (line) => line.propertyId === propertyId,
+    );
+    const maintenanceLines = maintenanceDetail.lines.filter(
+      (line) => line.propertyId === propertyId && !line.dismissed,
+    );
+    const cleaningKitCost = roundMoney(
+      cleaningLines.reduce((sum, line) => sum + (line.kit?.cost ?? 0), 0),
+    );
+    const cleaningKitCostWithIva = roundMoney(
+      cleaningLines.reduce(
+        (sum, line) => sum + (line.kit?.costWithIva ?? 0),
+        0,
+      ),
+    );
 
     return buildHttpResponse(200, {
       property: {
@@ -236,6 +243,8 @@ export const handler = async (event: HttpEvent) => {
         closed: cleaningClosed,
         lines: cleaningLines,
         total: cleaningLines.reduce((sum, line) => sum + (line.price ?? 0), 0),
+        kitCost: cleaningKitCost,
+        kitCostWithIva: cleaningKitCostWithIva,
       },
       maintenance: {
         status: maintenanceDetail.month.status,
