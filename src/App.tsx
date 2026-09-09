@@ -42,6 +42,7 @@ import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { PropertyReportsView } from './finance/PropertyReportsView'
+import { PropertyGroupsView } from './finance/PropertyGroupsView'
 import { MovementsView } from './finance/MovementsView'
 import { ServicesSubscriptionsView } from './finance/ServicesSubscriptionsView'
 import { LogsPanel } from './LogsPanel'
@@ -56,6 +57,10 @@ import {
   resolveYallaPropertyLabel,
   yallaAliasForListingId,
 } from '../amplify/functions/shared/property-identity'
+import {
+  asStringList,
+  isReportGroupType,
+} from '../amplify/functions/shared/property-groups'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
@@ -212,6 +217,7 @@ type PropertyRow = {
   active: boolean
   type: string
   mtlPrincipalId?: string
+  memberIds?: string[]
   roomType: string
   accommodates: number
   bedrooms: number
@@ -1131,6 +1137,7 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
       getStringValue(
         getItemValue(item, propertyFieldMap.mtlPrincipalId),
       ).trim() || undefined,
+    memberIds: asStringList(item.memberIds),
     roomType: getStringValue(getItemValue(item, propertyFieldMap.roomType)) || '—',
     accommodates: getNumberValue(
       getItemValue(item, propertyFieldMap.accommodates),
@@ -1897,7 +1904,12 @@ function App() {
 
   const activePropertyOptions = useMemo(() => {
     return propertyRows
-      .filter((row) => isManagedProperty(row) && row.active)
+      .filter(
+        (row) =>
+          isManagedProperty(row) &&
+          row.active &&
+          !isReportGroupType(row.type),
+      )
       .slice()
       .sort((a, b) => a.nickname.localeCompare(b.nickname))
   }, [propertyRows])
@@ -1913,6 +1925,7 @@ function App() {
           listingNickname: row.listingNickname || row.nickname,
           type: row.type && row.type !== '—' ? row.type : undefined,
           mtlPrincipalId: row.mtlPrincipalId,
+          memberIds: row.memberIds,
         })),
     [propertyRows],
   )
@@ -2944,6 +2957,7 @@ function App() {
       activePage === 'Visit templates' ||
       activePage === 'Template Auto Assign' ||
       activePage === 'Property Reports' ||
+      activePage === 'Property Groups' ||
       activePage === 'Movements' ||
       activePage === 'Services & Subscriptions' ||
       activePage === 'Cleaning Plan' ||
@@ -3370,6 +3384,9 @@ function App() {
   const propertiesFilteredRows = useMemo(() => {
     return propertyRows.filter((row) => {
       if (!isManagedProperty(row)) {
+        return false
+      }
+      if (isReportGroupType(row.type)) {
         return false
       }
       const statusValue = row.active ? 'Active' : 'Inactive'
@@ -8222,6 +8239,16 @@ function App() {
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
             onNavigate={navigateToPage}
+          />
+        ) : activePage === 'Property Groups' ? (
+          <PropertyGroupsView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+            isSummaryInfoOpen={isSummaryInfoOpen}
+            onToggleSummaryInfo={() =>
+              setIsSummaryInfoOpen((current) => !current)
+            }
+            onGroupsChanged={fetchProperties}
           />
         ) : activePage === 'Movements' ? (
           <MovementsView

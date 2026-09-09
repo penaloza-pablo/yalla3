@@ -11,13 +11,14 @@ import {
   bookingHasPayout,
   datesInReportMonth,
   getBookingById,
-  getPropertyById,
   getReportRecord,
   isMonthIdValue,
   isPropertyReportEligible,
   isReportableMonth,
   listingMatchesProperty,
+  listProperties,
   listReportMonthIds,
+  loadDirectPurchases,
   loadFinanceMovements,
   loadFinanceServices,
   loadPendingBillingExpenses,
@@ -26,14 +27,9 @@ import {
   reportMonthSummary,
   reportScopeForProperty,
   reservationFromPayload,
+  resolveReportProperty,
   roundMoney,
-  syntheticPlanta2Property,
 } from '../shared/property-reports';
-import {
-  isP2BuildingId,
-  isP2RoomListingId,
-  P2_BUILDING_ID,
-} from '../shared/property-identity';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -110,6 +106,7 @@ export const handler = async (event: HttpEvent) => {
   const subtractionsTable = process.env.SUBTRACTIONS_TABLE;
   const movementsTable = process.env.MOVEMENTS_TABLE;
   const servicesTable = process.env.SERVICES_TABLE;
+  const purchasesTable = process.env.PURCHASES_TABLE;
 
   if (
     !reportsTable ||
@@ -124,7 +121,8 @@ export const handler = async (event: HttpEvent) => {
     !visitTypesTable ||
     !subtractionsTable ||
     !movementsTable ||
-    !servicesTable
+    !servicesTable ||
+    !purchasesTable
   ) {
     return buildHttpResponse(500, {
       message: 'Property report tables are not configured.',
@@ -138,17 +136,15 @@ export const handler = async (event: HttpEvent) => {
   }
 
   try {
-    if (isP2RoomListingId(propertyId)) {
+    const properties = await listProperties(propertiesTable);
+    const resolved = resolveReportProperty(properties, propertyId);
+    if (resolved.memberGroup) {
       return buildHttpResponse(404, {
-        message: 'P2 rooms are reported together under Planta 2.',
+        message: `This property is reported together under ${resolved.memberGroup.name}.`,
       });
     }
-
-    const storedProperty = await getPropertyById(propertiesTable, propertyId);
-    const property =
-      storedProperty ??
-      (isP2BuildingId(propertyId) ? syntheticPlanta2Property() : undefined);
-    if (!property || !isPropertyReportEligible(property)) {
+    const property = resolved.property;
+    if (!property || !isPropertyReportEligible(property, resolved.groups)) {
       return buildHttpResponse(404, {
         message: 'Property is not available in Property Reports.',
       });
@@ -164,7 +160,7 @@ export const handler = async (event: HttpEvent) => {
     if (!monthId) {
       return buildHttpResponse(200, {
         property: {
-          id: scope.id || P2_BUILDING_ID,
+          id: scope.id,
           name: scope.name,
         },
         months,
@@ -187,6 +183,7 @@ export const handler = async (event: HttpEvent) => {
       subtractionExpenses,
       movementExpenses,
       serviceLines,
+      purchaseExpenses,
     ] = await Promise.all([
       loadPayoutBookings(bookingsTable, property, monthId),
       buildCleaningMonthDetail({
@@ -210,9 +207,14 @@ export const handler = async (event: HttpEvent) => {
       loadPendingBillingExpenses(subtractionsTable, property, monthId),
       loadFinanceMovements(movementsTable, property, monthId),
       loadFinanceServices(servicesTable, property, monthId),
+      loadDirectPurchases(purchasesTable, property, monthId),
     ]);
 
-    const expenses = [...subtractionExpenses, ...movementExpenses].sort(
+    const expenses = [
+      ...subtractionExpenses,
+      ...movementExpenses,
+      ...purchaseExpenses,
+    ].sort(
       (left, right) => {
         if (left.date !== right.date) {
           return left.date.localeCompare(right.date);
@@ -241,7 +243,7 @@ export const handler = async (event: HttpEvent) => {
 
     return buildHttpResponse(200, {
       property: {
-        id: scope.id || P2_BUILDING_ID,
+        id: scope.id,
         name: scope.name,
       },
       months,

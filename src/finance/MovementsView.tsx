@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  occurrencePriceWithIva,
+  priceFromGross,
+} from '../../amplify/functions/shared/finance-services'
 import { translateStatus } from '../i18n/display'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
@@ -41,6 +45,7 @@ type FormState = {
   description: string
   amount: string
   appliesIva: boolean
+  totalAmount: string
   kind: MovementKind
   date: string
   status: MovementStatus
@@ -64,10 +69,35 @@ const emptyForm = (): FormState => ({
   description: '',
   amount: '',
   appliesIva: false,
+  totalAmount: '',
   kind: 'outcome',
   date: getTodayMadrid(),
   status: 'Pending Billing',
 })
+
+const syncFromNet = (amount: string, appliesIva: boolean) => {
+  const parsed = Number(amount)
+  if (!Number.isFinite(parsed) || amount.trim() === '') {
+    return { amount, appliesIva, totalAmount: '' }
+  }
+  return {
+    amount,
+    appliesIva,
+    totalAmount: String(occurrencePriceWithIva(parsed, appliesIva)),
+  }
+}
+
+const syncFromGross = (totalAmount: string) => {
+  const parsed = Number(totalAmount)
+  if (!Number.isFinite(parsed) || totalAmount.trim() === '') {
+    return { amount: '', appliesIva: true, totalAmount }
+  }
+  return {
+    amount: String(priceFromGross(parsed)),
+    appliesIva: true,
+    totalAmount,
+  }
+}
 
 const emptyFilters = (): Filters => ({
   propertyIds: [],
@@ -183,11 +213,6 @@ export function MovementsView({
       }),
     [i18n.language],
   )
-
-  const formAmount = Number(form.amount)
-  const formTotal = Number.isFinite(formAmount)
-    ? roundMoney(form.appliesIva ? formAmount * IVA_MULTIPLIER : formAmount)
-    : 0
 
   const loadRows = useCallback(async () => {
     if (!endpoints.get) {
@@ -337,6 +362,7 @@ export function MovementsView({
       description: row.description,
       amount: String(row.amount),
       appliesIva: row.appliesIva,
+      totalAmount: String(row.totalAmount),
       kind: row.kind,
       date: row.date || getTodayMadrid(),
       status: row.status,
@@ -374,6 +400,9 @@ export function MovementsView({
           description: form.description.trim(),
           amount,
           appliesIva: form.appliesIva,
+          totalAmount: Number.isFinite(Number(form.totalAmount))
+            ? Number(form.totalAmount)
+            : undefined,
           kind: form.kind,
           date: form.date,
           status: form.status,
@@ -803,7 +832,7 @@ export function MovementsView({
               </button>
             </div>
             <div className="modal-body">
-              <div className="filters-grid">
+              <div className="form-grid">
                 <label>
                   {t('movements.property')}
                   <select
@@ -867,39 +896,7 @@ export function MovementsView({
                     ))}
                   </select>
                 </label>
-                <label>
-                  {t('movements.amount')}
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.amount}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="filter-option">
-                  <input
-                    type="checkbox"
-                    checked={form.appliesIva}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        appliesIva: event.target.checked,
-                      }))
-                    }
-                  />
-                  <span>{t('movements.appliesIva')}</span>
-                </label>
-                <label>
-                  {t('movements.totalAmount')}
-                  <input type="text" readOnly value={money.format(formTotal || 0)} />
-                </label>
-                <label>
+                <label className="form-field-span">
                   {t('movements.kind')}
                   <select
                     value={form.kind}
@@ -914,6 +911,51 @@ export function MovementsView({
                     <option value="outcome">{t('movements.outcome')}</option>
                   </select>
                 </label>
+                <div className="services-iva-row">
+                  <label className="form-field">
+                    <span>{t('movements.price')}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.amount}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          ...syncFromNet(event.target.value, current.appliesIva),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="services-iva-check">
+                    <input
+                      type="checkbox"
+                      checked={form.appliesIva}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          ...syncFromNet(current.amount, event.target.checked),
+                        }))
+                      }
+                    />
+                    <span>{t('movements.appliesIva')}</span>
+                  </label>
+                  <label className="form-field">
+                    <span>{t('movements.priceWithIva')}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.totalAmount}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          ...syncFromGross(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
               </div>
             </div>
             <div className="modal-footer">

@@ -86,6 +86,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         permissions.has(pagePermission(page)) ||
         (page === 'Property Reports' &&
           permissions.has(pagePermission('Finance solution 1'))) ||
+        (page === 'Property Groups' &&
+          (permissions.has(pagePermission('Property Reports')) ||
+            permissions.has(pagePermission('Finance solution 1')))) ||
         (page === 'Movements' &&
           permissions.has(pagePermission('Finance solution 2'))) ||
         (page === 'Services & Subscriptions' &&

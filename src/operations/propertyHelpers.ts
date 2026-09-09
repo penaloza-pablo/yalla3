@@ -9,6 +9,12 @@ import {
   PROPERTY_REPORTS_START_MONTH,
   resolveYallaPropertyLabel,
 } from '../../amplify/functions/shared/property-identity'
+import {
+  groupedMemberIdSet,
+  isReportGroupRecord,
+  isReportGroupType,
+  resolveReportGroups,
+} from '../../amplify/functions/shared/property-groups'
 
 export { isP2RoomNickname }
 
@@ -45,7 +51,9 @@ export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
   sortPropertyOptions(
     properties.filter(
       (property) =>
-        !isMtlPropertyType(property.type) && !property.mtlPrincipalId?.trim(),
+        !isReportGroupType(property.type) &&
+        !isMtlPropertyType(property.type) &&
+        !property.mtlPrincipalId?.trim(),
     ),
   )
 
@@ -95,7 +103,7 @@ export const filterBookingsPlannerPropertyOptions = (
 
 export const filterMovementsPropertyOptions = (properties: PropertyOption[]) => {
   const eligible = properties.filter((property) => {
-    if (isP2RoomProperty(property)) {
+    if (isP2RoomProperty(property) || isReportGroupType(property.type)) {
       return false
     }
     if (isYallaP2Property(property) || isOtherProperty(property)) {
@@ -134,18 +142,19 @@ export const listPropertyReportMonthIds = (todayIsoDate: string) => {
 }
 
 export const propertyReportsLabel = (property: PropertyOption) =>
-  isYallaP2Property(property) || isP2BuildingId(property.id)
-    ? PLANTA_2_REPORT_NAME
+  isYallaP2Property(property) ||
+  isP2BuildingId(property.id) ||
+  isReportGroupType(property.type)
+    ? property.nickname || PLANTA_2_REPORT_NAME
     : getPropertyLabel(property)
 
 export const filterPropertyReportsOptions = (properties: PropertyOption[]) => {
-  const hasP2 = properties.some(
-    (property) =>
-      isP2BuildingId(property.id) ||
-      isP2RoomProperty(property) ||
-      isYallaP2Property(property),
-  )
+  const groups = resolveReportGroups(properties)
+  const memberIds = groupedMemberIdSet(groups)
   const rest = properties.filter((property) => {
+    if (isReportGroupRecord(property) || memberIds.has(property.id)) {
+      return false
+    }
     if (isP2RoomProperty(property) || isYallaP2Property(property)) {
       return false
     }
@@ -167,16 +176,17 @@ export const filterPropertyReportsOptions = (properties: PropertyOption[]) => {
     }
     return true
   })
-  const building = properties.find((property) => isP2BuildingId(property.id))
-  const planta2 = hasP2
-    ? {
-        id: P2_BUILDING_ID,
-        nickname: PLANTA_2_REPORT_NAME,
-        listingNickname: PLANTA_2_REPORT_NAME,
-        title: building?.title || PLANTA_2_REPORT_NAME,
-        type: building?.type,
-        mtlPrincipalId: building?.mtlPrincipalId,
-      }
-    : null
-  return sortPropertyOptions([...(planta2 ? [planta2] : []), ...rest])
+  const groupOptions: PropertyOption[] = groups.map((group) => {
+    const stored = properties.find((property) => property.id === group.id)
+    return {
+      id: group.id,
+      nickname: group.name,
+      listingNickname: stored?.listingNickname || group.name,
+      title: stored?.title || group.name,
+      type: stored?.type || (group.id === P2_BUILDING_ID ? 'MTL_PRINCIPAL' : 'REPORT_GROUP'),
+      mtlPrincipalId: stored?.mtlPrincipalId,
+      memberIds: group.memberIds,
+    }
+  })
+  return sortPropertyOptions([...groupOptions, ...rest])
 }

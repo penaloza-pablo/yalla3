@@ -1340,6 +1340,10 @@ backend.getPropertyReport.addEnvironment(
   'SERVICES_TABLE',
   financeServicesTable.tableName,
 );
+backend.getPropertyReport.addEnvironment(
+  'PURCHASES_TABLE',
+  purchasesTable.tableName,
+);
 backend.getFinanceMovements.addEnvironment(
   'TABLE_NAME',
   financeMovementsTable.tableName,
@@ -1404,6 +1408,7 @@ maintenanceProvidersTable.grantReadData(
 );
 visitTypesTable.grantReadData(backend.getPropertyReport.resources.lambda);
 substractionsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+purchasesTable.grantReadData(backend.getPropertyReport.resources.lambda);
 financeMovementsTable.grantReadData(backend.getPropertyReport.resources.lambda);
 backend.getPropertyReport.resources.lambda.addToRolePolicy(
   new PolicyStatement({

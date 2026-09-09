@@ -195,6 +195,9 @@ export function PropertyReportsView({
     if (origin === 'movement') {
       return t('propertyReports.originMovement')
     }
+    if (origin === 'purchase') {
+      return t('propertyReports.originPurchase')
+    }
     return origin
   }
 

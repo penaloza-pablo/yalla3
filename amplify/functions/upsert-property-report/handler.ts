@@ -17,18 +17,14 @@ import {
   asString,
   deriveReportStatus,
   emptyReportRecord,
-  getPropertyById,
   isMonthIdValue,
   isPropertyReportEligible,
   isReportableMonth,
+  listProperties,
   reportScopeForProperty,
-  syntheticPlanta2Property,
+  resolveReportProperty,
   type PropertyReportStatus,
 } from '../shared/property-reports';
-import {
-  isP2BuildingId,
-  isP2RoomListingId,
-} from '../shared/property-identity';
 
 type Payload = {
   propertyId?: string;
@@ -70,17 +66,15 @@ export const handler = async (event: {
     });
   }
 
-  if (isP2RoomListingId(propertyId)) {
+  const properties = await listProperties(propertiesTable);
+  const resolved = resolveReportProperty(properties, propertyId);
+  if (resolved.memberGroup) {
     return buildHttpResponse(400, {
-      message: 'P2 rooms are reported together under Planta 2.',
+      message: `This property is reported together under ${resolved.memberGroup.name}.`,
     });
   }
-
-  const storedProperty = await getPropertyById(propertiesTable, propertyId);
-  const property =
-    storedProperty ??
-    (isP2BuildingId(propertyId) ? syntheticPlanta2Property() : undefined);
-  if (!property || !isPropertyReportEligible(property)) {
+  const property = resolved.property;
+  if (!property || !isPropertyReportEligible(property, resolved.groups)) {
     return buildHttpResponse(404, {
       message: 'Property is not available in Property Reports.',
     });

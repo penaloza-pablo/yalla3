@@ -19,6 +19,17 @@ import {
   resolveYallaPropertyLabelFromRecord,
   yallaAliasForListingId,
 } from './property-identity';
+import {
+  asStringList,
+  groupedMemberIdSet,
+  hydrateReportGroupProperty,
+  isReportGroupRecord,
+  isReportGroupType,
+  reportGroupById,
+  reportGroupForMember,
+  resolveReportGroups,
+  type ResolvedReportGroup,
+} from './property-groups';
 import { docClient } from './visit-task-utils';
 
 export { PROPERTY_REPORTS_START_MONTH };
@@ -45,7 +56,7 @@ export type PropertyReportBooking = {
   currency: string;
 };
 
-export type PropertyReportExpenseOrigin = 'subtraction' | 'movement';
+export type PropertyReportExpenseOrigin = 'subtraction' | 'movement' | 'purchase';
 
 export type PropertyReportExpense = {
   id: string;
@@ -123,7 +134,10 @@ const isActiveManagedProperty = (property: Record<string, unknown>) => {
   return true;
 };
 
-export const isPropertyReportEligible = (property: Record<string, unknown>) => {
+export const isPropertyReportEligible = (
+  property: Record<string, unknown>,
+  groups: ResolvedReportGroup[] = [],
+) => {
   const identity = identityFromProperty(property);
   if (!identity.id) {
     return false;
@@ -131,10 +145,16 @@ export const isPropertyReportEligible = (property: Record<string, unknown>) => {
   if (!isActiveManagedProperty(property)) {
     return false;
   }
+  if (isReportGroupRecord(property) || isP2BuildingId(identity.id)) {
+    return true;
+  }
   if (isOtherPropertyIdentity(identity) || isJclStorageIdentity(identity)) {
     return false;
   }
   if (isP2RoomListingId(identity.id) || isP2RoomNickname(identity.nickname)) {
+    return false;
+  }
+  if (groupedMemberIdSet(groups).has(identity.id)) {
     return false;
   }
   const type = asString(property.type || property.Type).toUpperCase();
@@ -144,16 +164,42 @@ export const isPropertyReportEligible = (property: Record<string, unknown>) => {
   return true;
 };
 
+const uniqueStrings = (values: string[]) => [
+  ...new Set(values.map((value) => value.trim()).filter(Boolean)),
+];
+
 export const reportScopeForProperty = (property: Record<string, unknown>) => {
   const id = asString(property.id);
-  const isGroup = isP2BuildingId(id);
+  const storedMembers = asStringList(property.memberIds);
+  const storedNames = asStringList(property.memberNames);
+  const isGroup =
+    isP2BuildingId(id) ||
+    isReportGroupType(asString(property.type)) ||
+    storedMembers.length > 0;
+  const memberIds = uniqueStrings(
+    isP2BuildingId(id)
+      ? [...storedMembers, ...p2ReportMemberIds()]
+      : isGroup
+        ? [id, ...storedMembers]
+        : [id],
+  );
+  const name = isGroup
+    ? asString(property.nickname) ||
+      asString(property.title) ||
+      asString(property.name) ||
+      (isP2BuildingId(id) ? PLANTA_2_REPORT_NAME : id)
+    : resolveYallaPropertyLabelFromRecord(property, id);
+  const memberNames = uniqueStrings([
+    ...storedNames,
+    name,
+    ...memberIds.map((memberId) => yallaAliasForListingId(memberId) || ''),
+  ]);
   return {
     id,
     isGroup,
-    memberIds: isGroup ? p2ReportMemberIds() : [id].filter(Boolean),
-    name: isGroup
-      ? PLANTA_2_REPORT_NAME
-      : resolveYallaPropertyLabelFromRecord(property, id),
+    memberIds,
+    memberNames,
+    name,
   };
 };
 
@@ -320,6 +366,7 @@ export const subtractionMatchesProperty = (
       asString(property.title),
       asString(property.name),
       scope.name,
+      ...scope.memberNames,
       ...scope.memberIds.map((id) => yallaAliasForListingId(id) || id),
     ]
       .map(normalizeNickname)
@@ -329,6 +376,9 @@ export const subtractionMatchesProperty = (
     names.add('p2');
     names.add('planta 2');
     names.add('planta2');
+    names.add('arenal');
+    names.add('platano 7');
+    names.add('plátano 7');
   }
   return names.has(location);
 };
@@ -463,6 +513,97 @@ export const loadFinanceMovements = async (
   return expenses;
 };
 
+const isDirectPurchase = (item: Record<string, unknown>) =>
+  item.Direct === true || item.direct === true;
+
+const isBillablePurchase = (item: Record<string, unknown>) => {
+  if (item.Billable === false || item.billable === false) {
+    return false;
+  }
+  return true;
+};
+
+const isExcludedPurchase = (item: Record<string, unknown>) => {
+  const status = asString(item.Status || item.status);
+  return (
+    item.Excluded === true ||
+    item.excluded === true ||
+    status === 'Excluded'
+  );
+};
+
+export const loadDirectPurchases = async (
+  tableName: string,
+  property: Record<string, unknown>,
+  monthId: string,
+): Promise<PropertyReportExpense[]> => {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+
+  const expenses: PropertyReportExpense[] = [];
+  for (const item of items) {
+    if (!isDirectPurchase(item) || isExcludedPurchase(item) || !isBillablePurchase(item)) {
+      continue;
+    }
+    if (!subtractionMatchesProperty(item, property)) {
+      continue;
+    }
+    const dateIso = subtractionDateToIso(
+      asString(item['Delivery date']) ||
+        asString(item.deliveryDate) ||
+        asString(item['Purchase date']) ||
+        asString(item.purchaseDate),
+    );
+    if (!dateIso || dateIso.slice(0, 7) !== monthId) {
+      continue;
+    }
+    const storedExclIva =
+      asNumber(item['Price excl. IVA']) ?? asNumber(item.priceExclIva);
+    const storedInclIva =
+      asNumber(item['Total price']) ?? asNumber(item.totalPrice);
+    const amountInclIva =
+      storedInclIva ??
+      (storedExclIva !== null
+        ? roundMoney(storedExclIva * IVA_MULTIPLIER)
+        : 0);
+    const amountExclIva =
+      storedExclIva ??
+      (storedInclIva !== null
+        ? roundMoney(storedInclIva / IVA_MULTIPLIER)
+        : 0);
+    const itemName =
+      asString(item['Item name']) || asString(item.itemName);
+    expenses.push({
+      id: `purchase:${asString(item.id) || `${dateIso}-${itemName}`}`,
+      origin: 'purchase',
+      itemName,
+      date: dateIso,
+      amountExclIva: roundMoney(-Math.abs(amountExclIva)),
+      amountInclIva: roundMoney(-Math.abs(amountInclIva)),
+    });
+  }
+
+  expenses.sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+    return left.id.localeCompare(right.id);
+  });
+  return expenses;
+};
+
 export type PropertyReportServiceLine = {
   id: string;
   title: string;
@@ -567,6 +708,7 @@ export const listingMatchesProperty = (
       asString(property.listingNickname),
       asString(property.title),
       scope.name,
+      ...scope.memberNames,
       ...scope.memberIds.map((id) => yallaAliasForListingId(id) || id),
     ]
       .map(normalizeNickname)
@@ -576,6 +718,9 @@ export const listingMatchesProperty = (
     names.add('p2');
     names.add('planta 2');
     names.add('planta2');
+    names.add('arenal');
+    names.add('platano 7');
+    names.add('plátano 7');
   }
   return listingNicknames.some((nickname) => names.has(nickname));
 };
@@ -622,6 +767,48 @@ export const getPropertyById = async (tableName: string, propertyId: string) => 
     }),
   );
   return (result.Item as Record<string, unknown> | undefined) ?? undefined;
+};
+
+export const listProperties = async (tableName: string) => {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+  return items;
+};
+
+export const resolveReportProperty = (
+  properties: Record<string, unknown>[],
+  propertyId: string,
+) => {
+  const groups = resolveReportGroups(properties);
+  const group = reportGroupById(groups, propertyId);
+  if (group) {
+    return {
+      property: hydrateReportGroupProperty(group),
+      groups,
+      group,
+    };
+  }
+  const memberGroup = reportGroupForMember(groups, propertyId);
+  const stored = properties.find(
+    (item) => asString(item.id) === propertyId,
+  );
+  return {
+    property: stored,
+    groups,
+    memberGroup,
+  };
 };
 
 export const getReportRecord = async (

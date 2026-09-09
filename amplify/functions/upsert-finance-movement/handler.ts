@@ -28,6 +28,7 @@ type MovementPayload = {
   description?: string;
   amount?: number | string;
   appliesIva?: boolean;
+  totalAmount?: number | string;
   kind?: string;
   date?: string;
   status?: string;
@@ -187,7 +188,12 @@ export const handler = async (event: {
       propertyId,
       asString(payload.propertyName) || asString(existing?.propertyName),
     );
-    const totalAmount = roundMoney(appliesIva ? amount * IVA_MULTIPLIER : amount);
+    const payloadTotal = asNumber(payload.totalAmount);
+    const totalAmount = appliesIva
+      ? payloadTotal !== null && payloadTotal >= 0
+        ? roundMoney(payloadTotal)
+        : roundMoney(amount * IVA_MULTIPLIER)
+      : roundMoney(amount);
     const timestamp = nowIso();
     const item = {
       id: asString(existing?.id) || (await getNextSequentialId(tableName, 'MOV')),

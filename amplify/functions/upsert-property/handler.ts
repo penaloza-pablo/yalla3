@@ -9,11 +9,20 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
   resolveYallaPropertyLabel,
   yallaAliasForListingId,
+  isP2BuildingId,
+  isP2RoomListingId,
 } from '../shared/property-identity';
+import {
+  asStringList,
+  isReportGroupType,
+  REPORT_GROUP_TYPE,
+  resolveReportGroups,
+} from '../shared/property-groups';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -35,6 +44,8 @@ type PropertyPayload = {
   bathrooms?: number;
   city?: string;
   neighborhood?: string;
+  memberIds?: unknown;
+  system?: boolean;
 };
 
 const parseBody = (body?: string) => {
@@ -107,14 +118,17 @@ export const handler = async (event: {
     throw new Error(message);
   }
 
-  const yallaNickname =
-    yallaAliasForListingId(id) || payload.nickname?.trim() || '';
+  const isGroup = isReportGroupType(payload.type);
+  const memberIds = asStringList(payload.memberIds);
+  const yallaNickname = isGroup
+    ? payload.nickname?.trim() || payload.title?.trim() || id
+    : yallaAliasForListingId(id) || payload.nickname?.trim() || '';
   const propertyFields = {
     id,
     title: payload.title?.trim() ?? '',
     nickname: yallaNickname,
     active: Boolean(payload.active),
-    type: payload.type?.trim() ?? '',
+    type: isGroup ? REPORT_GROUP_TYPE : payload.type?.trim() ?? '',
     roomType: payload.roomType?.trim() ?? '',
     accommodates: Number(payload.accommodates) || 0,
     bedrooms: Number(payload.bedrooms) || 0,
@@ -122,6 +136,28 @@ export const handler = async (event: {
     city: payload.city?.trim() ?? '',
     neighborhood: payload.neighborhood?.trim() ?? '',
   };
+
+  const fail = (status: number, message: string) => {
+    if (isHttp) {
+      return buildHttpResponse(status, { message });
+    }
+    throw new Error(message);
+  };
+
+  if (isGroup) {
+    if (memberIds.length === 0) {
+      return fail(400, 'A property group needs at least one property.');
+    }
+    if (memberIds.some((memberId) => isReportGroupType(memberId))) {
+      return fail(400, 'A property group cannot contain another group.');
+    }
+    if (
+      !isP2BuildingId(id) &&
+      memberIds.some((memberId) => isP2RoomListingId(memberId) || isP2BuildingId(memberId))
+    ) {
+      return fail(400, 'P2 rooms can only belong to Planta 2.');
+    }
+  }
 
   try {
     // Merge with existing item so bookings/reviews metrics (GuestPaid*, Listing*)
@@ -136,6 +172,39 @@ export const handler = async (event: {
       existing.Item && typeof existing.Item === 'object'
         ? (existing.Item as Record<string, unknown>)
         : {};
+
+    if (isGroup) {
+      const items: Record<string, unknown>[] = [];
+      let exclusiveStartKey: Record<string, unknown> | undefined;
+      do {
+        const scanned = await client.send(
+          new ScanCommand({
+            TableName: tableName,
+            ExclusiveStartKey: exclusiveStartKey,
+          }),
+        );
+        items.push(...((scanned.Items as Record<string, unknown>[]) ?? []));
+        exclusiveStartKey = scanned.LastEvaluatedKey as
+          | Record<string, unknown>
+          | undefined;
+      } while (exclusiveStartKey);
+      const groups = resolveReportGroups(items);
+      for (const memberId of memberIds) {
+        if (memberId === id) {
+          continue;
+        }
+        const owner = groups.find(
+          (group) => group.id !== id && group.memberIds.includes(memberId),
+        );
+        if (owner) {
+          return fail(
+            400,
+            `${memberId} already belongs to ${owner.name}.`,
+          );
+        }
+      }
+    }
+
     const item = {
       ...previous,
       ...propertyFields,
@@ -148,6 +217,12 @@ export const handler = async (event: {
         (typeof previous.ListingNickname === 'string'
           ? previous.ListingNickname
           : ''),
+      ...(isGroup
+        ? {
+            memberIds: [...new Set([id, ...memberIds])],
+            system: Boolean(payload.system),
+          }
+        : {}),
     };
 
     await client.send(
@@ -164,13 +239,17 @@ export const handler = async (event: {
       title: propertyFields.title,
     });
     await recordActivityLog(event, {
-      feature: LOG_FEATURES.PROPERTIES,
+      feature: isGroup ? LOG_FEATURES.PROPERTY_GROUPS : LOG_FEATURES.PROPERTIES,
       action: existing.Item ? 'update' : 'create',
       entityId: id,
       entityName: propertyLabel,
       summary: existing.Item
-        ? `updated property ${quoted(propertyLabel)}`
-        : `added property ${quoted(propertyLabel)}`,
+        ? isGroup
+          ? `updated property group ${quoted(propertyLabel)}`
+          : `updated property ${quoted(propertyLabel)}`
+        : isGroup
+          ? `created property group ${quoted(propertyLabel)}`
+          : `added property ${quoted(propertyLabel)}`,
     });
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;

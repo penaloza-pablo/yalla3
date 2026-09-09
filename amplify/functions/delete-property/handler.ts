@@ -8,7 +8,9 @@ import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
+  GetCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { isP2BuildingId } from '../shared/property-identity';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -85,6 +87,24 @@ export const handler = async (event: {
   }
 
   try {
+    const existing = await client.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { id },
+      }),
+    );
+    const current = existing.Item as Record<string, unknown> | undefined;
+    if (
+      isP2BuildingId(id) ||
+      current?.system === true
+    ) {
+      const message = 'This property group cannot be deleted.';
+      if (isHttp) {
+        return buildHttpResponse(400, { message });
+      }
+      throw new Error(message);
+    }
+
     const deleted = await client.send(
       new DeleteCommand({
         TableName: tableName,

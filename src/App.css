@@ -1683,6 +1683,18 @@ th {
   grid-column: span 2;
 }
 
+.checkbox-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.checkbox-list .form-field-checkbox {
+  margin: 0;
+}
+
 .services-iva-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

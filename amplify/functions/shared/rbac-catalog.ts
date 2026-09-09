@@ -52,7 +52,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Finance',
-    items: ['Property Reports', 'Movements', 'Services & Subscriptions'],
+    items: ['Property Reports', 'Property Groups', 'Movements', 'Services & Subscriptions'],
   },
 ]
 
@@ -202,6 +202,7 @@ export const ROLE_SEEDS: {
             !page.startsWith('Grow solution') &&
             !page.startsWith('Finance solution') &&
             page !== 'Property Reports' &&
+            page !== 'Property Groups' &&
             page !== 'Movements' &&
             page !== 'Services & Subscriptions',
         ),

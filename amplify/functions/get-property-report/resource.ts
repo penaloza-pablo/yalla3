@@ -15,6 +15,7 @@ export const getPropertyReport = defineFunction({
     SUBTRACTIONS_TABLE: 'yalla-substractions',
     MOVEMENTS_TABLE: 'yalla-finance-movements',
     SERVICES_TABLE: 'yalla-finance-services',
+    PURCHASES_TABLE: 'yalla-purchases',
     INVENTORY_TABLE: 'yalla-inventory',
   },
   timeoutSeconds: 60,
