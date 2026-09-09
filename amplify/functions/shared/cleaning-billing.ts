@@ -15,6 +15,7 @@ import {
   type CleaningTypeRecord,
 } from './cleaning-plan';
 import { isHiddenBillingMonth } from './billing-months';
+import { resolveYallaPropertyLabel } from './property-identity';
 import { docClient, getTodayInMadrid, putItem } from './visit-task-utils';
 
 export const OTHER_CLEANING_TYPE_ID = '__other__';
@@ -194,7 +195,11 @@ const detailsByPropertyIdFrom = (
       return [
         propertyId,
         {
-          nickname: asString(item.nickname) || propertyId,
+          nickname:
+            resolveYallaPropertyLabel({
+              id: propertyId,
+              nickname: asString(item.nickname),
+            }) || propertyId,
           types: normalizeCleaningTypes(item.cleaningTypes),
         },
       ];
@@ -247,10 +252,11 @@ const linesForMonth = (
     const catalogPrice = selectedType ? selectedType.price : null;
     const price = overridePrice ?? planPrice ?? catalogPrice;
     const property =
-      details?.nickname ||
-      asString(visit.Property) ||
-      asString(visit.property) ||
-      propertyId;
+      resolveYallaPropertyLabel({
+        id: propertyId,
+        nickname: details?.nickname,
+        title: asString(visit.Property) || asString(visit.property),
+      }) || propertyId;
     const statusValue = asString(visit.status).toUpperCase();
     const base = {
       source: 'visit' as const,

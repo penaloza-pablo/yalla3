@@ -24,6 +24,7 @@ import {
   loadCleaningVisitBookingContexts,
   resolveAutoCleaningType,
 } from '../shared/cleaning-plan-booking-context';
+import { resolveYallaPropertyLabel } from '../shared/property-identity';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -172,8 +173,11 @@ export const handler = async (event: HttpEvent) => {
         propertyId,
         normalizeCleaningTypes(item.cleaningTypes),
       );
-      const nickname =
-        typeof item.nickname === 'string' ? item.nickname.trim() : '';
+      const nickname = resolveYallaPropertyLabel({
+        id: propertyId,
+        nickname:
+          typeof item.nickname === 'string' ? item.nickname.trim() : '',
+      });
       if (nickname) {
         nicknameByPropertyId.set(propertyId, nickname);
       }

@@ -247,7 +247,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
       title:
         current.title.trim() ||
         `${visitType?.name ?? 'Visit'} - ${
-          property?.listingNickname || property?.nickname || 'Property'
+          property ? getPropertyLabel(property) : 'Property'
         }`,
     }))
   }

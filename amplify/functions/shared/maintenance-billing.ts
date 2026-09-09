@@ -1,6 +1,7 @@
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { isHiddenBillingMonth } from './billing-months';
 import { scanAllItems } from './cleaning-plan';
+import { resolveYallaPropertyLabelFromRecord } from './property-identity';
 import {
   docClient,
   getNextSequentialId,
@@ -404,12 +405,7 @@ export const loadMaintenanceVisitsForMonth = async (
 };
 
 const propertyLabel = (item: Record<string, unknown>, fallback: string) =>
-  asString(item.ListingNickname) ||
-  asString(item.listingNickname) ||
-  asString(item.nickname) ||
-  asString(item.Nickname) ||
-  asString(item.title) ||
-  fallback;
+  resolveYallaPropertyLabelFromRecord(item, fallback);
 
 export const loadPropertyLabels = async (propertiesTable: string) => {
   if (!propertiesTable) {

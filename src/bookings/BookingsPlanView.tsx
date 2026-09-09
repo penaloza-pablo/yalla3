@@ -27,6 +27,7 @@ import {
   linenMenuValuesForListing,
   normalizePlannerSettings,
 } from '../../amplify/functions/shared/bookings-planner'
+import { resolveYallaPropertyLabel } from '../../amplify/functions/shared/property-identity'
 import { YallaSwitch } from './YallaSwitch'
 
 type Props = {
@@ -144,7 +145,12 @@ const mapRow = (item: Record<string, unknown>): PlanRow => {
     id: asString(item.ReservationID ?? item.id),
     listingId,
     guestName: asString(item.GuestName) || '—',
-    property: asString(item.ListingNickname ?? item.ListingName) || '—',
+    property:
+      resolveYallaPropertyLabel({
+        id: listingId,
+        listingNickname: asString(item.ListingNickname ?? item.ListingName),
+        nickname: asString(item.ListingNickname ?? item.ListingName),
+      }) || '—',
     checkIn: asString(item.CheckInDate).slice(0, 10),
     checkOut: asString(item.CheckOutDate).slice(0, 10),
     guests: asString(item.Guests),

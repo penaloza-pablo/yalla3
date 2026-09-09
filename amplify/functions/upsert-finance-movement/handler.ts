@@ -17,6 +17,7 @@ import {
   getNextSequentialId,
   putItem,
 } from '../shared/visit-task-utils';
+import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 
 const IVA_MULTIPLIER = 1.21;
 
@@ -83,14 +84,7 @@ const resolvePropertyName = async (propertyId: string, fallback: string) => {
     }),
   );
   const property = result.Item as Record<string, unknown> | undefined;
-  return (
-    asString(property?.listingNickname) ||
-    asString(property?.ListingNickname) ||
-    asString(property?.nickname) ||
-    asString(property?.Nickname) ||
-    asString(property?.title) ||
-    propertyId
-  );
+  return resolveYallaPropertyLabelFromRecord(property, propertyId);
 };
 
 export const handler = async (event: {

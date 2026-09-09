@@ -1,7 +1,20 @@
 import type { PropertyOption } from './types'
+import {
+  isP2BuildingId,
+  isP2RoomListingId,
+  isP2RoomNickname,
+  resolveYallaPropertyLabel,
+} from '../../amplify/functions/shared/property-identity'
+
+export { isP2RoomNickname }
 
 export const getPropertyLabel = (property: PropertyOption) =>
-  property.listingNickname || property.nickname || property.title || property.id
+  resolveYallaPropertyLabel({
+    id: property.id,
+    nickname: property.nickname,
+    listingNickname: property.listingNickname,
+    title: property.title,
+  })
 
 export const isOtherProperty = (property: PropertyOption) =>
   property.id.trim().toLowerCase() === 'other'
@@ -32,29 +45,21 @@ export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
     ),
   )
 
-const P2_ROOM_NICKNAMES = new Set(
-  Array.from({ length: 12 }, (_, index) => String(201 + index)),
-)
-
-export const isP2RoomNickname = (value: string) =>
-  P2_ROOM_NICKNAMES.has(value.trim())
-
 const isMtlPrincipalType = (type?: string) =>
   (type ?? '').trim().toUpperCase() === 'MTL_PRINCIPAL'
 
 const isYallaP2Property = (property: PropertyOption) => {
-  if (isMtlPrincipalType(property.type)) {
+  if (isMtlPrincipalType(property.type) || isP2BuildingId(property.id)) {
     return true
   }
-  const id = property.id.trim().toLowerCase()
   const label = getPropertyLabel(property).trim().toLowerCase()
-  return id === 'planta2' || label === 'p2'
+  return label === 'p2'
 }
 
 const isP2RoomProperty = (property: PropertyOption) =>
+  isP2RoomListingId(property.id) ||
   isP2RoomNickname(property.nickname) ||
-  isP2RoomNickname(property.listingNickname) ||
-  isP2RoomNickname(property.id)
+  isP2RoomNickname(property.listingNickname)
 
 export const filterTemplateAutoAssignPropertyOptions = (
   properties: PropertyOption[],

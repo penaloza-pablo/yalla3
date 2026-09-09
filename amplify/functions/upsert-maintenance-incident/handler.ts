@@ -22,6 +22,10 @@ import {
   getNextSequentialId,
   putItem,
 } from '../shared/visit-task-utils';
+import {
+  resolveYallaPropertyLabelFromRecord,
+  yallaAliasForListingId,
+} from '../shared/property-identity';
 
 type Payload = {
   id?: string;
@@ -36,6 +40,10 @@ const resolvePropertyLabel = async (
   visit: Record<string, unknown>,
   propertyId: string,
 ) => {
+  const alias = yallaAliasForListingId(propertyId);
+  if (alias) {
+    return alias;
+  }
   const fromVisit = [visit.Property, visit.property]
     .map((value) => asString(value))
     .find(Boolean);
@@ -53,13 +61,7 @@ const resolvePropertyLabel = async (
     }),
   );
   const property = result.Item as Record<string, unknown> | undefined;
-  return (
-    asString(property?.ListingNickname) ||
-    asString(property?.listingNickname) ||
-    asString(property?.nickname) ||
-    asString(property?.title) ||
-    propertyId
-  );
+  return resolveYallaPropertyLabelFromRecord(property, propertyId);
 };
 
 export const handler = async (event: {

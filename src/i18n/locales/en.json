@@ -445,7 +445,8 @@
     "bathrooms": "Bathrooms",
     "city": "City",
     "filterSubtitle": "Select one or more values to filter the properties.",
-    "emptyFiltered": "No properties match the current filters."
+    "emptyFiltered": "No properties match the current filters.",
+    "guestyNameMismatch": "Error due to a Guesty mismatch in the property name: {{name}}"
   },
   "purchases": {
     "eyebrow": "Inventory / Purchases",

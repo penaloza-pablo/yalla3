@@ -4,6 +4,12 @@ import { CLEANING_VISIT_TYPE_ID, normalizeStartTime } from './cleaning-plan';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
+  isP2BuildingId,
+  isP2RoomListingId,
+  isP2RoomNickname,
+  resolveYallaPropertyLabelFromRecord,
+} from './property-identity';
+import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
 } from './slack-notifications';
@@ -47,17 +53,21 @@ export const loadPropertyNickname = async (
     const found = await docClient.send(
       new GetCommand({ TableName: detailsTable, Key: { id: propertyId } }),
     );
-    const nickname = asString(found.Item?.nickname);
-    if (nickname) {
-      return nickname;
+    const fromRecord = resolveYallaPropertyLabelFromRecord(
+      found.Item as Record<string, unknown> | undefined,
+      propertyId,
+    );
+    if (fromRecord) {
+      return fromRecord;
     }
   }
-  return (
-    asString(visit.Property) ||
-    asString(visit.property) ||
-    asString(visit.title) ||
-    propertyId ||
-    asString(visit.id)
+  return resolveYallaPropertyLabelFromRecord(
+    {
+      id: propertyId,
+      nickname: asString(visit.Property) || asString(visit.property),
+      title: asString(visit.title),
+    },
+    propertyId || asString(visit.id),
   );
 };
 
@@ -149,7 +159,15 @@ export const classifyOverdueTeam = (
 };
 
 export const isP2CleaningProperty = (...values: string[]) =>
-  values.some((value) => P2_CLEANING_PROPERTIES.has(value.trim().toLowerCase()));
+  values.some((value) => {
+    const trimmed = value.trim();
+    return (
+      P2_CLEANING_PROPERTIES.has(trimmed.toLowerCase()) ||
+      isP2RoomListingId(trimmed) ||
+      isP2RoomNickname(trimmed) ||
+      isP2BuildingId(trimmed)
+    );
+  });
 
 export type OverdueChannelKey =
   | 'cleaningChannelId'

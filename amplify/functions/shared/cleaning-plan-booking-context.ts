@@ -19,6 +19,10 @@ import {
   normalizeGapFreeNights,
   resolveCleaningType,
 } from './cleaning-plan';
+import {
+  isP2BuildingId,
+  yallaAliasForListingId,
+} from './property-identity';
 import { docClient } from './visit-task-utils';
 
 export const NEXT_BOOKING_LOOKAHEAD_DAYS = 90;
@@ -65,6 +69,10 @@ const P2_ROOM_KEYS = new Set(
 export type CleaningPropertyKind = 'p2-building' | 'p2-room' | 'other';
 
 const extractP2RoomKey = (value: string) => {
+  const alias = yallaAliasForListingId(value);
+  if (alias) {
+    return alias.toLowerCase();
+  }
   const folded = foldSearchText(value);
   if (P2_ROOM_KEYS.has(folded)) {
     return folded;
@@ -82,6 +90,9 @@ export const classifyCleaningPropertyKind = (
   }
   if (
     values.some((value) => {
+      if (isP2BuildingId(value)) {
+        return true;
+      }
       const folded = foldSearchText(value);
       return folded === 'p2' || /\bp2\b/.test(folded);
     })

@@ -46,10 +46,12 @@ import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
 import { usePermissions } from './rbac/PermissionsProvider'
+import { CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
 import {
-  CORE_PAGES,
-  NAVIGATION,
-} from '../amplify/functions/shared/rbac-catalog'
+  collectGuestyNicknameMismatches,
+  resolveYallaPropertyLabel,
+  yallaAliasForListingId,
+} from '../amplify/functions/shared/property-identity'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
@@ -202,6 +204,7 @@ type PropertyRow = {
   id: string
   title: string
   nickname: string
+  listingNickname: string
   active: boolean
   type: string
   mtlPrincipalId?: string
@@ -405,7 +408,8 @@ const computeSubtractionPricing = (
 const propertyFieldMap = {
   id: ['id', 'ID', 'ListingID', 'listingId'],
   title: ['title', 'Title'],
-  nickname: ['nickname', 'Nickname', 'ListingNickname', 'listingNickname'],
+  nickname: ['nickname', 'Nickname'],
+  listingNickname: ['ListingNickname', 'listingNickname'],
   active: ['active', 'Active'],
   type: ['type', 'Type'],
   mtlPrincipalId: ['MTL_PRINCIPALID', 'mtlPrincipalId', 'MTL_PRINCIPAL_ID'],
@@ -489,7 +493,8 @@ const displayBookingDetail = (value: string) => value.trim() || '—'
 const reviewFieldMap = {
   reviewId: ['ReviewID', 'reviewId', 'id', 'ID'],
   guestName: ['GuestName', 'guestName', 'Guest', 'guest'],
-  listingNickname: ['ListingNickname', 'listingNickname', 'listingNickname'],
+  listingNickname: ['ListingNickname', 'listingNickname'],
+  listingId: ['ListingID', 'listingId', 'listing_id'],
   rating: ['Rating', 'rating'],
   createdAt: ['CreatedAt', 'createdAt', 'Created At', 'created at'],
   categoryAccuracy: ['category_ratings_accuracy'],
@@ -1090,11 +1095,32 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
     getItemValue(item, ['title', 'Title']) !== undefined ||
     getItemValue(item, ['active', 'Active']) !== undefined
 
+  const id = getStringValue(getItemValue(item, propertyFieldMap.id)) || '—'
+  const dynamoNickname = getStringValue(
+    getItemValue(item, propertyFieldMap.nickname),
+  )
+  const storedListingNickname = getStringValue(
+    getItemValue(item, propertyFieldMap.listingNickname),
+  )
+  const yallaAlias = yallaAliasForListingId(id)
+  const listingNickname =
+    storedListingNickname ||
+    (yallaAlias && dynamoNickname && dynamoNickname !== yallaAlias
+      ? dynamoNickname
+      : '')
+  const title = getStringValue(getItemValue(item, propertyFieldMap.title)) || '—'
+
   return {
-    id: getStringValue(getItemValue(item, propertyFieldMap.id)) || '—',
-    title: getStringValue(getItemValue(item, propertyFieldMap.title)) || '—',
+    id,
+    title,
     nickname:
-      getStringValue(getItemValue(item, propertyFieldMap.nickname)) || '—',
+      resolveYallaPropertyLabel({
+        id,
+        nickname: dynamoNickname,
+        listingNickname,
+        title,
+      }) || '—',
+    listingNickname,
     active: resolvePropertyActive(item),
     type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
     mtlPrincipalId:
@@ -1203,14 +1229,24 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
 
   const guestCountValue = getItemValue(item, bookingFieldMap.guestCount)
 
+  const listingId = getStringValue(getItemValue(item, bookingFieldMap.listingId))
+  const listingNickname = getStringValue(
+    getItemValue(item, bookingFieldMap.property),
+  )
+
   return {
     id: getStringValue(getItemValue(item, bookingFieldMap.id)) || '—',
     confirmationCode: getStringValue(
       getItemValue(item, bookingFieldMap.confirmationCode),
     ),
     guestName: getStringValue(getItemValue(item, bookingFieldMap.guestName)) || '—',
-    property: getStringValue(getItemValue(item, bookingFieldMap.property)) || '—',
-    listingId: getStringValue(getItemValue(item, bookingFieldMap.listingId)),
+    property:
+      resolveYallaPropertyLabel({
+        id: listingId,
+        listingNickname,
+        nickname: listingNickname,
+      }) || '—',
+    listingId,
     checkInRaw,
     checkIn: formatUpdatedDate(checkInRaw),
     checkOutRaw,
@@ -1232,11 +1268,19 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
 
 const mapReviewRow = (item: Record<string, unknown>): ReviewRow => {
   const createdAtRaw = getStringValue(getItemValue(item, reviewFieldMap.createdAt))
+  const listingId = getStringValue(getItemValue(item, reviewFieldMap.listingId))
+  const listingNickname = getStringValue(
+    getItemValue(item, reviewFieldMap.listingNickname),
+  )
   return {
     reviewId: getStringValue(getItemValue(item, reviewFieldMap.reviewId)) || '—',
     guestName: getStringValue(getItemValue(item, reviewFieldMap.guestName)) || '—',
     listingNickname:
-      getStringValue(getItemValue(item, reviewFieldMap.listingNickname)) || '—',
+      resolveYallaPropertyLabel({
+        id: listingId,
+        listingNickname,
+        nickname: listingNickname,
+      }) || '—',
     rating: getNumberValue(getItemValue(item, reviewFieldMap.rating)),
     createdAtRaw,
     createdAt: formatAlertDate(createdAtRaw),
@@ -1860,12 +1904,34 @@ function App() {
           id: row.id,
           nickname: row.nickname,
           title: row.title,
-          listingNickname: row.nickname,
+          listingNickname: row.listingNickname || row.nickname,
           type: row.type && row.type !== '—' ? row.type : undefined,
           mtlPrincipalId: row.mtlPrincipalId,
         })),
     [propertyRows],
   )
+
+  const guestyNameMismatches = useMemo(
+    () =>
+      collectGuestyNicknameMismatches(
+        propertyRows.filter(isManagedProperty).map((row) => ({
+          id: row.id,
+          nickname: row.nickname,
+          listingNickname: row.listingNickname,
+          title: row.title,
+        })),
+      ),
+    [propertyRows],
+  )
+
+  const guestyNameMismatchMessage = useMemo(() => {
+    if (guestyNameMismatches.length === 0) {
+      return null
+    }
+    return t('properties.guestyNameMismatch', {
+      name: guestyNameMismatches.join(', '),
+    })
+  }, [guestyNameMismatches, t])
 
   const subtractionsFilteredRows = useMemo(() => {
     const fromDate = subtractionsFilters.dateFrom
@@ -2020,7 +2086,7 @@ function App() {
     )
   }
 
-  const getEndpoint = (key: string, fallback?: string) => {
+  const getEndpoint = useCallback((key: string, fallback?: string) => {
     const config = Amplify.getConfig() as { custom?: Record<string, string> }
     const outputCustom = (outputs as { custom?: Record<string, string> }).custom
     const fromAmplify = config.custom?.[key] ?? outputCustom?.[key]
@@ -2031,7 +2097,7 @@ function App() {
       return fallback
     }
     return fromAmplify ?? (fallback || undefined)
-  }
+  }, [])
 
   const fetchInventory = useCallback(async () => {
     const endpoint = getEndpoint(
@@ -2288,20 +2354,17 @@ function App() {
           ),
         )
         setBookingsAvailableStatuses(uniqueStatuses)
-        const selectedProperty = activeManagedPropertyOptions.find(
-          (property) => property.id === bookingsFilters.propertyId,
-        )
+        const propertyAlias = yallaAliasForListingId(bookingsFilters.propertyId)
         const filteredRows = mappedRows.filter((row) => {
           if (isExcludedBookingStatus(row.status)) {
             return false
           }
           if (bookingsFilters.propertyId) {
             const matchesId = row.listingId === bookingsFilters.propertyId
-            const matchesName =
-              selectedProperty != null &&
-              row.property.trim().toLowerCase() ===
-                selectedProperty.nickname.trim().toLowerCase()
-            if (!matchesId && !matchesName) {
+            const matchesAlias =
+              Boolean(propertyAlias) &&
+              row.property.trim().toLowerCase() === propertyAlias.toLowerCase()
+            if (!matchesId && !matchesAlias) {
               return false
             }
           }
@@ -2333,7 +2396,7 @@ function App() {
         setIsBookingsLoading(false)
       }
     },
-    [activeManagedPropertyOptions, bookingsFilters, bookingsPageSize],
+    [bookingsFilters, bookingsPageSize],
   )
 
   const refreshBookingsFromGuesty = useCallback(async () => {
@@ -2664,6 +2727,7 @@ function App() {
             id: diff.row.id,
             title: diff.row.title,
             nickname: diff.row.nickname,
+            listingNickname: diff.row.listingNickname,
             active: diff.row.active,
             type: diff.row.type,
             roomType: diff.row.roomType,
@@ -2831,37 +2895,52 @@ function App() {
     }
     if (activePage === 'Purchases') {
       void fetchPurchases()
-      void fetchProperties()
     }
     if (activePage === 'Subtractions') {
       void fetchSubtractions()
     }
-    if (activePage === 'Properties') {
-      void fetchProperties()
-    }
     if (activePage === 'Bookings') {
-      void fetchProperties()
       void fetchBookings(bookingsCurrentCursor)
     }
     if (activePage === 'Reviews') {
       void fetchReviews()
-    }
-    if (activePage === 'Daily Operations' || activePage === 'Unassigned tasks' || activePage === 'Visit templates' || activePage === 'Template Auto Assign' || activePage === 'Property Reports' || activePage === 'Movements' || activePage === 'Services & Subscriptions') {
-      void fetchProperties()
-    }
-    if (activePage === 'Cleaning Plan' || activePage === 'Cleaning Incidents' || activePage === 'Cleaning Billing' || activePage === 'Cleaning settings' || activePage === 'Maintenance Plan' || activePage === 'Maintenance Incidents' || activePage === 'Maintenance Billing' || activePage === 'Maintenance settings' || activePage === 'Bookings Plan' || activePage === 'Bookings settings') {
-      void fetchProperties()
     }
   }, [
     activePage,
     bookingsCurrentCursor,
     fetchBookings,
     fetchInventory,
-    fetchProperties,
     fetchPurchases,
     fetchReviews,
     fetchSubtractions,
   ])
+
+  useEffect(() => {
+    const needsProperties =
+      activePage === 'Purchases' ||
+      activePage === 'Properties' ||
+      activePage === 'Bookings' ||
+      activePage === 'Daily Operations' ||
+      activePage === 'Unassigned tasks' ||
+      activePage === 'Visit templates' ||
+      activePage === 'Template Auto Assign' ||
+      activePage === 'Property Reports' ||
+      activePage === 'Movements' ||
+      activePage === 'Services & Subscriptions' ||
+      activePage === 'Cleaning Plan' ||
+      activePage === 'Cleaning Incidents' ||
+      activePage === 'Cleaning Billing' ||
+      activePage === 'Cleaning settings' ||
+      activePage === 'Maintenance Plan' ||
+      activePage === 'Maintenance Incidents' ||
+      activePage === 'Maintenance Billing' ||
+      activePage === 'Maintenance settings' ||
+      activePage === 'Bookings Plan' ||
+      activePage === 'Bookings settings'
+    if (needsProperties) {
+      void fetchProperties()
+    }
+  }, [activePage, fetchProperties])
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -4656,6 +4735,11 @@ function App() {
       </button>
 
       <main className="main">
+        {guestyNameMismatchMessage ? (
+          <div className="alert" role="alert">
+            {guestyNameMismatchMessage}
+          </div>
+        ) : null}
         {!permissionsReady ? (
           <div
             className="page-loader"

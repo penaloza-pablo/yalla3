@@ -22,6 +22,7 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { docClient, putItem } from '../shared/visit-task-utils';
+import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 
 type CleaningTypePayload = {
   id?: string;
@@ -64,21 +65,8 @@ const amenitiesRulesFromPayload = (value: unknown): AmenityRule[] | null => {
   return rules;
 };
 
-const propertyLabel = (item: Record<string, unknown>, fallbackId: string) => {
-  if (typeof item.nickname === 'string' && item.nickname.trim()) {
-    return item.nickname;
-  }
-  if (typeof item.Nickname === 'string' && item.Nickname.trim()) {
-    return item.Nickname;
-  }
-  if (typeof item.listingNickname === 'string' && item.listingNickname.trim()) {
-    return item.listingNickname;
-  }
-  if (typeof item.title === 'string' && item.title.trim()) {
-    return item.title;
-  }
-  return fallbackId;
-};
+const propertyLabel = (item: Record<string, unknown>, fallbackId: string) =>
+  resolveYallaPropertyLabelFromRecord(item, fallbackId);
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };

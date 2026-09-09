@@ -5,6 +5,7 @@ import {
   isMonthId,
 } from './cleaning-billing';
 import { nowIso } from './dynamo-http';
+import { resolveYallaPropertyLabelFromRecord } from './property-identity';
 import { docClient } from './visit-task-utils';
 
 export const PHASE1_PROPERTY_NICKNAMES = ['esperanza 9'];
@@ -80,6 +81,7 @@ export const isPhase1Property = (property: Record<string, unknown>) => {
     asString(property.ListingNickname),
     asString(property.title),
     asString(property.name),
+    resolveYallaPropertyLabelFromRecord(property, asString(property.id)),
   ];
   return names.some((name) => isPhase1PropertyName(name));
 };
@@ -237,6 +239,7 @@ export const subtractionMatchesProperty = (
     asString(property.listingNickname),
     asString(property.title),
     asString(property.name),
+    resolveYallaPropertyLabelFromRecord(property, propertyId),
   ]
     .map(normalizeNickname)
     .filter(Boolean);
@@ -476,6 +479,7 @@ export const listingMatchesProperty = (
     asString(property.nickname),
     asString(property.listingNickname),
     asString(property.title),
+    resolveYallaPropertyLabelFromRecord(property, propertyId),
   ]
     .map(normalizeNickname)
     .filter(Boolean);

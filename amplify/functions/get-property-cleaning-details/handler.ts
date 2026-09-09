@@ -11,6 +11,7 @@ import {
   normalizeGapFreeNights,
   scanAllItems,
 } from '../shared/cleaning-plan';
+import { resolveYallaPropertyLabel } from '../shared/property-identity';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -41,10 +42,11 @@ export const handler = async (event: HttpEvent) => {
         const id = typeof item.id === 'string' ? item.id : '';
         const propertyId =
           typeof item.propertyId === 'string' ? item.propertyId : id;
-        const nickname =
-          typeof item.nickname === 'string' && item.nickname.trim()
-            ? item.nickname
-            : id;
+        const nickname = resolveYallaPropertyLabel({
+          id: propertyId,
+          nickname:
+            typeof item.nickname === 'string' ? item.nickname.trim() : '',
+        }) || propertyId;
         return {
           id,
           propertyId,

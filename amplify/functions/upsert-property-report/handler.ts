@@ -13,6 +13,7 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { docClient, putItem } from '../shared/visit-task-utils';
+import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 import {
   asString,
   deriveReportStatus,
@@ -124,7 +125,7 @@ export const handler = async (event: {
 
   try {
     await putItem(tableName, item);
-    const name = `${asString(property.nickname) || propertyId} ${monthId}`;
+    const name = `${resolveYallaPropertyLabelFromRecord(property, propertyId)} ${monthId}`;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PROPERTY_REPORTS,
       action: nextStatus === 'CLOSED' ? 'close' : action,

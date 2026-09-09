@@ -445,7 +445,8 @@
     "bathrooms": "Baños",
     "city": "Ciudad",
     "filterSubtitle": "Selecciona uno o más valores para filtrar las propiedades.",
-    "emptyFiltered": "Ninguna propiedad coincide con los filtros actuales."
+    "emptyFiltered": "Ninguna propiedad coincide con los filtros actuales.",
+    "guestyNameMismatch": "Error por incongruencia con Guesty en el nombre de la propiedad: {{name}}"
   },
   "purchases": {
     "eyebrow": "Inventario / Compras",

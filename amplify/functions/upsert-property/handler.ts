@@ -10,6 +10,10 @@ import {
   GetCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
+import {
+  resolveYallaPropertyLabel,
+  yallaAliasForListingId,
+} from '../shared/property-identity';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -22,6 +26,7 @@ type PropertyPayload = {
   id?: string;
   title?: string;
   nickname?: string;
+  listingNickname?: string;
   active?: boolean;
   type?: string;
   roomType?: string;
@@ -102,10 +107,12 @@ export const handler = async (event: {
     throw new Error(message);
   }
 
+  const yallaNickname =
+    yallaAliasForListingId(id) || payload.nickname?.trim() || '';
   const propertyFields = {
     id,
     title: payload.title?.trim() ?? '',
-    nickname: payload.nickname?.trim() ?? '',
+    nickname: yallaNickname,
     active: Boolean(payload.active),
     type: payload.type?.trim() ?? '',
     roomType: payload.roomType?.trim() ?? '',
@@ -137,7 +144,7 @@ export const handler = async (event: {
           ? previous.ListingID
           : id,
       ListingNickname:
-        propertyFields.nickname ||
+        payload.listingNickname?.trim() ||
         (typeof previous.ListingNickname === 'string'
           ? previous.ListingNickname
           : ''),
@@ -149,7 +156,13 @@ export const handler = async (event: {
         Item: item,
       }),
     );
-    const propertyLabel = propertyFields.nickname || propertyFields.title || id;
+    const propertyLabel = resolveYallaPropertyLabel({
+      id,
+      nickname: propertyFields.nickname,
+      listingNickname:
+        typeof item.ListingNickname === 'string' ? item.ListingNickname : '',
+      title: propertyFields.title,
+    });
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PROPERTIES,
       action: existing.Item ? 'update' : 'create',

@@ -28,6 +28,10 @@ import {
   visitScheduleWriteFields,
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
+import {
+  resolveYallaPropertyLabel,
+  yallaAliasForListingId,
+} from '../../amplify/functions/shared/property-identity'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-title'
 import { CLEANING_VISIT_TYPE_ID, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
@@ -195,14 +199,23 @@ const mapProperty = (item: Record<string, unknown>): PropertyOption => {
       item.MTL_PRINCIPAL_ID ??
       '',
   ).trim()
+  const id = String(item.id ?? '')
+  const nicknameRaw = String(item.nickname ?? item.Nickname ?? '')
+  const listingNickname = String(
+    item.ListingNickname ?? item.listingNickname ?? '',
+  )
+  const title = String(item.title ?? '')
 
   return {
-    id: String(item.id ?? ''),
-    nickname: String(item.nickname ?? item.Nickname ?? item.title ?? item.id ?? ''),
-    title: String(item.title ?? ''),
-    listingNickname: String(
-      item.ListingNickname ?? item.listingNickname ?? item.nickname ?? '',
-    ),
+    id,
+    nickname: resolveYallaPropertyLabel({
+      id,
+      nickname: nicknameRaw,
+      listingNickname,
+      title,
+    }),
+    title,
+    listingNickname,
     type: String(item.type ?? item.Type ?? '').trim() || undefined,
     mtlPrincipalId: mtlPrincipalId || undefined,
   }
@@ -238,7 +251,8 @@ const resolveBookingPropertyId = (
       return byId.id
     }
   }
-  const nick = listingNickname.trim().toLowerCase()
+  const alias = yallaAliasForListingId(listingId)
+  const nick = (alias || listingNickname).trim().toLowerCase()
   if (!nick) {
     return listingId
   }
@@ -893,12 +907,26 @@ export function DailyOperationsView({
   useEffect(() => {
     setPropertyOptions((current) => {
       const previousById = new Map(current.map((item) => [item.id, item]))
-      return propertyOptionsProp.map((property) => ({
+      const next = propertyOptionsProp.map((property) => ({
         ...property,
+        nickname: resolveYallaPropertyLabel(property),
         mtlPrincipalId:
           property.mtlPrincipalId?.trim() ||
           previousById.get(property.id)?.mtlPrincipalId,
       }))
+      if (
+        current.length === next.length &&
+        current.every(
+          (item, index) =>
+            item.id === next[index]?.id &&
+            item.nickname === next[index]?.nickname &&
+            item.listingNickname === next[index]?.listingNickname &&
+            item.mtlPrincipalId === next[index]?.mtlPrincipalId,
+        )
+      ) {
+        return current
+      }
+      return next
     })
   }, [propertyOptionsProp])
 
@@ -1272,7 +1300,7 @@ export function DailyOperationsView({
       title:
         current.title.trim() ||
         `${visitType?.name ?? 'Visit'} - ${
-          property?.listingNickname || property?.nickname || 'Property'
+          property ? getPropertyLabel(property) : 'Property'
         }`,
     }))
   }
@@ -1286,7 +1314,7 @@ export function DailyOperationsView({
     const title =
       visitForm.title.trim() ||
       `${visitType?.name ?? 'Visit'} - ${
-        property?.listingNickname || property?.nickname || 'Property'
+        property ? getPropertyLabel(property) : 'Property'
       }`
 
     const payload: Record<string, unknown> = {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import { getPropertyLabel } from '../operations/propertyHelpers'
+import { resolveYallaPropertyLabel } from '../../amplify/functions/shared/property-identity'
 import type { PropertyOption } from '../operations/types'
 import type {
   AmenityRule,
@@ -181,7 +182,10 @@ const mapDetails = (
 ): PropertyCleaningDetailsRecord => ({
   id: String(item.id ?? item.propertyId ?? ''),
   propertyId: String(item.propertyId ?? item.id ?? ''),
-  nickname: String(item.nickname ?? item.propertyId ?? item.id ?? ''),
+  nickname: resolveYallaPropertyLabel({
+    id: String(item.propertyId ?? item.id ?? ''),
+    nickname: String(item.nickname ?? item.propertyId ?? item.id ?? ''),
+  }),
   cleaningTypes: Array.isArray(item.cleaningTypes)
     ? (item.cleaningTypes as Record<string, unknown>[]).map(mapCleaningType)
     : [],
@@ -407,16 +411,27 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
       endpoints.properties,
     )
     setProperties(
-      (payload.items ?? []).map((item) => ({
-        id: String(item.id ?? ''),
-        nickname: String(
+      (payload.items ?? []).map((item) => {
+        const id = String(item.id ?? '')
+        const nicknameRaw = String(
           item.nickname ?? item.Nickname ?? item.title ?? item.id ?? '',
-        ),
-        title: String(item.title ?? ''),
-        listingNickname: String(
-          item.ListingNickname ?? item.listingNickname ?? item.nickname ?? '',
-        ),
-      })),
+        )
+        const listingNickname = String(
+          item.ListingNickname ?? item.listingNickname ?? '',
+        )
+        const title = String(item.title ?? '')
+        return {
+          id,
+          nickname: resolveYallaPropertyLabel({
+            id,
+            nickname: nicknameRaw,
+            listingNickname,
+            title,
+          }),
+          title,
+          listingNickname,
+        }
+      }),
     )
   }, [endpoints.properties])
 

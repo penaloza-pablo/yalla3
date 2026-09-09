@@ -1,3 +1,4 @@
+import { isP2RoomListingId } from '../../amplify/functions/shared/property-identity'
 import type { CleaningBillingPropertyGroup } from './types'
 
 export const PROPERTY_GROUP_CHIPS: CleaningBillingPropertyGroup[] = [
@@ -41,7 +42,11 @@ export const propertyGroupOf = (
   if (isOtherPropertyKey(label) || isOtherPropertyKey(propertyId)) {
     return 'other'
   }
-  if (isP2PropertyKey(label) || isP2PropertyKey(propertyId)) {
+  if (
+    isP2PropertyKey(label) ||
+    isP2PropertyKey(propertyId) ||
+    isP2RoomListingId(propertyId)
+  ) {
     return 'p2'
   }
   return 'apartments'

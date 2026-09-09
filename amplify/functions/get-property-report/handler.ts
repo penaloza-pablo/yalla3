@@ -27,6 +27,7 @@ import {
   reservationFromPayload,
   roundMoney,
 } from '../shared/property-reports';
+import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -148,11 +149,7 @@ export const handler = async (event: HttpEvent) => {
       return buildHttpResponse(200, {
         property: {
           id: propertyId,
-          name:
-            asString(property.nickname) ||
-            asString(property.listingNickname) ||
-            asString(property.title) ||
-            propertyId,
+          name: resolveYallaPropertyLabelFromRecord(property, propertyId),
         },
         months,
       });
@@ -229,11 +226,7 @@ export const handler = async (event: HttpEvent) => {
     return buildHttpResponse(200, {
       property: {
         id: propertyId,
-        name:
-          asString(property.nickname) ||
-          asString(property.listingNickname) ||
-          asString(property.title) ||
-          propertyId,
+        name: resolveYallaPropertyLabelFromRecord(property, propertyId),
       },
       months,
       report,
