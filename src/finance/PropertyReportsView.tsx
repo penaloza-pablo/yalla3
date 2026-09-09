@@ -89,6 +89,22 @@ type ServiceLine = {
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
+const PAYOUT_CLEANING_GROSS_RATE = 0.155
+
+const payoutGuestPay = (booking: ReportBooking) => {
+  if (booking.hostPayout === null && booking.hostServiceFee === null) {
+    return null
+  }
+  return roundMoney((booking.hostPayout ?? 0) + (booking.hostServiceFee ?? 0))
+}
+
+const payoutCleaningGross = (cleaningFee: number | null) => {
+  if (cleaningFee === null) {
+    return null
+  }
+  return roundMoney(cleaningFee - cleaningFee * PAYOUT_CLEANING_GROSS_RATE)
+}
+
 const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
   roundMoney(net * (ivaRate / 100))
 
@@ -362,9 +378,19 @@ export function PropertyReportsView({
     () => ({
       count: bookings.length,
       payout: bookings.reduce((sum, booking) => sum + (booking.hostPayout ?? 0), 0),
+      paidByGuest: roundMoney(
+        bookings.reduce((sum, booking) => sum + (payoutGuestPay(booking) ?? 0), 0),
+      ),
       cleaningFee: bookings.reduce(
         (sum, booking) => sum + (booking.fareCleaning ?? 0),
         0,
+      ),
+      cleaningGross: roundMoney(
+        bookings.reduce(
+          (sum, booking) =>
+            sum + (payoutCleaningGross(booking.fareCleaning) ?? 0),
+          0,
+        ),
       ),
       serviceFee: bookings.reduce(
         (sum, booking) => sum + (booking.hostServiceFee ?? 0),
@@ -1038,19 +1064,19 @@ export function PropertyReportsView({
                     <p className="card-value">{bookingTotals.count}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.payout')}</p>
+                    <p className="card-label">{t('propertyReports.paidByGuest')}</p>
                     <p className="card-value">
-                      {money.format(bookingTotals.payout)}
+                      {money.format(bookingTotals.paidByGuest)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.cleaningFee')}</p>
+                    <p className="card-label">{t('propertyReports.cleaningGross')}</p>
                     <p className="card-value">
-                      {money.format(bookingTotals.cleaningFee)}
+                      {money.format(bookingTotals.cleaningGross)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.serviceFee')}</p>
+                    <p className="card-label">{t('propertyReports.channelFee')}</p>
                     <p className="card-value">
                       {money.format(bookingTotals.serviceFee)}
                     </p>
@@ -1072,10 +1098,10 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.bookingId')}</th>
                       <th>{t('propertyReports.guestName')}</th>
                       <th>{t('propertyReports.checkIn')}</th>
-                      <th>{t('propertyReports.checkOut')}</th>
-                      <th>{t('propertyReports.hostPayout')}</th>
-                      <th>{t('propertyReports.fareCleaning')}</th>
-                      <th>{t('propertyReports.hostServiceFee')}</th>
+                      <th>{t('propertyReports.paidByGuest')}</th>
+                      <th>{t('propertyReports.cleaningGross')}</th>
+                      <th>{t('propertyReports.channelFee')}</th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1084,29 +1110,85 @@ export function PropertyReportsView({
                         <td colSpan={7}>{t('propertyReports.emptyBookings')}</td>
                       </tr>
                     ) : (
-                      bookings.map((booking) => (
-                        <tr key={booking.reservationId || booking.bookingId}>
-                          <td>{booking.bookingId}</td>
-                          <td>{booking.guestName || '—'}</td>
-                          <td>{dateLabel(booking.checkInDate)}</td>
-                          <td>{dateLabel(booking.checkOutDate)}</td>
-                          <td>
-                            {booking.hostPayout === null
-                              ? '—'
-                              : money.format(booking.hostPayout)}
-                          </td>
-                          <td>
-                            {booking.fareCleaning === null
-                              ? '—'
-                              : money.format(booking.fareCleaning)}
-                          </td>
-                          <td>
-                            {booking.hostServiceFee === null
-                              ? '—'
-                              : money.format(booking.hostServiceFee)}
-                          </td>
-                        </tr>
-                      ))
+                      bookings.map((booking) => {
+                        const rowId = `booking:${booking.reservationId || booking.bookingId}`
+                        const isExpanded = expandedRowIds.has(rowId)
+                        const guestPay = payoutGuestPay(booking)
+                        const cleaningGross = payoutCleaningGross(
+                          booking.fareCleaning,
+                        )
+                        return (
+                          <Fragment key={booking.reservationId || booking.bookingId}>
+                            <tr>
+                              <td>{booking.bookingId}</td>
+                              <td>{booking.guestName || '—'}</td>
+                              <td>{dateLabel(booking.checkInDate)}</td>
+                              <td>
+                                {guestPay === null
+                                  ? '—'
+                                  : money.format(guestPay)}
+                              </td>
+                              <td>
+                                {cleaningGross === null
+                                  ? '—'
+                                  : money.format(cleaningGross)}
+                              </td>
+                              <td>
+                                {booking.hostServiceFee === null
+                                  ? '—'
+                                  : money.format(booking.hostServiceFee)}
+                              </td>
+                              <td>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                  onClick={() => toggleExpandedRow(rowId)}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={7}>
+                                  <div className="detail-grid report-iva-details">
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.checkOut')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {dateLabel(booking.checkOutDate)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.payout')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {booking.hostPayout === null
+                                          ? '—'
+                                          : money.format(booking.hostPayout)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.cleaningNet')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {booking.fareCleaning === null
+                                          ? '—'
+                                          : money.format(booking.fareCleaning)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
