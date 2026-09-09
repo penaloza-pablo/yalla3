@@ -968,6 +968,51 @@ button.today-card {
   font-size: 1.15rem;
 }
 
+.report-iva-details {
+  grid-template-columns: repeat(2, minmax(160px, 280px));
+  justify-content: start;
+}
+
+.report-iva-details .form-field {
+  margin: 0;
+}
+
+.report-iva-details .form-field span {
+  margin: 0 0 6px;
+  color: #667085;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-iva-details .detail-span {
+  grid-column: 1 / -1;
+}
+
+.report-iva-details .detail-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.report-table-clamp {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.report-col-clamp {
+  width: 25%;
+  max-width: 25%;
+  overflow: hidden;
+}
+
+.report-truncated-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 .card-title {
   margin: 0;
   font-size: 1.2rem;
@@ -4308,6 +4353,22 @@ th {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
+  }
+
+  .report-table-clamp {
+    table-layout: auto;
+  }
+
+  .report-col-clamp {
+    width: auto;
+    max-width: none;
+    overflow: visible;
+  }
+
+  .report-truncated-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
 
   .data-table thead {

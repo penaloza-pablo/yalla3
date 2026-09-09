@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  IVA_RATES,
+  parseIvaRate,
+  type IvaRate,
+} from '../../amplify/functions/shared/finance-services'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { fetchJson } from '../operations/api'
@@ -50,6 +55,7 @@ type CleaningLine = {
   status: string
   price: number | null
   kitCost: number
+  ivaRate: IvaRate
 }
 
 type MaintenanceLine = {
@@ -58,6 +64,7 @@ type MaintenanceLine = {
   title: string
   visitTypeName: string
   price: number | null
+  ivaRate: IvaRate
 }
 
 type ExpenseLine = {
@@ -67,6 +74,7 @@ type ExpenseLine = {
   date: string
   amountExclIva: number
   amountInclIva: number
+  ivaRate: IvaRate
 }
 
 type ServiceLine = {
@@ -76,7 +84,119 @@ type ServiceLine = {
   date: string
   price: number
   priceWithIva: number
+  ivaRate: IvaRate
 }
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100
+
+const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
+  roundMoney(net * (ivaRate / 100))
+
+const grossFromNet = (net: number, ivaRate: IvaRate) =>
+  roundMoney(net + ivaEuroFromNet(net, ivaRate))
+
+const inferIvaRate = (net: number, gross: number, fallback: IvaRate = 21): IvaRate => {
+  if (!Number.isFinite(net) || !Number.isFinite(gross)) {
+    return fallback
+  }
+  if (Math.abs(net) < 0.005) {
+    return Math.abs(gross) < 0.005 ? 0 : fallback
+  }
+  const ratio = (gross - net) / net
+  if (Math.abs(ratio - 0.21) < 0.02) {
+    return 21
+  }
+  if (Math.abs(ratio - 0.1) < 0.02) {
+    return 10
+  }
+  if (Math.abs(ratio) < 0.02) {
+    return 0
+  }
+  return fallback
+}
+
+type IvaDetailsProps = {
+  ivaRate: IvaRate
+  netAmount: number
+  money: Intl.NumberFormat
+  onChange: (rate: IvaRate) => void
+  extra?: Array<{ label: string; value: string }>
+}
+
+const ReportIvaDetails = ({
+  ivaRate,
+  netAmount,
+  money,
+  onChange,
+  extra,
+}: IvaDetailsProps) => {
+  const { t } = useTranslation()
+  return (
+    <div className="detail-grid report-iva-details">
+      {extra?.map((item) => (
+        <div key={item.label} className="detail-span">
+          <p className="detail-label">{item.label}</p>
+          <p className="detail-value">{item.value || '—'}</p>
+        </div>
+      ))}
+      <div>
+        <label className="form-field">
+          <span>{t('propertyReports.ivaPercent')}</span>
+          <select
+            value={String(ivaRate)}
+            onChange={(event) =>
+              onChange(parseIvaRate(event.target.value) ?? 0)
+            }
+          >
+            {IVA_RATES.map((rate) => (
+              <option key={rate} value={rate}>
+                {rate === 10
+                  ? t('common.iva10')
+                  : rate === 21
+                    ? t('common.iva21')
+                    : t('common.ivaNone')}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div>
+        <p className="detail-label">{t('propertyReports.ivaEuro')}</p>
+        <p className="detail-value">
+          {money.format(ivaEuroFromNet(netAmount, ivaRate))}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const TableToggleButton = ({
+  open,
+  onClick,
+  expandLabel,
+  collapseLabel,
+}: {
+  open: boolean
+  onClick: () => void
+  expandLabel: string
+  collapseLabel: string
+}) => (
+  <button
+    className="btn-icon btn-icon-ghost"
+    type="button"
+    aria-expanded={open}
+    aria-label={open ? collapseLabel : expandLabel}
+    onClick={onClick}
+  >
+    {open ? '▾' : '▸'}
+  </button>
+)
+
+const TruncatedText = ({ value }: { value: string }) => (
+  <span className="report-truncated-text" title={value || undefined}>
+    {value || '—'}
+  </span>
+)
 
 const fallbackMonths = (): ReportMonth[] =>
   listPropertyReportMonthIds(getTodayMadrid()).map((id) => ({
@@ -127,10 +247,10 @@ export function PropertyReportsView({
   const [maintenanceLines, setMaintenanceLines] = useState<MaintenanceLine[]>([])
   const [cleaningTotal, setCleaningTotal] = useState(0)
   const [cleaningKitCost, setCleaningKitCost] = useState(0)
-  const [cleaningKitCostWithIva, setCleaningKitCostWithIva] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -167,11 +287,57 @@ export function PropertyReportsView({
     }),
     [bookings],
   )
-  const cleaningPriceWithIva = cleaningTotal * 1.21
+  const cleaningIvaTotal = useMemo(
+    () =>
+      roundMoney(
+        cleaningLines.reduce(
+          (sum, line) => sum + ivaEuroFromNet(line.price ?? 0, line.ivaRate),
+          0,
+        ),
+      ),
+    [cleaningLines],
+  )
+  const maintenanceIvaTotal = useMemo(
+    () =>
+      roundMoney(
+        maintenanceLines.reduce(
+          (sum, line) => sum + ivaEuroFromNet(line.price ?? 0, line.ivaRate),
+          0,
+        ),
+      ),
+    [maintenanceLines],
+  )
+  const cleaningGrossTotal = useMemo(
+    () =>
+      roundMoney(
+        cleaningLines.reduce(
+          (sum, line) => sum + grossFromNet(line.price ?? 0, line.ivaRate),
+          0,
+        ),
+      ),
+    [cleaningLines],
+  )
+  const maintenanceGrossTotal = useMemo(
+    () =>
+      roundMoney(
+        maintenanceLines.reduce(
+          (sum, line) => sum + grossFromNet(line.price ?? 0, line.ivaRate),
+          0,
+        ),
+      ),
+    [maintenanceLines],
+  )
   const expenseTotals = useMemo(
     () => ({
       count: expenses.length,
       totalCost: expenses.reduce((sum, line) => sum + line.amountExclIva, 0),
+      totalIva: roundMoney(
+        expenses.reduce(
+          (sum, line) =>
+            sum + ivaEuroFromNet(line.amountExclIva, line.ivaRate),
+          0,
+        ),
+      ),
       totalCostWithIva: expenses.reduce(
         (sum, line) => sum + line.amountInclIva,
         0,
@@ -183,6 +349,12 @@ export function PropertyReportsView({
     () => ({
       count: serviceLines.length,
       cost: serviceLines.reduce((sum, line) => sum + line.price, 0),
+      iva: roundMoney(
+        serviceLines.reduce(
+          (sum, line) => sum + ivaEuroFromNet(line.price, line.ivaRate),
+          0,
+        ),
+      ),
       costWithIva: serviceLines.reduce((sum, line) => sum + line.priceWithIva, 0),
     }),
     [serviceLines],
@@ -209,6 +381,18 @@ export function PropertyReportsView({
 
   const toggleTable = (key: keyof typeof openTables) => {
     setOpenTables((current) => ({ ...current, [key]: !current[key] }))
+  }
+
+  const toggleExpandedRow = (rowId: string) => {
+    setExpandedRowIds((current) => {
+      const next = new Set(current)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
   }
 
   const selectedProperty = properties.find(
@@ -301,16 +485,35 @@ export function PropertyReportsView({
                 ? null
                 : Number(price),
             kitCost: Number(kit?.cost ?? item.kitCost ?? 0),
+            ivaRate: parseIvaRate(item.ivaRate) ?? 21,
           }
         }),
       )
-      setMaintenanceLines(payload.maintenance?.lines ?? [])
+      setMaintenanceLines(
+        (payload.maintenance?.lines ?? []).map((item) => ({
+          ...item,
+          ivaRate: parseIvaRate((item as MaintenanceLine).ivaRate) ?? 21,
+        })),
+      )
       setCleaningTotal(Number(payload.cleaning?.total ?? 0))
       setCleaningKitCost(Number(payload.cleaning?.kitCost ?? 0))
-      setCleaningKitCostWithIva(Number(payload.cleaning?.kitCostWithIva ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
-      setExpenses(payload.expenses?.lines ?? [])
-      setServiceLines(payload.services?.lines ?? [])
+      setExpenses(
+        (payload.expenses?.lines ?? []).map((item) => ({
+          ...item,
+          ivaRate:
+            parseIvaRate((item as ExpenseLine).ivaRate) ??
+            inferIvaRate(item.amountExclIva, item.amountInclIva, 0),
+        })),
+      )
+      setServiceLines(
+        (payload.services?.lines ?? []).map((item) => ({
+          ...item,
+          ivaRate:
+            parseIvaRate((item as ServiceLine).ivaRate) ??
+            inferIvaRate(item.price, item.priceWithIva, 0),
+        })),
+      )
     },
     [endpoints.get, t],
   )
@@ -347,6 +550,7 @@ export function PropertyReportsView({
       expenses: false,
       services: false,
     })
+    setExpandedRowIds(new Set())
     setIsLoading(true)
     setError(null)
     void loadDetail(selectedPropertyId, selectedMonthId)
@@ -587,15 +791,12 @@ export function PropertyReportsView({
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn-secondary"
+              <TableToggleButton
+                open={openTables.bookings}
                 onClick={() => toggleTable('bookings')}
-              >
-                {openTables.bookings
-                  ? t('propertyReports.hideTable')
-                  : t('propertyReports.showTable')}
-              </button>
+                expandLabel={t('propertyReports.showTable')}
+                collapseLabel={t('propertyReports.hideTable')}
+              />
             </div>
             {openTables.bookings ? (
               <div className="table-wrap">
@@ -668,26 +869,24 @@ export function PropertyReportsView({
                     <p className="card-value">{cleaningLines.length}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.price')}</p>
+                    <p className="card-label">{t('propertyReports.net')}</p>
                     <p className="card-value">{money.format(cleaningTotal)}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.priceWithIva')}</p>
+                    <p className="card-label">{t('propertyReports.iva')}</p>
                     <p className="card-value">
-                      {money.format(cleaningPriceWithIva)}
+                      {money.format(cleaningIvaTotal)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.kitCost')}</p>
+                    <p className="card-label">{t('propertyReports.gross')}</p>
+                    <p className="card-value">
+                      {money.format(cleaningGrossTotal)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.kit')}</p>
                     <p className="card-value">{money.format(cleaningKitCost)}</p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.kitCostWithIva')}
-                    </p>
-                    <p className="card-value">
-                      {money.format(cleaningKitCostWithIva)}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -705,15 +904,12 @@ export function PropertyReportsView({
                     {t('propertyReports.openCleaningBilling')}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn-secondary"
+                <TableToggleButton
+                  open={openTables.cleaning}
                   onClick={() => toggleTable('cleaning')}
-                >
-                  {openTables.cleaning
-                    ? t('propertyReports.hideTable')
-                    : t('propertyReports.showTable')}
-                </button>
+                  expandLabel={t('propertyReports.showTable')}
+                  collapseLabel={t('propertyReports.hideTable')}
+                />
               </div>
             </div>
             {openTables.cleaning ? (
@@ -723,34 +919,78 @@ export function PropertyReportsView({
                     <tr>
                       <th>{t('propertyReports.date')}</th>
                       <th>{t('propertyReports.cleaningType')}</th>
-                      <th>{t('propertyReports.visitStatus')}</th>
-                      <th>{t('propertyReports.price')}</th>
-                      <th>{t('propertyReports.kitCost')}</th>
+                      <th>{t('propertyReports.netColumn')}</th>
+                      <th>{t('propertyReports.grossColumn')}</th>
+                      <th>{t('propertyReports.kit')}</th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cleaningLines.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>{t('propertyReports.emptyCleaning')}</td>
+                        <td colSpan={6}>{t('propertyReports.emptyCleaning')}</td>
                       </tr>
                     ) : (
-                      cleaningLines.map((line) => (
-                        <tr key={line.id}>
-                          <td>{dateLabel(line.date)}</td>
-                          <td>{line.cleaningTypeName || '—'}</td>
-                          <td>{line.status || '—'}</td>
-                          <td>
-                            {line.price === null
-                              ? '—'
-                              : money.format(line.price)}
-                          </td>
-                          <td>
-                            {line.kitCost
-                              ? money.format(line.kitCost)
-                              : '—'}
-                          </td>
-                        </tr>
-                      ))
+                      cleaningLines.map((line) => {
+                        const rowId = `cleaning:${line.id}`
+                        const isExpanded = expandedRowIds.has(rowId)
+                        return (
+                          <Fragment key={line.id}>
+                            <tr>
+                              <td>{dateLabel(line.date)}</td>
+                              <td>{line.cleaningTypeName || '—'}</td>
+                              <td>
+                                {line.price === null
+                                  ? '—'
+                                  : money.format(line.price)}
+                              </td>
+                              <td>
+                                {line.price === null
+                                  ? '—'
+                                  : money.format(
+                                      grossFromNet(line.price, line.ivaRate),
+                                    )}
+                              </td>
+                              <td>
+                                {line.kitCost
+                                  ? money.format(line.kitCost)
+                                  : '—'}
+                              </td>
+                              <td>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                  onClick={() => toggleExpandedRow(rowId)}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={6}>
+                                  <ReportIvaDetails
+                                    ivaRate={line.ivaRate}
+                                    netAmount={line.price ?? 0}
+                                    money={money}
+                                    onChange={(ivaRate) =>
+                                      setCleaningLines((current) =>
+                                        current.map((entry) =>
+                                          entry.id === line.id
+                                            ? { ...entry, ivaRate }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
@@ -777,9 +1017,21 @@ export function PropertyReportsView({
                     <p className="card-value">{maintenanceLines.length}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.price')}</p>
+                    <p className="card-label">{t('propertyReports.net')}</p>
                     <p className="card-value">
                       {money.format(maintenanceTotal)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.iva')}</p>
+                    <p className="card-value">
+                      {money.format(maintenanceIvaTotal)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.gross')}</p>
+                    <p className="card-value">
+                      {money.format(maintenanceGrossTotal)}
                     </p>
                   </div>
                 </div>
@@ -798,48 +1050,99 @@ export function PropertyReportsView({
                     {t('propertyReports.openMaintenanceBilling')}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn-secondary"
+                <TableToggleButton
+                  open={openTables.maintenance}
                   onClick={() => toggleTable('maintenance')}
-                >
-                  {openTables.maintenance
-                    ? t('propertyReports.hideTable')
-                    : t('propertyReports.showTable')}
-                </button>
+                  expandLabel={t('propertyReports.showTable')}
+                  collapseLabel={t('propertyReports.hideTable')}
+                />
               </div>
             </div>
             {openTables.maintenance ? (
               <div className="table-wrap">
-                <table className="data-table">
+                <table className="data-table report-table-clamp">
                   <thead>
                     <tr>
                       <th>{t('propertyReports.date')}</th>
-                      <th>{t('propertyReports.visitTitle')}</th>
-                      <th>{t('propertyReports.visitType')}</th>
-                      <th>{t('propertyReports.price')}</th>
+                      <th className="report-col-clamp">
+                        {t('propertyReports.jobsColumn')}
+                      </th>
+                      <th>{t('propertyReports.netColumn')}</th>
+                      <th>{t('propertyReports.grossColumn')}</th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {maintenanceLines.length === 0 ? (
                       <tr>
-                        <td colSpan={4}>
+                        <td colSpan={5}>
                           {t('propertyReports.emptyMaintenance')}
                         </td>
                       </tr>
                     ) : (
-                      maintenanceLines.map((line) => (
-                        <tr key={line.id}>
-                          <td>{dateLabel(line.date)}</td>
-                          <td>{line.title || '—'}</td>
-                          <td>{line.visitTypeName || '—'}</td>
-                          <td>
-                            {line.price === null
-                              ? '—'
-                              : money.format(line.price)}
-                          </td>
-                        </tr>
-                      ))
+                      maintenanceLines.map((line) => {
+                        const rowId = `maintenance:${line.id}`
+                        const isExpanded = expandedRowIds.has(rowId)
+                        return (
+                          <Fragment key={line.id}>
+                            <tr>
+                              <td>{dateLabel(line.date)}</td>
+                              <td className="report-col-clamp">
+                                <TruncatedText value={line.title || ''} />
+                              </td>
+                              <td>
+                                {line.price === null
+                                  ? '—'
+                                  : money.format(line.price)}
+                              </td>
+                              <td>
+                                {line.price === null
+                                  ? '—'
+                                  : money.format(
+                                      grossFromNet(line.price, line.ivaRate),
+                                    )}
+                              </td>
+                              <td>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                  onClick={() => toggleExpandedRow(rowId)}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={5}>
+                                  <ReportIvaDetails
+                                    ivaRate={line.ivaRate}
+                                    netAmount={line.price ?? 0}
+                                    money={money}
+                                    extra={[
+                                      {
+                                        label: t('propertyReports.jobsColumn'),
+                                        value: line.title || '—',
+                                      },
+                                    ]}
+                                    onChange={(ivaRate) =>
+                                      setMaintenanceLines((current) =>
+                                        current.map((entry) =>
+                                          entry.id === line.id
+                                            ? { ...entry, ivaRate }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
@@ -859,56 +1162,107 @@ export function PropertyReportsView({
                     <p className="card-value">{serviceTotals.count}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.cost')}</p>
+                    <p className="card-label">{t('propertyReports.net')}</p>
                     <p className="card-value">
                       {money.format(serviceTotals.cost)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.costWithIva')}</p>
+                    <p className="card-label">{t('propertyReports.iva')}</p>
+                    <p className="card-value">
+                      {money.format(serviceTotals.iva)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.gross')}</p>
                     <p className="card-value">
                       {money.format(serviceTotals.costWithIva)}
                     </p>
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn-secondary"
+              <TableToggleButton
+                open={openTables.services}
                 onClick={() => toggleTable('services')}
-              >
-                {openTables.services
-                  ? t('propertyReports.hideTable')
-                  : t('propertyReports.showTable')}
-              </button>
+                expandLabel={t('propertyReports.showTable')}
+                collapseLabel={t('propertyReports.hideTable')}
+              />
             </div>
             {openTables.services ? (
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th>{t('propertyReports.date')}</th>
                       <th>{t('propertyReports.serviceTitle')}</th>
                       <th>{t('propertyReports.recurrence')}</th>
-                      <th>{t('propertyReports.date')}</th>
-                      <th>{t('propertyReports.cost')}</th>
-                      <th>{t('propertyReports.costWithIva')}</th>
+                      <th>{t('propertyReports.net')}</th>
+                      <th>{t('propertyReports.gross')}</th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {serviceLines.length === 0 && !isLoading ? (
                       <tr>
-                        <td colSpan={5}>{t('propertyReports.emptyServices')}</td>
+                        <td colSpan={6}>{t('propertyReports.emptyServices')}</td>
                       </tr>
                     ) : (
-                      serviceLines.map((line) => (
-                        <tr key={line.id}>
-                          <td>{line.title || '—'}</td>
-                          <td>{recurrenceLabel(line.recurrence)}</td>
-                          <td>{dateLabel(line.date)}</td>
-                          <td>{money.format(line.price)}</td>
-                          <td>{money.format(line.priceWithIva)}</td>
-                        </tr>
-                      ))
+                      serviceLines.map((line) => {
+                        const rowId = `service:${line.id}`
+                        const isExpanded = expandedRowIds.has(rowId)
+                        return (
+                          <Fragment key={line.id}>
+                            <tr>
+                              <td>{dateLabel(line.date)}</td>
+                              <td>{line.title || '—'}</td>
+                              <td>{recurrenceLabel(line.recurrence)}</td>
+                              <td>{money.format(line.price)}</td>
+                              <td>{money.format(line.priceWithIva)}</td>
+                              <td>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                  onClick={() => toggleExpandedRow(rowId)}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={6}>
+                                  <ReportIvaDetails
+                                    ivaRate={line.ivaRate}
+                                    netAmount={line.price}
+                                    money={money}
+                                    onChange={(ivaRate) =>
+                                      setServiceLines((current) =>
+                                        current.map((entry) =>
+                                          entry.id === line.id
+                                            ? {
+                                                ...entry,
+                                                ivaRate,
+                                                priceWithIva: roundMoney(
+                                                  entry.price +
+                                                    ivaEuroFromNet(
+                                                      entry.price,
+                                                      ivaRate,
+                                                    ),
+                                                ),
+                                              }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
@@ -928,58 +1282,117 @@ export function PropertyReportsView({
                     <p className="card-value">{expenseTotals.count}</p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.totalCost')}</p>
+                    <p className="card-label">{t('propertyReports.net')}</p>
                     <p className="card-value">
                       {money.format(expenseTotals.totalCost)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.totalCostWithIva')}
+                    <p className="card-label">{t('propertyReports.iva')}</p>
+                    <p className="card-value">
+                      {money.format(expenseTotals.totalIva)}
                     </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.gross')}</p>
                     <p className="card-value">
                       {money.format(expenseTotals.totalCostWithIva)}
                     </p>
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn-secondary"
+              <TableToggleButton
+                open={openTables.expenses}
                 onClick={() => toggleTable('expenses')}
-              >
-                {openTables.expenses
-                  ? t('propertyReports.hideTable')
-                  : t('propertyReports.showTable')}
-              </button>
+                expandLabel={t('propertyReports.showTable')}
+                collapseLabel={t('propertyReports.hideTable')}
+              />
             </div>
             {openTables.expenses ? (
               <div className="table-wrap">
-                <table className="data-table">
+                <table className="data-table report-table-clamp">
                   <thead>
                     <tr>
-                      <th>{t('propertyReports.origin')}</th>
-                      <th>{t('propertyReports.item')}</th>
                       <th>{t('propertyReports.date')}</th>
-                      <th>{t('propertyReports.amountExclIva')}</th>
-                      <th>{t('propertyReports.amountInclIva')}</th>
+                      <th className="report-col-clamp">
+                        {t('propertyReports.item')}
+                      </th>
+                      <th>{t('propertyReports.origin')}</th>
+                      <th>{t('propertyReports.net')}</th>
+                      <th>{t('propertyReports.gross')}</th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {expenses.length === 0 && !isLoading ? (
                       <tr>
-                        <td colSpan={5}>{t('propertyReports.emptyExpenses')}</td>
+                        <td colSpan={6}>{t('propertyReports.emptyExpenses')}</td>
                       </tr>
                     ) : (
-                      expenses.map((line) => (
-                        <tr key={line.id}>
-                          <td>{originLabel(line.origin)}</td>
-                          <td>{line.itemName || '—'}</td>
-                          <td>{dateLabel(line.date)}</td>
-                          <td>{money.format(line.amountExclIva)}</td>
-                          <td>{money.format(line.amountInclIva)}</td>
-                        </tr>
-                      ))
+                      expenses.map((line) => {
+                        const rowId = `expense:${line.id}`
+                        const isExpanded = expandedRowIds.has(rowId)
+                        return (
+                          <Fragment key={line.id}>
+                            <tr>
+                              <td>{dateLabel(line.date)}</td>
+                              <td className="report-col-clamp">
+                                <TruncatedText value={line.itemName || ''} />
+                              </td>
+                              <td>{originLabel(line.origin)}</td>
+                              <td>{money.format(line.amountExclIva)}</td>
+                              <td>{money.format(line.amountInclIva)}</td>
+                              <td>
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                  onClick={() => toggleExpandedRow(rowId)}
+                                >
+                                  {isExpanded ? '▾' : '▸'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={6}>
+                                  <ReportIvaDetails
+                                    ivaRate={line.ivaRate}
+                                    netAmount={line.amountExclIva}
+                                    money={money}
+                                    extra={[
+                                      {
+                                        label: t('propertyReports.item'),
+                                        value: line.itemName || '—',
+                                      },
+                                    ]}
+                                    onChange={(ivaRate) =>
+                                      setExpenses((current) =>
+                                        current.map((entry) =>
+                                          entry.id === line.id
+                                            ? {
+                                                ...entry,
+                                                ivaRate,
+                                                amountInclIva: roundMoney(
+                                                  entry.amountExclIva +
+                                                    ivaEuroFromNet(
+                                                      entry.amountExclIva,
+                                                      ivaRate,
+                                                    ),
+                                                ),
+                                              }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
