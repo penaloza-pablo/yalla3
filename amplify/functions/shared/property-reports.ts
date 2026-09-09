@@ -44,6 +44,30 @@ export type PropertyReportStatus =
   | 'READY_TO_CLOSE'
   | 'CLOSED';
 
+export const COST_ALLOCATIONS = ['bear', 'ownerPlus12', 'owner'] as const;
+
+export type CostAllocation = (typeof COST_ALLOCATIONS)[number];
+
+export const isCostAllocation = (value: unknown): value is CostAllocation =>
+  COST_ALLOCATIONS.includes(String(value) as CostAllocation);
+
+export const parseLineAllocations = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {} as Record<string, CostAllocation>;
+  }
+  const next: Record<string, CostAllocation> = {};
+  for (const [key, allocation] of Object.entries(
+    value as Record<string, unknown>,
+  )) {
+    const id = key.trim();
+    if (!id || !isCostAllocation(allocation)) {
+      continue;
+    }
+    next[id] = allocation;
+  }
+  return next;
+};
+
 export const IVA_MULTIPLIER = 1.21;
 
 export const roundMoney = (value: number) => Math.round(value * 100) / 100;
@@ -861,6 +885,7 @@ export const emptyReportRecord = (
     propertyId,
     monthId,
     status,
+    lineAllocations: {},
     createdAt: timestamp,
     updatedAt: timestamp,
   };

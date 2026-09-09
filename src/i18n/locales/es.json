@@ -898,7 +898,22 @@
     "missingWrite": "Falta el endpoint de escritura de Property Reports. Vuelve a desplegar el backend.",
     "loadError": "No se pudo cargar el reporte de la propiedad.",
     "saveError": "No se pudo actualizar el reporte de la propiedad.",
-    "updated": "Reporte de propiedad actualizado."
+    "updated": "Reporte de propiedad actualizado.",
+    "openReport": "Abrir informe de desempeño",
+    "reportLocked": "El informe de desempeño estará disponible cuando el mes se marque como listo para cerrar.",
+    "sectionsMustClose": "Cierra primero el billing de: {{sections}}.",
+    "allocation": "Cargo",
+    "allocationBear": "We bear the cost",
+    "allocationOwnerPlus12": "Charge to owner + 12%",
+    "allocationOwner": "Charge to owner",
+    "reportDraftTitle": "Informe de desempeño de la propiedad",
+    "reportDraftDisclaimer": "Esta sección debe responder a las especificaciones y el modelo de contratación de cada propiedad. Funcionalidad pendiente de desarrollo para hacer los cálculos correctos.",
+    "draftSection": "Apartado",
+    "draftPayouts": "Payouts",
+    "draftOwnerCharges": "Cargo al propietario",
+    "draftCompanyCosts": "Asumimos nosotros",
+    "draftUnassigned": "Sin asignar",
+    "emptyDraftLines": "No hay líneas de costo para este borrador."
   },
   "movements": {
     "eyebrow": "Finanzas / Movimientos",

@@ -1013,6 +1013,50 @@ button.today-card {
   max-width: 100%;
 }
 
+.btn-icon:disabled,
+.btn-icon.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.report-cost-chip {
+  width: 100%;
+  max-width: 220px;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  background: #f9fafb;
+  color: #344054;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.report-cost-chip:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.report-draft-modal {
+  width: min(960px, 100%);
+}
+
+.report-draft-disclaimer {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #b54708;
+  border: 1px solid #fdc9a3;
+}
+
+.report-draft-modal .modal-body {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .card-title {
   margin: 0;
   font-size: 1.2rem;

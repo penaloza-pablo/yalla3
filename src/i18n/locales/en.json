@@ -898,7 +898,22 @@
     "missingWrite": "Missing Property Reports write endpoint. Redeploy the backend.",
     "loadError": "Unable to load the property report.",
     "saveError": "Unable to update the property report.",
-    "updated": "Property report updated."
+    "updated": "Property report updated.",
+    "openReport": "Open performance report",
+    "reportLocked": "The performance report is available after the month is marked ready to close.",
+    "sectionsMustClose": "Close billing first: {{sections}}.",
+    "allocation": "Charge",
+    "allocationBear": "We bear the cost",
+    "allocationOwnerPlus12": "Charge to owner + 12%",
+    "allocationOwner": "Charge to owner",
+    "reportDraftTitle": "Property performance report",
+    "reportDraftDisclaimer": "This section must follow each property's specifications and contracting model. Functionality to calculate the correct figures is still pending development.",
+    "draftSection": "Section",
+    "draftPayouts": "Payouts",
+    "draftOwnerCharges": "Charge to owner",
+    "draftCompanyCosts": "We bear",
+    "draftUnassigned": "Unassigned",
+    "emptyDraftLines": "No cost lines to include in this draft."
   },
   "movements": {
     "eyebrow": "Finance / Movements",

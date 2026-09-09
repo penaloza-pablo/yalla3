@@ -1376,6 +1376,14 @@ backend.upsertPropertyReport.addEnvironment(
   'PROPERTIES_TABLE',
   propertiesTable.tableName,
 );
+backend.upsertPropertyReport.addEnvironment(
+  'CLEANING_BILLING_TABLE',
+  cleaningBillingTable.tableName,
+);
+backend.upsertPropertyReport.addEnvironment(
+  'MAINTENANCE_BILLING_TABLE',
+  maintenanceBillingTable.tableName,
+);
 propertyReportsTable.grantReadData(backend.getPropertyReport.resources.lambda);
 propertyReportsTable.grantReadWriteData(
   backend.upsertPropertyReport.resources.lambda,
@@ -1392,6 +1400,10 @@ backend.getPropertyReport.resources.lambda.addToRolePolicy(
 );
 propertiesTable.grantReadData(backend.getPropertyReport.resources.lambda);
 propertiesTable.grantReadData(backend.upsertPropertyReport.resources.lambda);
+cleaningBillingTable.grantReadData(backend.upsertPropertyReport.resources.lambda);
+maintenanceBillingTable.grantReadData(
+  backend.upsertPropertyReport.resources.lambda,
+);
 cleaningBillingTable.grantReadData(backend.getPropertyReport.resources.lambda);
 cleaningPlansTable.grantReadData(backend.getPropertyReport.resources.lambda);
 propertyCleaningDetailsTable.grantReadData(

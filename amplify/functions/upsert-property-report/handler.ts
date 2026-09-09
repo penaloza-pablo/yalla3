@@ -5,6 +5,10 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import {
+  deriveMonthStatus as deriveCleaningMonthStatus,
+  getMonthRecord as getCleaningMonthRecord,
+} from '../shared/cleaning-billing';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -12,6 +16,10 @@ import {
   parseBody,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
+import {
+  deriveMonthStatus as deriveMaintenanceMonthStatus,
+  getMonthRecord as getMaintenanceMonthRecord,
+} from '../shared/maintenance-billing';
 import { docClient, putItem } from '../shared/visit-task-utils';
 import {
   asString,
@@ -21,8 +29,10 @@ import {
   isPropertyReportEligible,
   isReportableMonth,
   listProperties,
+  parseLineAllocations,
   reportScopeForProperty,
   resolveReportProperty,
+  type CostAllocation,
   type PropertyReportStatus,
 } from '../shared/property-reports';
 
@@ -30,6 +40,20 @@ type Payload = {
   propertyId?: string;
   monthId?: string;
   action?: string;
+  lineAllocations?: Record<string, CostAllocation>;
+};
+
+const monthIsClosed = async (
+  tableName: string | undefined,
+  monthId: string,
+  deriveStatus: typeof deriveCleaningMonthStatus,
+  getMonth: typeof getCleaningMonthRecord,
+) => {
+  if (!tableName) {
+    return false;
+  }
+  const stored = await getMonth(tableName, monthId);
+  return deriveStatus(monthId, asString(stored?.status)) === 'CLOSED';
 };
 
 export const handler = async (event: {
@@ -48,6 +72,8 @@ export const handler = async (event: {
 
   const tableName = process.env.TABLE_NAME;
   const propertiesTable = process.env.PROPERTIES_TABLE;
+  const cleaningBillingTable = process.env.CLEANING_BILLING_TABLE;
+  const maintenanceBillingTable = process.env.MAINTENANCE_BILLING_TABLE;
   if (!tableName || !propertiesTable) {
     return buildHttpResponse(500, { message: 'TABLE_NAME is not configured.' });
   }
@@ -89,11 +115,32 @@ export const handler = async (event: {
   const existing = found.Item as Record<string, unknown> | undefined;
   const currentStatus = deriveReportStatus(monthId, asString(existing?.status));
 
-  let nextStatus: PropertyReportStatus | null = null;
+  let nextStatus: PropertyReportStatus = currentStatus;
+  let nextAllocations = parseLineAllocations(existing?.lineAllocations);
   if (action === 'ready') {
     if (currentStatus !== 'PENDING_TO_CLOSE') {
       return buildHttpResponse(400, {
         message: 'Only a pending month can be marked ready to close.',
+      });
+    }
+    const [cleaningClosed, maintenanceClosed] = await Promise.all([
+      monthIsClosed(
+        cleaningBillingTable,
+        monthId,
+        deriveCleaningMonthStatus,
+        getCleaningMonthRecord,
+      ),
+      monthIsClosed(
+        maintenanceBillingTable,
+        monthId,
+        deriveMaintenanceMonthStatus,
+        getMaintenanceMonthRecord,
+      ),
+    ]);
+    if (!cleaningClosed || !maintenanceClosed) {
+      return buildHttpResponse(400, {
+        message:
+          'Cleaning and Maintenance billing for this month must be closed first.',
       });
     }
     nextStatus = 'READY_TO_CLOSE';
@@ -111,9 +158,16 @@ export const handler = async (event: {
       });
     }
     nextStatus = 'PENDING_TO_CLOSE';
+  } else if (action === 'allocate') {
+    if (currentStatus !== 'READY_TO_CLOSE') {
+      return buildHttpResponse(400, {
+        message: 'Allocations can only be edited while the month is ready to close.',
+      });
+    }
+    nextAllocations = parseLineAllocations(payload.lineAllocations);
   } else {
     return buildHttpResponse(400, {
-      message: 'action must be ready, close, or reopen.',
+      message: 'action must be ready, close, reopen, or allocate.',
     });
   }
 
@@ -123,6 +177,7 @@ export const handler = async (event: {
     propertyId,
     monthId,
     status: nextStatus,
+    lineAllocations: nextAllocations,
     updatedAt: timestamp,
   };
   if (nextStatus === 'CLOSED') {
@@ -142,9 +197,11 @@ export const handler = async (event: {
       summary:
         nextStatus === 'CLOSED'
           ? `closed property report ${quoted(name)}`
-          : nextStatus === 'READY_TO_CLOSE'
-            ? `marked property report ready ${quoted(name)}`
-            : `reopened property report ${quoted(name)}`,
+          : action === 'allocate'
+            ? `updated property report allocations ${quoted(name)}`
+            : nextStatus === 'READY_TO_CLOSE'
+              ? `marked property report ready ${quoted(name)}`
+              : `reopened property report ${quoted(name)}`,
     });
     return buildHttpResponse(200, { item });
   } catch (error) {

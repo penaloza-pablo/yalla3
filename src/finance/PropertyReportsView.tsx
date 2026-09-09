@@ -198,6 +198,88 @@ const TruncatedText = ({ value }: { value: string }) => (
   </span>
 )
 
+const COST_ALLOCATIONS = ['bear', 'ownerPlus12', 'owner'] as const
+type CostAllocation = (typeof COST_ALLOCATIONS)[number]
+
+const isCostAllocation = (value: unknown): value is CostAllocation =>
+  COST_ALLOCATIONS.includes(String(value) as CostAllocation)
+
+const parseLineAllocations = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {} as Record<string, CostAllocation>
+  }
+  const next: Record<string, CostAllocation> = {}
+  for (const [key, allocation] of Object.entries(
+    value as Record<string, unknown>,
+  )) {
+    const id = key.trim()
+    if (!id || !isCostAllocation(allocation)) {
+      continue
+    }
+    next[id] = allocation
+  }
+  return next
+}
+
+const ownerChargeFromAllocation = (
+  gross: number,
+  allocation: CostAllocation | '',
+) => {
+  if (allocation === 'owner') {
+    return roundMoney(gross)
+  }
+  if (allocation === 'ownerPlus12') {
+    return roundMoney(gross * 1.12)
+  }
+  return 0
+}
+
+const companyCostFromAllocation = (
+  gross: number,
+  allocation: CostAllocation | '',
+) => (allocation === 'bear' ? roundMoney(gross) : 0)
+
+const ReportDocumentIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
+    <path
+      d="M6 2h6l4 4v12H6V2zm6 1.4V7h3.4L12 3.4zM8 9.2h6v1.4H8V9.2zm0 2.8h6v1.4H8v-1.4zm0 2.8h4v1.4H8v-1.4z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+const AllocationChip = ({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: CostAllocation | ''
+  disabled: boolean
+  onChange: (value: CostAllocation) => void
+}) => {
+  const { t } = useTranslation()
+  return (
+    <select
+      className="report-cost-chip"
+      value={value}
+      disabled={disabled}
+      aria-label={t('propertyReports.allocation')}
+      onChange={(event) => {
+        if (isCostAllocation(event.target.value)) {
+          onChange(event.target.value)
+        }
+      }}
+    >
+      <option value="">{t('common.select')}</option>
+      <option value="bear">{t('propertyReports.allocationBear')}</option>
+      <option value="ownerPlus12">
+        {t('propertyReports.allocationOwnerPlus12')}
+      </option>
+      <option value="owner">{t('propertyReports.allocationOwner')}</option>
+    </select>
+  )
+}
+
 const fallbackMonths = (): ReportMonth[] =>
   listPropertyReportMonthIds(getTodayMadrid()).map((id) => ({
     id,
@@ -251,6 +333,10 @@ export function PropertyReportsView({
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
+  const [lineAllocations, setLineAllocations] = useState<
+    Record<string, CostAllocation>
+  >({})
+  const [isReportOpen, setIsReportOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -460,6 +546,7 @@ export function PropertyReportsView({
         services?: {
           lines?: ServiceLine[]
         }
+        lineAllocations?: Record<string, unknown>
       }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}&month=${encodeURIComponent(monthId)}`,
       )
@@ -514,6 +601,8 @@ export function PropertyReportsView({
             inferIvaRate(item.price, item.priceWithIva, 0),
         })),
       )
+      setLineAllocations(parseLineAllocations(payload.lineAllocations))
+      setIsReportOpen(false)
     },
     [endpoints.get, t],
   )
@@ -551,6 +640,8 @@ export function PropertyReportsView({
       services: false,
     })
     setExpandedRowIds(new Set())
+    setLineAllocations({})
+    setIsReportOpen(false)
     setIsLoading(true)
     setError(null)
     void loadDetail(selectedPropertyId, selectedMonthId)
@@ -595,6 +686,149 @@ export function PropertyReportsView({
     }
   }
 
+  const saveAllocation = async (rowId: string, allocation: CostAllocation) => {
+    const next = { ...lineAllocations, [rowId]: allocation }
+    setLineAllocations(next)
+    if (!endpoints.upsert || !selectedPropertyId || !selectedMonthId) {
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    try {
+      await fetchJson(endpoints.upsert, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: selectedPropertyId,
+          monthId: selectedMonthId,
+          action: 'allocate',
+          lineAllocations: next,
+        }),
+      })
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('propertyReports.saveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const sectionsClosed = cleaningClosed && maintenanceClosed
+  const pendingSectionLabels = [
+    cleaningClosed ? null : t('propertyReports.cleaningTitle'),
+    maintenanceClosed ? null : t('propertyReports.maintenanceTitle'),
+  ].filter((value): value is string => Boolean(value))
+  const usesAllocations =
+    report?.status === 'READY_TO_CLOSE' || report?.status === 'CLOSED'
+  const canOpenReport = Boolean(usesAllocations)
+  const allocationsLocked = report?.status === 'CLOSED' || isSaving
+
+  const draftLines = useMemo(() => {
+    const lines: Array<{
+      id: string
+      section: string
+      label: string
+      gross: number
+    }> = [
+      ...cleaningLines.map((line) => ({
+        id: `cleaning:${line.id}`,
+        section: t('propertyReports.cleaningTitle'),
+        label: line.cleaningTypeName || dateLabel(line.date),
+        gross: roundMoney(
+          (line.price === null
+            ? 0
+            : grossFromNet(line.price, line.ivaRate)) + (line.kitCost || 0),
+        ),
+      })),
+      ...maintenanceLines.map((line) => ({
+        id: `maintenance:${line.id}`,
+        section: t('propertyReports.maintenanceTitle'),
+        label: line.title || dateLabel(line.date),
+        gross:
+          line.price === null ? 0 : grossFromNet(line.price, line.ivaRate),
+      })),
+      ...serviceLines.map((line) => ({
+        id: `service:${line.id}`,
+        section: t('propertyReports.servicesTitle'),
+        label: line.title || dateLabel(line.date),
+        gross: line.priceWithIva,
+      })),
+      ...expenses.map((line) => ({
+        id: `expense:${line.id}`,
+        section: t('propertyReports.expensesTitle'),
+        label: line.itemName || dateLabel(line.date),
+        gross: line.amountInclIva,
+      })),
+    ]
+    return lines
+  }, [
+    cleaningLines,
+    dateLabel,
+    expenses,
+    maintenanceLines,
+    serviceLines,
+    t,
+  ])
+
+  const draftTotals = useMemo(() => {
+    return draftLines.reduce(
+      (sum, line) => {
+        const allocation = lineAllocations[line.id] ?? ''
+        return {
+          owner: roundMoney(
+            sum.owner + ownerChargeFromAllocation(line.gross, allocation),
+          ),
+          company: roundMoney(
+            sum.company + companyCostFromAllocation(line.gross, allocation),
+          ),
+          unassigned: roundMoney(
+            sum.unassigned + (allocation ? 0 : line.gross),
+          ),
+        }
+      },
+      { owner: 0, company: 0, unassigned: 0 },
+    )
+  }, [draftLines, lineAllocations])
+
+  const allocationLabel = (value: CostAllocation | '') => {
+    if (value === 'bear') return t('propertyReports.allocationBear')
+    if (value === 'ownerPlus12') {
+      return t('propertyReports.allocationOwnerPlus12')
+    }
+    if (value === 'owner') return t('propertyReports.allocationOwner')
+    return t('common.select')
+  }
+
+  const renderLineAction = (rowId: string, isExpanded: boolean) => {
+    if (usesAllocations) {
+      return (
+        <td>
+          <AllocationChip
+            value={lineAllocations[rowId] ?? ''}
+            disabled={allocationsLocked}
+            onChange={(allocation) => void saveAllocation(rowId, allocation)}
+          />
+        </td>
+      )
+    }
+    return (
+      <td>
+        <button
+          className="btn-icon btn-icon-ghost"
+          type="button"
+          aria-expanded={isExpanded}
+          aria-label={t('common.toggleDetails')}
+          onClick={() => toggleExpandedRow(rowId)}
+        >
+          {isExpanded ? '▾' : '▸'}
+        </button>
+      </td>
+    )
+  }
+
   const title = selectedMonthId
     ? `${propertyLabel} · ${formatMonthLabel(selectedMonthId)}`
     : selectedPropertyId
@@ -620,6 +854,8 @@ export function PropertyReportsView({
                     setBookings([])
                     setExpenses([])
                     setServiceLines([])
+                    setLineAllocations({})
+                    setIsReportOpen(false)
                     return
                   }
                   setSelectedPropertyId('')
@@ -638,19 +874,40 @@ export function PropertyReportsView({
                 : t('propertyReports.subtitle')}
           </p>
         </div>
-        {selectedMonthId && report && canChangeStatus ? (
+        {selectedMonthId && report ? (
           <div className="header-actions">
-            {report.canMarkReady ? (
+            <button
+              className={`btn-icon${canOpenReport ? '' : ' is-disabled'}`}
+              type="button"
+              disabled={!canOpenReport}
+              aria-label={t('propertyReports.openReport')}
+              title={
+                canOpenReport
+                  ? t('propertyReports.openReport')
+                  : t('propertyReports.reportLocked')
+              }
+              onClick={() => setIsReportOpen(true)}
+            >
+              <ReportDocumentIcon />
+            </button>
+            {canChangeStatus && report.status === 'PENDING_TO_CLOSE' ? (
               <button
                 className="btn-secondary"
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || !sectionsClosed}
+                title={
+                  sectionsClosed
+                    ? undefined
+                    : t('propertyReports.sectionsMustClose', {
+                        sections: pendingSectionLabels.join(', '),
+                      })
+                }
                 onClick={() => void saveStatus('ready')}
               >
                 {t('propertyReports.markReady')}
               </button>
             ) : null}
-            {report.canClose ? (
+            {canChangeStatus && report.canClose ? (
               <button
                 className="btn-primary"
                 type="button"
@@ -660,7 +917,7 @@ export function PropertyReportsView({
                 {t('propertyReports.closeMonth')}
               </button>
             ) : null}
-            {report.canReopen ? (
+            {canChangeStatus && report.canReopen ? (
               <button
                 className="btn-secondary"
                 type="button"
@@ -676,6 +933,15 @@ export function PropertyReportsView({
 
       {error ? <p className="notice error">{error}</p> : null}
       {message ? <p className="notice success">{message}</p> : null}
+      {selectedMonthId &&
+      report?.status === 'PENDING_TO_CLOSE' &&
+      !sectionsClosed ? (
+        <p className="report-billing-warning" role="status">
+          {t('propertyReports.sectionsMustClose', {
+            sections: pendingSectionLabels.join(', '),
+          })}
+        </p>
+      ) : null}
       {isLoading ? <p>{t('common.loading')}</p> : null}
 
       {!selectedPropertyId ? (
@@ -922,7 +1188,11 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.netColumn')}</th>
                       <th>{t('propertyReports.grossColumn')}</th>
                       <th>{t('propertyReports.kit')}</th>
-                      <th>{t('common.actions')}</th>
+                      <th>
+                        {usesAllocations
+                          ? t('propertyReports.allocation')
+                          : t('common.actions')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -956,19 +1226,9 @@ export function PropertyReportsView({
                                   ? money.format(line.kitCost)
                                   : '—'}
                               </td>
-                              <td>
-                                <button
-                                  className="btn-icon btn-icon-ghost"
-                                  type="button"
-                                  aria-expanded={isExpanded}
-                                  aria-label={t('common.toggleDetails')}
-                                  onClick={() => toggleExpandedRow(rowId)}
-                                >
-                                  {isExpanded ? '▾' : '▸'}
-                                </button>
-                              </td>
+                              {renderLineAction(rowId, isExpanded)}
                             </tr>
-                            {isExpanded ? (
+                            {!usesAllocations && isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={6}>
                                   <ReportIvaDetails
@@ -1069,7 +1329,11 @@ export function PropertyReportsView({
                       </th>
                       <th>{t('propertyReports.netColumn')}</th>
                       <th>{t('propertyReports.grossColumn')}</th>
-                      <th>{t('common.actions')}</th>
+                      <th>
+                        {usesAllocations
+                          ? t('propertyReports.allocation')
+                          : t('common.actions')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1102,19 +1366,9 @@ export function PropertyReportsView({
                                       grossFromNet(line.price, line.ivaRate),
                                     )}
                               </td>
-                              <td>
-                                <button
-                                  className="btn-icon btn-icon-ghost"
-                                  type="button"
-                                  aria-expanded={isExpanded}
-                                  aria-label={t('common.toggleDetails')}
-                                  onClick={() => toggleExpandedRow(rowId)}
-                                >
-                                  {isExpanded ? '▾' : '▸'}
-                                </button>
-                              </td>
+                              {renderLineAction(rowId, isExpanded)}
                             </tr>
-                            {isExpanded ? (
+                            {!usesAllocations && isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={5}>
                                   <ReportIvaDetails
@@ -1198,7 +1452,11 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.recurrence')}</th>
                       <th>{t('propertyReports.net')}</th>
                       <th>{t('propertyReports.gross')}</th>
-                      <th>{t('common.actions')}</th>
+                      <th>
+                        {usesAllocations
+                          ? t('propertyReports.allocation')
+                          : t('common.actions')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1218,19 +1476,9 @@ export function PropertyReportsView({
                               <td>{recurrenceLabel(line.recurrence)}</td>
                               <td>{money.format(line.price)}</td>
                               <td>{money.format(line.priceWithIva)}</td>
-                              <td>
-                                <button
-                                  className="btn-icon btn-icon-ghost"
-                                  type="button"
-                                  aria-expanded={isExpanded}
-                                  aria-label={t('common.toggleDetails')}
-                                  onClick={() => toggleExpandedRow(rowId)}
-                                >
-                                  {isExpanded ? '▾' : '▸'}
-                                </button>
-                              </td>
+                              {renderLineAction(rowId, isExpanded)}
                             </tr>
-                            {isExpanded ? (
+                            {!usesAllocations && isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={6}>
                                   <ReportIvaDetails
@@ -1320,7 +1568,11 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.origin')}</th>
                       <th>{t('propertyReports.net')}</th>
                       <th>{t('propertyReports.gross')}</th>
-                      <th>{t('common.actions')}</th>
+                      <th>
+                        {usesAllocations
+                          ? t('propertyReports.allocation')
+                          : t('common.actions')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1342,19 +1594,9 @@ export function PropertyReportsView({
                               <td>{originLabel(line.origin)}</td>
                               <td>{money.format(line.amountExclIva)}</td>
                               <td>{money.format(line.amountInclIva)}</td>
-                              <td>
-                                <button
-                                  className="btn-icon btn-icon-ghost"
-                                  type="button"
-                                  aria-expanded={isExpanded}
-                                  aria-label={t('common.toggleDetails')}
-                                  onClick={() => toggleExpandedRow(rowId)}
-                                >
-                                  {isExpanded ? '▾' : '▸'}
-                                </button>
-                              </td>
+                              {renderLineAction(rowId, isExpanded)}
                             </tr>
-                            {isExpanded ? (
+                            {!usesAllocations && isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={6}>
                                   <ReportIvaDetails
@@ -1400,6 +1642,113 @@ export function PropertyReportsView({
             ) : null}
           </section>
         </>
+      ) : null}
+
+      {isReportOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal report-draft-modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {t('propertyReports.reportDraftTitle')}
+                </h3>
+                <p className="modal-subtitle">
+                  {title}
+                </p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setIsReportOpen(false)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="notice report-draft-disclaimer">
+                {t('propertyReports.reportDraftDisclaimer')}
+              </p>
+              <div className="report-metrics">
+                <div className="report-metric">
+                  <p className="card-label">{t('propertyReports.draftPayouts')}</p>
+                  <p className="card-value">
+                    {money.format(bookingTotals.payout)}
+                  </p>
+                </div>
+                <div className="report-metric">
+                  <p className="card-label">
+                    {t('propertyReports.draftOwnerCharges')}
+                  </p>
+                  <p className="card-value">
+                    {money.format(draftTotals.owner)}
+                  </p>
+                </div>
+                <div className="report-metric">
+                  <p className="card-label">
+                    {t('propertyReports.draftCompanyCosts')}
+                  </p>
+                  <p className="card-value">
+                    {money.format(draftTotals.company)}
+                  </p>
+                </div>
+                <div className="report-metric">
+                  <p className="card-label">
+                    {t('propertyReports.draftUnassigned')}
+                  </p>
+                  <p className="card-value">
+                    {money.format(draftTotals.unassigned)}
+                  </p>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('propertyReports.draftSection')}</th>
+                      <th>{t('propertyReports.item')}</th>
+                      <th>{t('propertyReports.grossColumn')}</th>
+                      <th>{t('propertyReports.allocation')}</th>
+                      <th>{t('propertyReports.draftOwnerCharges')}</th>
+                      <th>{t('propertyReports.draftCompanyCosts')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draftLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={6}>
+                          {t('propertyReports.emptyDraftLines')}
+                        </td>
+                      </tr>
+                    ) : (
+                      draftLines.map((line) => {
+                        const allocation = lineAllocations[line.id] ?? ''
+                        return (
+                          <tr key={line.id}>
+                            <td>{line.section}</td>
+                            <td>{line.label || '—'}</td>
+                            <td>{money.format(line.gross)}</td>
+                            <td>{allocationLabel(allocation)}</td>
+                            <td>
+                              {money.format(
+                                ownerChargeFromAllocation(line.gross, allocation),
+                              )}
+                            </td>
+                            <td>
+                              {money.format(
+                                companyCostFromAllocation(line.gross, allocation),
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   )

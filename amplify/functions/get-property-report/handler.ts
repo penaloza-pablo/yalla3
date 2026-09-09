@@ -23,6 +23,7 @@ import {
   loadFinanceServices,
   loadPendingBillingExpenses,
   mapReportBooking,
+  parseLineAllocations,
   queryBookingsByCheckInDate,
   reportMonthSummary,
   reportScopeForProperty,
@@ -175,6 +176,7 @@ export const handler = async (event: HttpEvent) => {
 
     const stored = await getReportRecord(reportsTable, propertyId, monthId);
     const report = reportMonthSummary(monthId, stored);
+    const lineAllocations = parseLineAllocations(stored?.lineAllocations);
 
     const [
       bookings,
@@ -248,6 +250,7 @@ export const handler = async (event: HttpEvent) => {
       },
       months,
       report,
+      lineAllocations,
       bookings,
       cleaning: {
         status: cleaningDetail.month.status,
