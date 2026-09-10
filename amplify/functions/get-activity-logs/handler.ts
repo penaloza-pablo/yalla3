@@ -10,6 +10,9 @@ import {
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
+const QUERY_PAGE_SIZE = 100;
+const MAX_EXAMINED_ITEMS = 2000;
+
 const parseLimit = (value?: string) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -30,11 +33,81 @@ const parseExclusiveStartKey = (value?: string) => {
   }
 };
 
-type LogsQueryArgs = {
-  limit?: number;
-  feature?: string;
-  userEmail?: string;
-  exclusiveStartKey?: string;
+const parseFeatures = (value?: string) =>
+  (value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const asString = (value: unknown) => (typeof value === 'string' ? value : '');
+
+type IndexMode = 'pk' | 'feature' | 'userEmail';
+
+type MappedLog = {
+  id: string;
+  userEmail: string;
+  feature: string;
+  summary: string;
+  createdAt: string;
+  action?: string;
+  entityId?: string;
+  entityName?: string;
+  pk: string;
+  sk: string;
+};
+
+const mapItem = (item: Record<string, unknown>): MappedLog => ({
+  id: asString(item.id),
+  userEmail: asString(item.userEmail) || 'system',
+  feature: asString(item.feature),
+  summary: asString(item.summary),
+  createdAt: asString(item.createdAt),
+  action: asString(item.action) || undefined,
+  entityId: asString(item.entityId) || undefined,
+  entityName: asString(item.entityName) || undefined,
+  pk: asString(item.pk) || ACTIVITY_LOG_PK,
+  sk: asString(item.sk),
+});
+
+const publicItem = (item: MappedLog) => ({
+  id: item.id,
+  userEmail: item.userEmail,
+  feature: item.feature,
+  summary: item.summary,
+  createdAt: item.createdAt,
+  action: item.action,
+  entityId: item.entityId,
+  entityName: item.entityName,
+});
+
+const cursorForItem = (item: MappedLog, mode: IndexMode) => {
+  if (!item.sk) {
+    return undefined;
+  }
+  if (mode === 'feature') {
+    return { pk: item.pk, sk: item.sk, feature: item.feature };
+  }
+  if (mode === 'userEmail') {
+    return { pk: item.pk, sk: item.sk, userEmail: item.userEmail };
+  }
+  return { pk: item.pk, sk: item.sk };
+};
+
+const matchesSearch = (item: MappedLog, query: string) => {
+  if (!query) {
+    return true;
+  }
+  const haystack = [
+    item.userEmail,
+    item.feature,
+    item.summary,
+    item.action ?? '',
+    item.entityName ?? '',
+    item.entityId ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query);
 };
 
 export const handler = async (event: {
@@ -59,65 +132,108 @@ export const handler = async (event: {
     return buildHttpResponse(500, { message: 'TABLE_NAME is not configured.' });
   }
 
-  const args: LogsQueryArgs = {
-    limit: parseLimit(event.queryStringParameters?.limit),
-    feature: event.queryStringParameters?.feature?.trim(),
-    userEmail: event.queryStringParameters?.userEmail?.trim(),
-    exclusiveStartKey: event.queryStringParameters?.exclusiveStartKey,
-  };
+  const query = event.queryStringParameters ?? {};
+  const limit = parseLimit(query.limit);
+  const search = (query.q ?? query.search ?? '').trim().toLowerCase().slice(0, 80);
+  const from = (query.from ?? '').trim();
+  const userEmail = (query.userEmail ?? '').trim();
+  const features = parseFeatures(query.features || query.feature);
+  let exclusiveStartKey = parseExclusiveStartKey(query.exclusiveStartKey);
 
-  const exclusiveStartKey = parseExclusiveStartKey(args.exclusiveStartKey);
-  const feature = args.feature;
-  const userEmail = args.userEmail;
+  const useFeatureIndex = features.length === 1 && !userEmail;
+  const useUserIndex = !useFeatureIndex && Boolean(userEmail);
+  const indexMode: IndexMode = useFeatureIndex
+    ? 'feature'
+    : useUserIndex
+      ? 'userEmail'
+      : 'pk';
+
+  const keyNames: Record<string, string> = {};
+  const keyValues: Record<string, string> = {};
+  let keyCondition = '';
+
+  if (useFeatureIndex) {
+    keyNames['#feature'] = 'feature';
+    keyValues[':feature'] = features[0];
+    keyCondition = '#feature = :feature';
+  } else if (useUserIndex) {
+    keyNames['#userEmail'] = 'userEmail';
+    keyValues[':userEmail'] = userEmail;
+    keyCondition = '#userEmail = :userEmail';
+  } else {
+    keyNames['#pk'] = 'pk';
+    keyValues[':pk'] = ACTIVITY_LOG_PK;
+    keyCondition = '#pk = :pk';
+  }
+
+  if (from) {
+    keyNames['#sk'] = 'sk';
+    keyValues[':from'] = from;
+    keyCondition += ' AND #sk >= :from';
+  }
 
   try {
-    const useFeatureIndex = Boolean(feature);
-    const useUserIndex = !useFeatureIndex && Boolean(userEmail);
+    const matched: MappedLog[] = [];
+    let examined = 0;
+    let lastEvaluatedKey: Record<string, unknown> | null = null;
+    let exhausted = false;
 
-    const result = await client.send(
-      new QueryCommand({
-        TableName: tableName,
-        ...(useFeatureIndex
-          ? {
-              IndexName: 'feature-sk-index',
-              KeyConditionExpression: '#feature = :feature',
-              ExpressionAttributeNames: { '#feature': 'feature' },
-              ExpressionAttributeValues: { ':feature': feature },
-            }
-          : useUserIndex
-            ? {
-                IndexName: 'userEmail-sk-index',
-                KeyConditionExpression: '#userEmail = :userEmail',
-                ExpressionAttributeNames: { '#userEmail': 'userEmail' },
-                ExpressionAttributeValues: { ':userEmail': userEmail },
-              }
-            : {
-                KeyConditionExpression: '#pk = :pk',
-                ExpressionAttributeNames: { '#pk': 'pk' },
-                ExpressionAttributeValues: { ':pk': ACTIVITY_LOG_PK },
-              }),
-        ScanIndexForward: false,
-        Limit: args.limit,
-        ExclusiveStartKey: exclusiveStartKey,
-      }),
-    );
+    while (matched.length < limit && examined < MAX_EXAMINED_ITEMS) {
+      const result = await client.send(
+        new QueryCommand({
+          TableName: tableName,
+          ...(useFeatureIndex
+            ? { IndexName: 'feature-sk-index' }
+            : useUserIndex
+              ? { IndexName: 'userEmail-sk-index' }
+              : {}),
+          KeyConditionExpression: keyCondition,
+          ExpressionAttributeNames: keyNames,
+          ExpressionAttributeValues: keyValues,
+          ScanIndexForward: false,
+          Limit: QUERY_PAGE_SIZE,
+          ExclusiveStartKey: exclusiveStartKey,
+        }),
+      );
 
-    const items = (result.Items ?? []).map((item) => ({
-      id: typeof item.id === 'string' ? item.id : '',
-      userEmail: typeof item.userEmail === 'string' ? item.userEmail : 'system',
-      feature: typeof item.feature === 'string' ? item.feature : '',
-      summary: typeof item.summary === 'string' ? item.summary : '',
-      createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
-      action: typeof item.action === 'string' ? item.action : undefined,
-      entityId: typeof item.entityId === 'string' ? item.entityId : undefined,
-      entityName:
-        typeof item.entityName === 'string' ? item.entityName : undefined,
-    }));
+      const page = (result.Items ?? []).map((item) =>
+        mapItem(item as Record<string, unknown>),
+      );
+      examined += page.length;
+
+      for (const item of page) {
+        if (features.length > 1 && !features.includes(item.feature)) {
+          continue;
+        }
+        if (!matchesSearch(item, search)) {
+          continue;
+        }
+        matched.push(item);
+        if (matched.length >= limit) {
+          lastEvaluatedKey = cursorForItem(item, indexMode) ?? null;
+          break;
+        }
+      }
+
+      if (matched.length >= limit) {
+        break;
+      }
+
+      if (!result.LastEvaluatedKey) {
+        exhausted = true;
+        lastEvaluatedKey = null;
+        break;
+      }
+
+      exclusiveStartKey = result.LastEvaluatedKey;
+      lastEvaluatedKey = result.LastEvaluatedKey as Record<string, unknown>;
+    }
 
     return buildHttpResponse(200, {
-      items,
-      count: items.length,
-      lastEvaluatedKey: result.LastEvaluatedKey ?? null,
+      items: matched.map(publicItem),
+      count: matched.length,
+      lastEvaluatedKey: exhausted ? null : lastEvaluatedKey,
+      truncated: !exhausted && examined >= MAX_EXAMINED_ITEMS,
     });
   } catch (error) {
     console.error('GetActivityLogs failed', { tableName, error });

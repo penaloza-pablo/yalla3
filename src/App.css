@@ -1189,6 +1189,12 @@ button.today-card {
   overflow-x: auto;
 }
 
+.logs-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
 .action-buttons {
   display: flex;
   gap: 8px;

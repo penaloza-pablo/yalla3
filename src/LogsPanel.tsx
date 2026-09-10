@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
@@ -18,6 +18,8 @@ type ActivityLogRow = {
 type LogsApiResponse = {
   items?: ActivityLogRow[]
   count?: number
+  lastEvaluatedKey?: Record<string, unknown> | null
+  truncated?: boolean
 }
 
 type LogsQuickPreset = 'none' | 'today' | 'last100'
@@ -99,56 +101,106 @@ export function LogsPanel({
   const { t, i18n } = useTranslation()
   const [rows, setRows] = useState<ActivityLogRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [featureFilters, setFeatureFilters] = useState<string[]>([])
   const [featureFilterDraft, setFeatureFilterDraft] = useState<string[]>([])
   const [quickPreset, setQuickPreset] = useState<LogsQuickPreset>('none')
+  const [nextKey, setNextKey] = useState<Record<string, unknown> | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const requestSeq = useRef(0)
 
-  const fetchLogs = useCallback(async () => {
-    const endpoint = getEndpoint(
-      'getActivityLogsUrl',
-      import.meta.env.VITE_GET_ACTIVITY_LOGS_URL,
-    )
-    if (!endpoint) {
-      setError(t('logs.missingEndpoint'))
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const params = new URLSearchParams()
-      params.set('limit', '200')
-      const separator = endpoint.includes('?') ? '&' : '?'
-      const response = await authFetch(`${endpoint}${separator}${params.toString()}`)
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(
-          `Logs request failed (${response.status}). ${errorText}`.trim(),
-        )
-      }
-      const payload = (await response.json()) as LogsApiResponse
-      setRows(Array.isArray(payload.items) ? payload.items : [])
-      setLastUpdated(new Date().toISOString())
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : t('logs.loadError'),
+  const fetchLogs = useCallback(
+    async (options?: { cursor?: Record<string, unknown> | null }) => {
+      const endpoint = getEndpoint(
+        'getActivityLogsUrl',
+        import.meta.env.VITE_GET_ACTIVITY_LOGS_URL,
       )
-    } finally {
-      setIsLoading(false)
-    }
-  }, [getEndpoint, t])
+      if (!endpoint) {
+        setError(t('logs.missingEndpoint'))
+        return
+      }
+
+      const append = Boolean(options?.cursor)
+      const seq = ++requestSeq.current
+      if (append) {
+        setIsLoadingMore(true)
+      } else {
+        setIsLoading(true)
+        setNextKey(null)
+        setTruncated(false)
+      }
+      setError(null)
+
+      try {
+        const params = new URLSearchParams()
+        params.set('limit', quickPreset === 'last100' ? '100' : '200')
+        if (featureFilters.length === 1) {
+          params.set('feature', featureFilters[0])
+        } else if (featureFilters.length > 1) {
+          params.set('features', featureFilters.join(','))
+        }
+        const query = searchQuery.trim()
+        if (query) {
+          params.set('q', query)
+        }
+        if (quickPreset === 'today') {
+          const start = new Date()
+          start.setHours(0, 0, 0, 0)
+          params.set('from', start.toISOString())
+        }
+        if (options?.cursor) {
+          params.set('exclusiveStartKey', JSON.stringify(options.cursor))
+        }
+        const separator = endpoint.includes('?') ? '&' : '?'
+        const response = await authFetch(
+          `${endpoint}${separator}${params.toString()}`,
+        )
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(
+            `Logs request failed (${response.status}). ${errorText}`.trim(),
+          )
+        }
+        const payload = (await response.json()) as LogsApiResponse
+        if (seq !== requestSeq.current) {
+          return
+        }
+        const items = Array.isArray(payload.items) ? payload.items : []
+        setRows((current) => (append ? [...current, ...items] : items))
+        setNextKey(payload.lastEvaluatedKey ?? null)
+        setTruncated(Boolean(payload.truncated))
+        setLastUpdated(new Date().toISOString())
+      } catch (requestError) {
+        if (seq !== requestSeq.current) {
+          return
+        }
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : t('logs.loadError'),
+        )
+      } finally {
+        if (seq === requestSeq.current) {
+          setIsLoading(false)
+          setIsLoadingMore(false)
+        }
+      }
+    },
+    [featureFilters, getEndpoint, quickPreset, searchQuery, t],
+  )
 
   useEffect(() => {
-    void fetchLogs()
-  }, [fetchLogs])
+    const delay = searchQuery.trim() ? 400 : 0
+    const handle = window.setTimeout(() => {
+      void fetchLogs()
+    }, delay)
+    return () => window.clearTimeout(handle)
+  }, [fetchLogs, searchQuery])
 
-  const filteredRows = useMemo(() => {
+  const visibleRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     let next = rows
 
@@ -165,6 +217,7 @@ export function LogsPanel({
           row.feature.toLowerCase().includes(query) ||
           featureLabel.includes(query) ||
           row.summary.toLowerCase().includes(query) ||
+          (row.action ?? '').toLowerCase().includes(query) ||
           (row.entityName ?? '').toLowerCase().includes(query)
         )
       })
@@ -174,20 +227,18 @@ export function LogsPanel({
       next = next.filter((row) => isSameLocalDay(row.createdAt))
     }
 
-    if (quickPreset === 'last100') {
-      next = next.slice(0, 100)
-    }
-
     return next
   }, [featureFilters, quickPreset, rows, searchQuery, t])
 
   const uniqueUsers = useMemo(() => {
-    return new Set(filteredRows.map((row) => row.userEmail).filter(Boolean)).size
-  }, [filteredRows])
+    return new Set(visibleRows.map((row) => row.userEmail).filter(Boolean)).size
+  }, [visibleRows])
 
   const activeFilterCount = featureFilters.length
   const hasActiveFilters =
     activeFilterCount > 0 || Boolean(searchQuery.trim()) || quickPreset !== 'none'
+  const canLoadMore =
+    Boolean(nextKey) && quickPreset !== 'last100' && !isLoading
 
   return (
     <>
@@ -311,8 +362,12 @@ export function LogsPanel({
       >
         <div className="card card-compact">
           <p className="card-label">{t('logs.totalEvents')}</p>
-          <p className="card-value">{filteredRows.length}</p>
-          <p className="card-meta">{t('logs.recentEvents')}</p>
+          <p className="card-value">{visibleRows.length}</p>
+          <p className="card-meta">
+            {canLoadMore
+              ? t('logs.loadedWithMore')
+              : t('logs.loadedEvents', { count: visibleRows.length })}
+          </p>
         </div>
         <div className="card card-compact">
           <p className="card-label">{t('logs.uniqueUsers')}</p>
@@ -458,14 +513,14 @@ export function LogsPanel({
                     {t('logs.loading')}
                   </td>
                 </tr>
-              ) : filteredRows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <tr>
                   <td className="table-empty" colSpan={4}>
                     {hasActiveFilters ? t('logs.emptyFiltered') : t('logs.empty')}
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
+                visibleRows.map((row) => (
                   <tr key={row.id || `${row.createdAt}-${row.summary}`}>
                     <td>{row.userEmail || 'system'}</td>
                     <td>{translatePage(t, row.feature)}</td>
@@ -477,6 +532,21 @@ export function LogsPanel({
             </tbody>
           </table>
         </div>
+        {truncated ? (
+          <p className="notice">{t('logs.truncated')}</p>
+        ) : null}
+        {canLoadMore ? (
+          <div className="logs-load-more">
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={isLoadingMore}
+              onClick={() => void fetchLogs({ cursor: nextKey })}
+            >
+              {isLoadingMore ? t('logs.loadingMore') : t('logs.loadMore')}
+            </button>
+          </div>
+        ) : null}
       </section>
     </>
   )
