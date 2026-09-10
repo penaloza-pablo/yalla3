@@ -104,7 +104,7 @@ const DEFAULT_STATUS_FILTER: VisitStatus[] = [
   'COMPLETED',
 ]
 
-const DEFAULT_BOOKING_EVENTS: BookingEventKind[] = ['check-in']
+const DEFAULT_BOOKING_EVENTS: BookingEventKind[] = ['check-in', 'check-out']
 
 const emptyOpsFilters = (): OpsFilters => ({
   teamIds: [],

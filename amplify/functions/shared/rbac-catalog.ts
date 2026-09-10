@@ -76,6 +76,7 @@ export const ACTION_KEYS = {
   visitMoreInfo: 'action:visit.moreInfo',
   dailyOpsCreate: 'action:dailyOps.create',
   inventoryCreate: 'action:inventory.create',
+  inventoryEditItems: 'action:inventory.editItems',
   spotCheckCreate: 'action:spotCheck.create',
   purchasesCreate: 'action:purchases.create',
   propertiesUpdateFromGuesty: 'action:properties.updateFromGuesty',
@@ -110,6 +111,10 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
   { key: ACTION_KEYS.visitMoreInfo, i18nKey: 'rbac.actions.visitMoreInfo' },
   { key: ACTION_KEYS.dailyOpsCreate, i18nKey: 'rbac.actions.dailyOpsCreate' },
   { key: ACTION_KEYS.inventoryCreate, i18nKey: 'rbac.actions.inventoryCreate' },
+  {
+    key: ACTION_KEYS.inventoryEditItems,
+    i18nKey: 'rbac.actions.inventoryEditItems',
+  },
   { key: ACTION_KEYS.spotCheckCreate, i18nKey: 'rbac.actions.spotCheckCreate' },
   { key: ACTION_KEYS.purchasesCreate, i18nKey: 'rbac.actions.purchasesCreate' },
   {
@@ -237,6 +242,7 @@ export const ROLE_SEEDS: {
       ACTION_KEYS.cleaningBillingPrices,
       ACTION_KEYS.dailyOpsCreate,
       ACTION_KEYS.inventoryCreate,
+      ACTION_KEYS.inventoryEditItems,
       ACTION_KEYS.spotCheckCreate,
       ACTION_KEYS.purchasesCreate,
       ACTION_KEYS.visitMoreInfo,

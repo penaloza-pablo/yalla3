@@ -185,6 +185,19 @@ export const assignUnitVerticalPositions = (
   return Math.max(currentTop, laneHeight)
 }
 
+export const DAY_VISIT_HEIGHT = 30
+export const DAY_BOOKING_HEIGHT = 46
+export const DAY_LANE_HEIGHT = DAY_BOOKING_HEIGHT
+export const DAY_OVERLAP_STEP = DAY_BOOKING_HEIGHT - DAY_VISIT_HEIGHT
+
+export const visitBlockTop = (entry: DayTimelineVisit) => {
+  const base = Math.round((DAY_BOOKING_HEIGHT - DAY_VISIT_HEIGHT) / 2)
+  if (entry.isClusterExpanded) {
+    return entry.laneIndex * DAY_LANE_HEIGHT + base
+  }
+  return base + entry.stackLayer * DAY_OVERLAP_STEP
+}
+
 export type DayTimelineVisit = {
   visit: VisitRecord
   start: number
@@ -211,16 +224,23 @@ export const buildDayTimelineVisits = (
 
   const clusterByVisitId = new Map<
     string,
-    { key: string; isMultiTeam: boolean; size: number }
+    { key: string; isMultiTeam: boolean; size: number; stackLayer: number }
   >()
   buildTimeOverlapComponents(sorted).forEach((component) => {
     const key = clusterKeyForVisits(component)
     const isMultiTeam = new Set(component.map((visit) => visit.teamId)).size > 1
-    component.forEach((visit) => {
+    const ordered = [...component].sort(
+      (a, b) =>
+        getVisitTimeRange(a).start - getVisitTimeRange(b).start ||
+        a.scheduledStartTime.localeCompare(b.scheduledStartTime) ||
+        a.id.localeCompare(b.id),
+    )
+    ordered.forEach((visit, index) => {
       clusterByVisitId.set(visit.id, {
         key,
         isMultiTeam,
         size: component.length,
+        stackLayer: component.length > 1 ? index : 0,
       })
     })
   })
@@ -232,9 +252,9 @@ export const buildDayTimelineVisits = (
       visit,
       start,
       end,
-      hasTimeOverlap: false,
-      overlapCount: 1,
-      stackLayer: 0,
+      hasTimeOverlap: (cluster?.size ?? 1) > 1,
+      overlapCount: cluster?.size ?? 1,
+      stackLayer: cluster?.stackLayer ?? 0,
       clusterKey: cluster?.key ?? visit.id,
       clusterSize: cluster?.size ?? 1,
       isMultiTeamOverlap: cluster?.isMultiTeam ?? false,
@@ -253,25 +273,6 @@ export const buildDayTimelineVisits = (
     item.overlapCount = overlapping.length + 1
   })
 
-  items.forEach((item) => {
-    if (!item.hasTimeOverlap) {
-      return
-    }
-    const cluster = items
-      .filter((other) =>
-        rangesOverlap(item.start, item.end, other.start, other.end),
-      )
-      .sort(
-        (a, b) =>
-          a.start - b.start ||
-          a.visit.scheduledStartTime.localeCompare(b.visit.scheduledStartTime) ||
-          a.visit.id.localeCompare(b.visit.id),
-      )
-    item.stackLayer = cluster.findIndex(
-      (entry) => entry.visit.id === item.visit.id,
-    )
-  })
-
   return items
 }
 
@@ -279,7 +280,7 @@ export const layoutDayTimelineVisits = (
   items: DayTimelineVisit[],
   expandedClusterKeys: Set<string>,
   teamById: Map<string, string>,
-): { items: DayTimelineVisit[]; laneCount: number } => {
+): { items: DayTimelineVisit[]; channelHeight: number } => {
   const membersByCluster = new Map<string, DayTimelineVisit[]>()
   items.forEach((item) => {
     const members = membersByCluster.get(item.clusterKey) ?? []
@@ -289,14 +290,19 @@ export const layoutDayTimelineVisits = (
 
   const laneByVisitId = new Map<string, number>()
   const expandedByCluster = new Map<string, boolean>()
+  let channelHeight = DAY_LANE_HEIGHT
 
   membersByCluster.forEach((members, clusterKey) => {
     const shouldExpand =
-      members[0]?.isMultiTeamOverlap === true &&
-      expandedClusterKeys.has(clusterKey)
+      members.length > 1 && expandedClusterKeys.has(clusterKey)
     expandedByCluster.set(clusterKey, shouldExpand)
     if (!shouldExpand) {
       members.forEach((member) => laneByVisitId.set(member.visit.id, 0))
+      const maxLayer = Math.max(0, ...members.map((member) => member.stackLayer))
+      channelHeight = Math.max(
+        channelHeight,
+        DAY_BOOKING_HEIGHT + maxLayer * DAY_OVERLAP_STEP,
+      )
       return
     }
 
@@ -309,6 +315,10 @@ export const layoutDayTimelineVisits = (
     sortedMembers.forEach((member, index) => {
       laneByVisitId.set(member.visit.id, index)
     })
+    channelHeight = Math.max(
+      channelHeight,
+      sortedMembers.length * DAY_LANE_HEIGHT,
+    )
   })
 
   const nextItems = items.map((item) => ({
@@ -317,19 +327,42 @@ export const layoutDayTimelineVisits = (
     laneIndex: laneByVisitId.get(item.visit.id) ?? 0,
   }))
 
-  const laneCount = Math.max(
-    1,
-    ...nextItems.map((item) => item.laneIndex + 1),
-  )
-
-  return { items: nextItems, laneCount }
+  return { items: nextItems, channelHeight }
 }
 
 export const dayVisitExpandsOverlapOnClick = (entry: DayTimelineVisit) =>
-  entry.isMultiTeamOverlap && !entry.isClusterExpanded
+  entry.hasTimeOverlap && !entry.isClusterExpanded
+
+export const pointerHitsCollapsedVisitOverlap = (
+  entry: DayTimelineVisit,
+  items: DayTimelineVisit[],
+  minutes: number,
+  _offsetY?: number,
+) => {
+  if (!dayVisitExpandsOverlapOnClick(entry)) {
+    return false
+  }
+  if (minutes < entry.start || minutes >= entry.end) {
+    return false
+  }
+  return items.some(
+    (other) =>
+      other.visit.id !== entry.visit.id &&
+      minutes >= other.start &&
+      minutes < other.end,
+  )
+}
 
 export const dayTimelineHasOverlaps = (items: DayTimelineVisit[]) =>
   items.some((item) => item.hasTimeOverlap)
+
+export const formatVisitBarTitle = (
+  visit: VisitRecord,
+  options?: { roomLabel?: string },
+) => {
+  const roomSuffix = options?.roomLabel ? ` (${options.roomLabel})` : ''
+  return `${visit.title.trim()}${roomSuffix}`
+}
 
 export const formatVisitSummaryLine = (
   visit: VisitRecord,

@@ -11,8 +11,11 @@ import {
   type MtlDisplayRow,
 } from './mtlPropertyHelpers'
 import {
+  BOOKING_CHECK_OUT_END,
+  BOOKING_DURATION_MINUTES,
   canShiftDayWindowEarlier,
   canShiftDayWindowLater,
+  clampCheckInLayout,
   clipVisitToDayWindow,
   DAY_MIN_DURATION_MINUTES,
   DAY_VIEW_DEFAULT_START_MINUTES,
@@ -20,31 +23,35 @@ import {
   DAY_VIEW_SPAN_MINUTES,
   formatAgendaDayLabel,
   formatMinutesAsTime,
+  getDayTimelineHourMarks,
   getDayTimelineWindow,
   getDayWindowOverflow,
   getVisitTimeRange,
   isTerminalVisit,
   minutesToPositionPercent,
+  positionPercentToMinutes,
+  resolveCheckInLayout,
   shiftDayWindowStart,
   snapToDayGrid,
   type DayTimelineWindow,
 } from './operationsViewHelpers'
+import {
+  readDayCheckInLayout,
+  writeDayCheckInLayout,
+  type StoredCheckInLayout,
+} from './dayCheckInLayoutStore'
 import { getTeamBlockStyle } from './teamColors'
 import {
   buildDayTimelineVisits,
-  dayTimelineHasOverlaps,
   dayVisitExpandsOverlapOnClick,
+  formatVisitBarTitle,
   formatVisitSummaryLine,
   layoutDayTimelineVisits,
+  pointerHitsCollapsedVisitOverlap,
+  visitBlockTop,
   type DayTimelineVisit,
 } from './visitOverlapLayout'
 import type { VisitRecord } from './types'
-
-const DAY_LANE_HEIGHT = 34
-const BOOKING_CHECK_IN_START = 15 * 60
-const BOOKING_CHECK_OUT_END = 11 * 60
-const BOOKING_DURATION_MINUTES = 30
-const EARLY_CHECK_IN_DURATION_MINUTES = 15
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
 
@@ -63,6 +70,8 @@ export type DayBookingEvent = {
   propertyId: string
   guestName: string
   earlyCheckIn?: boolean
+  checkInStartMinutes?: number
+  earlyLeadMinutes?: number
 }
 
 type Props = {
@@ -113,15 +122,42 @@ export function OperationsDayView({
   const [windowStartMinutes, setWindowStartMinutes] = useState(
     DAY_VIEW_DEFAULT_START_MINUTES,
   )
+  const [layoutEpoch, setLayoutEpoch] = useState(0)
+  const bookingsWithLayout = useMemo(
+    () =>
+      bookings.map((booking) => {
+        if (booking.kind !== 'check-in') {
+          return booking
+        }
+        const stored = readDayCheckInLayout(dayViewDate, booking.id)
+        return {
+          ...booking,
+          ...resolveCheckInLayout({ ...booking, ...stored }),
+        }
+      }),
+    [bookings, dayViewDate, layoutEpoch],
+  )
+  const handleCheckInLayoutChange = useCallback(
+    (bookingId: string, layout: StoredCheckInLayout) => {
+      writeDayCheckInLayout(dayViewDate, bookingId, layout)
+      setLayoutEpoch((value) => value + 1)
+    },
+    [dayViewDate],
+  )
   const timelineWindow = useMemo(
     () => getDayTimelineWindow(windowStartMinutes),
     [windowStartMinutes],
   )
-  const { startMinutes, endMinutes } = timelineWindow
-  const hourMarks: number[] = []
-  for (let minute = startMinutes; minute <= endMinutes; minute += 60) {
-    hourMarks.push(minute)
-  }
+  const hourMarks = useMemo(
+    () => getDayTimelineHourMarks(timelineWindow),
+    [timelineWindow],
+  )
+  const windowOverflow = useMemo(
+    () => getDayWindowOverflow(visits, timelineWindow, bookingsWithLayout),
+    [visits, bookingsWithLayout, timelineWindow],
+  )
+  const canShiftEarlier = canShiftDayWindowEarlier(windowStartMinutes)
+  const canShiftLater = canShiftDayWindowLater(windowStartMinutes)
 
   useEffect(() => {
     setWindowStartMinutes(DAY_VIEW_DEFAULT_START_MINUTES)
@@ -146,7 +182,10 @@ export function OperationsDayView({
           propertyVisits: getVisitsForPropertyIds(visits, row.propertyIds).sort(
             (a, b) => a.scheduledStartTime.localeCompare(b.scheduledStartTime),
           ),
-          propertyBookings: getBookingsForPropertyIds(bookings, row.propertyIds),
+          propertyBookings: getBookingsForPropertyIds(
+            bookingsWithLayout,
+            row.propertyIds,
+          ),
           showRoomLabel: false,
           isChildRow: false,
           canExpand: false,
@@ -169,8 +208,8 @@ export function OperationsDayView({
               a.scheduledStartTime.localeCompare(b.scheduledStartTime),
             ),
         propertyBookings: isExpanded
-          ? getBookingsForPropertyIds(bookings, [row.principal.id])
-          : getBookingsForPropertyIds(bookings, row.propertyIds),
+          ? getBookingsForPropertyIds(bookingsWithLayout, [row.principal.id])
+          : getBookingsForPropertyIds(bookingsWithLayout, row.propertyIds),
         showRoomLabel: !isExpanded,
         isChildRow: false,
         canExpand: true,
@@ -185,7 +224,10 @@ export function OperationsDayView({
             .sort((a, b) =>
               a.scheduledStartTime.localeCompare(b.scheduledStartTime),
             )
-          const childBookings = getBookingsForPropertyIds(bookings, [child.id])
+          const childBookings = getBookingsForPropertyIds(
+            bookingsWithLayout,
+            [child.id],
+          )
           if (childVisits.length === 0 && childBookings.length === 0) {
             return
           }
@@ -205,7 +247,7 @@ export function OperationsDayView({
     })
 
     return rows
-  }, [visibleRows, visits, bookings, expandedMtlIds])
+  }, [visibleRows, visits, bookingsWithLayout, expandedMtlIds])
 
   const toggleMtlGroup = (principalId: string) => {
     setExpandedMtlIds((current) => {
@@ -271,6 +313,37 @@ export function OperationsDayView({
           No visits scheduled for {formatAgendaDayLabel(dayViewDate)}.
         </p>
       ) : (
+      <>
+        {windowOverflow.hasEarly || windowOverflow.hasLate ? (
+          <div className="operations-day-window-warnings" role="status">
+            {windowOverflow.hasEarly ? (
+              <button
+                type="button"
+                className="operations-day-window-warning"
+                onClick={() => shiftTimelineWindow(-DAY_VIEW_PAN_STEP_MINUTES)}
+                disabled={!canShiftEarlier}
+              >
+                {t('operations.visitsBeforeWindow', {
+                  time: formatMinutesAsTime(timelineWindow.startMinutes),
+                  earliest: formatMinutesAsTime(windowOverflow.earliestBefore),
+                })}
+              </button>
+            ) : null}
+            {windowOverflow.hasLate ? (
+              <button
+                type="button"
+                className="operations-day-window-warning"
+                onClick={() => shiftTimelineWindow(DAY_VIEW_PAN_STEP_MINUTES)}
+                disabled={!canShiftLater}
+              >
+                {t('operations.visitsAfterWindow', {
+                  time: formatMinutesAsTime(timelineWindow.endMinutes),
+                  latest: formatMinutesAsTime(windowOverflow.latestAfter),
+                })}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       <div className="operations-day-scroll">
         <table className="operations-day-table">
           <thead>
@@ -280,10 +353,10 @@ export function OperationsDayView({
                 <div className="operations-day-hours-wrap">
                   <button
                     type="button"
-                    className="operations-range-nav"
-                    aria-label="Earlier hours"
-                    title="Earlier hours"
-                    disabled={!canShiftDayWindowEarlier(windowStartMinutes)}
+                    className="operations-range-nav operations-range-nav--start"
+                    aria-label={t('operations.earlierHours')}
+                    title={t('operations.earlierHours')}
+                    disabled={!canShiftEarlier}
                     onClick={() => shiftTimelineWindow(-DAY_VIEW_PAN_STEP_MINUTES)}
                   >
                     &laquo;
@@ -303,10 +376,10 @@ export function OperationsDayView({
                   </div>
                   <button
                     type="button"
-                    className="operations-range-nav"
-                    aria-label="Later hours"
-                    title="Later hours"
-                    disabled={!canShiftDayWindowLater(windowStartMinutes)}
+                    className="operations-range-nav operations-range-nav--end"
+                    aria-label={t('operations.laterHours')}
+                    title={t('operations.laterHours')}
+                    disabled={!canShiftLater}
                     onClick={() => shiftTimelineWindow(DAY_VIEW_PAN_STEP_MINUTES)}
                   >
                     &raquo;
@@ -317,65 +390,147 @@ export function OperationsDayView({
           </thead>
           <tbody>
             {tableRows.map((row) => (
-              <tr
+              <DayPropertyRow
                 key={row.key}
-                className={row.isChildRow ? 'operations-day-row-child' : undefined}
-              >
-                <th
-                  className={`operations-day-property-cell${
-                    row.isChildRow ? ' is-child' : ''
-                  }${row.canExpand ? ' is-mtl-header' : ''}`}
-                  scope="row"
-                >
-                  {row.canExpand ? (
-                    <button
-                      type="button"
-                      className="operations-mtl-toggle"
-                      onClick={() => toggleMtlGroup(row.mtlPrincipalId!)}
-                      aria-expanded={row.isExpanded}
-                      aria-label={
-                        row.isExpanded
-                          ? `Collapse ${row.propertyLabel}`
-                          : `Expand ${row.propertyLabel}`
-                      }
-                    >
-                      {row.isExpanded ? '▾' : '▸'}
-                    </button>
-                  ) : null}
-                  <span>{row.propertyLabel}</span>
-                </th>
-                <td className="operations-day-timeline-cell">
-                  <DayTimelineTrack
-                    propertyVisits={row.propertyVisits}
-                    propertyBookings={row.propertyBookings}
-                    timelineWindow={timelineWindow}
-                    propertyById={propertyById}
-                    teamById={teamById}
-                    syncingVisitIds={syncingVisitIds}
-                    showRoomLabel={row.showRoomLabel}
-                    expandMtlOnVisitClick={row.canExpand && !row.isExpanded}
-                    onExpandMtlGroup={
-                      row.canExpand && row.mtlPrincipalId
-                        ? () => toggleMtlGroup(row.mtlPrincipalId!)
-                        : undefined
-                    }
-                    onVisitClick={onVisitClick}
-                    onVisitTimeChange={onVisitTimeChange}
-                  />
-                </td>
-              </tr>
+                row={row}
+                timelineWindow={timelineWindow}
+                propertyById={propertyById}
+                teamById={teamById}
+                syncingVisitIds={syncingVisitIds}
+                onToggleMtlGroup={toggleMtlGroup}
+                onVisitClick={onVisitClick}
+                onVisitTimeChange={onVisitTimeChange}
+                onCheckInLayoutChange={handleCheckInLayoutChange}
+              />
             ))}
           </tbody>
         </table>
       </div>
+      </>
       )}
     </section>
+  )
+}
+
+type DayPropertyRowProps = {
+  row: DayTableRow
+  timelineWindow: DayTimelineWindow
+  propertyById: Map<string, string>
+  teamById: Map<string, string>
+  syncingVisitIds: Set<string>
+  onToggleMtlGroup: (mtlPrincipalId: string) => void
+  onVisitClick: (visitId: string) => void
+  onVisitTimeChange: (
+    visitId: string,
+    scheduledStartTime: string,
+    scheduledEndTime: string,
+  ) => void
+  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
+}
+
+function DayPropertyRow({
+  row,
+  timelineWindow,
+  propertyById,
+  teamById,
+  syncingVisitIds,
+  onToggleMtlGroup,
+  onVisitClick,
+  onVisitTimeChange,
+  onCheckInLayoutChange,
+}: DayPropertyRowProps) {
+  const { t } = useTranslation()
+  const [expandedClusterKeys, setExpandedClusterKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const { items: timelineVisits, channelHeight } = useMemo(
+    () =>
+      layoutDayTimelineVisits(
+        buildDayTimelineVisits(row.propertyVisits),
+        expandedClusterKeys,
+        teamById,
+      ),
+    [expandedClusterKeys, row.propertyVisits, teamById],
+  )
+  const hasExpandedClusters = timelineVisits.some(
+    (entry) => entry.isClusterExpanded,
+  )
+
+  return (
+    <tr className={row.isChildRow ? 'operations-day-row-child' : undefined}>
+      <th
+        className={`operations-day-property-cell${
+          row.isChildRow ? ' is-child' : ''
+        }${row.canExpand ? ' is-mtl-header' : ''}`}
+        scope="row"
+      >
+        {row.canExpand ? (
+          <button
+            type="button"
+            className="operations-mtl-toggle"
+            onClick={() => onToggleMtlGroup(row.mtlPrincipalId!)}
+            aria-expanded={row.isExpanded}
+            aria-label={
+              row.isExpanded
+                ? `Collapse ${row.propertyLabel}`
+                : `Expand ${row.propertyLabel}`
+            }
+          >
+            {row.isExpanded ? '▾' : '▸'}
+          </button>
+        ) : null}
+        <span>{row.propertyLabel}</span>
+        {hasExpandedClusters ? (
+          <button
+            type="button"
+            className="operations-mtl-toggle operations-day-overlap-collapse"
+            aria-expanded
+            aria-label={t('operations.collapseOverlappingVisits')}
+            title={t('operations.collapseOverlappingVisits')}
+            onClick={() => setExpandedClusterKeys(new Set())}
+          >
+            ▾
+          </button>
+        ) : null}
+      </th>
+      <td className="operations-day-timeline-cell">
+        <DayTimelineTrack
+          propertyVisits={row.propertyVisits}
+          propertyBookings={row.propertyBookings}
+          timelineVisits={timelineVisits}
+          channelHeight={channelHeight}
+          timelineWindow={timelineWindow}
+          propertyById={propertyById}
+          teamById={teamById}
+          syncingVisitIds={syncingVisitIds}
+          showRoomLabel={row.showRoomLabel}
+          expandMtlOnVisitClick={row.canExpand && !row.isExpanded}
+          onExpandMtlGroup={
+            row.canExpand && row.mtlPrincipalId
+              ? () => onToggleMtlGroup(row.mtlPrincipalId!)
+              : undefined
+          }
+          onExpandOverlapCluster={(clusterKey) => {
+            setExpandedClusterKeys((current) => {
+              const next = new Set(current)
+              next.add(clusterKey)
+              return next
+            })
+          }}
+          onVisitClick={onVisitClick}
+          onVisitTimeChange={onVisitTimeChange}
+          onCheckInLayoutChange={onCheckInLayoutChange}
+        />
+      </td>
+    </tr>
   )
 }
 
 type DayTimelineTrackProps = {
   propertyVisits: VisitRecord[]
   propertyBookings: DayBookingEvent[]
+  timelineVisits: DayTimelineVisit[]
+  channelHeight: number
   timelineWindow: DayTimelineWindow
   propertyById: Map<string, string>
   teamById: Map<string, string>
@@ -383,17 +538,31 @@ type DayTimelineTrackProps = {
   showRoomLabel: boolean
   expandMtlOnVisitClick: boolean
   onExpandMtlGroup?: () => void
+  onExpandOverlapCluster: (clusterKey: string) => void
   onVisitClick: (visitId: string) => void
   onVisitTimeChange: (
     visitId: string,
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
+  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
+}
+
+function minutesFromTrackPointer(
+  clientX: number,
+  track: HTMLElement,
+  timelineWindow: DayTimelineWindow,
+) {
+  const rect = track.getBoundingClientRect()
+  const percent = ((clientX - rect.left) / Math.max(rect.width, 1)) * 100
+  return positionPercentToMinutes(percent, timelineWindow)
 }
 
 function DayTimelineTrack({
   propertyVisits,
   propertyBookings,
+  timelineVisits,
+  channelHeight,
   timelineWindow,
   propertyById,
   teamById,
@@ -401,33 +570,26 @@ function DayTimelineTrack({
   showRoomLabel,
   expandMtlOnVisitClick,
   onExpandMtlGroup,
+  onExpandOverlapCluster,
   onVisitClick,
   onVisitTimeChange,
+  onCheckInLayoutChange,
 }: DayTimelineTrackProps) {
-  const { t } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
-  const [expandedClusterKeys, setExpandedClusterKeys] = useState<Set<string>>(
-    () => new Set(),
-  )
   const [previewRange, setPreviewRange] = useState<{
     visitId: string
     start: number
     end: number
   } | null>(null)
   const dragMovedRef = useRef(false)
+  const pointerHitOverlapRef = useRef(false)
 
-  const overflow = getDayWindowOverflow(propertyVisits, timelineWindow)
-  const { items: timelineVisits, laneCount } = layoutDayTimelineVisits(
-    buildDayTimelineVisits(propertyVisits),
-    expandedClusterKeys,
-    teamById,
+  const overflow = getDayWindowOverflow(
+    propertyVisits,
+    timelineWindow,
+    propertyBookings,
   )
-  const hasTimeConflicts = dayTimelineHasOverlaps(timelineVisits)
-  const hasExpandedClusters = timelineVisits.some(
-    (entry) => entry.isClusterExpanded,
-  )
-  const collapseRowHeight = hasExpandedClusters ? 18 : 0
 
   const finishDrag = useCallback(
     (drag: ActiveDrag, nextStart: number, nextEnd: number) => {
@@ -521,6 +683,24 @@ function DayTimelineTrack({
     }
   }, [activeDrag, finishDrag])
 
+  const pointerHitsOverlap = (
+    entry: DayTimelineVisit,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const track = trackRef.current
+    if (!track) {
+      return false
+    }
+    const rect = track.getBoundingClientRect()
+    return pointerHitsCollapsedVisitOverlap(
+      entry,
+      timelineVisits,
+      minutesFromTrackPointer(clientX, track, timelineWindow),
+      clientY - rect.top,
+    )
+  }
+
   const beginDrag = (
     event: React.PointerEvent,
     entry: DayTimelineVisit,
@@ -530,7 +710,10 @@ function DayTimelineTrack({
     if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id)) {
       return
     }
-    if (expandMtlOnVisitClick || dayVisitExpandsOverlapOnClick(entry)) {
+    const hitsOverlap = pointerHitsOverlap(entry, event.clientX, event.clientY)
+    pointerHitOverlapRef.current = hitsOverlap
+    if (expandMtlOnVisitClick || hitsOverlap) {
+      dragMovedRef.current = false
       return
     }
     const track = trackRef.current
@@ -554,28 +737,30 @@ function DayTimelineTrack({
     setPreviewRange({ visitId: visit.id, start, end })
   }
 
-  const handleBlockClick = (entry: DayTimelineVisit) => {
+  const handleBlockClick = (
+    entry: DayTimelineVisit,
+    clientX?: number,
+    clientY?: number,
+  ) => {
     if (dragMovedRef.current) {
       dragMovedRef.current = false
+      pointerHitOverlapRef.current = false
       return
     }
     if (expandMtlOnVisitClick) {
       onExpandMtlGroup?.()
       return
     }
-    if (dayVisitExpandsOverlapOnClick(entry)) {
-      setExpandedClusterKeys((current) => {
-        const next = new Set(current)
-        next.add(entry.clusterKey)
-        return next
-      })
+    const hitsOverlap =
+      clientX === undefined || clientY === undefined
+        ? pointerHitOverlapRef.current
+        : pointerHitsOverlap(entry, clientX, clientY)
+    pointerHitOverlapRef.current = false
+    if (hitsOverlap && dayVisitExpandsOverlapOnClick(entry)) {
+      onExpandOverlapCluster(entry.clusterKey)
       return
     }
     onVisitClick(entry.visit.id)
-  }
-
-  const collapseExpandedClusters = () => {
-    setExpandedClusterKeys(new Set())
   }
 
   return (
@@ -603,10 +788,12 @@ function DayTimelineTrack({
       <div
         ref={trackRef}
         className={`operations-day-track${
-          hasTimeConflicts ? ' has-time-conflicts' : ''
-        }${hasExpandedClusters ? ' is-overlap-expanded' : ''}`}
+          timelineVisits.some((entry) => entry.isClusterExpanded)
+            ? ' is-overlap-expanded'
+            : ''
+        }`}
         style={{
-          minHeight: `${laneCount * DAY_LANE_HEIGHT + collapseRowHeight + 8}px`,
+          height: `${channelHeight}px`,
         }}
       >
         {timelineVisits.map((entry) => (
@@ -620,9 +807,7 @@ function DayTimelineTrack({
             showRoomLabel={showRoomLabel}
             previewRange={previewRange}
             expandMtlOnVisitClick={expandMtlOnVisitClick}
-            lockDrag={
-              expandMtlOnVisitClick || dayVisitExpandsOverlapOnClick(entry)
-            }
+            lockDrag={expandMtlOnVisitClick}
             beginDrag={beginDrag}
             handleBlockClick={handleBlockClick}
           />
@@ -632,18 +817,9 @@ function DayTimelineTrack({
             key={booking.id}
             booking={booking}
             timelineWindow={timelineWindow}
+            onCheckInLayoutChange={onCheckInLayoutChange}
           />
         ))}
-        {hasExpandedClusters ? (
-          <button
-            type="button"
-            className="operations-day-collapse-group"
-            style={{ top: `${laneCount * DAY_LANE_HEIGHT}px` }}
-            onClick={collapseExpandedClusters}
-          >
-            {t('operations.collapseOverlappingVisits')}
-          </button>
-        ) : null}
       </div>
     </div>
   )
@@ -664,7 +840,11 @@ type DayVisitBlockProps = {
     entry: DayTimelineVisit,
     mode: DragMode,
   ) => void
-  handleBlockClick: (entry: DayTimelineVisit) => void
+  handleBlockClick: (
+    entry: DayTimelineVisit,
+    clientX?: number,
+    clientY?: number,
+  ) => void
 }
 
 function DayVisitBlock({
@@ -696,10 +876,6 @@ function DayVisitBlock({
   const isEditable = !isTerminalVisit(visit)
   const roomLabel = showRoomLabel ? propertyById.get(visit.propertyId) : undefined
   const expandsOverlap = dayVisitExpandsOverlapOnClick(entry)
-  const isTopOverlapLayer =
-    entry.hasTimeOverlap &&
-    !entry.isClusterExpanded &&
-    entry.stackLayer === entry.overlapCount - 1
   const clickHint = expandMtlOnVisitClick
     ? t('operations.expandRoomsOnVisitClick')
     : expandsOverlap
@@ -731,15 +907,15 @@ function DayVisitBlock({
       style={{
         left: `${left}%`,
         width: `${width}%`,
-        top: `${entry.laneIndex * DAY_LANE_HEIGHT}px`,
+        top: `${visitBlockTop(entry)}px`,
+        ...getTeamBlockStyle(visit.teamId, teamById),
         zIndex: isDragging
           ? 5
           : entry.isClusterExpanded
             ? 2
             : entry.hasTimeOverlap
-              ? 2 + entry.stackLayer
+              ? Math.min(5, 2 + entry.stackLayer)
               : 2,
-        ...getTeamBlockStyle(visit.teamId, teamById),
       }}
       title={summaryTitle}
     >
@@ -755,7 +931,9 @@ function DayVisitBlock({
           <div
             className="operations-day-block-body"
             onPointerDown={(event) => beginDrag(event, entry, 'move')}
-            onClick={() => handleBlockClick(entry)}
+            onClick={(event) =>
+              handleBlockClick(entry, event.clientX, event.clientY)
+            }
             role="button"
             tabIndex={0}
             onKeyDown={(event) => {
@@ -772,16 +950,8 @@ function DayVisitBlock({
               />
             ) : null}
             <span className="operations-day-visit-summary">
-              {formatVisitSummaryLine(visit, {
-                roomLabel,
-                endTime: formatMinutesAsTime(end),
-              })}
+              {formatVisitBarTitle(visit, { roomLabel })}
             </span>
-            {expandsOverlap && isTopOverlapLayer ? (
-              <span className="operations-day-overlap-count">
-                ×{entry.clusterSize}
-              </span>
-            ) : null}
           </div>
           {lockDrag ? null : (
             <span
@@ -795,29 +965,15 @@ function DayVisitBlock({
         <button
           type="button"
           className="operations-day-block-body operations-day-block-body--button"
-          onClick={() => handleBlockClick(entry)}
+          onClick={(event) =>
+            handleBlockClick(entry, event.clientX, event.clientY)
+          }
         >
           <span className="operations-day-visit-summary">
-            {formatVisitSummaryLine(visit, {
-              roomLabel,
-              endTime: visit.scheduledEndTime,
-            })}
+            {formatVisitBarTitle(visit, { roomLabel })}
           </span>
-          {expandsOverlap && isTopOverlapLayer ? (
-            <span className="operations-day-overlap-count">
-              ×{entry.clusterSize}
-            </span>
-          ) : null}
         </button>
       )}
-      {entry.hasTimeOverlap && !entry.isClusterExpanded ? (
-        <span
-          className="operations-day-time-overlap-badge"
-          title={t('operations.expandOverlappingVisits')}
-        >
-          +
-        </span>
-      ) : null}
       {isTerminalVisit(visit) ? (
         <span className="operations-day-terminal-mark">
           {visit.status === 'COMPLETED' ? '✓' : '✕'}
@@ -876,6 +1032,7 @@ function DayBookingTimeBlock({
   className,
   title,
   children,
+  onMovePointerDown,
 }: {
   start: number
   end: number
@@ -883,6 +1040,7 @@ function DayBookingTimeBlock({
   className: string
   title: string
   children?: ReactNode
+  onMovePointerDown?: (event: React.PointerEvent) => void
 }) {
   const clipped = clipVisitToDayWindow(start, end, timelineWindow)
   if (clipped.visualEnd <= clipped.visualStart) {
@@ -903,55 +1061,178 @@ function DayBookingTimeBlock({
       }}
       title={title}
       aria-label={title}
+      role={onMovePointerDown ? 'button' : undefined}
+      onPointerDown={onMovePointerDown}
     >
       {children}
     </div>
   )
 }
 
+type BookingDrag = {
+  mode: 'move' | 'resize-early'
+  checkInStartMinutes: number
+  earlyLeadMinutes: number
+  pointerStartX: number
+  trackWidth: number
+}
+
 function DayBookingBlock({
   booking,
   timelineWindow,
+  onCheckInLayoutChange,
 }: {
   booking: DayBookingEvent
   timelineWindow: DayTimelineWindow
+  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
 }) {
-  const start =
-    booking.kind === 'check-in'
-      ? BOOKING_CHECK_IN_START
-      : BOOKING_CHECK_OUT_END - BOOKING_DURATION_MINUTES
-  const end =
-    booking.kind === 'check-in'
-      ? start + BOOKING_DURATION_MINUTES
-      : BOOKING_CHECK_OUT_END
-  const showEarlyCheckIn =
-    booking.kind === 'check-in' && Boolean(booking.earlyCheckIn)
-  const label =
-    booking.kind === 'check-in'
-      ? `Check-in · ${booking.guestName}`
-      : `Check-out · ${booking.guestName}`
+  const layout = resolveCheckInLayout(booking)
+  const [preview, setPreview] = useState<StoredCheckInLayout | null>(null)
+  const [activeDrag, setActiveDrag] = useState<BookingDrag | null>(null)
+  const display = preview ?? layout
+
+  useEffect(() => {
+    if (!activeDrag) {
+      return
+    }
+
+    const minLead = booking.earlyCheckIn ? 15 : 0
+
+    const applyDelta = (deltaPx: number) => {
+      const deltaMinutes = snapToDayGrid(
+        (deltaPx / activeDrag.trackWidth) * DAY_VIEW_SPAN_MINUTES,
+      )
+      if (activeDrag.mode === 'move') {
+        return clampCheckInLayout({
+          checkInStartMinutes: activeDrag.checkInStartMinutes + deltaMinutes,
+          earlyLeadMinutes: activeDrag.earlyLeadMinutes,
+          minLead,
+        })
+      }
+      const leadDelta =
+        Math.round(
+          ((deltaPx / activeDrag.trackWidth) * DAY_VIEW_SPAN_MINUTES) / 15,
+        ) * 15
+      return clampCheckInLayout({
+        checkInStartMinutes: activeDrag.checkInStartMinutes,
+        earlyLeadMinutes: activeDrag.earlyLeadMinutes - leadDelta,
+        minLead,
+      })
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      setPreview(applyDelta(event.clientX - activeDrag.pointerStartX))
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const next = applyDelta(event.clientX - activeDrag.pointerStartX)
+      if (
+        next.checkInStartMinutes !== layout.checkInStartMinutes ||
+        next.earlyLeadMinutes !== layout.earlyLeadMinutes
+      ) {
+        onCheckInLayoutChange(booking.id, next)
+      }
+      setActiveDrag(null)
+      setPreview(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [activeDrag, booking.earlyCheckIn, booking.id, layout, onCheckInLayoutChange])
+
+  const beginDrag = (
+    event: React.PointerEvent,
+    mode: BookingDrag['mode'],
+  ) => {
+    const track = event.currentTarget.closest('.operations-day-track')
+    if (!track) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    const trackWidth = track.getBoundingClientRect().width
+    if (trackWidth <= 0) {
+      return
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setActiveDrag({
+      mode,
+      checkInStartMinutes: layout.checkInStartMinutes,
+      earlyLeadMinutes: layout.earlyLeadMinutes,
+      pointerStartX: event.clientX,
+      trackWidth,
+    })
+    setPreview(layout)
+  }
+
+  if (booking.kind === 'check-out') {
+    const start = BOOKING_CHECK_OUT_END - BOOKING_DURATION_MINUTES
+    return (
+      <DayBookingTimeBlock
+        start={start}
+        end={BOOKING_CHECK_OUT_END}
+        timelineWindow={timelineWindow}
+        className="operations-day-booking-block is-check-out"
+        title={`Check-out · ${booking.guestName}`}
+      >
+        <DayBookingIcon kind="check-out" />
+      </DayBookingTimeBlock>
+    )
+  }
+
+  const start = display.checkInStartMinutes
+  const end = start + BOOKING_DURATION_MINUTES
+  const showEarlyCheckIn = display.earlyLeadMinutes > 0
+  const isDragging = Boolean(activeDrag)
 
   return (
     <>
       {showEarlyCheckIn ? (
         <DayBookingTimeBlock
-          start={start - EARLY_CHECK_IN_DURATION_MINUTES}
+          start={start - display.earlyLeadMinutes}
           end={start}
           timelineWindow={timelineWindow}
-          className="operations-day-booking-block is-early-check-in"
+          className={`operations-day-booking-block is-early-check-in${
+            isDragging ? ' is-dragging' : ''
+          }`}
           title={`Early check-in · ${booking.guestName}`}
-        />
+          onMovePointerDown={(event) => beginDrag(event, 'move')}
+        >
+          <span
+            className="operations-day-resize-handle operations-day-resize-handle--start"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              beginDrag(event, 'resize-early')
+            }}
+            aria-label="Resize early check-in"
+          />
+        </DayBookingTimeBlock>
       ) : null}
       <DayBookingTimeBlock
         start={start}
         end={end}
         timelineWindow={timelineWindow}
-        className={`operations-day-booking-block ${
-          booking.kind === 'check-in' ? 'is-check-in' : 'is-check-out'
-        }${showEarlyCheckIn ? ' has-early-lead' : ''}`}
-        title={label}
+        className={`operations-day-booking-block is-check-in${
+          showEarlyCheckIn ? ' has-early-lead' : ''
+        }${isDragging ? ' is-dragging' : ''}`}
+        title={`Check-in · ${booking.guestName}`}
+        onMovePointerDown={(event) => beginDrag(event, 'move')}
       >
-        <DayBookingIcon kind={booking.kind} />
+        {showEarlyCheckIn ? null : (
+          <span
+            className="operations-day-resize-handle operations-day-resize-handle--start"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              beginDrag(event, 'resize-early')
+            }}
+            aria-label="Add early check-in"
+          />
+        )}
+        <DayBookingIcon kind="check-in" />
       </DayBookingTimeBlock>
     </>
   )

@@ -1201,6 +1201,12 @@ button.today-card {
   align-items: center;
 }
 
+.action-buttons .btn-icon-ghost:disabled,
+.action-buttons .btn-icon-ghost.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1695,7 +1701,7 @@ th {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 20;
+  z-index: 50;
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -3244,8 +3250,7 @@ th {
   z-index: 2;
 }
 
-.operations-agenda-collapse-group,
-.operations-day-collapse-group {
+.operations-agenda-collapse-group {
   display: block;
   margin-top: 2px;
   padding: 2px 0;
@@ -3256,12 +3261,6 @@ th {
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
-}
-
-.operations-day-collapse-group {
-  position: absolute;
-  left: 0;
-  z-index: 3;
 }
 
 .operations-agenda-visit-chip.is-draggable {
@@ -3314,6 +3313,9 @@ th {
 }
 
 .operations-day-card {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -3422,7 +3424,10 @@ th {
 
 .operations-day-booking-block {
   position: absolute;
-  min-height: 30px;
+  top: 0;
+  bottom: 0;
+  height: auto;
+  min-height: 46px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -3431,6 +3436,7 @@ th {
   overflow: hidden;
   pointer-events: none;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 .operations-day-booking-icon {
@@ -3439,8 +3445,14 @@ th {
 }
 
 .operations-day-booking-block.is-check-in {
-  background: #12b76a;
+  background: #339668;
   color: #ffffff;
+  z-index: 8;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  overflow: visible;
 }
 
 .operations-day-booking-block.is-check-in.has-early-lead {
@@ -3449,15 +3461,34 @@ th {
 }
 
 .operations-day-booking-block.is-early-check-in {
-  background: #facc15;
+  background-color: #e1d08f;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    #ccb042 8px,
+    #ccb042 16px
+  );
   color: #854d0e;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
+  z-index: 1;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  overflow: visible;
 }
 
 .operations-day-booking-block.is-check-out {
-  background: #667085;
+  background: #6c727f;
   color: #ffffff;
+  z-index: 8;
+}
+
+.operations-day-booking-block.is-dragging {
+  cursor: grabbing;
+  z-index: 9;
 }
 
 .operations-day-scroll {
@@ -3482,12 +3513,28 @@ th {
 .operations-day-property-cell {
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 12;
   background: #ffffff;
   min-width: 160px;
   max-width: 220px;
   font-weight: 600;
   text-align: left;
+}
+
+.operations-day-property-cell {
+  display: flex;
+  align-items: center;
+}
+
+.operations-day-property-cell > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.operations-day-overlap-collapse {
+  margin-right: 0;
+  margin-left: 6px;
+  flex-shrink: 0;
 }
 
 .operations-day-property-cell.is-child {
@@ -3515,17 +3562,30 @@ th {
 }
 
 .operations-day-hours-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 760px;
+  position: relative;
+  min-width: 720px;
+  height: 28px;
 }
 
 .operations-day-hours {
   position: relative;
-  flex: 1;
   height: 28px;
   min-width: 720px;
+}
+
+.operations-day-hours-wrap > .operations-range-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+
+.operations-day-hours-wrap > .operations-range-nav--start {
+  left: 0;
+}
+
+.operations-day-hours-wrap > .operations-range-nav--end {
+  right: 0;
 }
 
 .operations-day-hour {
@@ -3534,6 +3594,37 @@ th {
   font-size: 0.75rem;
   color: #667085;
   white-space: nowrap;
+}
+
+.operations-day-window-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 4px;
+}
+
+.operations-day-window-warning {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  background: #fffaeb;
+  color: #b54708;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.operations-day-window-warning:hover:not(:disabled) {
+  background: #fef0c7;
+}
+
+.operations-day-window-warning:disabled {
+  cursor: default;
 }
 
 .operations-day-track-wrap {
@@ -3587,39 +3678,10 @@ th {
   min-width: 720px;
 }
 
-.operations-day-track.has-time-conflicts {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 8px,
-    rgba(240, 68, 56, 0.06) 8px,
-    rgba(240, 68, 56, 0.06) 16px
-  );
-}
-
 .operations-day-visit-block.has-time-overlap {
   box-shadow:
     0 0 0 2px #f04438,
     0 4px 12px rgba(240, 68, 56, 0.28);
-}
-
-.operations-day-time-overlap-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #344054;
-  font-size: 0.92rem;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.18);
 }
 
 .operations-day-visit-block {
@@ -3634,6 +3696,7 @@ th {
 
 .operations-day-visit-block--compact {
   min-height: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
 }
@@ -3680,10 +3743,6 @@ th {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-.operations-day-visit-block--compact .operations-day-overlap-count {
-  margin-left: 6px;
 }
 
 .operations-day-overlap-expanded {

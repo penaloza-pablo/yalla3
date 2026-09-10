@@ -51,7 +51,7 @@ import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
 import { usePermissions } from './rbac/PermissionsProvider'
-import { CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
+import { ACTION_KEYS, CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
 import {
   collectGuestyNicknameMismatches,
   resolveYallaPropertyLabel,
@@ -1515,6 +1515,7 @@ const emptySubtractionFormState: SubtractionFormState = {
 function App() {
   const { t, i18n } = useTranslation()
   const { ready: permissionsReady, can, canPage } = usePermissions()
+  const canEditInventoryItems = can(ACTION_KEYS.inventoryEditItems)
   const pageLabel = (page: string) => translatePage(t, page)
   const navItemLabel = (page: string) =>
     t(`navPages.${page}`, { defaultValue: translatePage(t, page) })
@@ -3048,6 +3049,9 @@ function App() {
   }
 
   const openPurchaseWizard = (row: InventoryRow) => {
+    if (!canEditInventoryItems) {
+      return
+    }
     setPurchaseFormValues({
       ...emptyPurchaseFormState,
       itemId: row.id,
@@ -3076,6 +3080,9 @@ function App() {
   }
 
   const openSubtractionWizard = (row: InventoryRow) => {
+    if (!canEditInventoryItems) {
+      return
+    }
     if (propertyRows.length === 0) {
       void fetchProperties()
     }
@@ -3122,6 +3129,9 @@ function App() {
   }
 
   const openEditItem = (row: InventoryRow) => {
+    if (!canEditInventoryItems) {
+      return
+    }
     const resolvedCategoryChoice =
       row.category && categoryOptions.includes(row.category)
         ? row.category
@@ -3154,6 +3164,9 @@ function App() {
   }
 
   const deleteItem = async (row: InventoryRow) => {
+    if (!canEditInventoryItems) {
+      return
+    }
     const confirmed = window.confirm(
       t('inventory.deleteConfirm', { name: itemDisplayName(row), id: row.id }),
     )
@@ -5310,8 +5323,16 @@ function App() {
                           <td>
                             <div className="action-buttons">
                               <button
-                                className="btn-icon btn-icon-ghost"
+                                className={`btn-icon btn-icon-ghost${
+                                  canEditInventoryItems ? '' : ' is-disabled'
+                                }`}
                                 type="button"
+                                disabled={!canEditInventoryItems}
+                                title={
+                                  canEditInventoryItems
+                                    ? t('common.createPurchase')
+                                    : t('inventory.editItemsLocked')
+                                }
                                 onClick={() => openPurchaseWizard(row)}
                                 aria-label={t('common.createPurchase')}
                               >
@@ -5328,11 +5349,18 @@ function App() {
                                 </svg>
                               </button>
                               <button
-                                className="btn-icon btn-icon-ghost"
+                                className={`btn-icon btn-icon-ghost${
+                                  canEditInventoryItems ? '' : ' is-disabled'
+                                }`}
                                 type="button"
+                                disabled={!canEditInventoryItems}
+                                title={
+                                  canEditInventoryItems
+                                    ? t('common.subtract')
+                                    : t('inventory.editItemsLocked')
+                                }
                                 onClick={() => openSubtractionWizard(row)}
                                 aria-label={t('common.createSubtraction')}
-                                title={t('common.subtract')}
                               >
                                 <svg
                                   aria-hidden="true"
@@ -5347,16 +5375,32 @@ function App() {
                                 </svg>
                               </button>
                               <button
-                                className="btn-icon btn-icon-ghost"
+                                className={`btn-icon btn-icon-ghost${
+                                  canEditInventoryItems ? '' : ' is-disabled'
+                                }`}
                                 type="button"
+                                disabled={!canEditInventoryItems}
+                                title={
+                                  canEditInventoryItems
+                                    ? t('common.edit')
+                                    : t('inventory.editItemsLocked')
+                                }
                                 onClick={() => openEditItem(row)}
                                 aria-label={t('common.edit')}
                               >
                                 ✎
                               </button>
                               <button
-                                className="btn-icon btn-icon-ghost"
+                                className={`btn-icon btn-icon-ghost${
+                                  canEditInventoryItems ? '' : ' is-disabled'
+                                }`}
                                 type="button"
+                                disabled={!canEditInventoryItems}
+                                title={
+                                  canEditInventoryItems
+                                    ? t('common.delete')
+                                    : t('inventory.editItemsLocked')
+                                }
                                 onClick={() => deleteItem(row)}
                                 aria-label={t('common.delete')}
                               >

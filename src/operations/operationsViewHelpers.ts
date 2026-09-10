@@ -153,17 +153,22 @@ export const buildVisitLayoutSlots = (visits: VisitRecord[]): VisitLayoutSlot[] 
   return slots
 }
 
-export const DAY_VIEW_DEFAULT_START_MINUTES = 9 * 60
+export const DAY_VIEW_EDGE_PAD_MINUTES = 30
+export const DAY_VIEW_DEFAULT_START_MINUTES = 10 * 60 + DAY_VIEW_EDGE_PAD_MINUTES
 export const DAY_VIEW_START_MINUTES = DAY_VIEW_DEFAULT_START_MINUTES
-export const DAY_VIEW_WINDOW_SPAN_MINUTES = 10 * 60
+export const DAY_VIEW_WINDOW_SPAN_MINUTES = 7 * 60
 export const DAY_VIEW_END_MINUTES =
   DAY_VIEW_DEFAULT_START_MINUTES + DAY_VIEW_WINDOW_SPAN_MINUTES
 export const DAY_VIEW_SPAN_MINUTES = DAY_VIEW_WINDOW_SPAN_MINUTES
 export const DAY_VIEW_PAN_STEP_MINUTES = 2 * 60
-export const DAY_VIEW_MIN_WINDOW_START = 6 * 60
-export const DAY_VIEW_MAX_WINDOW_END = 22 * 60
+export const DAY_VIEW_MIN_WINDOW_START = 5 * 60 + DAY_VIEW_EDGE_PAD_MINUTES
+export const DAY_VIEW_MAX_WINDOW_END = 21 * 60 + DAY_VIEW_EDGE_PAD_MINUTES
 export const DAY_SNAP_MINUTES = 30
 export const DAY_MIN_DURATION_MINUTES = 30
+export const BOOKING_CHECK_IN_START = 15 * 60
+export const BOOKING_CHECK_OUT_END = 11 * 60
+export const BOOKING_DURATION_MINUTES = 30
+export const EARLY_CHECK_IN_DURATION_MINUTES = 15
 
 export type DayTimelineWindow = {
   startMinutes: number
@@ -206,6 +211,77 @@ export const getDayTimelineBounds = (
   startMinutes = DAY_VIEW_DEFAULT_START_MINUTES,
 ) => getDayTimelineWindow(startMinutes)
 
+export const getDayTimelineHourMarks = (window: DayTimelineWindow) => {
+  const marks: number[] = []
+  const firstHour = Math.ceil(window.startMinutes / 60) * 60
+  const lastHour = Math.floor(window.endMinutes / 60) * 60
+  const start =
+    firstHour === window.startMinutes ? firstHour + 60 : firstHour
+  const end = lastHour === window.endMinutes ? lastHour - 60 : lastHour
+  for (let minute = start; minute <= end; minute += 60) {
+    marks.push(minute)
+  }
+  return marks
+}
+
+export const getBookingEventTimeRange = (booking: {
+  kind: 'check-in' | 'check-out'
+  earlyCheckIn?: boolean
+  checkInStartMinutes?: number
+  earlyLeadMinutes?: number
+}) => {
+  if (booking.kind === 'check-in') {
+    const start = booking.checkInStartMinutes ?? BOOKING_CHECK_IN_START
+    const lead =
+      booking.earlyLeadMinutes ??
+      (booking.earlyCheckIn ? EARLY_CHECK_IN_DURATION_MINUTES : 0)
+    return {
+      start: start - lead,
+      end: start + BOOKING_DURATION_MINUTES,
+    }
+  }
+  return {
+    start: BOOKING_CHECK_OUT_END - BOOKING_DURATION_MINUTES,
+    end: BOOKING_CHECK_OUT_END,
+  }
+}
+
+export const resolveCheckInLayout = (booking: {
+  earlyCheckIn?: boolean
+  checkInStartMinutes?: number
+  earlyLeadMinutes?: number
+}) => {
+  const checkInStartMinutes =
+    booking.checkInStartMinutes ?? BOOKING_CHECK_IN_START
+  const earlyLeadMinutes =
+    booking.earlyLeadMinutes ??
+    (booking.earlyCheckIn ? EARLY_CHECK_IN_DURATION_MINUTES : 0)
+  return { checkInStartMinutes, earlyLeadMinutes }
+}
+
+export const clampCheckInLayout = ({
+  checkInStartMinutes,
+  earlyLeadMinutes,
+  minLead = 0,
+}: {
+  checkInStartMinutes: number
+  earlyLeadMinutes: number
+  minLead?: number
+}) => {
+  const lead = Math.max(minLead, Math.round(earlyLeadMinutes / 15) * 15)
+  const start = Math.max(
+    lead,
+    Math.min(
+      24 * 60 - BOOKING_DURATION_MINUTES,
+      snapToDayGrid(checkInStartMinutes),
+    ),
+  )
+  return {
+    checkInStartMinutes: start,
+    earlyLeadMinutes: Math.min(lead, start),
+  }
+}
+
 export type ClippedVisitRange = {
   visualStart: number
   visualEnd: number
@@ -227,14 +303,24 @@ export const clipVisitToDayWindow = (
 export const getDayWindowOverflow = (
   visits: VisitRecord[],
   window: DayTimelineWindow = getDayTimelineWindow(),
+  bookings: Array<{
+    kind: 'check-in' | 'check-out'
+    earlyCheckIn?: boolean
+    checkInStartMinutes?: number
+    earlyLeadMinutes?: number
+  }> = [],
 ) => {
   let hasEarly = false
   let hasLate = false
   let earliestBefore = window.startMinutes
   let latestAfter = window.endMinutes
 
-  visits.forEach((visit) => {
-    const { start, end } = getVisitTimeRange(visit)
+  const ranges = [
+    ...visits.map(getVisitTimeRange),
+    ...bookings.map(getBookingEventTimeRange),
+  ]
+
+  ranges.forEach(({ start, end }) => {
     if (start < window.startMinutes) {
       hasEarly = true
       earliestBefore = Math.min(earliestBefore, start)
