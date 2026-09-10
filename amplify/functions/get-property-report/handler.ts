@@ -210,7 +210,7 @@ export const handler = async (event: HttpEvent) => {
       cleaningDetail,
       maintenanceDetail,
       subtractionExpenses,
-      movementExpenses,
+      financeMovements,
       serviceLines,
       purchaseExpenses,
     ] = await Promise.all([
@@ -241,7 +241,7 @@ export const handler = async (event: HttpEvent) => {
 
     const expenses = [
       ...subtractionExpenses,
-      ...movementExpenses,
+      ...financeMovements.expenses,
       ...purchaseExpenses,
     ].sort(
       (left, right) => {
@@ -251,6 +251,7 @@ export const handler = async (event: HttpEvent) => {
         return left.id.localeCompare(right.id);
       },
     );
+    const incomes = financeMovements.incomes;
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';
@@ -301,6 +302,16 @@ export const handler = async (event: HttpEvent) => {
         ),
         totalCostWithIva: roundMoney(
           expenses.reduce((sum, line) => sum + line.amountInclIva, 0),
+        ),
+      },
+      incomes: {
+        lines: incomes,
+        count: incomes.length,
+        total: roundMoney(
+          incomes.reduce((sum, line) => sum + line.amountExclIva, 0),
+        ),
+        totalWithIva: roundMoney(
+          incomes.reduce((sum, line) => sum + line.amountInclIva, 0),
         ),
       },
       services: {

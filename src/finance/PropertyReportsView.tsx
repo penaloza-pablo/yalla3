@@ -1,8 +1,11 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   IVA_RATES,
+  occurrencePriceWithIva,
   parseIvaRate,
+  persistIvaFields,
+  priceFromGross,
   type IvaRate,
 } from '../../amplify/functions/shared/finance-services'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
@@ -16,6 +19,8 @@ import {
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import { PropertyReportSettingsModal } from './PropertyReportSettingsModal'
+import { PropertyClosedReportView } from './PropertyClosedReportView'
+import { computePropertyReportMetrics } from './property-report-metrics'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -76,6 +81,67 @@ type ExpenseLine = {
   amountExclIva: number
   amountInclIva: number
   ivaRate: IvaRate
+}
+
+type MovementKind = 'income' | 'outcome'
+
+type MovementDraft = {
+  description: string
+  amount: string
+  ivaRate: IvaRate
+  totalAmount: string
+  date: string
+  kind: MovementKind
+}
+
+const defaultDateInMonth = (monthId: string) => {
+  const today = getTodayMadrid()
+  if (today.startsWith(`${monthId}-`)) {
+    return today
+  }
+  return `${monthId}-01`
+}
+
+const lastDateInMonth = (monthId: string) => {
+  const [year, month] = monthId.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return `${monthId}-${String(lastDay).padStart(2, '0')}`
+}
+
+const emptyMovementDraft = (
+  monthId: string,
+  kind: MovementKind,
+): MovementDraft => ({
+  description: '',
+  amount: '',
+  ivaRate: 0,
+  totalAmount: '',
+  date: defaultDateInMonth(monthId),
+  kind,
+})
+
+const syncDraftFromNet = (amount: string, ivaRate: IvaRate) => {
+  const parsed = Number(amount)
+  if (!Number.isFinite(parsed) || amount.trim() === '') {
+    return { amount, ivaRate, totalAmount: '' }
+  }
+  return {
+    amount,
+    ivaRate,
+    totalAmount: String(occurrencePriceWithIva(parsed, ivaRate)),
+  }
+}
+
+const syncDraftFromGross = (totalAmount: string, ivaRate: IvaRate) => {
+  const parsed = Number(totalAmount)
+  if (!Number.isFinite(parsed) || totalAmount.trim() === '') {
+    return { amount: '', ivaRate, totalAmount }
+  }
+  return {
+    amount: String(priceFromGross(parsed, ivaRate)),
+    ivaRate,
+    totalAmount,
+  }
 }
 
 type ServiceLine = {
@@ -238,24 +304,6 @@ const parseLineAllocations = (value: unknown) => {
   return next
 }
 
-const ownerChargeFromAllocation = (
-  gross: number,
-  allocation: CostAllocation | '',
-) => {
-  if (allocation === 'owner') {
-    return roundMoney(gross)
-  }
-  if (allocation === 'ownerPlus12') {
-    return roundMoney(gross * 1.12)
-  }
-  return 0
-}
-
-const companyCostFromAllocation = (
-  gross: number,
-  allocation: CostAllocation | '',
-) => (allocation === 'bear' ? roundMoney(gross) : 0)
-
 const ReportDocumentIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
     <path
@@ -337,6 +385,7 @@ export function PropertyReportsView({
     () => ({
       get: getEndpoint('getPropertyReportUrl'),
       upsert: getEndpoint('upsertPropertyReportUrl'),
+      upsertMovement: getEndpoint('upsertFinanceMovementUrl'),
     }),
     [getEndpoint],
   )
@@ -359,12 +408,15 @@ export function PropertyReportsView({
   const [cleaningKitCost, setCleaningKitCost] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
+  const [incomes, setIncomes] = useState<ExpenseLine[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
+  const [movementDraft, setMovementDraft] = useState<MovementDraft | null>(null)
+  const [isSavingMovement, setIsSavingMovement] = useState(false)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [lineAllocations, setLineAllocations] = useState<
     Record<string, CostAllocation>
   >({})
-  const [isReportOpen, setIsReportOpen] = useState(false)
+  const [isClosedReportOpen, setIsClosedReportOpen] = useState(false)
   const [settingsProperty, setSettingsProperty] = useState<{
     id: string
     name: string
@@ -378,6 +430,7 @@ export function PropertyReportsView({
     cleaning: false,
     maintenance: false,
     expenses: false,
+    incomes: false,
     services: false,
   })
 
@@ -455,24 +508,22 @@ export function PropertyReportsView({
       ),
     [maintenanceLines],
   )
-  const expenseTotals = useMemo(
-    () => ({
-      count: expenses.length,
-      totalCost: expenses.reduce((sum, line) => sum + line.amountExclIva, 0),
-      totalIva: roundMoney(
-        expenses.reduce(
-          (sum, line) =>
-            sum + ivaEuroFromNet(line.amountExclIva, line.ivaRate),
-          0,
-        ),
-      ),
-      totalCostWithIva: expenses.reduce(
-        (sum, line) => sum + line.amountInclIva,
+  const summarizeMoneyLines = (lines: ExpenseLine[]) => ({
+    count: lines.length,
+    totalCost: lines.reduce((sum, line) => sum + line.amountExclIva, 0),
+    totalIva: roundMoney(
+      lines.reduce(
+        (sum, line) => sum + ivaEuroFromNet(line.amountExclIva, line.ivaRate),
         0,
       ),
-    }),
+    ),
+    totalCostWithIva: lines.reduce((sum, line) => sum + line.amountInclIva, 0),
+  })
+  const expenseTotals = useMemo(
+    () => summarizeMoneyLines(expenses),
     [expenses],
   )
+  const incomeTotals = useMemo(() => summarizeMoneyLines(incomes), [incomes])
   const serviceTotals = useMemo(
     () => ({
       count: serviceLines.length,
@@ -585,6 +636,9 @@ export function PropertyReportsView({
         expenses?: {
           lines?: ExpenseLine[]
         }
+        incomes?: {
+          lines?: ExpenseLine[]
+        }
         services?: {
           lines?: ServiceLine[]
         }
@@ -627,14 +681,14 @@ export function PropertyReportsView({
       setCleaningTotal(Number(payload.cleaning?.total ?? 0))
       setCleaningKitCost(Number(payload.cleaning?.kitCost ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
-      setExpenses(
-        (payload.expenses?.lines ?? []).map((item) => ({
-          ...item,
-          ivaRate:
-            parseIvaRate((item as ExpenseLine).ivaRate) ??
-            inferIvaRate(item.amountExclIva, item.amountInclIva, 0),
-        })),
-      )
+      const mapMoneyLine = (item: ExpenseLine): ExpenseLine => ({
+        ...item,
+        ivaRate:
+          parseIvaRate(item.ivaRate) ??
+          inferIvaRate(item.amountExclIva, item.amountInclIva, 0),
+      })
+      setExpenses((payload.expenses?.lines ?? []).map(mapMoneyLine))
+      setIncomes((payload.incomes?.lines ?? []).map(mapMoneyLine))
       setServiceLines(
         (payload.services?.lines ?? []).map((item) => ({
           ...item,
@@ -644,7 +698,6 @@ export function PropertyReportsView({
         })),
       )
       setLineAllocations(parseLineAllocations(payload.lineAllocations))
-      setIsReportOpen(false)
     },
     [endpoints.get, t],
   )
@@ -679,11 +732,13 @@ export function PropertyReportsView({
       cleaning: false,
       maintenance: false,
       expenses: false,
+      incomes: false,
       services: false,
     })
+    setMovementDraft(null)
     setExpandedRowIds(new Set())
     setLineAllocations({})
-    setIsReportOpen(false)
+    setIsClosedReportOpen(false)
     setIsLoading(true)
     setError(null)
     void loadDetail(selectedPropertyId, selectedMonthId)
@@ -716,6 +771,9 @@ export function PropertyReportsView({
         }),
       })
       setMessage(t('propertyReports.updated'))
+      if (action === 'reopen') {
+        setIsClosedReportOpen(false)
+      }
       await loadDetail(selectedPropertyId, selectedMonthId)
     } catch (saveError) {
       setError(
@@ -758,6 +816,76 @@ export function PropertyReportsView({
     }
   }
 
+  const openMovementForm = (kind: MovementKind) => {
+    if (!selectedMonthId) {
+      return
+    }
+    setError(null)
+    setMessage(null)
+    setMovementDraft(emptyMovementDraft(selectedMonthId, kind))
+  }
+
+  const saveMovement = async () => {
+    if (!movementDraft) {
+      return
+    }
+    if (!endpoints.upsertMovement) {
+      setError(t('propertyReports.missingMovementWrite'))
+      return
+    }
+    if (!selectedPropertyId || !selectedMonthId) {
+      return
+    }
+    const amount = Number(movementDraft.amount)
+    const date = movementDraft.date
+    if (!movementDraft.description.trim() || !date) {
+      setError(t('propertyReports.validationMovement'))
+      return
+    }
+    if (date.slice(0, 7) !== selectedMonthId) {
+      setError(t('propertyReports.validationMovementDate'))
+      return
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError(t('movements.validationAmount'))
+      return
+    }
+    setIsSavingMovement(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await fetchJson(endpoints.upsertMovement, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: selectedPropertyId,
+          propertyName: propertyLabel,
+          description: movementDraft.description.trim(),
+          amount,
+          ivaRate: movementDraft.ivaRate,
+          appliesIva: persistIvaFields(movementDraft.ivaRate).appliesIva,
+          totalAmount: Number.isFinite(Number(movementDraft.totalAmount))
+            ? Number(movementDraft.totalAmount)
+            : undefined,
+          kind: movementDraft.kind,
+          date,
+          status: 'Pending Billing',
+        }),
+      })
+      setMovementDraft(null)
+      setMessage(t('propertyReports.addMovementSaved'))
+      await loadDetail(selectedPropertyId, selectedMonthId)
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('movements.saveError'),
+      )
+    } finally {
+      setIsSavingMovement(false)
+    }
+  }
+
   const sectionsClosed = cleaningClosed && maintenanceClosed
   const pendingSectionLabels = [
     cleaningClosed ? null : t('propertyReports.cleaningTitle'),
@@ -765,84 +893,75 @@ export function PropertyReportsView({
   ].filter((value): value is string => Boolean(value))
   const usesAllocations =
     report?.status === 'READY_TO_CLOSE' || report?.status === 'CLOSED'
-  const canOpenReport = Boolean(usesAllocations)
+  const canOpenReport = report?.status === 'CLOSED'
   const allocationsLocked = report?.status === 'CLOSED' || isSaving
+  const canAddMovement =
+    Boolean(endpoints.upsertMovement) && report?.status !== 'CLOSED'
 
-  const draftLines = useMemo(() => {
-    const lines: Array<{
-      id: string
-      section: string
-      label: string
-      gross: number
-    }> = [
-      ...cleaningLines.map((line) => ({
-        id: `cleaning:${line.id}`,
-        section: t('propertyReports.cleaningTitle'),
-        label: line.cleaningTypeName || dateLabel(line.date),
-        gross: roundMoney(
-          (line.price === null
-            ? 0
-            : grossFromNet(line.price, line.ivaRate)) + (line.kitCost || 0),
-        ),
-      })),
-      ...maintenanceLines.map((line) => ({
-        id: `maintenance:${line.id}`,
-        section: t('propertyReports.maintenanceTitle'),
-        label: line.title || dateLabel(line.date),
-        gross:
-          line.price === null ? 0 : grossFromNet(line.price, line.ivaRate),
-      })),
-      ...serviceLines.map((line) => ({
-        id: `service:${line.id}`,
-        section: t('propertyReports.servicesTitle'),
-        label: line.title || dateLabel(line.date),
-        gross: line.priceWithIva,
-      })),
-      ...expenses.map((line) => ({
-        id: `expense:${line.id}`,
-        section: t('propertyReports.expensesTitle'),
-        label: line.itemName || dateLabel(line.date),
-        gross: line.amountInclIva,
-      })),
-    ]
-    return lines
-  }, [
-    cleaningLines,
-    dateLabel,
-    expenses,
-    maintenanceLines,
-    serviceLines,
-    t,
-  ])
-
-  const draftTotals = useMemo(() => {
-    return draftLines.reduce(
-      (sum, line) => {
-        const allocation = lineAllocations[line.id] ?? ''
-        return {
-          owner: roundMoney(
-            sum.owner + ownerChargeFromAllocation(line.gross, allocation),
-          ),
-          company: roundMoney(
-            sum.company + companyCostFromAllocation(line.gross, allocation),
-          ),
-          unassigned: roundMoney(
-            sum.unassigned + (allocation ? 0 : line.gross),
-          ),
-        }
-      },
-      { owner: 0, company: 0, unassigned: 0 },
-    )
-  }, [draftLines, lineAllocations])
-
-  const allocationLabel = (value: CostAllocation | '') => {
-    if (value === 'bear') return t('propertyReports.allocationBear')
-    if (value === 'ownerPlus12') {
-      return t('propertyReports.allocationOwnerPlus12')
-    }
-    if (value === 'owner') return t('propertyReports.allocationOwner')
-    return t('common.select')
-  }
+  const closedReportMetrics = useMemo(
+    () =>
+      computePropertyReportMetrics({
+        paidByGuest: bookingTotals.paidByGuest,
+        otherIncomesNet: incomeTotals.totalCost,
+        payoutCleaningNet: bookingTotals.cleaningFee,
+        payoutCleaningGross: bookingTotals.cleaningGross,
+        cleaningNet: cleaningTotal,
+        cleaningKit: cleaningKitCost,
+        cleaningIva: cleaningIvaTotal,
+        maintenanceNet: maintenanceTotal,
+        maintenanceIva: maintenanceIvaTotal,
+        servicesNet: serviceTotals.cost,
+        servicesIva: serviceTotals.iva,
+        otherExpensesNet: expenseTotals.totalCost,
+        otherExpensesIva: expenseTotals.totalIva,
+        otherIncomesIva: incomeTotals.totalIva,
+        bookingCount: bookingTotals.count,
+        allocatedLines: [
+          ...cleaningLines.map((line) => ({
+            section: 'cleaning' as const,
+            net: (line.price ?? 0) + (line.kitCost || 0),
+            allocation: lineAllocations[`cleaning:${line.id}`] ?? '',
+          })),
+          ...maintenanceLines.map((line) => ({
+            section: 'maintenance' as const,
+            net: line.price ?? 0,
+            allocation: lineAllocations[`maintenance:${line.id}`] ?? '',
+          })),
+          ...serviceLines.map((line) => ({
+            section: 'service' as const,
+            net: line.price,
+            allocation: lineAllocations[`service:${line.id}`] ?? '',
+          })),
+          ...expenses.map((line) => ({
+            section: 'expense' as const,
+            net: line.amountExclIva,
+            allocation: lineAllocations[`expense:${line.id}`] ?? '',
+          })),
+          ...incomes.map((line) => ({
+            section: 'income' as const,
+            net: line.amountExclIva,
+            allocation: lineAllocations[`income:${line.id}`] ?? '',
+          })),
+        ],
+      }),
+    [
+      bookingTotals,
+      cleaningIvaTotal,
+      cleaningKitCost,
+      cleaningLines,
+      cleaningTotal,
+      expenseTotals,
+      expenses,
+      incomeTotals,
+      incomes,
+      lineAllocations,
+      maintenanceIvaTotal,
+      maintenanceLines,
+      maintenanceTotal,
+      serviceLines,
+      serviceTotals,
+    ],
+  )
 
   const renderLineAction = (rowId: string, isExpanded: boolean) => {
     if (usesAllocations) {
@@ -871,6 +990,165 @@ export function PropertyReportsView({
     )
   }
 
+  const updateLineIva = (
+    setLines: Dispatch<SetStateAction<ExpenseLine[]>>,
+    lineId: string,
+    ivaRate: IvaRate,
+  ) => {
+    setLines((current) =>
+      current.map((entry) =>
+        entry.id === lineId
+          ? {
+              ...entry,
+              ivaRate,
+              amountInclIva: roundMoney(
+                entry.amountExclIva +
+                  ivaEuroFromNet(entry.amountExclIva, ivaRate),
+              ),
+            }
+          : entry,
+      ),
+    )
+  }
+
+  const renderMoneyLinesCard = (
+    tableKey: 'expenses' | 'incomes',
+    lines: ExpenseLine[],
+    totals: ReturnType<typeof summarizeMoneyLines>,
+    setLines: Dispatch<SetStateAction<ExpenseLine[]>>,
+  ) => {
+    const rowPrefix = tableKey === 'expenses' ? 'expense' : 'income'
+    const kind: MovementKind = tableKey === 'expenses' ? 'outcome' : 'income'
+    return (
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">
+              {t(`propertyReports.${tableKey}Title`)}
+            </h2>
+            <div className="report-metrics">
+              <div className="report-metric">
+                <p className="card-label">
+                  {t(`propertyReports.${tableKey}Count`)}
+                </p>
+                <p className="card-value">{totals.count}</p>
+              </div>
+              <div className="report-metric">
+                <p className="card-label">{t('propertyReports.net')}</p>
+                <p className="card-value">{money.format(totals.totalCost)}</p>
+              </div>
+              <div className="report-metric">
+                <p className="card-label">{t('propertyReports.iva')}</p>
+                <p className="card-value">{money.format(totals.totalIva)}</p>
+              </div>
+              <div className="report-metric">
+                <p className="card-label">{t('propertyReports.gross')}</p>
+                <p className="card-value">
+                  {money.format(totals.totalCostWithIva)}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="table-actions">
+            {canAddMovement ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => openMovementForm(kind)}
+              >
+                {t(
+                  tableKey === 'expenses'
+                    ? 'propertyReports.addExpense'
+                    : 'propertyReports.addIncome',
+                )}
+              </button>
+            ) : null}
+            <TableToggleButton
+              open={openTables[tableKey]}
+              onClick={() => toggleTable(tableKey)}
+              expandLabel={t('propertyReports.showTable')}
+              collapseLabel={t('propertyReports.hideTable')}
+            />
+          </div>
+        </div>
+        {openTables[tableKey] ? (
+          <div className="table-wrap">
+            <table className="data-table report-table-clamp">
+              <thead>
+                <tr>
+                  <th>{t('propertyReports.date')}</th>
+                  <th className="report-col-clamp">
+                    {t('propertyReports.item')}
+                  </th>
+                  <th>{t('propertyReports.origin')}</th>
+                  <th>{t('propertyReports.net')}</th>
+                  <th>{t('propertyReports.gross')}</th>
+                  <th>
+                    {usesAllocations
+                      ? t('propertyReports.allocation')
+                      : t('common.actions')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.length === 0 && !isLoading ? (
+                  <tr>
+                    <td colSpan={6}>
+                      {t(
+                        tableKey === 'expenses'
+                          ? 'propertyReports.emptyExpenses'
+                          : 'propertyReports.emptyIncomes',
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  lines.map((line) => {
+                    const rowId = `${rowPrefix}:${line.id}`
+                    const isExpanded = expandedRowIds.has(rowId)
+                    return (
+                      <Fragment key={`${tableKey}-${line.id}`}>
+                        <tr>
+                          <td>{dateLabel(line.date)}</td>
+                          <td className="report-col-clamp">
+                            <TruncatedText value={line.itemName || ''} />
+                          </td>
+                          <td>{originLabel(line.origin)}</td>
+                          <td>{money.format(line.amountExclIva)}</td>
+                          <td>{money.format(line.amountInclIva)}</td>
+                          {renderLineAction(rowId, isExpanded)}
+                        </tr>
+                        {!usesAllocations && isExpanded ? (
+                          <tr className="detail-row">
+                            <td colSpan={6}>
+                              <ReportIvaDetails
+                                ivaRate={line.ivaRate}
+                                netAmount={line.amountExclIva}
+                                money={money}
+                                extra={[
+                                  {
+                                    label: t('propertyReports.item'),
+                                    value: line.itemName || '—',
+                                  },
+                                ]}
+                                onChange={(ivaRate) =>
+                                  updateLineIva(setLines, line.id, ivaRate)
+                                }
+                              />
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    )
+  }
+
   const title = selectedMonthId
     ? `${propertyLabel} · ${formatMonthLabel(selectedMonthId)}`
     : selectedPropertyId
@@ -890,14 +1168,20 @@ export function PropertyReportsView({
                 onClick={() => {
                   setError(null)
                   setMessage(null)
+                  if (isClosedReportOpen) {
+                    setIsClosedReportOpen(false)
+                    return
+                  }
                   if (selectedMonthId) {
                     setSelectedMonthId('')
                     setReport(null)
                     setBookings([])
                     setExpenses([])
+                    setIncomes([])
                     setServiceLines([])
+                    setMovementDraft(null)
                     setLineAllocations({})
-                    setIsReportOpen(false)
+                    setIsClosedReportOpen(false)
                     return
                   }
                   setSelectedPropertyId('')
@@ -910,7 +1194,9 @@ export function PropertyReportsView({
           </div>
           <p className="subtitle">
             {selectedMonthId
-              ? t('propertyReports.monthSubtitle')
+              ? isClosedReportOpen
+                ? t('propertyReports.closedReportSubtitle')
+                : t('propertyReports.monthSubtitle')
               : selectedPropertyId
                 ? t('propertyReports.monthsSubtitle')
                 : t('propertyReports.subtitle')}
@@ -934,7 +1220,7 @@ export function PropertyReportsView({
                 <SettingsGearIcon />
               </button>
             ) : null}
-            {selectedMonthId && report ? (
+            {selectedMonthId && report && !isClosedReportOpen ? (
               <button
                 className={`btn-icon${canOpenReport ? '' : ' is-disabled'}`}
                 type="button"
@@ -945,7 +1231,7 @@ export function PropertyReportsView({
                     ? t('propertyReports.openReport')
                     : t('propertyReports.reportLocked')
                 }
-                onClick={() => setIsReportOpen(true)}
+                onClick={() => setIsClosedReportOpen(true)}
               >
                 <ReportDocumentIcon />
               </button>
@@ -1098,7 +1384,11 @@ export function PropertyReportsView({
         </section>
       ) : null}
 
-      {selectedMonthId ? (
+      {selectedMonthId && isClosedReportOpen ? (
+        <PropertyClosedReportView metrics={closedReportMetrics} />
+      ) : null}
+
+      {selectedMonthId && !isClosedReportOpen ? (
         <>
           {report ? (
             <p className="subtitle">
@@ -1652,238 +1942,185 @@ export function PropertyReportsView({
             ) : null}
           </section>
 
-          <section className="card">
-            <div className="card-header">
-              <div>
-                <h2 className="card-title">{t('propertyReports.expensesTitle')}</h2>
-                <div className="report-metrics">
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.expensesCount')}
-                    </p>
-                    <p className="card-value">{expenseTotals.count}</p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.net')}</p>
-                    <p className="card-value">
-                      {money.format(expenseTotals.totalCost)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.iva')}</p>
-                    <p className="card-value">
-                      {money.format(expenseTotals.totalIva)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.gross')}</p>
-                    <p className="card-value">
-                      {money.format(expenseTotals.totalCostWithIva)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <TableToggleButton
-                open={openTables.expenses}
-                onClick={() => toggleTable('expenses')}
-                expandLabel={t('propertyReports.showTable')}
-                collapseLabel={t('propertyReports.hideTable')}
-              />
-            </div>
-            {openTables.expenses ? (
-              <div className="table-wrap">
-                <table className="data-table report-table-clamp">
-                  <thead>
-                    <tr>
-                      <th>{t('propertyReports.date')}</th>
-                      <th className="report-col-clamp">
-                        {t('propertyReports.item')}
-                      </th>
-                      <th>{t('propertyReports.origin')}</th>
-                      <th>{t('propertyReports.net')}</th>
-                      <th>{t('propertyReports.gross')}</th>
-                      <th>
-                        {usesAllocations
-                          ? t('propertyReports.allocation')
-                          : t('common.actions')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenses.length === 0 && !isLoading ? (
-                      <tr>
-                        <td colSpan={6}>{t('propertyReports.emptyExpenses')}</td>
-                      </tr>
-                    ) : (
-                      expenses.map((line) => {
-                        const rowId = `expense:${line.id}`
-                        const isExpanded = expandedRowIds.has(rowId)
-                        return (
-                          <Fragment key={line.id}>
-                            <tr>
-                              <td>{dateLabel(line.date)}</td>
-                              <td className="report-col-clamp">
-                                <TruncatedText value={line.itemName || ''} />
-                              </td>
-                              <td>{originLabel(line.origin)}</td>
-                              <td>{money.format(line.amountExclIva)}</td>
-                              <td>{money.format(line.amountInclIva)}</td>
-                              {renderLineAction(rowId, isExpanded)}
-                            </tr>
-                            {!usesAllocations && isExpanded ? (
-                              <tr className="detail-row">
-                                <td colSpan={6}>
-                                  <ReportIvaDetails
-                                    ivaRate={line.ivaRate}
-                                    netAmount={line.amountExclIva}
-                                    money={money}
-                                    extra={[
-                                      {
-                                        label: t('propertyReports.item'),
-                                        value: line.itemName || '—',
-                                      },
-                                    ]}
-                                    onChange={(ivaRate) =>
-                                      setExpenses((current) =>
-                                        current.map((entry) =>
-                                          entry.id === line.id
-                                            ? {
-                                                ...entry,
-                                                ivaRate,
-                                                amountInclIva: roundMoney(
-                                                  entry.amountExclIva +
-                                                    ivaEuroFromNet(
-                                                      entry.amountExclIva,
-                                                      ivaRate,
-                                                    ),
-                                                ),
-                                              }
-                                            : entry,
-                                        ),
-                                      )
-                                    }
-                                  />
-                                </td>
-                              </tr>
-                            ) : null}
-                          </Fragment>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </section>
+          {renderMoneyLinesCard(
+            'expenses',
+            expenses,
+            expenseTotals,
+            setExpenses,
+          )}
+          {renderMoneyLinesCard('incomes', incomes, incomeTotals, setIncomes)}
         </>
       ) : null}
 
-      {isReportOpen ? (
+      {movementDraft ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal report-draft-modal">
+          <div className="modal">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {t('propertyReports.reportDraftTitle')}
+                  {movementDraft.kind === 'outcome'
+                    ? t('propertyReports.addExpenseTitle')
+                    : t('propertyReports.addIncomeTitle')}
                 </h3>
                 <p className="modal-subtitle">
-                  {title}
+                  {t('propertyReports.addMovementSubtitle')}
                 </p>
               </div>
               <button
                 className="btn-icon"
                 type="button"
-                onClick={() => setIsReportOpen(false)}
-                aria-label={t('common.close')}
+                onClick={() => setMovementDraft(null)}
+                aria-label={t('common.closeForm')}
               >
                 ✕
               </button>
             </div>
             <div className="modal-body">
-              <p className="notice report-draft-disclaimer">
-                {t('propertyReports.reportDraftDisclaimer')}
-              </p>
-              <div className="report-metrics">
-                <div className="report-metric">
-                  <p className="card-label">{t('propertyReports.draftPayouts')}</p>
-                  <p className="card-value">
-                    {money.format(bookingTotals.payout)}
-                  </p>
-                </div>
-                <div className="report-metric">
-                  <p className="card-label">
-                    {t('propertyReports.draftOwnerCharges')}
-                  </p>
-                  <p className="card-value">
-                    {money.format(draftTotals.owner)}
-                  </p>
-                </div>
-                <div className="report-metric">
-                  <p className="card-label">
-                    {t('propertyReports.draftCompanyCosts')}
-                  </p>
-                  <p className="card-value">
-                    {money.format(draftTotals.company)}
-                  </p>
-                </div>
-                <div className="report-metric">
-                  <p className="card-label">
-                    {t('propertyReports.draftUnassigned')}
-                  </p>
-                  <p className="card-value">
-                    {money.format(draftTotals.unassigned)}
-                  </p>
-                </div>
-              </div>
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t('propertyReports.draftSection')}</th>
-                      <th>{t('propertyReports.item')}</th>
-                      <th>{t('propertyReports.grossColumn')}</th>
-                      <th>{t('propertyReports.allocation')}</th>
-                      <th>{t('propertyReports.draftOwnerCharges')}</th>
-                      <th>{t('propertyReports.draftCompanyCosts')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draftLines.length === 0 ? (
-                      <tr>
-                        <td colSpan={6}>
-                          {t('propertyReports.emptyDraftLines')}
-                        </td>
-                      </tr>
-                    ) : (
-                      draftLines.map((line) => {
-                        const allocation = lineAllocations[line.id] ?? ''
-                        return (
-                          <tr key={line.id}>
-                            <td>{line.section}</td>
-                            <td>{line.label || '—'}</td>
-                            <td>{money.format(line.gross)}</td>
-                            <td>{allocationLabel(allocation)}</td>
-                            <td>
-                              {money.format(
-                                ownerChargeFromAllocation(line.gross, allocation),
-                              )}
-                            </td>
-                            <td>
-                              {money.format(
-                                companyCostFromAllocation(line.gross, allocation),
-                              )}
-                            </td>
-                          </tr>
+              <div className="form-grid">
+                <label>
+                  {t('movements.property')}
+                  <input type="text" value={propertyLabel} readOnly />
+                </label>
+                <label>
+                  {t('movements.date')}
+                  <input
+                    type="date"
+                    min={`${selectedMonthId}-01`}
+                    max={lastDateInMonth(selectedMonthId)}
+                    value={movementDraft.date}
+                    onChange={(event) =>
+                      setMovementDraft((current) =>
+                        current
+                          ? { ...current, date: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  {t('movements.description')}
+                  <input
+                    type="text"
+                    value={movementDraft.description}
+                    onChange={(event) =>
+                      setMovementDraft((current) =>
+                        current
+                          ? { ...current, description: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  {t('movements.kind')}
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      movementDraft.kind === 'outcome'
+                        ? t('movements.outcome')
+                        : t('movements.income')
+                    }
+                  />
+                </label>
+                <div className="services-iva-row">
+                  <label className="form-field">
+                    <span>{t('movements.price')}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={movementDraft.amount}
+                      onChange={(event) =>
+                        setMovementDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                ...syncDraftFromNet(
+                                  event.target.value,
+                                  current.ivaRate,
+                                ),
+                              }
+                            : current,
                         )
-                      })
-                    )}
-                  </tbody>
-                </table>
+                      }
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>{t('movements.appliesIva')}</span>
+                    <select
+                      value={String(movementDraft.ivaRate)}
+                      onChange={(event) =>
+                        setMovementDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                ...syncDraftFromNet(
+                                  current.amount,
+                                  parseIvaRate(event.target.value) ?? 0,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      {IVA_RATES.map((rate) => (
+                        <option key={rate} value={rate}>
+                          {rate === 10
+                            ? t('common.iva10')
+                            : rate === 21
+                              ? t('common.iva21')
+                              : t('common.ivaNone')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>{t('movements.priceWithIva')}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={movementDraft.totalAmount}
+                      onChange={(event) =>
+                        setMovementDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                ...syncDraftFromGross(
+                                  event.target.value,
+                                  current.ivaRate,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                </div>
               </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setMovementDraft(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSavingMovement}
+                onClick={() => void saveMovement()}
+              >
+                {isSavingMovement ? t('common.saving') : t('common.save')}
+              </button>
             </div>
           </div>
         </div>
       ) : null}
+
       {settingsProperty ? (
         <PropertyReportSettingsModal
           propertyId={settingsProperty.id}

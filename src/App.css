@@ -968,6 +968,138 @@ button.today-card {
   font-size: 1.15rem;
 }
 
+.closed-report {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.closed-report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.closed-report-tab {
+  border: 1px solid #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.closed-report-tab.is-active {
+  background: #1d2939;
+  border-color: #1d2939;
+  color: #ffffff;
+}
+
+.closed-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  overflow: visible;
+}
+
+.closed-report-kpi {
+  margin: 0;
+  overflow: visible;
+  padding-bottom: 8px;
+  position: relative;
+}
+
+.closed-report-kpi.is-hero {
+  grid-column: 1 / -1;
+  z-index: 2;
+}
+
+.closed-report-kpi.is-hero .card-value {
+  font-size: 1.7rem;
+}
+
+.closed-report-kpi-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.closed-report-kpi-value .card-value {
+  margin: 0;
+}
+
+.metric-help-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.metric-help-wrap:hover,
+.metric-help-wrap:focus-within {
+  z-index: 8;
+}
+
+.metric-help {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1.5px solid #98a2b3;
+  background: #ffffff;
+  color: #475467;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metric-help-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 8;
+  width: min(320px, 70vw);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1d2939;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.18);
+}
+
+.metric-help-wrap:hover .metric-help-tip,
+.metric-help-wrap:focus-within .metric-help-tip {
+  display: block;
+}
+
+.closed-report-placeholder {
+  margin: 0;
+}
+
+.closed-report-placeholder-lead {
+  margin: 0 0 8px;
+}
+
+.closed-report-reference-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #475467;
+}
+
+.closed-report-reference-list li + li {
+  margin-top: 8px;
+}
+
 .report-iva-details {
   grid-template-columns: repeat(2, minmax(160px, 280px));
   justify-content: start;

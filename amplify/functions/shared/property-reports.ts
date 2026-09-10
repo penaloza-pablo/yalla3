@@ -93,7 +93,16 @@ export type PropertyReportExpense = {
   date: string;
   amountExclIva: number;
   amountInclIva: number;
+  ivaRate?: number;
 };
+
+const sortExpenseLines = (lines: PropertyReportExpense[]) =>
+  [...lines].sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+    return left.id.localeCompare(right.id);
+  });
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -456,36 +465,35 @@ export const loadPendingBillingExpenses = async (
       asNumber(item['Total Price']) ??
       asNumber(item['Total price']) ??
       asNumber(item.totalPrice);
+    const ivaRate = resolveIvaRate(item);
     const amountInclIva =
       storedTotal ??
-      occurrencePriceWithIva(amountExclIva, resolveIvaRate(item));
+      occurrencePriceWithIva(amountExclIva, ivaRate);
     expenses.push({
       id: asString(item.id) || `${dateIso}-${asString(item['Item name'])}`,
       origin: 'subtraction',
       itemName: asString(item['Item name']) || asString(item.itemName),
       date: dateIso,
-      amountExclIva: roundMoney(-Math.abs(amountExclIva)),
-      amountInclIva: roundMoney(-Math.abs(amountInclIva)),
+      amountExclIva: roundMoney(Math.abs(amountExclIva)),
+      amountInclIva: roundMoney(Math.abs(amountInclIva)),
+      ivaRate,
     });
   }
 
-  expenses.sort((left, right) => {
-    if (left.date !== right.date) {
-      return left.date.localeCompare(right.date);
-    }
-    return left.id.localeCompare(right.id);
-  });
-  return expenses;
+  return sortExpenseLines(expenses);
 };
 
 export const loadFinanceMovements = async (
   tableName: string,
   property: Record<string, unknown>,
   monthId: string,
-): Promise<PropertyReportExpense[]> => {
+): Promise<{
+  expenses: PropertyReportExpense[];
+  incomes: PropertyReportExpense[];
+}> => {
   const memberIds = reportScopeForProperty(property).memberIds;
   if (memberIds.length === 0) {
-    return [];
+    return { expenses: [], incomes: [] };
   }
 
   const items: Record<string, unknown>[] = [];
@@ -514,6 +522,7 @@ export const loadFinanceMovements = async (
   }
 
   const expenses: PropertyReportExpense[] = [];
+  const incomes: PropertyReportExpense[] = [];
   for (const item of items) {
     const date = asString(item.date).slice(0, 10);
     if (!date || date.slice(0, 7) !== monthId) {
@@ -528,24 +537,26 @@ export const loadFinanceMovements = async (
     const storedTotal = asNumber(item.totalAmount);
     const totalAmount =
       storedTotal ?? occurrencePriceWithIva(amount, ivaRate);
-    const sign = asString(item.kind).toLowerCase() === 'income' ? 1 : -1;
-    expenses.push({
+    const line: PropertyReportExpense = {
       id: asString(item.id) || `${date}-${asString(item.description)}`,
       origin: 'movement',
       itemName: asString(item.description),
       date,
-      amountExclIva: roundMoney(sign * amount),
-      amountInclIva: roundMoney(sign * totalAmount),
-    });
+      amountExclIva: roundMoney(amount),
+      amountInclIva: roundMoney(Math.abs(totalAmount)),
+      ivaRate,
+    };
+    if (asString(item.kind).toLowerCase() === 'income') {
+      incomes.push(line);
+    } else {
+      expenses.push(line);
+    }
   }
 
-  expenses.sort((left, right) => {
-    if (left.date !== right.date) {
-      return left.date.localeCompare(right.date);
-    }
-    return left.id.localeCompare(right.id);
-  });
-  return expenses;
+  return {
+    expenses: sortExpenseLines(expenses),
+    incomes: sortExpenseLines(incomes),
+  };
 };
 
 const isDirectPurchase = (item: Record<string, unknown>) =>
@@ -625,18 +636,13 @@ export const loadDirectPurchases = async (
       origin: 'purchase',
       itemName,
       date: dateIso,
-      amountExclIva: roundMoney(-Math.abs(amountExclIva)),
-      amountInclIva: roundMoney(-Math.abs(amountInclIva)),
+      amountExclIva: roundMoney(Math.abs(amountExclIva)),
+      amountInclIva: roundMoney(Math.abs(amountInclIva)),
+      ivaRate: resolveIvaRate(item),
     });
   }
 
-  expenses.sort((left, right) => {
-    if (left.date !== right.date) {
-      return left.date.localeCompare(right.date);
-    }
-    return left.id.localeCompare(right.id);
-  });
-  return expenses;
+  return sortExpenseLines(expenses);
 };
 
 export type PropertyReportServiceLine = {
