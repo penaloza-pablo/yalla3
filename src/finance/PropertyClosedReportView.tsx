@@ -1,22 +1,30 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  PROPERTY_TAB_METRIC_KEYS,
-  type PropertyTabMetricKey,
-  type PropertyReportMetricValues,
-} from './property-report-metrics'
-
-type ReportTab = 'property' | 'management' | 'owner'
+  REPORT_TABS,
+  defaultReportVisibility,
+  type ReportTabId,
+  type ReportVisibility,
+} from '../../amplify/functions/shared/property-report-settings'
+import type { PropertyReportMetricValues } from './property-report-metrics'
 
 type Props = {
   metrics: PropertyReportMetricValues
+  visibility?: ReportVisibility | null
+  hideManagementFee?: boolean
+  feeFormula?: string
+  contributionFormula?: string
+  ourProfitFormula?: string
+  netEarningsFormula?: string
 }
 
+const COUNT_IDS = new Set(['bookingCount'])
+
 const formatMetric = (
-  key: PropertyTabMetricKey,
+  key: string,
   value: number,
   money: Intl.NumberFormat,
-) => (key === 'bookingCount' ? String(value) : money.format(value))
+) => (COUNT_IDS.has(key) ? String(value) : money.format(value))
 
 const MetricHelp = ({ label, help }: { label: string; help: string }) => (
   <span className="metric-help-wrap">
@@ -33,9 +41,19 @@ const MetricHelp = ({ label, help }: { label: string; help: string }) => (
   </span>
 )
 
-export function PropertyClosedReportView({ metrics }: Props) {
+export function PropertyClosedReportView({
+  metrics,
+  visibility,
+  hideManagementFee = false,
+  feeFormula,
+  contributionFormula,
+  ourProfitFormula,
+  netEarningsFormula,
+}: Props) {
   const { t, i18n } = useTranslation()
-  const [tab, setTab] = useState<ReportTab>('property')
+  const resolved = visibility ?? defaultReportVisibility()
+  const tabs = REPORT_TABS.filter((item) => resolved[item].visible)
+  const [tab, setTab] = useState<ReportTabId>(tabs[0] ?? 'property')
   const money = useMemo(
     () =>
       new Intl.NumberFormat(i18n.language.startsWith('es') ? 'es-ES' : 'en-GB', {
@@ -45,15 +63,63 @@ export function PropertyClosedReportView({ metrics }: Props) {
     [i18n.language],
   )
 
-  const metricLabel = (key: PropertyTabMetricKey) =>
-    t(`propertyReports.metrics.${key}`)
-  const metricHelp = (key: PropertyTabMetricKey) =>
-    t(`propertyReports.metrics.${key}Help`)
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.includes(tab)) {
+      setTab(tabs[0])
+    }
+  }, [tab, tabs])
+
+  const metricLabel = (key: string) =>
+    t(`propertyReports.metrics.${key}`, {
+      defaultValue: t(`propertyReports.formulaVars.${key}`, { defaultValue: key }),
+    })
+
+  const metricHelp = (key: string) => {
+    if (key === 'managementFee' && feeFormula) {
+      return t('propertyReports.metrics.managementFeeHelp', { formula: feeFormula })
+    }
+    if (key === 'propertyContribution' && contributionFormula) {
+      return t('propertyReports.metrics.propertyContributionHelp', {
+        formula: contributionFormula,
+      })
+    }
+    if (key === 'ourProfit') {
+      return ourProfitFormula
+        ? t('propertyReports.metrics.ourProfitHelp', { formula: ourProfitFormula })
+        : t('propertyReports.metrics.ourProfitEmptyHelp')
+    }
+    if (key === 'netEarnings') {
+      return netEarningsFormula
+        ? t('propertyReports.metrics.netEarningsHelp', { formula: netEarningsFormula })
+        : t('propertyReports.metrics.netEarningsEmptyHelp')
+    }
+    return t(`propertyReports.metrics.${key}Help`, { defaultValue: metricLabel(key) })
+  }
+
+  const metricValue = (key: string) => {
+    const value = metrics[key as keyof PropertyReportMetricValues]
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  }
+
+  if (tabs.length === 0) {
+    return (
+      <section className="card closed-report-placeholder">
+        <p className="closed-report-placeholder-lead">
+          {t('propertyReports.noVisibleTabs')}
+        </p>
+      </section>
+    )
+  }
+
+  const row = resolved[tab]
+  const metricIds = row.metrics.filter(
+    (id) => !(hideManagementFee && id === 'managementFee'),
+  )
 
   return (
     <section className="closed-report">
       <div className="closed-report-tabs" role="tablist">
-        {(['property', 'management', 'owner'] as const).map((item) => (
+        {tabs.map((item) => (
           <button
             key={item}
             type="button"
@@ -67,47 +133,27 @@ export function PropertyClosedReportView({ metrics }: Props) {
         ))}
       </div>
 
-      {tab === 'property' ? (
-        <div className="closed-report-grid">
-          {PROPERTY_TAB_METRIC_KEYS.map((key) => {
-            const label = metricLabel(key)
-            const help = metricHelp(key)
-            const isHero = key === 'netProfit'
-            return (
-              <article
-                key={key}
-                className={`card closed-report-kpi${isHero ? ' is-hero' : ''}`}
-              >
-                <p className="card-label">{label}</p>
-                <div className="closed-report-kpi-value">
-                  <p className="card-value">
-                    {formatMetric(key, metrics[key], money)}
-                  </p>
-                  <MetricHelp label={label} help={help} />
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      ) : (
-        <section className="card closed-report-placeholder">
-          <h2 className="card-title">
-            {t(`propertyReports.reportTab.${tab}`)}
-          </h2>
-          <p className="closed-report-placeholder-lead">
-            {t('propertyReports.reportTabComingSoon')}
-          </p>
-          <p className="card-meta">{t('propertyReports.reportTabReference')}</p>
-          <ul className="closed-report-reference-list">
-            {PROPERTY_TAB_METRIC_KEYS.map((key) => (
-              <li key={key}>
-                <strong>{metricLabel(key)}</strong>
-                <span> — {metricHelp(key)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <div className="closed-report-grid">
+        {metricIds.map((key) => {
+          const label = metricLabel(key)
+          const help = metricHelp(key)
+          const isHero = key === row.primary
+          return (
+            <article
+              key={key}
+              className={`card closed-report-kpi${isHero ? ' is-hero' : ''}`}
+            >
+              <p className="card-label">{label}</p>
+              <div className="closed-report-kpi-value">
+                <p className="card-value">
+                  {formatMetric(key, metricValue(key), money)}
+                </p>
+                <MetricHelp label={label} help={help} />
+              </div>
+            </article>
+          )
+        })}
+      </div>
     </section>
   )
 }

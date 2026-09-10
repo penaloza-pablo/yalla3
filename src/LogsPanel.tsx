@@ -54,6 +54,7 @@ const FEATURE_OPTIONS = [
   'Maintenance Billing',
   'Maintenance settings',
   'Property Reports',
+  'Reports Settings',
   'Property Groups',
   'Movements',
   'Services & Subscriptions',

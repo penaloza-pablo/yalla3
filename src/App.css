@@ -1190,7 +1190,7 @@ button.today-card {
 }
 
 .report-settings-modal {
-  width: min(760px, 100%);
+  width: min(860px, 100%);
 }
 
 .report-settings-conditions {
@@ -1217,6 +1217,186 @@ button.today-card {
 
 .report-settings-condition .form-field {
   min-width: 0;
+}
+
+.formula-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.formula-field .card-title {
+  font-size: 1rem;
+}
+
+.report-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.report-visibility-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.report-visibility-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+}
+
+.report-visibility-tab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-visibility-tab-head .card-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.report-visibility-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.report-visibility-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.report-visibility-metric {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.report-settings-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.report-settings-copy .form-field {
+  min-width: min(280px, 100%);
+  flex: 1 1 240px;
+}
+
+.formula-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.formula-canvas {
+  min-height: 52px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: #ffffff;
+}
+
+.formula-placeholder {
+  color: #98a2b3;
+  font-size: 0.88rem;
+}
+
+.formula-chip {
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.formula-chip.is-ident {
+  background: #eef4ff;
+  border-color: #b2ccff;
+  color: #175cd3;
+}
+
+.formula-chip.is-number {
+  background: #ecfdf3;
+  border-color: #abefc6;
+  color: #067647;
+}
+
+.formula-chip.is-op {
+  min-width: 28px;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.formula-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.formula-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  color: #344054;
+  font-size: 0.82rem;
+}
+
+.formula-tool select,
+.formula-tool input {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.formula-tool-number {
+  min-width: 110px;
+  max-width: 130px;
+}
+
+.formula-ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.formula-op {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.formula-op:hover,
+.formula-chip:hover {
+  border-color: #98a2b3;
 }
 
 .card-title {
@@ -4088,6 +4268,10 @@ th {
 
   .report-settings-condition .btn-icon {
     justify-self: end;
+  }
+
+  .report-visibility-grid {
+    grid-template-columns: 1fr;
   }
 }
 

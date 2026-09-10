@@ -18,7 +18,19 @@ import {
   propertyReportsLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
-import { PropertyReportSettingsModal } from './PropertyReportSettingsModal'
+import {
+  GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+  emptyReportSettings,
+  mergeReportSettings,
+  parseReportSettings,
+  type PropertyReportSettings,
+} from '../../amplify/functions/shared/property-report-settings'
+import { DEFAULT_COMMISSION_FORMULA } from '../../amplify/functions/shared/property-report-formula'
+import {
+  computePayoutBreakdown,
+  sumPayoutField,
+} from '../../amplify/functions/shared/property-report-payouts'
+import { PropertyReportSettingsView } from './PropertyReportSettingsView'
 import { PropertyClosedReportView } from './PropertyClosedReportView'
 import { computePropertyReportMetrics } from './property-report-metrics'
 
@@ -156,20 +168,11 @@ type ServiceLine = {
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
-const PAYOUT_CLEANING_GROSS_RATE = 0.155
-
 const payoutGuestPay = (booking: ReportBooking) => {
   if (booking.hostPayout === null && booking.hostServiceFee === null) {
     return null
   }
   return roundMoney((booking.hostPayout ?? 0) + (booking.hostServiceFee ?? 0))
-}
-
-const payoutCleaningGross = (cleaningFee: number | null) => {
-  if (cleaningFee === null) {
-    return null
-  }
-  return roundMoney(cleaningFee - cleaningFee * PAYOUT_CLEANING_GROSS_RATE)
 }
 
 const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
@@ -394,6 +397,14 @@ export function PropertyReportsView({
     () => filterPropertyReportsOptions(propertyOptions),
     [propertyOptions],
   )
+  const copyTargets = useMemo(
+    () =>
+      properties.map((property) => ({
+        id: property.id,
+        name: propertyReportsLabel(property),
+      })),
+    [properties],
+  )
 
   const [selectedPropertyId, setSelectedPropertyId] = useState('')
   const [selectedMonthId, setSelectedMonthId] = useState('')
@@ -421,6 +432,11 @@ export function PropertyReportsView({
     id: string
     name: string
   } | null>(null)
+  const [reportSettings, setReportSettings] = useState<PropertyReportSettings>(
+    emptyReportSettings(),
+  )
+  const [globalSettings, setGlobalSettings] =
+    useState<PropertyReportSettings | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -443,6 +459,16 @@ export function PropertyReportsView({
     [i18n.language],
   )
 
+  const payoutRows = useMemo(
+    () =>
+      bookings.map((booking) => ({
+        booking,
+        guestPay: payoutGuestPay(booking),
+        ...computePayoutBreakdown(booking, reportSettings),
+      })),
+    [bookings, reportSettings],
+  )
+
   const bookingTotals = useMemo(
     () => ({
       count: bookings.length,
@@ -450,23 +476,19 @@ export function PropertyReportsView({
       paidByGuest: roundMoney(
         bookings.reduce((sum, booking) => sum + (payoutGuestPay(booking) ?? 0), 0),
       ),
-      cleaningFee: bookings.reduce(
-        (sum, booking) => sum + (booking.fareCleaning ?? 0),
-        0,
-      ),
-      cleaningGross: roundMoney(
-        bookings.reduce(
-          (sum, booking) =>
-            sum + (payoutCleaningGross(booking.fareCleaning) ?? 0),
-          0,
-        ),
-      ),
+      cleaningFee: sumPayoutField(payoutRows, 'cleaningFee'),
+      cleaningGross: sumPayoutField(payoutRows, 'cleaningGross'),
+      cleaningPayoutVat: sumPayoutField(payoutRows, 'cleaningPayoutVat'),
+      cleaningNet: sumPayoutField(payoutRows, 'cleaningNet'),
+      accommodationGross: sumPayoutField(payoutRows, 'accommodationGross'),
+      accommodationPayoutVat: sumPayoutField(payoutRows, 'accommodationPayoutVat'),
+      accommodationNet: sumPayoutField(payoutRows, 'accommodationNet'),
       serviceFee: bookings.reduce(
         (sum, booking) => sum + (booking.hostServiceFee ?? 0),
         0,
       ),
     }),
-    [bookings],
+    [bookings, payoutRows],
   )
   const cleaningIvaTotal = useMemo(
     () =>
@@ -603,12 +625,21 @@ export function PropertyReportsView({
         setMonths(fallbackMonths())
         return
       }
-      const payload = await fetchJson<{ months?: Record<string, unknown>[] }>(
+      const payload = await fetchJson<{
+        months?: Record<string, unknown>[]
+        settings?: Record<string, unknown>
+      }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}`,
       )
       setMonths((payload.months ?? []).map(mapMonth))
+      setReportSettings(
+        mergeReportSettings(
+          parseReportSettings(payload.settings),
+          globalSettings,
+        ),
+      )
     },
-    [endpoints.get, t],
+    [endpoints.get, globalSettings],
   )
 
   const loadDetail = useCallback(
@@ -643,6 +674,7 @@ export function PropertyReportsView({
           lines?: ServiceLine[]
         }
         lineAllocations?: Record<string, unknown>
+        settings?: Record<string, unknown>
       }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}&month=${encodeURIComponent(monthId)}`,
       )
@@ -698,14 +730,53 @@ export function PropertyReportsView({
         })),
       )
       setLineAllocations(parseLineAllocations(payload.lineAllocations))
+      if (payload.settings) {
+        setReportSettings(
+          mergeReportSettings(
+            parseReportSettings(payload.settings),
+            globalSettings,
+          ),
+        )
+      }
     },
-    [endpoints.get, t],
+    [endpoints.get, globalSettings, t],
   )
+
+  useEffect(() => {
+    if (!endpoints.get) {
+      return
+    }
+    let cancelled = false
+    void fetchJson<{ settings?: Record<string, unknown> }>(
+      `${endpoints.get}?propertyId=${encodeURIComponent(GLOBAL_REPORT_SETTINGS_PROPERTY_ID)}&settings=1`,
+    )
+      .then((payload) => {
+        if (!cancelled) {
+          setGlobalSettings(parseReportSettings(payload.settings))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGlobalSettings(emptyReportSettings())
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [endpoints.get])
+
+  useEffect(() => {
+    if (!globalSettings) {
+      return
+    }
+    setReportSettings((current) => mergeReportSettings(current, globalSettings))
+  }, [globalSettings])
 
   useEffect(() => {
     if (!selectedPropertyId) {
       setMonths([])
       setSelectedMonthId('')
+      setReportSettings(emptyReportSettings())
       setError(null)
       setMessage(null)
       return
@@ -900,11 +971,17 @@ export function PropertyReportsView({
 
   const closedReportMetrics = useMemo(
     () =>
-      computePropertyReportMetrics({
+      computePropertyReportMetrics(
+        {
         paidByGuest: bookingTotals.paidByGuest,
         otherIncomesNet: incomeTotals.totalCost,
-        payoutCleaningNet: bookingTotals.cleaningFee,
+        payoutCleaningNet: bookingTotals.cleaningNet,
         payoutCleaningGross: bookingTotals.cleaningGross,
+        cleaningFee: bookingTotals.cleaningFee,
+        cleaningPayoutVat: bookingTotals.cleaningPayoutVat,
+        accommodationGross: bookingTotals.accommodationGross,
+        accommodationPayoutVat: bookingTotals.accommodationPayoutVat,
+        accommodationNet: bookingTotals.accommodationNet,
         cleaningNet: cleaningTotal,
         cleaningKit: cleaningKitCost,
         cleaningIva: cleaningIvaTotal,
@@ -943,7 +1020,9 @@ export function PropertyReportsView({
             allocation: lineAllocations[`income:${line.id}`] ?? '',
           })),
         ],
-      }),
+        },
+        reportSettings,
+      ),
     [
       bookingTotals,
       cleaningIvaTotal,
@@ -958,6 +1037,7 @@ export function PropertyReportsView({
       maintenanceIvaTotal,
       maintenanceLines,
       maintenanceTotal,
+      reportSettings,
       serviceLines,
       serviceTotals,
     ],
@@ -1154,6 +1234,33 @@ export function PropertyReportsView({
     : selectedPropertyId
       ? propertyLabel
       : t('pages.Property Reports')
+
+  if (settingsProperty) {
+    return (
+      <PropertyReportSettingsView
+        propertyId={settingsProperty.id}
+        propertyName={settingsProperty.name}
+        getUrl={endpoints.get}
+        upsertUrl={endpoints.upsert}
+        copyTargets={copyTargets}
+        onBack={() => setSettingsProperty(null)}
+        onSaved={(settings) => {
+          setReportSettings(mergeReportSettings(settings, globalSettings))
+          setSettingsProperty(null)
+          setMessage(t('propertyReports.settingsSaved'))
+          setError(null)
+          if (selectedPropertyId) {
+            void loadMonths(selectedPropertyId).catch(() => undefined)
+            if (selectedMonthId) {
+              void loadDetail(selectedPropertyId, selectedMonthId).catch(
+                () => undefined,
+              )
+            }
+          }
+        }}
+      />
+    )
+  }
 
   return (
     <>
@@ -1385,7 +1492,23 @@ export function PropertyReportsView({
       ) : null}
 
       {selectedMonthId && isClosedReportOpen ? (
-        <PropertyClosedReportView metrics={closedReportMetrics} />
+        <PropertyClosedReportView
+          metrics={closedReportMetrics}
+          visibility={reportSettings.visibility}
+          hideManagementFee={reportSettings.businessModel === 'fixedRent'}
+          feeFormula={
+            reportSettings.businessModel === 'commission'
+              ? reportSettings.formula.trim() || DEFAULT_COMMISSION_FORMULA
+              : undefined
+          }
+          contributionFormula={
+            reportSettings.propertyContributionFormula.trim() || undefined
+          }
+          ourProfitFormula={reportSettings.ourProfitFormula.trim() || undefined}
+          netEarningsFormula={
+            reportSettings.netEarningsFormula.trim() || undefined
+          }
+        />
       ) : null}
 
       {selectedMonthId && !isClosedReportOpen ? (
@@ -1412,9 +1535,53 @@ export function PropertyReportsView({
                     </p>
                   </div>
                   <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.cleaningFee')}</p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.cleaningFee)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
                     <p className="card-label">{t('propertyReports.cleaningGross')}</p>
                     <p className="card-value">
                       {money.format(bookingTotals.cleaningGross)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.cleaningPayoutVat')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.cleaningPayoutVat)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.cleaningNet')}</p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.cleaningNet)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.accommodationGross')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.accommodationGross)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.accommodationPayoutVat')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.accommodationPayoutVat)}
+                    </p>
+                  </div>
+                  <div className="report-metric">
+                    <p className="card-label">
+                      {t('propertyReports.accommodationNet')}
+                    </p>
+                    <p className="card-value">
+                      {money.format(bookingTotals.accommodationNet)}
                     </p>
                   </div>
                   <div className="report-metric">
@@ -1447,39 +1614,26 @@ export function PropertyReportsView({
                     </tr>
                   </thead>
                   <tbody>
-                    {bookings.length === 0 && !isLoading ? (
+                    {payoutRows.length === 0 && !isLoading ? (
                       <tr>
                         <td colSpan={7}>{t('propertyReports.emptyBookings')}</td>
                       </tr>
                     ) : (
-                      bookings.map((booking) => {
+                      payoutRows.map((row) => {
+                        const booking = row.booking
                         const rowId = `booking:${booking.reservationId || booking.bookingId}`
                         const isExpanded = expandedRowIds.has(rowId)
-                        const guestPay = payoutGuestPay(booking)
-                        const cleaningGross = payoutCleaningGross(
-                          booking.fareCleaning,
-                        )
+                        const moneyOrDash = (value: number | null) =>
+                          value === null ? '—' : money.format(value)
                         return (
                           <Fragment key={booking.reservationId || booking.bookingId}>
                             <tr>
                               <td>{booking.bookingId}</td>
                               <td>{booking.guestName || '—'}</td>
                               <td>{dateLabel(booking.checkInDate)}</td>
-                              <td>
-                                {guestPay === null
-                                  ? '—'
-                                  : money.format(guestPay)}
-                              </td>
-                              <td>
-                                {cleaningGross === null
-                                  ? '—'
-                                  : money.format(cleaningGross)}
-                              </td>
-                              <td>
-                                {booking.hostServiceFee === null
-                                  ? '—'
-                                  : money.format(booking.hostServiceFee)}
-                              </td>
+                              <td>{moneyOrDash(row.guestPay)}</td>
+                              <td>{moneyOrDash(row.cleaningGross)}</td>
+                              <td>{moneyOrDash(booking.hostServiceFee)}</td>
                               <td>
                                 <button
                                   className="btn-icon btn-icon-ghost"
@@ -1509,9 +1663,31 @@ export function PropertyReportsView({
                                         {t('propertyReports.payout')}
                                       </p>
                                       <p className="detail-value">
-                                        {booking.hostPayout === null
-                                          ? '—'
-                                          : money.format(booking.hostPayout)}
+                                        {moneyOrDash(booking.hostPayout)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.cleaningFee')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.cleaningFee)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.cleaningGross')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.cleaningGross)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.cleaningPayoutVat')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.cleaningPayoutVat)}
                                       </p>
                                     </div>
                                     <div>
@@ -1519,9 +1695,31 @@ export function PropertyReportsView({
                                         {t('propertyReports.cleaningNet')}
                                       </p>
                                       <p className="detail-value">
-                                        {booking.fareCleaning === null
-                                          ? '—'
-                                          : money.format(booking.fareCleaning)}
+                                        {moneyOrDash(row.cleaningNet)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.accommodationGross')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.accommodationGross)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.accommodationPayoutVat')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.accommodationPayoutVat)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('propertyReports.accommodationNet')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {moneyOrDash(row.accommodationNet)}
                                       </p>
                                     </div>
                                   </div>
@@ -2119,21 +2317,6 @@ export function PropertyReportsView({
             </div>
           </div>
         </div>
-      ) : null}
-
-      {settingsProperty ? (
-        <PropertyReportSettingsModal
-          propertyId={settingsProperty.id}
-          propertyName={settingsProperty.name}
-          getUrl={endpoints.get}
-          upsertUrl={endpoints.upsert}
-          onClose={() => setSettingsProperty(null)}
-          onSaved={() => {
-            setSettingsProperty(null)
-            setMessage(t('propertyReports.settingsSaved'))
-            setError(null)
-          }}
-        />
       ) : null}
     </>
   )

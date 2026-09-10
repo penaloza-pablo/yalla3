@@ -1,3 +1,14 @@
+import {
+  DEFAULT_COMMISSION_FORMULA,
+  DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
+  evaluateFormula,
+  type VisibilityMetricId,
+} from '../../amplify/functions/shared/property-report-formula'
+import type {
+  BusinessModel,
+  PropertyReportSettings,
+} from '../../amplify/functions/shared/property-report-settings'
+
 export type CostAllocation = 'bear' | 'ownerPlus12' | 'owner'
 
 export type PropertyReportMetricUnit = 'money' | 'count'
@@ -15,6 +26,11 @@ export type PropertyReportMetricInputs = {
   otherIncomesNet: number
   payoutCleaningNet: number
   payoutCleaningGross: number
+  cleaningFee: number
+  cleaningPayoutVat: number
+  accommodationGross: number
+  accommodationPayoutVat: number
+  accommodationNet: number
   cleaningNet: number
   cleaningKit: number
   cleaningIva: number
@@ -29,7 +45,6 @@ export type PropertyReportMetricInputs = {
   allocatedLines: AllocatedReportLine[]
 }
 
-export const MANAGEMENT_FEE_EUR = 1000
 export const MARKUP_RATE = 0.12
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
@@ -57,6 +72,31 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
   },
   {
     id: 'payoutCleaningGross',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'cleaningFee',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'cleaningPayoutVat',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'accommodationGross',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'accommodationPayoutVat',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'accommodationNet',
     unit: 'money',
     role: 'source',
   },
@@ -119,7 +159,25 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'managementFee',
     unit: 'money',
     role: 'source',
-    formula: '1000',
+    formula: 'settings.managementFeeFormula',
+  },
+  {
+    id: 'propertyContribution',
+    unit: 'money',
+    role: 'indicator',
+    formula: DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
+  },
+  {
+    id: 'ourProfit',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'settings.ourProfitFormula',
+  },
+  {
+    id: 'netEarnings',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'settings.netEarningsFormula',
   },
   {
     id: 'income',
@@ -171,20 +229,13 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'indicator',
     formula: 'servicesNet + otherExpensesNet',
   },
-  {
-    id: 'netProfit',
-    unit: 'money',
-    role: 'indicator',
-    formula:
-      '(income - payoutCleaningNet) - (cleaningNet + cleaningKit) - maintenanceNet - managementFee - markup - expensesAndServices',
-  },
 ] as const
 
 export type PropertyReportFieldId =
   (typeof PROPERTY_REPORT_FIELD_CATALOG)[number]['id']
 
 export const PROPERTY_TAB_METRIC_KEYS = [
-  'netProfit',
+  'propertyContribution',
   'income',
   'cleaningMargin',
   'managementFee',
@@ -199,13 +250,24 @@ export const PROPERTY_TAB_METRIC_KEYS = [
 
 export type PropertyTabMetricKey = (typeof PROPERTY_TAB_METRIC_KEYS)[number]
 
-export type PropertyReportMetricValues = Record<PropertyTabMetricKey, number> & {
-  paidByGuest: number
-  otherIncomesNet: number
-  payoutCleaningNet: number
-  payoutCleaningGross: number
-  cleaningNet: number
-  cleaningKit: number
+export type ReportDisplayMetricKey =
+  | PropertyTabMetricKey
+  | 'ourProfit'
+  | 'netEarnings'
+
+export type PropertyReportMetricValues = Record<VisibilityMetricId, number> & {
+  netProfit: number
+}
+
+const evaluateNamedFormula = (
+  source: string,
+  values: Record<string, number>,
+) => {
+  if (!source.trim()) {
+    return 0
+  }
+  const result = evaluateFormula(source, values)
+  return result.ok ? roundMoney(result.value) : 0
 }
 
 const sumAllocated = (
@@ -216,8 +278,28 @@ const sumAllocated = (
     lines.reduce((sum, line) => (match(line) ? sum + line.net : sum), 0),
   )
 
+const resolveManagementFee = (
+  values: Record<string, number>,
+  settings?: PropertyReportSettings | null,
+) => {
+  const model = settings?.businessModel as BusinessModel | ''
+  if (model === 'fixedRent') {
+    return 0
+  }
+  if (model !== 'commission') {
+    return 0
+  }
+  const formula = settings?.formula?.trim() || DEFAULT_COMMISSION_FORMULA
+  return evaluateNamedFormula(formula, {
+    ...values,
+    commission: settings?.commissionPercent ?? 0,
+    fixedRent: settings?.fixedRent ?? 0,
+  })
+}
+
 export const computePropertyReportMetrics = (
   inputs: PropertyReportMetricInputs,
+  settings?: PropertyReportSettings | null,
 ): PropertyReportMetricValues => {
   const income = roundMoney(inputs.paidByGuest + inputs.otherIncomesNet)
   const cleaningMargin = roundMoney(
@@ -248,25 +330,82 @@ export const computePropertyReportMetrics = (
   const expensesAndServices = roundMoney(
     inputs.servicesNet + inputs.otherExpensesNet,
   )
-  const managementFee = MANAGEMENT_FEE_EUR
-  const netProfit = roundMoney(
-    income -
-      inputs.payoutCleaningNet -
-      (inputs.cleaningNet + inputs.cleaningKit) -
-      inputs.maintenanceNet -
-      managementFee -
-      markup -
-      expensesAndServices,
+  const formulaValues = {
+    paidByGuest: roundMoney(inputs.paidByGuest),
+    otherIncomesNet: roundMoney(inputs.otherIncomesNet),
+    payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
+    payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
+    cleaningFee: roundMoney(inputs.cleaningFee),
+    cleaningPayoutVat: roundMoney(inputs.cleaningPayoutVat),
+    accommodationGross: roundMoney(inputs.accommodationGross),
+    accommodationPayoutVat: roundMoney(inputs.accommodationPayoutVat),
+    accommodationNet: roundMoney(inputs.accommodationNet),
+    cleaningNet: roundMoney(inputs.cleaningNet),
+    cleaningKit: roundMoney(inputs.cleaningKit),
+    cleaningIva: roundMoney(inputs.cleaningIva),
+    maintenanceNet: roundMoney(inputs.maintenanceNet),
+    maintenanceIva: roundMoney(inputs.maintenanceIva),
+    servicesNet: roundMoney(inputs.servicesNet),
+    servicesIva: roundMoney(inputs.servicesIva),
+    otherExpensesNet: roundMoney(inputs.otherExpensesNet),
+    otherExpensesIva: roundMoney(inputs.otherExpensesIva),
+    otherIncomesIva: roundMoney(inputs.otherIncomesIva),
+    bookingCount: inputs.bookingCount,
+    income,
+    cleaningMargin,
+    maintenance: roundMoney(inputs.maintenanceNet),
+    maintenanceCoverByOwner,
+    maintenanceCoverByUs,
+    markup,
+    iva,
+    expensesAndServices,
+  }
+  const managementFee = resolveManagementFee(formulaValues, settings)
+  const withFee = {
+    ...formulaValues,
+    managementFee,
+    commission: settings?.commissionPercent ?? 0,
+    fixedRent: settings?.fixedRent ?? 0,
+  }
+  const propertyContribution = evaluateNamedFormula(
+    settings?.propertyContributionFormula?.trim() ||
+      DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
+    withFee,
   )
+  const withContribution = { ...withFee, propertyContribution }
+  const ourProfit = evaluateNamedFormula(
+    settings?.ourProfitFormula ?? '',
+    withContribution,
+  )
+  const netEarnings = evaluateNamedFormula(settings?.netEarningsFormula ?? '', {
+    ...withContribution,
+    ourProfit,
+  })
 
   return {
     paidByGuest: roundMoney(inputs.paidByGuest),
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
+    cleaningFee: roundMoney(inputs.cleaningFee),
+    cleaningPayoutVat: roundMoney(inputs.cleaningPayoutVat),
+    accommodationGross: roundMoney(inputs.accommodationGross),
+    accommodationPayoutVat: roundMoney(inputs.accommodationPayoutVat),
+    accommodationNet: roundMoney(inputs.accommodationNet),
     cleaningNet: roundMoney(inputs.cleaningNet),
     cleaningKit: roundMoney(inputs.cleaningKit),
-    netProfit,
+    cleaningIva: roundMoney(inputs.cleaningIva),
+    maintenanceNet: roundMoney(inputs.maintenanceNet),
+    maintenanceIva: roundMoney(inputs.maintenanceIva),
+    servicesNet: roundMoney(inputs.servicesNet),
+    servicesIva: roundMoney(inputs.servicesIva),
+    otherExpensesNet: roundMoney(inputs.otherExpensesNet),
+    otherExpensesIva: roundMoney(inputs.otherExpensesIva),
+    otherIncomesIva: roundMoney(inputs.otherIncomesIva),
+    netProfit: propertyContribution,
+    propertyContribution,
+    ourProfit,
+    netEarnings,
     income,
     cleaningMargin,
     managementFee,

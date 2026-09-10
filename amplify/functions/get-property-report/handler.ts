@@ -32,6 +32,8 @@ import {
   roundMoney,
 } from '../shared/property-reports';
 import {
+  GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+  isGlobalReportSettingsId,
   parseReportSettings,
   REPORT_SETTINGS_MONTH_ID,
 } from '../shared/property-report-settings';
@@ -144,6 +146,24 @@ export const handler = async (event: HttpEvent) => {
   }
 
   try {
+    const loadStoredSettings = async (id: string) => {
+      const stored = await getReportRecord(
+        reportsTable,
+        id,
+        REPORT_SETTINGS_MONTH_ID,
+      );
+      return parseReportSettings(stored);
+    };
+
+    if (isGlobalReportSettingsId(propertyId)) {
+      return buildHttpResponse(200, {
+        property: {
+          id: GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+          name: 'Reports Settings',
+        },
+        settings: await loadStoredSettings(GLOBAL_REPORT_SETTINGS_PROPERTY_ID),
+      });
+    }
     const properties = await listProperties(propertiesTable);
     const resolved = resolveReportProperty(properties, propertyId);
     if (resolved.memberGroup) {
@@ -159,14 +179,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     const scope = reportScopeForProperty(property);
-    const loadSettings = async () => {
-      const stored = await getReportRecord(
-        reportsTable,
-        propertyId,
-        REPORT_SETTINGS_MONTH_ID,
-      );
-      return parseReportSettings(stored);
-    };
+    const loadSettings = async () => loadStoredSettings(propertyId);
 
     if (settingsOnly) {
       return buildHttpResponse(200, {
@@ -278,6 +291,7 @@ export const handler = async (event: HttpEvent) => {
       },
       months,
       report,
+      settings: await loadSettings(),
       lineAllocations,
       bookings,
       cleaning: {

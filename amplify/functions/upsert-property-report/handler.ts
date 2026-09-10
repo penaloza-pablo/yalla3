@@ -36,6 +36,8 @@ import {
   type PropertyReportStatus,
 } from '../shared/property-reports';
 import {
+  GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+  isGlobalReportSettingsId,
   parseReportSettings,
   REPORT_SETTINGS_MONTH_ID,
   validateReportSettings,
@@ -49,6 +51,14 @@ type Payload = {
   businessModel?: string;
   commissionPercent?: number | string | null;
   fixedRent?: number | string | null;
+  formula?: string | null;
+  propertyContributionFormula?: string | null;
+  ourProfitFormula?: string | null;
+  netEarningsFormula?: string | null;
+  cleaningVat?: number | string | null;
+  accommodationVat?: number | string | null;
+  airbnbFeePercent?: number | string | null;
+  visibility?: unknown;
   conditions?: unknown[];
 };
 
@@ -100,6 +110,90 @@ export const handler = async (event: {
     });
   }
 
+  const saveSettingsItem = async (
+    id: string,
+    parsed: Extract<
+      ReturnType<typeof validateReportSettings>,
+      { ok: true }
+    >,
+    entityName: string,
+  ) => {
+    const foundSettings = await docClient.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { propertyId: id, monthId: REPORT_SETTINGS_MONTH_ID },
+      }),
+    );
+    const existingSettings = foundSettings.Item as
+      | Record<string, unknown>
+      | undefined;
+    const timestamp = nowIso();
+    const item = {
+      propertyId: id,
+      monthId: REPORT_SETTINGS_MONTH_ID,
+      kind: 'settings',
+      businessModel: parsed.settings.businessModel,
+      commissionPercent: parsed.settings.commissionPercent,
+      fixedRent: parsed.settings.fixedRent,
+      formula: parsed.settings.formula,
+      managementFeeFormula: parsed.settings.formula,
+      propertyContributionFormula: parsed.settings.propertyContributionFormula,
+      ourProfitFormula: parsed.settings.ourProfitFormula,
+      netEarningsFormula: parsed.settings.netEarningsFormula,
+      cleaningVat: parsed.settings.cleaningVat,
+      accommodationVat: parsed.settings.accommodationVat,
+      airbnbFeePercent: parsed.settings.airbnbFeePercent,
+      visibility: parsed.settings.visibility,
+      conditions: parsed.settings.conditions,
+      createdAt: asString(existingSettings?.createdAt) || timestamp,
+      updatedAt: timestamp,
+    };
+    await putItem(tableName, item);
+    await recordActivityLog(event, {
+      feature: LOG_FEATURES.PROPERTY_REPORTS,
+      action: 'settings',
+      entityId: `${id}#${REPORT_SETTINGS_MONTH_ID}`,
+      entityName,
+      summary: `updated property report settings ${quoted(entityName)}`,
+    });
+    return item;
+  };
+
+  if (action === 'settings' && isGlobalReportSettingsId(propertyId)) {
+    const parsed = validateReportSettings(
+      parseReportSettings({
+        formula: payload.formula,
+        propertyContributionFormula: payload.propertyContributionFormula,
+        ourProfitFormula: payload.ourProfitFormula,
+        netEarningsFormula: payload.netEarningsFormula,
+        cleaningVat: payload.cleaningVat,
+        accommodationVat: payload.accommodationVat,
+        airbnbFeePercent: payload.airbnbFeePercent,
+        visibility: payload.visibility,
+      } as Record<string, unknown>),
+      { global: true },
+    );
+    if (!parsed.ok) {
+      return buildHttpResponse(400, { message: parsed.message });
+    }
+    try {
+      const item = await saveSettingsItem(
+        GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+        parsed,
+        'Reports Settings',
+      );
+      return buildHttpResponse(200, {
+        item,
+        settings: parseReportSettings(item),
+      });
+    } catch (error) {
+      return buildHttpResponse(500, {
+        message: 'Failed to update the property report settings.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const properties = await listProperties(propertiesTable);
   const resolved = resolveReportProperty(properties, propertyId);
   if (resolved.memberGroup) {
@@ -120,45 +214,23 @@ export const handler = async (event: {
         businessModel: payload.businessModel,
         commissionPercent: payload.commissionPercent,
         fixedRent: payload.fixedRent,
+        formula: payload.formula,
+        propertyContributionFormula: payload.propertyContributionFormula,
+        ourProfitFormula: payload.ourProfitFormula,
+        netEarningsFormula: payload.netEarningsFormula,
+        cleaningVat: payload.cleaningVat,
+        accommodationVat: payload.accommodationVat,
+        airbnbFeePercent: payload.airbnbFeePercent,
+        visibility: payload.visibility,
         conditions: payload.conditions,
       } as Record<string, unknown>),
     );
     if (!parsed.ok) {
       return buildHttpResponse(400, { message: parsed.message });
     }
-
-    const foundSettings = await docClient.send(
-      new GetCommand({
-        TableName: tableName,
-        Key: { propertyId, monthId: REPORT_SETTINGS_MONTH_ID },
-      }),
-    );
-    const existingSettings = foundSettings.Item as
-      | Record<string, unknown>
-      | undefined;
-    const timestamp = nowIso();
-    const item = {
-      propertyId,
-      monthId: REPORT_SETTINGS_MONTH_ID,
-      kind: 'settings',
-      businessModel: parsed.settings.businessModel,
-      commissionPercent: parsed.settings.commissionPercent,
-      fixedRent: parsed.settings.fixedRent,
-      conditions: parsed.settings.conditions,
-      createdAt: asString(existingSettings?.createdAt) || timestamp,
-      updatedAt: timestamp,
-    };
-
     try {
-      await putItem(tableName, item);
       const name = reportScopeForProperty(property).name;
-      await recordActivityLog(event, {
-        feature: LOG_FEATURES.PROPERTY_REPORTS,
-        action: 'settings',
-        entityId: `${propertyId}#${REPORT_SETTINGS_MONTH_ID}`,
-        entityName: name,
-        summary: `updated property report settings ${quoted(name)}`,
-      });
+      const item = await saveSettingsItem(propertyId, parsed, name);
       return buildHttpResponse(200, {
         item,
         settings: parseReportSettings(item),

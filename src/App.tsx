@@ -42,6 +42,7 @@ import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { PropertyReportsView } from './finance/PropertyReportsView'
+import { FinanceReportsSettingsView } from './finance/FinanceReportsSettingsView'
 import { PropertyGroupsView } from './finance/PropertyGroupsView'
 import { MovementsView } from './finance/MovementsView'
 import { ServicesSubscriptionsView } from './finance/ServicesSubscriptionsView'
@@ -1514,7 +1515,8 @@ const emptySubtractionFormState: SubtractionFormState = {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const { ready: permissionsReady, can, canPage } = usePermissions()
+  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions } =
+    usePermissions()
   const canEditInventoryItems = can(ACTION_KEYS.inventoryEditItems)
   const pageLabel = (page: string) => translatePage(t, page)
   const navItemLabel = (page: string) =>
@@ -4841,6 +4843,20 @@ function App() {
           >
             <span className="page-loader-spinner" aria-hidden="true" />
           </div>
+        ) : loadError ? (
+          <section className="card">
+            <h1 className="page-title">{t('rbac.permissionsLoadError')}</h1>
+            <p className="subtitle">{loadError}</p>
+            <div className="header-actions">
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void refreshPermissions()}
+              >
+                {t('rbac.retryPermissions')}
+              </button>
+            </div>
+          </section>
         ) : !canPage(activePage) ? (
           <section className="card">
             <h1 className="page-title">{t('rbac.noAccess')}</h1>
@@ -8313,6 +8329,8 @@ function App() {
             propertyOptions={activeManagedPropertyOptions}
             onNavigate={navigateToPage}
           />
+        ) : activePage === 'Reports Settings' ? (
+          <FinanceReportsSettingsView getEndpoint={getEndpoint} />
         ) : activePage === 'Property Groups' ? (
           <PropertyGroupsView
             getEndpoint={getEndpoint}
