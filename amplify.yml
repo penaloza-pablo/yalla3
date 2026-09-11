@@ -4,7 +4,18 @@ backend:
     build:
       commands:
         - npm ci --cache .npm --prefer-offline
-        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        - |
+          echo "Building branch: ${AWS_BRANCH}"
+          case "${AWS_BRANCH}" in
+            main)
+              echo "Deploying backend for main"
+              npx ampx pipeline-deploy --branch "$AWS_BRANCH" --app-id "$AWS_APP_ID"
+              ;;
+            *)
+              echo "Reusing main backend outputs (no backend deploy)"
+              npx ampx generate outputs --branch main --app-id "$AWS_APP_ID"
+              ;;
+          esac
 frontend:
   phases:
     build:
