@@ -4,12 +4,16 @@ import {
   evaluateFormula,
   type VisibilityMetricId,
 } from '../../amplify/functions/shared/property-report-formula'
-import type {
-  BusinessModel,
-  PropertyReportSettings,
+import {
+  resolveMarkupPercent,
+  type BusinessModel,
+  type PropertyReportSettings,
 } from '../../amplify/functions/shared/property-report-settings'
+import type { LineAllocation } from '../../amplify/functions/shared/property-report-allocations'
 
 export type CostAllocation = 'bear' | 'ownerPlus12' | 'owner'
+export type IncomeAllocation = 'directToOwner' | 'applyMarkup' | 'doNotSend'
+export type ReportLineAllocation = LineAllocation
 
 export type PropertyReportMetricUnit = 'money' | 'count'
 
@@ -18,7 +22,7 @@ export type PropertyReportFieldRole = 'source' | 'indicator'
 export type AllocatedReportLine = {
   section: 'cleaning' | 'maintenance' | 'service' | 'expense' | 'income'
   net: number
-  allocation: CostAllocation | ''
+  allocation: ReportLineAllocation | ''
 }
 
 export type PropertyReportMetricInputs = {
@@ -42,10 +46,19 @@ export type PropertyReportMetricInputs = {
   otherExpensesIva: number
   otherIncomesIva: number
   bookingCount: number
+  nights: number
   allocatedLines: AllocatedReportLine[]
 }
 
 export const MARKUP_RATE = 0.12
+
+const isIncomeApplyMarkup = (line: AllocatedReportLine) =>
+  line.section === 'income' &&
+  (line.allocation === 'applyMarkup' || line.allocation === 'ownerPlus12')
+
+const isIncomeDoNotSend = (line: AllocatedReportLine) =>
+  line.section === 'income' &&
+  (line.allocation === 'doNotSend' || line.allocation === 'bear')
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
@@ -156,6 +169,11 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'source',
   },
   {
+    id: 'nights',
+    unit: 'count',
+    role: 'source',
+  },
+  {
     id: 'managementFee',
     unit: 'money',
     role: 'source',
@@ -189,7 +207,7 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'cleaningMargin',
     unit: 'money',
     role: 'indicator',
-    formula: 'payoutCleaningGross - (cleaningNet + cleaningKit)',
+    formula: 'payoutCleaningNet - (cleaningNet + cleaningKit)',
   },
   {
     id: 'maintenance',
@@ -214,7 +232,8 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'markup',
     unit: 'money',
     role: 'indicator',
-    formula: '0.12 * sum(net where allocation = bear and section != income)',
+    formula:
+      'markupPercent / 100 * (sum(net where allocation = bear and section != income) + sum(income.net where allocation = applyMarkup))',
   },
   {
     id: 'iva',
@@ -228,6 +247,26 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     unit: 'money',
     role: 'indicator',
     formula: 'servicesNet + otherExpensesNet',
+  },
+  {
+    id: 'expensesAndServicesCoverByOwner',
+    unit: 'money',
+    role: 'indicator',
+    formula:
+      'sum((service|expense).net where allocation in [owner, ownerPlus12])',
+  },
+  {
+    id: 'expensesAndServicesCoverByUs',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum((service|expense).net where allocation = bear)',
+  },
+  {
+    id: 'amountTransferred',
+    unit: 'money',
+    role: 'indicator',
+    formula:
+      'income - incomesDoNotSend - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup',
   },
 ] as const
 
@@ -245,7 +284,11 @@ export const PROPERTY_TAB_METRIC_KEYS = [
   'markup',
   'iva',
   'expensesAndServices',
+  'expensesAndServicesCoverByOwner',
+  'expensesAndServicesCoverByUs',
+  'amountTransferred',
   'bookingCount',
+  'nights',
 ] as const
 
 export type PropertyTabMetricKey = (typeof PROPERTY_TAB_METRIC_KEYS)[number]
@@ -303,7 +346,7 @@ export const computePropertyReportMetrics = (
 ): PropertyReportMetricValues => {
   const income = roundMoney(inputs.paidByGuest + inputs.otherIncomesNet)
   const cleaningMargin = roundMoney(
-    inputs.payoutCleaningGross - (inputs.cleaningNet + inputs.cleaningKit),
+    inputs.payoutCleaningNet - (inputs.cleaningNet + inputs.cleaningKit),
   )
   const maintenanceCoverByOwner = sumAllocated(
     inputs.allocatedLines,
@@ -317,9 +360,12 @@ export const computePropertyReportMetrics = (
   )
   const markupBase = sumAllocated(
     inputs.allocatedLines,
-    (line) => line.section !== 'income' && line.allocation === 'bear',
+    (line) =>
+      (line.section !== 'income' && line.allocation === 'bear') ||
+      isIncomeApplyMarkup(line),
   )
-  const markup = roundMoney(markupBase * MARKUP_RATE)
+  const markupRate = resolveMarkupPercent(settings) / 100
+  const markup = roundMoney(markupBase * markupRate)
   const iva = roundMoney(
     inputs.cleaningIva +
       inputs.maintenanceIva +
@@ -329,6 +375,18 @@ export const computePropertyReportMetrics = (
   )
   const expensesAndServices = roundMoney(
     inputs.servicesNet + inputs.otherExpensesNet,
+  )
+  const expensesAndServicesCoverByOwner = sumAllocated(
+    inputs.allocatedLines,
+    (line) =>
+      (line.section === 'service' || line.section === 'expense') &&
+      (line.allocation === 'owner' || line.allocation === 'ownerPlus12'),
+  )
+  const expensesAndServicesCoverByUs = sumAllocated(
+    inputs.allocatedLines,
+    (line) =>
+      (line.section === 'service' || line.section === 'expense') &&
+      line.allocation === 'bear',
   )
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
@@ -351,6 +409,7 @@ export const computePropertyReportMetrics = (
     otherExpensesIva: roundMoney(inputs.otherExpensesIva),
     otherIncomesIva: roundMoney(inputs.otherIncomesIva),
     bookingCount: inputs.bookingCount,
+    nights: inputs.nights,
     income,
     cleaningMargin,
     maintenance: roundMoney(inputs.maintenanceNet),
@@ -359,11 +418,26 @@ export const computePropertyReportMetrics = (
     markup,
     iva,
     expensesAndServices,
+    expensesAndServicesCoverByOwner,
+    expensesAndServicesCoverByUs,
   }
+  const incomesDoNotSend = sumAllocated(
+    inputs.allocatedLines,
+    isIncomeDoNotSend,
+  )
   const managementFee = resolveManagementFee(formulaValues, settings)
+  const amountTransferred = roundMoney(
+    income -
+      incomesDoNotSend -
+      expensesAndServicesCoverByOwner -
+      maintenanceCoverByOwner -
+      managementFee -
+      markup,
+  )
   const withFee = {
     ...formulaValues,
     managementFee,
+    amountTransferred,
     commission: settings?.commissionPercent ?? 0,
     fixedRent: settings?.fixedRent ?? 0,
   }
@@ -415,7 +489,11 @@ export const computePropertyReportMetrics = (
     markup,
     iva,
     expensesAndServices,
+    expensesAndServicesCoverByOwner,
+    expensesAndServicesCoverByUs,
+    amountTransferred,
     bookingCount: inputs.bookingCount,
+    nights: inputs.nights,
   }
 }
 

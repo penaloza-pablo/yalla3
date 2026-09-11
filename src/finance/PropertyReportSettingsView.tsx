@@ -8,6 +8,7 @@ import {
   mergeReportSettings,
   parseReportSettings,
   validateReportSettings,
+  DEFAULT_MARKUP_PERCENT,
   type BusinessModel,
   type ConditionRule,
   type PropertyReportSettings,
@@ -54,6 +55,7 @@ type SettingsForm = {
   businessModel: BusinessModel | ''
   commissionPercent: string
   fixedRent: string
+  markupPercent: string
   formula: string
   propertyContributionFormula: string
   ourProfitFormula: string
@@ -82,6 +84,10 @@ const toForm = (settings: PropertyReportSettings): SettingsForm => ({
   commissionPercent:
     settings.commissionPercent === null ? '' : String(settings.commissionPercent),
   fixedRent: settings.fixedRent === null ? '' : String(settings.fixedRent),
+  markupPercent:
+    settings.markupPercent === null
+      ? String(DEFAULT_MARKUP_PERCENT)
+      : String(settings.markupPercent),
   formula:
     settings.businessModel === 'commission' && !settings.formula
       ? DEFAULT_COMMISSION_FORMULA
@@ -213,6 +219,13 @@ export function PropertyReportSettingsView({
         }
       }
     }
+    const markup = parseAmount(form.markupPercent)
+    if (markup === null || !Number.isFinite(markup) || markup < 0 || markup > 100) {
+      return {
+        ok: false as const,
+        message: t('propertyReports.settingsMarkupInvalid'),
+      }
+    }
     const formulaChecks: Array<[string, FormulaTarget, boolean]> = [
       [form.formula, 'managementFee', form.businessModel === 'commission'],
       [form.propertyContributionFormula, 'propertyContribution', false],
@@ -262,6 +275,7 @@ export function PropertyReportSettingsView({
       businessModel: form.businessModel,
       commissionPercent: parseAmount(form.commissionPercent),
       fixedRent: parseAmount(form.fixedRent),
+      markupPercent: parseAmount(form.markupPercent),
       formula: form.formula.trim(),
       propertyContributionFormula: form.propertyContributionFormula.trim(),
       ourProfitFormula: form.ourProfitFormula.trim(),
@@ -275,9 +289,11 @@ export function PropertyReportSettingsView({
     if (!parsed.ok) {
       return {
         ok: false as const,
-        message: parsed.message.includes('airbnbFee')
-          ? t('propertyReports.settingsAirbnbFeeInvalid')
-          : t('propertyReports.settingsConditionInvalid'),
+        message: parsed.message.includes('markupPercent')
+          ? t('propertyReports.settingsMarkupInvalid')
+          : parsed.message.includes('airbnbFee')
+            ? t('propertyReports.settingsAirbnbFeeInvalid')
+            : t('propertyReports.settingsConditionInvalid'),
       }
     }
     return { ok: true as const, settings: parsed.settings }
@@ -308,6 +324,7 @@ export function PropertyReportSettingsView({
             businessModel: built.settings.businessModel,
             commissionPercent: built.settings.commissionPercent,
             fixedRent: built.settings.fixedRent,
+            markupPercent: built.settings.markupPercent,
             formula: built.settings.formula,
             propertyContributionFormula: built.settings.propertyContributionFormula,
             ourProfitFormula: built.settings.ourProfitFormula,
@@ -338,7 +355,11 @@ export function PropertyReportSettingsView({
 
   const ruleLabel = (rule: ConditionRule) => {
     if (rule === 'bear') return t('propertyReports.allocationBear')
-    if (rule === 'ownerPlus12') return t('propertyReports.allocationOwnerPlus12')
+    if (rule === 'ownerPlus12') {
+      return t('propertyReports.allocationOwnerPlus12', {
+        percent: form.markupPercent.trim() || DEFAULT_MARKUP_PERCENT,
+      })
+    }
     if (rule === 'owner') return t('propertyReports.allocationOwner')
     return t('propertyReports.allocationBearFirst')
   }
@@ -473,6 +494,22 @@ export function PropertyReportSettingsView({
                   />
                 </label>
               ) : null}
+              <label>
+                {t('propertyReports.knockKnockMarkupPercent')}
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={form.markupPercent}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      markupPercent: event.target.value,
+                    }))
+                  }
+                />
+              </label>
             </div>
             {form.businessModel ? (
               <>

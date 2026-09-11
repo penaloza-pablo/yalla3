@@ -32,7 +32,7 @@ import {
   parseLineAllocations,
   reportScopeForProperty,
   resolveReportProperty,
-  type CostAllocation,
+  type LineAllocation,
   type PropertyReportStatus,
 } from '../shared/property-reports';
 import {
@@ -47,10 +47,11 @@ type Payload = {
   propertyId?: string;
   monthId?: string;
   action?: string;
-  lineAllocations?: Record<string, CostAllocation>;
+  lineAllocations?: Record<string, LineAllocation>;
   businessModel?: string;
   commissionPercent?: number | string | null;
   fixedRent?: number | string | null;
+  markupPercent?: number | string | null;
   formula?: string | null;
   propertyContributionFormula?: string | null;
   ourProfitFormula?: string | null;
@@ -135,6 +136,7 @@ export const handler = async (event: {
       businessModel: parsed.settings.businessModel,
       commissionPercent: parsed.settings.commissionPercent,
       fixedRent: parsed.settings.fixedRent,
+      markupPercent: parsed.settings.markupPercent,
       formula: parsed.settings.formula,
       managementFeeFormula: parsed.settings.formula,
       propertyContributionFormula: parsed.settings.propertyContributionFormula,
@@ -214,6 +216,7 @@ export const handler = async (event: {
         businessModel: payload.businessModel,
         commissionPercent: payload.commissionPercent,
         fixedRent: payload.fixedRent,
+        markupPercent: payload.markupPercent,
         formula: payload.formula,
         propertyContributionFormula: payload.propertyContributionFormula,
         ourProfitFormula: payload.ourProfitFormula,

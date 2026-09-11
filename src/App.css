@@ -1011,6 +1011,26 @@ button.today-card {
   position: relative;
 }
 
+.closed-report-kpi.is-clickable {
+  cursor: pointer;
+}
+
+.closed-report-kpi.is-clickable:hover,
+.closed-report-kpi.is-clickable:focus-visible {
+  box-shadow: 0 0 0 2px #d0d5dd;
+}
+
+.metric-detail-section + .metric-detail-section {
+  margin-top: 16px;
+}
+
+.metric-detail-section-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #344054;
+}
+
 .closed-report-kpi.is-hero {
   grid-column: 1 / -1;
   z-index: 2;
@@ -1124,6 +1144,24 @@ button.today-card {
 .report-iva-details .detail-value {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.payout-detail-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 8px;
+}
+
+.payout-detail-zone {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.payout-detail-zone + .payout-detail-zone {
+  padding-top: 16px;
+  border-top: 1px solid #eaecf0;
 }
 
 .report-table-clamp {
@@ -5189,6 +5227,14 @@ th {
     grid-template-columns: 1fr;
     gap: 12px;
     padding: 0;
+  }
+
+  .payout-detail-zones {
+    padding: 0;
+  }
+
+  .payout-detail-zone {
+    grid-template-columns: 1fr 1fr;
   }
 
   .detail-span {

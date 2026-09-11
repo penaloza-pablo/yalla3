@@ -36,6 +36,20 @@ import {
 } from './iva';
 import { docClient } from './visit-task-utils';
 
+export {
+  COST_ALLOCATIONS,
+  INCOME_ALLOCATIONS,
+  LINE_ALLOCATIONS,
+  isCostAllocation,
+  isIncomeAllocation,
+  isLineAllocation,
+  parseLineAllocations,
+  toIncomeAllocation,
+  type CostAllocation,
+  type IncomeAllocation,
+  type LineAllocation,
+} from './property-report-allocations';
+
 export { PROPERTY_REPORTS_START_MONTH };
 
 export type PropertyReportStatus =
@@ -43,30 +57,6 @@ export type PropertyReportStatus =
   | 'PENDING_TO_CLOSE'
   | 'READY_TO_CLOSE'
   | 'CLOSED';
-
-export const COST_ALLOCATIONS = ['bear', 'ownerPlus12', 'owner'] as const;
-
-export type CostAllocation = (typeof COST_ALLOCATIONS)[number];
-
-export const isCostAllocation = (value: unknown): value is CostAllocation =>
-  COST_ALLOCATIONS.includes(String(value) as CostAllocation);
-
-export const parseLineAllocations = (value: unknown) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {} as Record<string, CostAllocation>;
-  }
-  const next: Record<string, CostAllocation> = {};
-  for (const [key, allocation] of Object.entries(
-    value as Record<string, unknown>,
-  )) {
-    const id = key.trim();
-    if (!id || !isCostAllocation(allocation)) {
-      continue;
-    }
-    next[id] = allocation;
-  }
-  return next;
-};
 
 export const IVA_MULTIPLIER = 1.21;
 

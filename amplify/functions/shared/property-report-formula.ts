@@ -33,6 +33,7 @@ export const FORMULA_CATALOG_VARIABLES = [
   'otherExpensesIva',
   'otherIncomesIva',
   'bookingCount',
+  'nights',
   'income',
   'cleaningMargin',
   'maintenance',
@@ -41,6 +42,8 @@ export const FORMULA_CATALOG_VARIABLES = [
   'markup',
   'iva',
   'expensesAndServices',
+  'expensesAndServicesCoverByOwner',
+  'expensesAndServicesCoverByUs',
 ] as const;
 
 export type FormulaCatalogVariable = (typeof FORMULA_CATALOG_VARIABLES)[number];
@@ -50,6 +53,7 @@ export const FORMULA_RESULT_VARIABLES = [
   'propertyContribution',
   'ourProfit',
   'netEarnings',
+  'amountTransferred',
 ] as const;
 
 export const VISIBILITY_METRIC_IDS = [
@@ -61,9 +65,14 @@ export type VisibilityMetricId = (typeof VISIBILITY_METRIC_IDS)[number];
 
 const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
   managementFee: [],
-  propertyContribution: ['managementFee'],
-  ourProfit: ['managementFee', 'propertyContribution'],
-  netEarnings: ['managementFee', 'propertyContribution', 'ourProfit'],
+  propertyContribution: ['managementFee', 'amountTransferred'],
+  ourProfit: ['managementFee', 'propertyContribution', 'amountTransferred'],
+  netEarnings: [
+    'managementFee',
+    'propertyContribution',
+    'ourProfit',
+    'amountTransferred',
+  ],
 };
 
 export type FormulaToken =

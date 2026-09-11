@@ -11,7 +11,11 @@ import {
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { fetchJson } from '../operations/api'
-import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
+import {
+  calendarDaysBetween,
+  formatDateOnlyLabel,
+  getTodayMadrid,
+} from '../operations/dateHelpers'
 import {
   filterPropertyReportsOptions,
   listPropertyReportMonthIds,
@@ -23,9 +27,17 @@ import {
   emptyReportSettings,
   mergeReportSettings,
   parseReportSettings,
+  resolveMarkupPercent,
   type PropertyReportSettings,
 } from '../../amplify/functions/shared/property-report-settings'
 import { DEFAULT_COMMISSION_FORMULA } from '../../amplify/functions/shared/property-report-formula'
+import {
+  isCostAllocation,
+  isIncomeAllocation,
+  parseLineAllocations,
+  toIncomeAllocation,
+  type LineAllocation,
+} from '../../amplify/functions/shared/property-report-allocations'
 import {
   computePayoutBreakdown,
   sumPayoutField,
@@ -175,6 +187,13 @@ const payoutGuestPay = (booking: ReportBooking) => {
   return roundMoney((booking.hostPayout ?? 0) + (booking.hostServiceFee ?? 0))
 }
 
+const bookingNights = (booking: ReportBooking) => {
+  if (!booking.checkInDate || !booking.checkOutDate) {
+    return null
+  }
+  return Math.max(0, calendarDaysBetween(booking.checkInDate, booking.checkOutDate))
+}
+
 const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
   roundMoney(net * (ivaRate / 100))
 
@@ -284,27 +303,69 @@ const TruncatedText = ({ value }: { value: string }) => (
   </span>
 )
 
-const COST_ALLOCATIONS = ['bear', 'ownerPlus12', 'owner'] as const
-type CostAllocation = (typeof COST_ALLOCATIONS)[number]
-
-const isCostAllocation = (value: unknown): value is CostAllocation =>
-  COST_ALLOCATIONS.includes(String(value) as CostAllocation)
-
-const parseLineAllocations = (value: unknown) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {} as Record<string, CostAllocation>
-  }
-  const next: Record<string, CostAllocation> = {}
-  for (const [key, allocation] of Object.entries(
-    value as Record<string, unknown>,
-  )) {
-    const id = key.trim()
-    if (!id || !isCostAllocation(allocation)) {
-      continue
-    }
-    next[id] = allocation
-  }
-  return next
+const AllocationChip = ({
+  value,
+  kind,
+  disabled,
+  markupPercent,
+  onChange,
+}: {
+  value: LineAllocation | ''
+  kind: 'cost' | 'income'
+  disabled: boolean
+  markupPercent: number
+  onChange: (value: LineAllocation) => void
+}) => {
+  const { t } = useTranslation()
+  const selected =
+    kind === 'income'
+      ? toIncomeAllocation(value)
+      : isCostAllocation(value)
+        ? value
+        : ''
+  return (
+    <select
+      className="report-cost-chip"
+      value={selected}
+      disabled={disabled}
+      aria-label={t('propertyReports.allocation')}
+      onChange={(event) => {
+        const next = event.target.value
+        if (kind === 'income' && isIncomeAllocation(next)) {
+          onChange(next)
+          return
+        }
+        if (kind === 'cost' && isCostAllocation(next)) {
+          onChange(next)
+        }
+      }}
+    >
+      <option value="">{t('common.select')}</option>
+      {kind === 'income' ? (
+        <>
+          <option value="directToOwner">
+            {t('propertyReports.allocationDirectToOwner')}
+          </option>
+          <option value="applyMarkup">
+            {t('propertyReports.allocationApplyMarkup')}
+          </option>
+          <option value="doNotSend">
+            {t('propertyReports.allocationDoNotSend')}
+          </option>
+        </>
+      ) : (
+        <>
+          <option value="bear">{t('propertyReports.allocationBear')}</option>
+          <option value="ownerPlus12">
+            {t('propertyReports.allocationOwnerPlus12', {
+              percent: markupPercent,
+            })}
+          </option>
+          <option value="owner">{t('propertyReports.allocationOwner')}</option>
+        </>
+      )}
+    </select>
+  )
 }
 
 const ReportDocumentIcon = () => (
@@ -326,38 +387,6 @@ const SettingsGearIcon = () => (
     />
   </svg>
 )
-
-const AllocationChip = ({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: CostAllocation | ''
-  disabled: boolean
-  onChange: (value: CostAllocation) => void
-}) => {
-  const { t } = useTranslation()
-  return (
-    <select
-      className="report-cost-chip"
-      value={value}
-      disabled={disabled}
-      aria-label={t('propertyReports.allocation')}
-      onChange={(event) => {
-        if (isCostAllocation(event.target.value)) {
-          onChange(event.target.value)
-        }
-      }}
-    >
-      <option value="">{t('common.select')}</option>
-      <option value="bear">{t('propertyReports.allocationBear')}</option>
-      <option value="ownerPlus12">
-        {t('propertyReports.allocationOwnerPlus12')}
-      </option>
-      <option value="owner">{t('propertyReports.allocationOwner')}</option>
-    </select>
-  )
-}
 
 const fallbackMonths = (): ReportMonth[] =>
   listPropertyReportMonthIds(getTodayMadrid()).map((id) => ({
@@ -425,7 +454,7 @@ export function PropertyReportsView({
   const [isSavingMovement, setIsSavingMovement] = useState(false)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [lineAllocations, setLineAllocations] = useState<
-    Record<string, CostAllocation>
+    Record<string, LineAllocation>
   >({})
   const [isClosedReportOpen, setIsClosedReportOpen] = useState(false)
   const [settingsProperty, setSettingsProperty] = useState<{
@@ -464,6 +493,7 @@ export function PropertyReportsView({
       bookings.map((booking) => ({
         booking,
         guestPay: payoutGuestPay(booking),
+        nights: bookingNights(booking),
         ...computePayoutBreakdown(booking, reportSettings),
       })),
     [bookings, reportSettings],
@@ -472,6 +502,7 @@ export function PropertyReportsView({
   const bookingTotals = useMemo(
     () => ({
       count: bookings.length,
+      nights: payoutRows.reduce((sum, row) => sum + (row.nights ?? 0), 0),
       payout: bookings.reduce((sum, booking) => sum + (booking.hostPayout ?? 0), 0),
       paidByGuest: roundMoney(
         bookings.reduce((sum, booking) => sum + (payoutGuestPay(booking) ?? 0), 0),
@@ -857,7 +888,7 @@ export function PropertyReportsView({
     }
   }
 
-  const saveAllocation = async (rowId: string, allocation: CostAllocation) => {
+  const saveAllocation = async (rowId: string, allocation: LineAllocation) => {
     const next = { ...lineAllocations, [rowId]: allocation }
     setLineAllocations(next)
     if (!endpoints.upsert || !selectedPropertyId || !selectedMonthId) {
@@ -993,6 +1024,7 @@ export function PropertyReportsView({
         otherExpensesIva: expenseTotals.totalIva,
         otherIncomesIva: incomeTotals.totalIva,
         bookingCount: bookingTotals.count,
+        nights: bookingTotals.nights,
         allocatedLines: [
           ...cleaningLines.map((line) => ({
             section: 'cleaning' as const,
@@ -1043,13 +1075,21 @@ export function PropertyReportsView({
     ],
   )
 
-  const renderLineAction = (rowId: string, isExpanded: boolean) => {
+  const markupPercent = resolveMarkupPercent(reportSettings)
+
+  const renderLineAction = (
+    rowId: string,
+    isExpanded: boolean,
+    kind: 'cost' | 'income' = 'cost',
+  ) => {
     if (usesAllocations) {
       return (
         <td>
           <AllocationChip
             value={lineAllocations[rowId] ?? ''}
+            kind={kind}
             disabled={allocationsLocked}
+            markupPercent={markupPercent}
             onChange={(allocation) => void saveAllocation(rowId, allocation)}
           />
         </td>
@@ -1195,7 +1235,11 @@ export function PropertyReportsView({
                           <td>{originLabel(line.origin)}</td>
                           <td>{money.format(line.amountExclIva)}</td>
                           <td>{money.format(line.amountInclIva)}</td>
-                          {renderLineAction(rowId, isExpanded)}
+                          {renderLineAction(
+                            rowId,
+                            isExpanded,
+                            tableKey === 'incomes' ? 'income' : 'cost',
+                          )}
                         </tr>
                         {!usesAllocations && isExpanded ? (
                           <tr className="detail-row">
@@ -1508,6 +1552,57 @@ export function PropertyReportsView({
           netEarningsFormula={
             reportSettings.netEarningsFormula.trim() || undefined
           }
+          detailSources={{
+            payouts: payoutRows.map((row) => ({
+              id: row.booking.reservationId || row.booking.bookingId,
+              guestName: row.booking.guestName || '—',
+              guestPay: row.guestPay ?? 0,
+              cleaningFee: row.cleaningFee ?? 0,
+              cleaningGross: row.cleaningGross ?? 0,
+              cleaningPayoutVat: row.cleaningPayoutVat ?? 0,
+              cleaningNet: row.cleaningNet ?? 0,
+              accommodationGross: row.accommodationGross ?? 0,
+              accommodationPayoutVat: row.accommodationPayoutVat ?? 0,
+              accommodationNet: row.accommodationNet ?? 0,
+            })),
+            cleaning: cleaningLines.map((line) => ({
+              id: line.id,
+              title: line.cleaningTypeName || '—',
+              net: line.price ?? 0,
+              kit: line.kitCost || 0,
+              iva: ivaEuroFromNet(line.price ?? 0, line.ivaRate),
+              allocation: lineAllocations[`cleaning:${line.id}`] ?? '',
+            })),
+            maintenance: maintenanceLines.map((line) => ({
+              id: line.id,
+              title: line.title || line.visitTypeName || '—',
+              net: line.price ?? 0,
+              iva: ivaEuroFromNet(line.price ?? 0, line.ivaRate),
+              allocation: lineAllocations[`maintenance:${line.id}`] ?? '',
+            })),
+            services: serviceLines.map((line) => ({
+              id: line.id,
+              title: line.title || '—',
+              net: line.price,
+              iva: ivaEuroFromNet(line.price, line.ivaRate),
+              allocation: lineAllocations[`service:${line.id}`] ?? '',
+            })),
+            expenses: expenses.map((line) => ({
+              id: line.id,
+              title: line.itemName || '—',
+              net: line.amountExclIva,
+              iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
+              allocation: lineAllocations[`expense:${line.id}`] ?? '',
+            })),
+            incomes: incomes.map((line) => ({
+              id: line.id,
+              title: line.itemName || '—',
+              net: line.amountExclIva,
+              iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
+              allocation: lineAllocations[`income:${line.id}`] ?? '',
+            })),
+            settings: reportSettings,
+          }}
         />
       ) : null}
 
@@ -1529,59 +1624,19 @@ export function PropertyReportsView({
                     <p className="card-value">{bookingTotals.count}</p>
                   </div>
                   <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.nights')}</p>
+                    <p className="card-value">{bookingTotals.nights}</p>
+                  </div>
+                  <div className="report-metric">
                     <p className="card-label">{t('propertyReports.paidByGuest')}</p>
                     <p className="card-value">
                       {money.format(bookingTotals.paidByGuest)}
                     </p>
                   </div>
                   <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.cleaningFee')}</p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.cleaningFee)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">{t('propertyReports.cleaningGross')}</p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.cleaningGross)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.cleaningPayoutVat')}
-                    </p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.cleaningPayoutVat)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
                     <p className="card-label">{t('propertyReports.cleaningNet')}</p>
                     <p className="card-value">
                       {money.format(bookingTotals.cleaningNet)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.accommodationGross')}
-                    </p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.accommodationGross)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.accommodationPayoutVat')}
-                    </p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.accommodationPayoutVat)}
-                    </p>
-                  </div>
-                  <div className="report-metric">
-                    <p className="card-label">
-                      {t('propertyReports.accommodationNet')}
-                    </p>
-                    <p className="card-value">
-                      {money.format(bookingTotals.accommodationNet)}
                     </p>
                   </div>
                   <div className="report-metric">
@@ -1604,11 +1659,11 @@ export function PropertyReportsView({
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>{t('propertyReports.bookingId')}</th>
                       <th>{t('propertyReports.guestName')}</th>
                       <th>{t('propertyReports.checkIn')}</th>
+                      <th>{t('propertyReports.nights')}</th>
                       <th>{t('propertyReports.paidByGuest')}</th>
-                      <th>{t('propertyReports.cleaningGross')}</th>
+                      <th>{t('propertyReports.cleaningNet')}</th>
                       <th>{t('propertyReports.channelFee')}</th>
                       <th>{t('common.actions')}</th>
                     </tr>
@@ -1628,11 +1683,11 @@ export function PropertyReportsView({
                         return (
                           <Fragment key={booking.reservationId || booking.bookingId}>
                             <tr>
-                              <td>{booking.bookingId}</td>
                               <td>{booking.guestName || '—'}</td>
                               <td>{dateLabel(booking.checkInDate)}</td>
+                              <td>{row.nights ?? '—'}</td>
                               <td>{moneyOrDash(row.guestPay)}</td>
-                              <td>{moneyOrDash(row.cleaningGross)}</td>
+                              <td>{moneyOrDash(row.cleaningNet)}</td>
                               <td>{moneyOrDash(booking.hostServiceFee)}</td>
                               <td>
                                 <button
@@ -1649,78 +1704,92 @@ export function PropertyReportsView({
                             {isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={7}>
-                                  <div className="detail-grid report-iva-details">
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.checkOut')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {dateLabel(booking.checkOutDate)}
-                                      </p>
+                                  <div className="payout-detail-zones">
+                                    <div className="payout-detail-zone">
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.bookingId')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {booking.bookingId || '—'}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.checkOut')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {dateLabel(booking.checkOutDate)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.payout')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(booking.hostPayout)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.cleaningFee')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.cleaningFee)}
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.payout')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(booking.hostPayout)}
-                                      </p>
+                                    <div className="payout-detail-zone">
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.accommodationGross')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.accommodationGross)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.accommodationPayoutVat')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.accommodationPayoutVat)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.accommodationNet')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.accommodationNet)}
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.cleaningFee')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.cleaningFee)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.cleaningGross')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.cleaningGross)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.cleaningPayoutVat')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.cleaningPayoutVat)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.cleaningNet')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.cleaningNet)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.accommodationGross')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.accommodationGross)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.accommodationPayoutVat')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.accommodationPayoutVat)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="detail-label">
-                                        {t('propertyReports.accommodationNet')}
-                                      </p>
-                                      <p className="detail-value">
-                                        {moneyOrDash(row.accommodationNet)}
-                                      </p>
+                                    <div className="payout-detail-zone">
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.cleaningGross')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.cleaningGross)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.cleaningPayoutVat')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.cleaningPayoutVat)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="detail-label">
+                                          {t('propertyReports.cleaningNet')}
+                                        </p>
+                                        <p className="detail-value">
+                                          {moneyOrDash(row.cleaningNet)}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
                                 </td>

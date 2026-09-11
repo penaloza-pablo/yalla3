@@ -42,10 +42,13 @@ export type ReportTabVisibility = {
 
 export type ReportVisibility = Record<ReportTabId, ReportTabVisibility>;
 
+export const DEFAULT_MARKUP_PERCENT = 12;
+
 export type PropertyReportSettings = {
   businessModel: BusinessModel | '';
   commissionPercent: number | null;
   fixedRent: number | null;
+  markupPercent: number | null;
   formula: string;
   propertyContributionFormula: string;
   ourProfitFormula: string;
@@ -96,7 +99,11 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'markup',
       'iva',
       'expensesAndServices',
+      'expensesAndServicesCoverByOwner',
+      'expensesAndServicesCoverByUs',
+      'amountTransferred',
       'bookingCount',
+      'nights',
     ],
   },
   management: {
@@ -108,6 +115,8 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'markup',
       'income',
       'expensesAndServices',
+      'expensesAndServicesCoverByOwner',
+      'expensesAndServicesCoverByUs',
       'iva',
     ],
   },
@@ -117,12 +126,44 @@ export const defaultReportVisibility = (): ReportVisibility => ({
     metrics: [
       'netEarnings',
       'income',
+      'amountTransferred',
       'maintenanceCoverByOwner',
+      'expensesAndServicesCoverByOwner',
       'iva',
       'bookingCount',
+      'nights',
     ],
   },
 });
+
+const NEW_DEFAULT_METRICS = [
+  'nights',
+  'expensesAndServicesCoverByOwner',
+  'expensesAndServicesCoverByUs',
+  'amountTransferred',
+] as const;
+
+const injectNewDefaultMetrics = (
+  metrics: string[],
+  fallbackMetrics: string[],
+) => {
+  for (const id of NEW_DEFAULT_METRICS) {
+    if (!fallbackMetrics.includes(id) || metrics.includes(id)) {
+      continue;
+    }
+    const fallbackIndex = fallbackMetrics.indexOf(id);
+    let insertAt = metrics.length;
+    for (let index = fallbackIndex - 1; index >= 0; index -= 1) {
+      const neighbor = metrics.indexOf(fallbackMetrics[index]);
+      if (neighbor >= 0) {
+        insertAt = neighbor + 1;
+        break;
+      }
+    }
+    metrics.splice(insertAt, 0, id);
+  }
+  return metrics;
+};
 
 const parseTabVisibility = (
   value: unknown,
@@ -137,7 +178,10 @@ const parseTabVisibility = (
         .map((item) => asString(item))
         .filter((item) => VISIBILITY_SET.has(item))
     : fallback.metrics;
-  const unique = [...new Set(metrics.length ? metrics : fallback.metrics)];
+  const unique = injectNewDefaultMetrics(
+    [...new Set(metrics.length ? metrics : fallback.metrics)],
+    fallback.metrics,
+  );
   const primary = asString(row.primary);
   return {
     visible: row.visible !== false,
@@ -161,10 +205,15 @@ export const parseVisibility = (
   };
 };
 
+export const resolveMarkupPercent = (
+  settings?: PropertyReportSettings | null,
+) => settings?.markupPercent ?? DEFAULT_MARKUP_PERCENT;
+
 export const emptyReportSettings = (): PropertyReportSettings => ({
   businessModel: '',
   commissionPercent: null,
   fixedRent: null,
+  markupPercent: null,
   formula: '',
   propertyContributionFormula: '',
   ourProfitFormula: '',
@@ -218,6 +267,7 @@ export const parseReportSettings = (
     businessModel: isBusinessModel(model) ? model : '',
     commissionPercent: asNumber(stored.commissionPercent),
     fixedRent: asNumber(stored.fixedRent),
+    markupPercent: asNumber(stored.markupPercent),
     formula: asString(stored.managementFeeFormula) || asString(stored.formula),
     propertyContributionFormula:
       asString(stored.propertyContributionFormula) ||
@@ -319,6 +369,19 @@ export const validateReportSettings = (
   const airbnbFeePercent =
     airbnbRaw === null ? DEFAULT_AIRBNB_FEE_PERCENT : roundMoney(airbnbRaw);
 
+  const markupRaw = asNumber(value.markupPercent);
+  if (
+    markupRaw !== null &&
+    (!Number.isFinite(markupRaw) || markupRaw < 0 || markupRaw > 100)
+  ) {
+    return {
+      ok: false,
+      message: 'markupPercent must be between 0 and 100.',
+    };
+  }
+  const markupPercent =
+    markupRaw === null ? DEFAULT_MARKUP_PERCENT : roundMoney(markupRaw);
+
   const conditions: ReportCondition[] = [];
   for (const row of value.conditions) {
     const name = row.name.trim();
@@ -356,6 +419,7 @@ export const validateReportSettings = (
       businessModel: global ? '' : value.businessModel,
       commissionPercent,
       fixedRent,
+      markupPercent,
       formula,
       propertyContributionFormula,
       ourProfitFormula,
@@ -392,6 +456,10 @@ export const mergeReportSettings = (
       property.airbnbFeePercent ??
       fallback.airbnbFeePercent ??
       DEFAULT_AIRBNB_FEE_PERCENT,
+    markupPercent:
+      property.markupPercent ??
+      fallback.markupPercent ??
+      DEFAULT_MARKUP_PERCENT,
     visibility: property.visibility ?? fallback.visibility ?? defaultReportVisibility(),
   };
 };
