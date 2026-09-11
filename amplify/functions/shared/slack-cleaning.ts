@@ -460,6 +460,14 @@ export const notifyVisitClosedWithComments = async (visit: {
 };
 
 export const notifyCleaningPlanReopened = async (plannedDate: string) => {
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.cleaningPlanReopened,
+    ))
+  ) {
+    console.log('Cleaning plan reopen notify skipped: automation disabled.');
+    return;
+  }
   const { warningsChannelId } = await loadSlackSecrets();
   if (!warningsChannelId) {
     console.error(
@@ -535,6 +543,14 @@ export const notifyCleaningPlanChanges = async (
   changes: string[],
 ) => {
   if (changes.length === 0) {
+    return;
+  }
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.cleaningPlanChanges,
+    ))
+  ) {
+    console.log('Cleaning plan changes notify skipped: automation disabled.');
     return;
   }
   const { warningsChannelId } = await loadSlackSecrets();

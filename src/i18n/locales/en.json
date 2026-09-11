@@ -1362,6 +1362,18 @@
       "notify_slack_hoy": {
         "name": "Notify today summary",
         "description": "Posts the daily summary when someone runs /yalla hoy."
+      },
+      "notify_cleaning_plan_reopened": {
+        "name": "Cleaning plan reopened",
+        "description": "Posts in #yalla-warnings when a ready cleaning plan is reopened."
+      },
+      "notify_cleaning_plan_changes": {
+        "name": "Cleaning plan changes",
+        "description": "Posts in #yalla-warnings the edits made after a ready cleaning plan is reopened."
+      },
+      "notify_early_check_in_ready": {
+        "name": "Early check-in ready",
+        "description": "Posts in #yalla-warnings when a guest is waiting to enter: after all visits for that property are completed, or at 11:00 if there are no visits that day."
       }
     }
   },

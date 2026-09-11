@@ -1019,6 +1019,7 @@ const slackNotificationReaders = [
   backend.upsertVisit,
   backend.handleSlackCommand,
   backend.processSlackHoy,
+  backend.upsertCleaningPlan,
 ];
 for (const lambdaFunction of slackNotificationReaders) {
   lambdaFunction.addEnvironment(
@@ -1051,7 +1052,31 @@ backend.notifyCleaningOverdue.addEnvironment(
   'TEAMS_TABLE',
   teamsTable.tableName,
 );
+backend.notifyCleaningOverdue.addEnvironment(
+  'BOOKINGS_TABLE',
+  bookingsTable.tableName,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
 teamsTable.grantReadData(backend.notifyCleaningOverdue.resources.lambda);
+backend.notifyCleaningOverdue.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:Scan',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+      'dynamodb:UpdateItem',
+    ],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+      propertiesTable.tableArn,
+    ],
+  }),
+);
 propertyCleaningDetailsTable.grantReadData(
   backend.handleSlackCommand.resources.lambda,
 );

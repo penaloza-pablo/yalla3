@@ -16,6 +16,7 @@ import {
   type OverdueChannelKey,
 } from '../shared/slack-cleaning';
 import { loadSlackSecrets, slackApi } from '../shared/slack';
+import { notifyEarlyCheckInReady } from '../shared/slack-early-check-in';
 import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
@@ -101,96 +102,119 @@ const postTestMessages = async () => {
   return { action: 'testChannels', results };
 };
 
+const isEarlyCheckInEvent = (event: unknown) =>
+  Boolean(
+    event &&
+      typeof event === 'object' &&
+      (event as { action?: string }).action === 'earlyCheckIn',
+  );
+
 export const handler = async (event?: unknown) => {
   if (isTestChannelsEvent(event)) {
     return postTestMessages();
   }
 
   const visitsTable = process.env.TABLE_NAME;
-    const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
-    if (!visitsTable) {
-      throw new Error('TABLE_NAME is not configured.');
+  const detailsTable = process.env.PROPERTY_CLEANING_DETAILS_TABLE || '';
+  if (!visitsTable) {
+    throw new Error('TABLE_NAME is not configured.');
+  }
+
+  const earlyCheckInForce = isEarlyCheckInEvent(event);
+  let early;
+  try {
+    early = await notifyEarlyCheckInReady({
+      ignoreElevenAm: earlyCheckInForce,
+    });
+  } catch (error) {
+    console.error('Failed to notify early check-in ready', error);
+  }
+
+  if (earlyCheckInForce) {
+    return { early };
+  }
+
+  if (
+    !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
+  ) {
+    console.log('Slack overdue notify skipped: automation disabled.');
+    return { early };
+  }
+
+  const secrets = await loadSlackSecrets({ forceRefresh: true });
+  if (!secrets.botToken) {
+    console.error('Slack notify skipped: missing botToken in yalla/slack.');
+    return { early };
+  }
+
+  const today = getTodayInMadrid();
+  const nowTime = getNowTimeInMadrid();
+  const teamNames = await loadTeamNames();
+  const visits = await queryVisitsForScheduledDate(visitsTable, today);
+
+  for (const visit of visits) {
+    const visitId = asString(visit.id);
+    const status = asString(visit.status).toUpperCase();
+    const endTime = normalizeStartTime(asString(visit.scheduledEndTime));
+    if (!visitId || !endTime || TERMINAL_VISIT_STATUSES.has(status)) {
+      continue;
+    }
+    if (endTime > nowTime) {
+      continue;
+    }
+    const notifyKey = overdueNotifyKey(today, endTime);
+    if (asString(visit[SLACK_OVERDUE_FIELD]) === notifyKey) {
+      continue;
     }
 
-    if (
-      !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
-    ) {
-      console.log('Slack overdue notify skipped: automation disabled.');
-      return;
+    const teamId = asString(visit.teamId);
+    const teamKind = classifyOverdueTeam(
+      teamId,
+      teamNames.get(teamId) ?? asString(visit.team),
+    );
+    if (!teamKind) {
+      continue;
     }
 
-    const secrets = await loadSlackSecrets({ forceRefresh: true });
-    if (!secrets.botToken) {
-      console.error('Slack notify skipped: missing botToken in yalla/slack.');
-      return;
-    }
-
-    const today = getTodayInMadrid();
-    const nowTime = getNowTimeInMadrid();
-    const teamNames = await loadTeamNames();
-    const visits = await queryVisitsForScheduledDate(visitsTable, today);
-
-    for (const visit of visits) {
-      const visitId = asString(visit.id);
-      const status = asString(visit.status).toUpperCase();
-      const endTime = normalizeStartTime(asString(visit.scheduledEndTime));
-      if (!visitId || !endTime || TERMINAL_VISIT_STATUSES.has(status)) {
-        continue;
-      }
-      if (endTime > nowTime) {
-        continue;
-      }
-      const notifyKey = overdueNotifyKey(today, endTime);
-      if (asString(visit[SLACK_OVERDUE_FIELD]) === notifyKey) {
-        continue;
-      }
-
-      const teamId = asString(visit.teamId);
-      const teamKind = classifyOverdueTeam(
-        teamId,
-        teamNames.get(teamId) ?? asString(visit.team),
+    const nickname = await loadPropertyNickname(detailsTable, visit);
+    const title = asString(visit.title) || nickname;
+    const channel = resolveOverdueChannel({
+      teamKind,
+      nickname,
+      propertyId: asString(visit.propertyId),
+      title,
+      secrets,
+    });
+    if (!channel) {
+      console.error(
+        `Slack notify skipped for ${visitId}: missing channel for team ${teamKind}.`,
       );
-      if (!teamKind) {
-        continue;
-      }
-
-      const nickname = await loadPropertyNickname(detailsTable, visit);
-      const title = asString(visit.title) || nickname;
-      const channel = resolveOverdueChannel({
-        teamKind,
-        nickname,
-        propertyId: asString(visit.propertyId),
-        title,
-        secrets,
-      });
-      if (!channel) {
-        console.error(
-          `Slack notify skipped for ${visitId}: missing channel for team ${teamKind}.`,
-        );
-        continue;
-      }
-
-      const isMaintenance = teamKind === 'maintenance';
-      const text = isMaintenance
-        ? overdueMaintenanceMessage(title)
-        : overdueCleaningMessage(title);
-      const blocks = isMaintenance
-        ? overdueMaintenanceBlocks(visitId, title)
-        : overdueCleaningBlocks(visitId, title);
-      try {
-        console.log(
-          `Posting overdue ${visitId} to Slack secret key ${channel.key}`,
-        );
-        await slackApi('chat.postMessage', {
-          channel: channel.channelId,
-          text,
-          blocks,
-        });
-        await patchUserOriginatedRecord(visitsTable, visitId, {
-          set: { [SLACK_OVERDUE_FIELD]: notifyKey },
-        });
-      } catch (error) {
-        console.error(`Failed to notify overdue visit ${visitId}`, error);
-      }
+      continue;
     }
-  };
+
+    const isMaintenance = teamKind === 'maintenance';
+    const text = isMaintenance
+      ? overdueMaintenanceMessage(title)
+      : overdueCleaningMessage(title);
+    const blocks = isMaintenance
+      ? overdueMaintenanceBlocks(visitId, title)
+      : overdueCleaningBlocks(visitId, title);
+    try {
+      console.log(
+        `Posting overdue ${visitId} to Slack secret key ${channel.key}`,
+      );
+      await slackApi('chat.postMessage', {
+        channel: channel.channelId,
+        text,
+        blocks,
+      });
+      await patchUserOriginatedRecord(visitsTable, visitId, {
+        set: { [SLACK_OVERDUE_FIELD]: notifyKey },
+      });
+    } catch (error) {
+      console.error(`Failed to notify overdue visit ${visitId}`, error);
+    }
+  }
+
+  return { early };
+};

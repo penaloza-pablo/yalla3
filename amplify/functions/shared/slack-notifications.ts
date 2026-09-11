@@ -5,6 +5,9 @@ export const SLACK_NOTIFICATION_IDS = {
   cleaningOverdue: 'notify_cleaning_overdue',
   visitClosedComments: 'notify_visit_closed_with_comments',
   slackHoy: 'notify_slack_hoy',
+  cleaningPlanReopened: 'notify_cleaning_plan_reopened',
+  cleaningPlanChanges: 'notify_cleaning_plan_changes',
+  earlyCheckInReady: 'notify_early_check_in_ready',
 } as const;
 
 export type SlackNotificationId =
@@ -16,6 +19,9 @@ export const SLACK_NOTIFICATION_DEFINITIONS: {
   { id: SLACK_NOTIFICATION_IDS.cleaningOverdue },
   { id: SLACK_NOTIFICATION_IDS.visitClosedComments },
   { id: SLACK_NOTIFICATION_IDS.slackHoy },
+  { id: SLACK_NOTIFICATION_IDS.cleaningPlanReopened },
+  { id: SLACK_NOTIFICATION_IDS.cleaningPlanChanges },
+  { id: SLACK_NOTIFICATION_IDS.earlyCheckInReady },
 ];
 
 export const isKnownSlackNotificationId = (

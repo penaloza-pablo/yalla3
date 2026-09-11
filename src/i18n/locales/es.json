@@ -1362,6 +1362,18 @@
       "notify_slack_hoy": {
         "name": "Notify today summary",
         "description": "Envía el resumen del día cuando alguien usa /yalla hoy."
+      },
+      "notify_cleaning_plan_reopened": {
+        "name": "Apertura de plan de limpieza cerrado",
+        "description": "Envía un mensaje a #yalla-warnings cuando se reabre un plan de limpieza que estaba listo."
+      },
+      "notify_cleaning_plan_changes": {
+        "name": "Cambios en plan de limpieza reabierto",
+        "description": "Envía a #yalla-warnings los cambios hechos tras reabrir un plan de limpieza listo."
+      },
+      "notify_early_check_in_ready": {
+        "name": "Early check-in listo para entrar",
+        "description": "Avisa en #yalla-warnings cuando el huésped espera para entrar: al completar todas las visitas de esa propiedad, o a las 11:00 si no hay visitas ese día."
       }
     }
   },

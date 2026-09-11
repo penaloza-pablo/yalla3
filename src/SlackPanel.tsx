@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YallaSwitch } from './bookings/YallaSwitch'
 import { authFetch } from './lib/auth-fetch'
 import { MobileBodyPortal } from './MobileBodyPortal'
 
@@ -180,16 +181,14 @@ export function SlackPanel({ getEndpoint }: SlackPanelProps) {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="btn-secondary"
-                        type="button"
+                      <YallaSwitch
+                        on={row.enabled}
                         disabled={savingId === row.id}
-                        onClick={() => void toggleEnabled(row)}
-                      >
-                        {row.enabled
-                          ? t('slackSettings.disable')
-                          : t('slackSettings.enable')}
-                      </button>
+                        label={t(`slackSettings.items.${row.id}.name`, {
+                          defaultValue: row.id,
+                        })}
+                        onToggle={() => void toggleEnabled(row)}
+                      />
                     </td>
                   </tr>
                 ))}
