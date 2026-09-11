@@ -10,5 +10,4 @@ export const applyBookingsPlanner = defineFunction({
   },
   timeoutSeconds: 120,
   memoryMB: 512,
-  schedule: '0 3 * * ? *',
 });

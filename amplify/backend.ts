@@ -8,7 +8,8 @@ import {
   ProjectionType,
   Table,
 } from 'aws-cdk-lib/aws-dynamodb';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { CfnSchedule } from 'aws-cdk-lib/aws-scheduler';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { auth } from './auth/resource';
@@ -514,6 +515,34 @@ bookingsPlannerSettingsTable.grantReadWriteData(
 bookingsPlannerSettingsTable.grantReadData(
   backend.applyBookingsPlanner.resources.lambda,
 );
+
+const plannerScheduleStack = backend.createStack('planner-schedule');
+const applyBookingsPlannerScheduleRole = new Role(
+  plannerScheduleStack,
+  'ApplyBookingsPlannerScheduleRole',
+  {
+    assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
+  },
+);
+applyBookingsPlannerScheduleRole.addToPolicy(
+  new PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [
+      backend.applyBookingsPlanner.resources.lambda.functionArn,
+      `${backend.applyBookingsPlanner.resources.lambda.functionArn}:*`,
+    ],
+  }),
+);
+new CfnSchedule(plannerScheduleStack, 'ApplyBookingsPlannerDaily', {
+  flexibleTimeWindow: { mode: 'OFF' },
+  scheduleExpression: 'cron(0 3 * * ? *)',
+  scheduleExpressionTimezone: 'UTC',
+  target: {
+    arn: backend.applyBookingsPlanner.resources.lambda.functionArn,
+    roleArn: applyBookingsPlannerScheduleRole.roleArn,
+    input: JSON.stringify({ syncGuesty: true }),
+  },
+});
 bookingsPlannerSettingsTable.grantReadData(
   backend.upsertBookingPlannerFields.resources.lambda,
 );
