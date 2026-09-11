@@ -249,6 +249,34 @@ const asRecordString = (item: Record<string, unknown>, keys: string[]) => {
   return ''
 }
 
+const asRecordDisplay = (item: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = item[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value)
+    }
+  }
+  return ''
+}
+
+const nightsBetweenDates = (checkIn: string, checkOut: string) => {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(checkIn) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(checkOut)
+  ) {
+    return ''
+  }
+  const start = Date.parse(`${checkIn}T00:00:00`)
+  const end = Date.parse(`${checkOut}T00:00:00`)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return ''
+  }
+  return String(Math.round((end - start) / 86_400_000))
+}
+
 const asRecordBoolean = (item: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
     if (item[key] === true) {
@@ -532,6 +560,10 @@ export function DailyOperationsView({
       bookings: getEndpoint(
         'getBookingsUrl',
         import.meta.env.VITE_GET_BOOKINGS_URL,
+      ),
+      upsertPlannerFields: getEndpoint(
+        'upsertBookingPlannerFieldsUrl',
+        import.meta.env.VITE_UPSERT_BOOKING_PLANNER_FIELDS_URL,
       ),
       cleaningPlan: getEndpoint(
         'getCleaningPlanUrl',
@@ -889,7 +921,14 @@ export function DailyOperationsView({
             id: `${reservationId || listingId}-in`,
             kind: 'check-in',
             propertyId,
+            reservationId,
             guestName: guestName || listingNickname || reservationId,
+            guests: asRecordDisplay(record, ['Guests', 'guests', 'GuestCount']),
+            nights:
+              asRecordDisplay(record, ['Nights', 'nights']) ||
+              nightsBetweenDates(checkInDate, checkOutDate),
+            giftCard: asRecordDisplay(record, ['GiftCard', 'giftCard']),
+            linen: asRecordDisplay(record, ['Linen', 'linen']),
             earlyCheckIn:
               asRecordBoolean(record, ['EarlyCheckInOn', 'earlyCheckInOn']) ||
               isEarlyCheckInEnabled(
@@ -920,6 +959,44 @@ export function DailyOperationsView({
     filters.bookingEvents,
     propertyOptions,
   ])
+
+  const handleEarlyCheckInChange = useCallback(
+    async (booking: DayBookingEvent, enabled: boolean) => {
+      const reservationId = booking.reservationId?.trim()
+      if (!reservationId || !endpoints.upsertPlannerFields) {
+        return
+      }
+      setDayBookings((current) =>
+        current.map((entry) =>
+          entry.id === booking.id ? { ...entry, earlyCheckIn: enabled } : entry,
+        ),
+      )
+      try {
+        await fetchJson(endpoints.upsertPlannerFields, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            reservationId,
+            earlyCheckInOn: enabled,
+          }),
+        })
+      } catch (saveError) {
+        setDayBookings((current) =>
+          current.map((entry) =>
+            entry.id === booking.id
+              ? { ...entry, earlyCheckIn: booking.earlyCheckIn }
+              : entry,
+          ),
+        )
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : t('operations.unableSaveEarlyCheckIn'),
+        )
+      }
+    },
+    [endpoints.upsertPlannerFields, t],
+  )
 
   const applyTodayRange = () => {
     const today = getTodayMadrid()
@@ -2425,6 +2502,7 @@ export function DailyOperationsView({
               onDayDateChange={setDayViewDate}
               onVisitClick={setSelectedVisitId}
               onVisitTimeChange={handleVisitTimeChange}
+              onEarlyCheckInChange={handleEarlyCheckInChange}
             />
           )}
         </>

@@ -21,6 +21,7 @@ import {
   DAY_VIEW_DEFAULT_START_MINUTES,
   DAY_VIEW_PAN_STEP_MINUTES,
   DAY_VIEW_SPAN_MINUTES,
+  EARLY_CHECK_IN_DURATION_MINUTES,
   formatAgendaDayLabel,
   formatMinutesAsTime,
   getDayTimelineHourMarks,
@@ -68,7 +69,12 @@ export type DayBookingEvent = {
   id: string
   kind: 'check-in' | 'check-out'
   propertyId: string
+  reservationId?: string
   guestName: string
+  guests?: string
+  nights?: string
+  giftCard?: string
+  linen?: string
   earlyCheckIn?: boolean
   checkInStartMinutes?: number
   earlyLeadMinutes?: number
@@ -89,6 +95,7 @@ type Props = {
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
+  onEarlyCheckInChange?: (booking: DayBookingEvent, enabled: boolean) => void
 }
 
 type DayTableRow = {
@@ -116,9 +123,13 @@ export function OperationsDayView({
   onDayDateChange,
   onVisitClick,
   onVisitTimeChange,
+  onEarlyCheckInChange,
 }: Props) {
   const { t } = useTranslation()
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
+  const [selectedCheckIn, setSelectedCheckIn] = useState<DayBookingEvent | null>(
+    null,
+  )
   const [windowStartMinutes, setWindowStartMinutes] = useState(
     DAY_VIEW_DEFAULT_START_MINUTES,
   )
@@ -130,20 +141,37 @@ export function OperationsDayView({
           return booking
         }
         const stored = readDayCheckInLayout(dayViewDate, booking.id)
+        const resolved = resolveCheckInLayout({ ...booking, ...stored })
         return {
           ...booking,
-          ...resolveCheckInLayout({ ...booking, ...stored }),
+          ...resolved,
+          earlyLeadMinutes: booking.earlyCheckIn
+            ? resolved.earlyLeadMinutes || EARLY_CHECK_IN_DURATION_MINUTES
+            : 0,
         }
       }),
     [bookings, dayViewDate, layoutEpoch],
   )
   const handleCheckInLayoutChange = useCallback(
-    (bookingId: string, layout: StoredCheckInLayout) => {
-      writeDayCheckInLayout(dayViewDate, bookingId, layout)
+    (booking: DayBookingEvent, layout: StoredCheckInLayout) => {
+      const previous = resolveCheckInLayout({
+        ...booking,
+        ...readDayCheckInLayout(dayViewDate, booking.id),
+      })
+      writeDayCheckInLayout(dayViewDate, booking.id, layout)
       setLayoutEpoch((value) => value + 1)
+      const wasOn = previous.earlyLeadMinutes > 0
+      const nowOn = layout.earlyLeadMinutes > 0
+      if (wasOn !== nowOn) {
+        onEarlyCheckInChange?.(booking, nowOn)
+      }
     },
-    [dayViewDate],
+    [dayViewDate, onEarlyCheckInChange],
   )
+
+  useEffect(() => {
+    setSelectedCheckIn(null)
+  }, [dayViewDate])
   const timelineWindow = useMemo(
     () => getDayTimelineWindow(windowStartMinutes),
     [windowStartMinutes],
@@ -401,6 +429,7 @@ export function OperationsDayView({
                 onVisitClick={onVisitClick}
                 onVisitTimeChange={onVisitTimeChange}
                 onCheckInLayoutChange={handleCheckInLayoutChange}
+                onBookingClick={setSelectedCheckIn}
               />
             ))}
           </tbody>
@@ -408,6 +437,65 @@ export function OperationsDayView({
       </div>
       </>
       )}
+      {selectedCheckIn ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setSelectedCheckIn(null)}
+        >
+          <div
+            className="modal operations-booking-popover"
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedCheckIn.guestName || t('operations.checkInDetails')}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">
+                  {selectedCheckIn.guestName || t('operations.checkInDetails')}
+                </h3>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setSelectedCheckIn(null)}
+                aria-label={t('common.close')}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="detail-grid">
+                <div>
+                  <p className="detail-label">{t('bookingsPlan.guests')}</p>
+                  <p className="detail-value">
+                    {selectedCheckIn.guests || '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="detail-label">{t('bookingsPlan.nights')}</p>
+                  <p className="detail-value">
+                    {selectedCheckIn.nights || '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="detail-label">{t('bookingsPlan.giftCard')}</p>
+                  <p className="detail-value">
+                    {selectedCheckIn.giftCard || '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="detail-label">{t('bookingsPlan.linen')}</p>
+                  <p className="detail-value">
+                    {selectedCheckIn.linen || '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -425,7 +513,11 @@ type DayPropertyRowProps = {
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
-  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
+  onCheckInLayoutChange: (
+    booking: DayBookingEvent,
+    layout: StoredCheckInLayout,
+  ) => void
+  onBookingClick: (booking: DayBookingEvent) => void
 }
 
 function DayPropertyRow({
@@ -438,6 +530,7 @@ function DayPropertyRow({
   onVisitClick,
   onVisitTimeChange,
   onCheckInLayoutChange,
+  onBookingClick,
 }: DayPropertyRowProps) {
   const { t } = useTranslation()
   const [expandedClusterKeys, setExpandedClusterKeys] = useState<Set<string>>(
@@ -520,6 +613,7 @@ function DayPropertyRow({
           onVisitClick={onVisitClick}
           onVisitTimeChange={onVisitTimeChange}
           onCheckInLayoutChange={onCheckInLayoutChange}
+          onBookingClick={onBookingClick}
         />
       </td>
     </tr>
@@ -545,7 +639,11 @@ type DayTimelineTrackProps = {
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
-  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
+  onCheckInLayoutChange: (
+    booking: DayBookingEvent,
+    layout: StoredCheckInLayout,
+  ) => void
+  onBookingClick: (booking: DayBookingEvent) => void
 }
 
 function minutesFromTrackPointer(
@@ -574,6 +672,7 @@ function DayTimelineTrack({
   onVisitClick,
   onVisitTimeChange,
   onCheckInLayoutChange,
+  onBookingClick,
 }: DayTimelineTrackProps) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
@@ -818,6 +917,7 @@ function DayTimelineTrack({
             booking={booking}
             timelineWindow={timelineWindow}
             onCheckInLayoutChange={onCheckInLayoutChange}
+            onBookingClick={onBookingClick}
           />
         ))}
       </div>
@@ -1033,6 +1133,7 @@ function DayBookingTimeBlock({
   title,
   children,
   onMovePointerDown,
+  onClick,
 }: {
   start: number
   end: number
@@ -1041,6 +1142,7 @@ function DayBookingTimeBlock({
   title: string
   children?: ReactNode
   onMovePointerDown?: (event: React.PointerEvent) => void
+  onClick?: () => void
 }) {
   const clipped = clipVisitToDayWindow(start, end, timelineWindow)
   if (clipped.visualEnd <= clipped.visualStart) {
@@ -1061,8 +1163,9 @@ function DayBookingTimeBlock({
       }}
       title={title}
       aria-label={title}
-      role={onMovePointerDown ? 'button' : undefined}
+      role={onMovePointerDown || onClick ? 'button' : undefined}
       onPointerDown={onMovePointerDown}
+      onClick={onClick}
     >
       {children}
     </div>
@@ -1071,6 +1174,7 @@ function DayBookingTimeBlock({
 
 type BookingDrag = {
   mode: 'move' | 'resize-early'
+  source: 'check-in' | 'early'
   checkInStartMinutes: number
   earlyLeadMinutes: number
   pointerStartX: number
@@ -1081,92 +1185,137 @@ function DayBookingBlock({
   booking,
   timelineWindow,
   onCheckInLayoutChange,
+  onBookingClick,
 }: {
   booking: DayBookingEvent
   timelineWindow: DayTimelineWindow
-  onCheckInLayoutChange: (bookingId: string, layout: StoredCheckInLayout) => void
+  onCheckInLayoutChange: (
+    booking: DayBookingEvent,
+    layout: StoredCheckInLayout,
+  ) => void
+  onBookingClick: (booking: DayBookingEvent) => void
 }) {
   const layout = resolveCheckInLayout(booking)
   const [preview, setPreview] = useState<StoredCheckInLayout | null>(null)
-  const [activeDrag, setActiveDrag] = useState<BookingDrag | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef<BookingDrag | null>(null)
+  const movedRef = useRef(false)
+  const stopListeningRef = useRef<() => void>(() => {})
   const display = preview ?? layout
 
-  useEffect(() => {
-    if (!activeDrag) {
-      return
-    }
+  useEffect(() => () => stopListeningRef.current(), [])
 
-    const minLead = booking.earlyCheckIn ? 15 : 0
-
-    const applyDelta = (deltaPx: number) => {
-      const deltaMinutes = snapToDayGrid(
-        (deltaPx / activeDrag.trackWidth) * DAY_VIEW_SPAN_MINUTES,
-      )
-      if (activeDrag.mode === 'move') {
-        return clampCheckInLayout({
-          checkInStartMinutes: activeDrag.checkInStartMinutes + deltaMinutes,
-          earlyLeadMinutes: activeDrag.earlyLeadMinutes,
-          minLead,
-        })
-      }
-      const leadDelta =
-        Math.round(
-          ((deltaPx / activeDrag.trackWidth) * DAY_VIEW_SPAN_MINUTES) / 15,
-        ) * 15
+  const applyDelta = (drag: BookingDrag, deltaPx: number) => {
+    const deltaMinutes = snapToDayGrid(
+      (deltaPx / drag.trackWidth) * DAY_VIEW_SPAN_MINUTES,
+    )
+    if (drag.mode === 'move') {
       return clampCheckInLayout({
-        checkInStartMinutes: activeDrag.checkInStartMinutes,
-        earlyLeadMinutes: activeDrag.earlyLeadMinutes - leadDelta,
-        minLead,
+        checkInStartMinutes: drag.checkInStartMinutes + deltaMinutes,
+        earlyLeadMinutes: drag.earlyLeadMinutes,
+        minLead: 0,
       })
     }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      setPreview(applyDelta(event.clientX - activeDrag.pointerStartX))
-    }
-
-    const handlePointerUp = (event: PointerEvent) => {
-      const next = applyDelta(event.clientX - activeDrag.pointerStartX)
-      if (
-        next.checkInStartMinutes !== layout.checkInStartMinutes ||
-        next.earlyLeadMinutes !== layout.earlyLeadMinutes
-      ) {
-        onCheckInLayoutChange(booking.id, next)
-      }
-      setActiveDrag(null)
-      setPreview(null)
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [activeDrag, booking.earlyCheckIn, booking.id, layout, onCheckInLayoutChange])
+    const leadDelta =
+      Math.round(((deltaPx / drag.trackWidth) * DAY_VIEW_SPAN_MINUTES) / 15) *
+      15
+    return clampCheckInLayout({
+      checkInStartMinutes: drag.checkInStartMinutes,
+      earlyLeadMinutes: drag.earlyLeadMinutes - leadDelta,
+      minLead: 0,
+    })
+  }
 
   const beginDrag = (
     event: React.PointerEvent,
     mode: BookingDrag['mode'],
+    source: BookingDrag['source'] = 'check-in',
   ) => {
     const track = event.currentTarget.closest('.operations-day-track')
     if (!track) {
       return
     }
-    event.preventDefault()
     event.stopPropagation()
     const trackWidth = track.getBoundingClientRect().width
     if (trackWidth <= 0) {
       return
     }
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setActiveDrag({
+    movedRef.current = false
+    const drag: BookingDrag = {
       mode,
+      source,
       checkInStartMinutes: layout.checkInStartMinutes,
       earlyLeadMinutes: layout.earlyLeadMinutes,
       pointerStartX: event.clientX,
       trackWidth,
-    })
+    }
+    dragRef.current = drag
+    setIsDragging(true)
     setPreview(layout)
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Synthetic or already-released pointers can throw here.
+    }
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const current = dragRef.current
+      if (!current) {
+        return
+      }
+      const deltaPx = moveEvent.clientX - current.pointerStartX
+      if (Math.abs(deltaPx) > CLICK_THRESHOLD_PX) {
+        movedRef.current = true
+      }
+      setPreview(applyDelta(current, deltaPx))
+    }
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      stopListeningRef.current()
+      const current = dragRef.current
+      dragRef.current = null
+      setIsDragging(false)
+      if (!current) {
+        setPreview(null)
+        return
+      }
+      const deltaPx = upEvent.clientX - current.pointerStartX
+      if (
+        current.mode === 'move' &&
+        current.source === 'check-in' &&
+        !movedRef.current &&
+        Math.abs(deltaPx) <= CLICK_THRESHOLD_PX
+      ) {
+        setPreview(null)
+        return
+      }
+      const next = applyDelta(current, deltaPx)
+      if (
+        next.checkInStartMinutes !== layout.checkInStartMinutes ||
+        next.earlyLeadMinutes !== layout.earlyLeadMinutes
+      ) {
+        onCheckInLayoutChange(booking, next)
+      }
+      setPreview(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+    stopListeningRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+      stopListeningRef.current = () => {}
+    }
+  }
+
+  const handleCheckInClick = () => {
+    if (movedRef.current) {
+      movedRef.current = false
+      return
+    }
+    onBookingClick(booking)
   }
 
   if (booking.kind === 'check-out') {
@@ -1187,7 +1336,6 @@ function DayBookingBlock({
   const start = display.checkInStartMinutes
   const end = start + BOOKING_DURATION_MINUTES
   const showEarlyCheckIn = display.earlyLeadMinutes > 0
-  const isDragging = Boolean(activeDrag)
 
   return (
     <>
@@ -1200,14 +1348,15 @@ function DayBookingBlock({
             isDragging ? ' is-dragging' : ''
           }`}
           title={`Early check-in · ${booking.guestName}`}
-          onMovePointerDown={(event) => beginDrag(event, 'move')}
+          onMovePointerDown={(event) => beginDrag(event, 'move', 'early')}
         >
           <span
             className="operations-day-resize-handle operations-day-resize-handle--start"
             onPointerDown={(event) => {
               event.stopPropagation()
-              beginDrag(event, 'resize-early')
+              beginDrag(event, 'resize-early', 'early')
             }}
+            onClick={(event) => event.stopPropagation()}
             aria-label="Resize early check-in"
           />
         </DayBookingTimeBlock>
@@ -1220,15 +1369,17 @@ function DayBookingBlock({
           showEarlyCheckIn ? ' has-early-lead' : ''
         }${isDragging ? ' is-dragging' : ''}`}
         title={`Check-in · ${booking.guestName}`}
-        onMovePointerDown={(event) => beginDrag(event, 'move')}
+        onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
+        onClick={handleCheckInClick}
       >
         {showEarlyCheckIn ? null : (
           <span
             className="operations-day-resize-handle operations-day-resize-handle--start"
             onPointerDown={(event) => {
               event.stopPropagation()
-              beginDrag(event, 'resize-early')
+              beginDrag(event, 'resize-early', 'check-in')
             }}
+            onClick={(event) => event.stopPropagation()}
             aria-label="Add early check-in"
           />
         )}

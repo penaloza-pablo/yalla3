@@ -3841,6 +3841,16 @@ th {
   z-index: 9;
 }
 
+.operations-booking-popover {
+  max-width: 360px;
+}
+
+.operations-booking-popover .detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
 .operations-day-scroll {
   overflow: auto;
   max-width: 100%;

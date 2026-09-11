@@ -26,7 +26,12 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { invokeGuestyTaskSync } from '../shared/guesty-sync';
-import { notifyCleaningPlanReopened } from '../shared/slack-cleaning';
+import {
+  describeCleaningPlanChanges,
+  notifyCleaningPlanChanges,
+  notifyCleaningPlanReopened,
+  type CleaningPlanChangeItem,
+} from '../shared/slack-cleaning';
 import {
   docClient,
   getTodayInMadrid,
@@ -245,6 +250,15 @@ export const handler = async (event: {
       item.readyAt = existing.readyAt;
     }
 
+    const snapshotItems = Array.isArray(existing?.slackSnapshot)
+      ? (existing.slackSnapshot as SavedPlanItem[])
+      : [];
+    if (action === 'reopen' && currentStatus === 'READY') {
+      item.slackSnapshot = existing?.items ?? [];
+    } else if (action !== 'ready' && snapshotItems.length > 0) {
+      item.slackSnapshot = snapshotItems;
+    }
+
     await putItem(plansTable, item);
 
     if (action === 'reopen' && currentStatus === 'READY') {
@@ -252,6 +266,69 @@ export const handler = async (event: {
         await notifyCleaningPlanReopened(plannedDate as string);
       } catch (error) {
         console.error('Failed to notify Slack of cleaning plan reopen', error);
+      }
+    }
+
+    if (action !== 'reopen' && snapshotItems.length > 0) {
+      try {
+        const cleanerNameById = new Map<string, string>();
+        const loadCleanerName = async (cleanerId: string) => {
+          const id = cleanerId.trim();
+          if (!id) {
+            return '';
+          }
+          const cached = cleanerNameById.get(id);
+          if (cached !== undefined) {
+            return cached;
+          }
+          const cleaner = await loadCleaner(cleanersTable, id);
+          const name =
+            typeof cleaner?.name === 'string' ? cleaner.name.trim() : id;
+          cleanerNameById.set(id, name);
+          return name;
+        };
+        const toChangeItem = async (planItem: {
+          visitId?: string;
+          cleanerId?: string;
+          startTime?: string;
+          cleaningTypeName?: string;
+          qualityReview?: boolean;
+        }): Promise<CleaningPlanChangeItem> => {
+          const visitId = typeof planItem.visitId === 'string' ? planItem.visitId : '';
+          const visit = visitById.get(visitId);
+          const title =
+            typeof visit?.title === 'string' && visit.title.trim()
+              ? visit.title.trim()
+              : visitId;
+          return {
+            visitId,
+            title,
+            cleanerName: await loadCleanerName(
+              typeof planItem.cleanerId === 'string' ? planItem.cleanerId : '',
+            ),
+            startTime:
+              typeof planItem.startTime === 'string' ? planItem.startTime : '',
+            cleaningTypeName:
+              typeof planItem.cleaningTypeName === 'string'
+                ? planItem.cleaningTypeName
+                : '',
+            qualityReview: Boolean(planItem.qualityReview),
+          };
+        };
+        const previous = await Promise.all(snapshotItems.map(toChangeItem));
+        const next = await Promise.all(normalizedItems.map(toChangeItem));
+        const changes = describeCleaningPlanChanges(previous, next);
+        if (changes.length > 0) {
+          await notifyCleaningPlanChanges(plannedDate as string, changes);
+          if (action !== 'ready') {
+            await putItem(plansTable, {
+              ...item,
+              slackSnapshot: normalizedItems,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to notify Slack of cleaning plan changes', error);
       }
     }
 

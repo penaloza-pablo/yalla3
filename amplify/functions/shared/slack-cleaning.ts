@@ -474,3 +474,83 @@ export const notifyCleaningPlanReopened = async (plannedDate: string) => {
     text,
   });
 };
+
+export type CleaningPlanChangeItem = {
+  visitId: string;
+  title: string;
+  cleanerName: string;
+  startTime: string;
+  cleaningTypeName: string;
+  qualityReview: boolean;
+};
+
+const labelOrEmpty = (value: string, empty: string) =>
+  asString(value) || empty;
+
+export const describeCleaningPlanChanges = (
+  previous: CleaningPlanChangeItem[],
+  next: CleaningPlanChangeItem[],
+) => {
+  const changes: string[] = [];
+  const previousById = new Map(previous.map((item) => [item.visitId, item]));
+  const nextById = new Map(next.map((item) => [item.visitId, item]));
+  for (const item of next) {
+    const before = previousById.get(item.visitId);
+    const title = labelOrEmpty(item.title, item.visitId);
+    if (!before) {
+      changes.push(`Añadida: ${title}`);
+      continue;
+    }
+    if (before.startTime !== item.startTime) {
+      changes.push(
+        `${title}: hora ${labelOrEmpty(before.startTime, 'sin hora')} → ${labelOrEmpty(item.startTime, 'sin hora')}`,
+      );
+    }
+    if (before.cleanerName !== item.cleanerName) {
+      changes.push(
+        `${title}: cleaner ${labelOrEmpty(before.cleanerName, 'sin asignar')} → ${labelOrEmpty(item.cleanerName, 'sin asignar')}`,
+      );
+    }
+    if (before.cleaningTypeName !== item.cleaningTypeName) {
+      changes.push(
+        `${title}: tipo ${labelOrEmpty(before.cleaningTypeName, 'sin tipo')} → ${labelOrEmpty(item.cleaningTypeName, 'sin tipo')}`,
+      );
+    }
+    if (before.qualityReview !== item.qualityReview) {
+      changes.push(
+        `${title}: Quality Check ${item.qualityReview ? 'activado' : 'desactivado'}`,
+      );
+    }
+  }
+  for (const item of previous) {
+    if (!nextById.has(item.visitId)) {
+      changes.push(`Eliminada: ${labelOrEmpty(item.title, item.visitId)}`);
+    }
+  }
+  return changes;
+};
+
+export const notifyCleaningPlanChanges = async (
+  plannedDate: string,
+  changes: string[],
+) => {
+  if (changes.length === 0) {
+    return;
+  }
+  const { warningsChannelId } = await loadSlackSecrets();
+  if (!warningsChannelId) {
+    console.error(
+      'Cleaning plan changes notify skipped: missing warningsChannelId in yalla/slack.',
+    );
+    return;
+  }
+  const date = asString(plannedDate);
+  const lines = changes
+    .map((line) => `• ${escapeMrkdwn(line)}`)
+    .join('\n');
+  const text = `Cambios en el plan de limpieza del ${escapeMrkdwn(date)}:\n${lines}`;
+  await slackApi('chat.postMessage', {
+    channel: warningsChannelId,
+    text,
+  });
+};
