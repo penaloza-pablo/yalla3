@@ -11,5 +11,5 @@ export const notifyCleaningOverdue = defineFunction({
     APP_BASE_URL: 'https://main.dd8kh4wy2zlme.amplifyapp.com',
   },
   schedule: 'every 1m',
-    timeoutSeconds: 90,
+    timeoutSeconds: 60,
 });
