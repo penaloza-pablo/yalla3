@@ -41,6 +41,7 @@ type TemplatePayload = {
   appliesToHourBank?: boolean;
   active?: boolean;
   tasks?: TemplateTask[];
+  propertyIds?: string[];
 };
 
 const normalizeTasks = (tasks?: TemplateTask[]) => {
@@ -184,6 +185,16 @@ export const handler = async (event: {
       timestamp,
     updatedAt: timestamp,
   };
+
+  const existingPropertyIds = Array.isArray(existing?.propertyIds)
+    ? existing.propertyIds
+    : undefined;
+  const payloadPropertyIds = Array.isArray(payload.propertyIds)
+    ? payload.propertyIds
+    : undefined;
+  if (payloadPropertyIds || existingPropertyIds) {
+    item.propertyIds = payloadPropertyIds ?? existingPropertyIds;
+  }
 
   try {
     await putItem(tableName, item);

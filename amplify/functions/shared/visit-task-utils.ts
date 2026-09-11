@@ -334,7 +334,7 @@ export const getTaskCountsForVisit = async (
       const status = normalizeStatus(
         typeof task.status === 'string' ? task.status : '',
       );
-      if (status === 'COMPLETED') {
+      if (status === 'COMPLETED' || status === 'SKIPPED') {
         completed += 1;
       }
     }
@@ -366,6 +366,7 @@ export const visitHasOpenTasks = async (tasksTable: string, visitId: string) => 
       );
       if (
         status !== 'COMPLETED' &&
+        status !== 'SKIPPED' &&
         status !== 'DISMISS' &&
         status !== 'CANCELLED'
       ) {

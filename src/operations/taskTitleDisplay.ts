@@ -1,4 +1,8 @@
 import { isSpanishLocale } from '../i18n/display'
+import {
+  TEMPLATE_TASK_DESCRIPTION_ES_EXTRA,
+  TEMPLATE_TASK_TITLE_ES_EXTRA,
+} from './templateTaskEsExtra'
 
 /** Fallback Spanish titles for the shared DEEP PC checklist (English title -> ES). */
 export const TEMPLATE_TASK_TITLE_ES: Record<string, string> = {
@@ -185,7 +189,10 @@ const normalizeLookupKey = (title: string) =>
     .toLowerCase()
 
 const TEMPLATE_TASK_TITLE_ES_LOOKUP = new Map(
-  Object.entries(TEMPLATE_TASK_TITLE_ES).flatMap(([english, spanish]) => {
+  Object.entries({
+    ...TEMPLATE_TASK_TITLE_ES,
+    ...TEMPLATE_TASK_TITLE_ES_EXTRA,
+  }).flatMap(([english, spanish]) => {
     const raw = english.trim().toLowerCase()
     const normalized = normalizeLookupKey(english)
     return [
@@ -196,7 +203,10 @@ const TEMPLATE_TASK_TITLE_ES_LOOKUP = new Map(
 )
 
 const TEMPLATE_TASK_DESCRIPTION_ES_LOOKUP = new Map(
-  Object.entries(TEMPLATE_TASK_DESCRIPTION_ES).flatMap(([english, spanish]) => {
+  Object.entries({
+    ...TEMPLATE_TASK_DESCRIPTION_ES,
+    ...TEMPLATE_TASK_DESCRIPTION_ES_EXTRA,
+  }).flatMap(([english, spanish]) => {
     const normalized = normalizeLookupKey(english)
     return [
       [english.trim().toLowerCase(), spanish],
@@ -248,3 +258,18 @@ export const displayTaskDescription = (
     text
   )
 }
+
+export const editableTaskTitle = (
+  language: string | undefined,
+  title: string,
+  titleEs?: string | null,
+) => (isSpanishLocale(language) ? titleEs || title || '' : title || '')
+
+export const editableTaskDescription = (
+  language: string | undefined,
+  description?: string | null,
+  descriptionEs?: string | null,
+) =>
+  isSpanishLocale(language)
+    ? descriptionEs || description || ''
+    : description || ''

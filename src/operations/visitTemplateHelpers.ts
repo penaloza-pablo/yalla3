@@ -1,4 +1,5 @@
 import type {
+  TaskRecord,
   VisitDraftTask,
   VisitRecord,
   VisitTemplateRecord,
@@ -97,6 +98,26 @@ export const templateTasksToDrafts = (
     priority: task.priority,
     urgent: Boolean(task.urgent),
   }))
+
+export const emptyDraftTask = (): VisitDraftTask => ({
+  title: '',
+  titleEs: '',
+  description: '',
+  descriptionEs: '',
+  priority: 'MEDIUM',
+  urgent: false,
+})
+
+export const taskRecordToDraft = (task: TaskRecord): VisitDraftTask => ({
+  id: task.id,
+  status: task.status,
+  title: task.title,
+  titleEs: task.titleEs,
+  description: task.description,
+  descriptionEs: task.descriptionEs,
+  priority: task.priority,
+  urgent: task.priority === 'URGENT',
+})
 
 export const templateTasksPayload = (template: VisitTemplateRecord) =>
   template.tasks

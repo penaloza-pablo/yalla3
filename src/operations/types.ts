@@ -6,7 +6,18 @@ export type TaskStatus =
   | 'PENDING'
   | 'BLOCKED'
   | 'COMPLETED'
+  | 'SKIPPED'
   | 'CANCELLED'
+
+export const isResolvedTaskStatus = (status: string) => {
+  const normalized = status.trim().toUpperCase()
+  return (
+    normalized === 'COMPLETED' ||
+    normalized === 'SKIPPED' ||
+    normalized === 'DISMISS' ||
+    normalized === 'CANCELLED'
+  )
+}
 
 export type VisitRecord = {
   id: string
@@ -109,6 +120,8 @@ export type VisitTemplateAutoAssignRule = {
 }
 
 export type VisitDraftTask = {
+  id?: string
+  status?: TaskStatus
   title: string
   titleEs?: string
   description: string

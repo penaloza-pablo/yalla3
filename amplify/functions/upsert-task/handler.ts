@@ -36,7 +36,7 @@ type TaskPayload = {
   status?: string;
   priority?: string;
   dueDate?: string;
-  action?: 'dismiss' | 'assign' | 'delete';
+  action?: 'dismiss' | 'assign' | 'delete' | 'skip';
   assignVisitId?: string;
   closedBy?: string;
   createdAt?: string;
@@ -49,6 +49,7 @@ const VALID_TASK_STATUSES = new Set([
   'PENDING',
   'BLOCKED',
   'COMPLETED',
+  'SKIPPED',
   'CANCELLED',
 ]);
 const TERMINAL_TASK_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
@@ -115,10 +116,22 @@ export const handler = async (event: {
     const existingStatus = normalizeStatus(
       typeof existing.status === 'string' ? existing.status : '',
     );
-    if (TERMINAL_TASK_STATUSES.has(existingStatus) && action !== 'assign') {
-      return buildHttpResponse(400, {
-        message: 'Completed tasks cannot be edited.',
-      });
+    if (
+      TERMINAL_TASK_STATUSES.has(existingStatus) &&
+      action !== 'assign' &&
+      action !== 'skip' &&
+      action !== 'delete'
+    ) {
+      const nextStatus = normalizeStatus(payload.status);
+      const canRetoggle =
+        nextStatus === 'COMPLETED' ||
+        nextStatus === 'SKIPPED' ||
+        nextStatus === 'PENDING';
+      if (!canRetoggle) {
+        return buildHttpResponse(400, {
+          message: 'Completed tasks cannot be edited.',
+        });
+      }
     }
   }
 
@@ -132,6 +145,16 @@ export const handler = async (event: {
     };
     await patchUserOriginatedRecord(tasksTable, taskId, dismissPatch);
     const item = mergeUserEditResponseItem(existing, dismissPatch, timestamp);
+    return buildHttpResponse(200, { item });
+  }
+
+  if (action === 'skip' && existing) {
+    const taskId = typeof existing.id === 'string' ? existing.id : '';
+    const skipPatch = {
+      set: { status: 'SKIPPED' },
+    };
+    await patchUserOriginatedRecord(tasksTable, taskId, skipPatch);
+    const item = mergeUserEditResponseItem(existing, skipPatch, timestamp);
     return buildHttpResponse(200, { item });
   }
 
@@ -320,7 +343,17 @@ export const handler = async (event: {
       editableFields.dueDate = visitDueDate;
     }
   } else if (isUpdate) {
-    removeFields.push('visitId');
+    const existingVisitId =
+      typeof existing?.visitId === 'string' ? existing.visitId.trim() : '';
+    if (
+      existingVisitId &&
+      status !== 'UNASSIGNED' &&
+      status !== 'DISMISS'
+    ) {
+      editableFields.visitId = existingVisitId;
+    } else {
+      removeFields.push('visitId');
+    }
   }
 
   try {

@@ -903,8 +903,6 @@ const nextPurchasesSummary = (
   }
 }
 
-const WARNING_STATUSES = ['Reorder', 'Low Stock', 'Skipped'] as const
-
 const applyConfirmedPurchaseToInventory = (
   rows: InventoryRow[],
   itemId: string,
@@ -3321,13 +3319,16 @@ function App() {
     })
   }
 
+  const [inventoryWarningsOnly, setInventoryWarningsOnly] = useState(false)
+
   const filteredRows = useMemo(() => {
     return inventoryRows.filter((row) => {
       const locationMatch =
         filters.locations.length === 0 ||
         filters.locations.includes(row.location)
-      const statusMatch =
-        filters.statuses.length === 0 || filters.statuses.includes(row.status)
+      const statusMatch = inventoryWarningsOnly
+        ? row.status !== 'OK'
+        : filters.statuses.length === 0 || filters.statuses.includes(row.status)
       const categoryMatch =
         filters.categories.length === 0 ||
         filters.categories.includes(row.category)
@@ -3350,6 +3351,7 @@ function App() {
     filters.statuses,
     filters.categories,
     inventoryRows,
+    inventoryWarningsOnly,
     tableSearchQuery,
   ])
 
@@ -3382,27 +3384,16 @@ function App() {
     )
   }, [filters.locations, filters.statuses, filters.categories])
 
-  const isWarningsQuickFilterActive = useMemo(
-    () =>
-      filters.statuses.length === WARNING_STATUSES.length &&
-      WARNING_STATUSES.every((status) => filters.statuses.includes(status)),
-    [filters.statuses],
-  )
+  const isWarningsQuickFilterActive = inventoryWarningsOnly
 
   const toggleWarningsQuickFilter = () => {
     if (isWarningsQuickFilterActive) {
-      setFilters((current) => ({ ...current, statuses: [] }))
-      setFilterDraft((current) => ({ ...current, statuses: [] }))
+      setInventoryWarningsOnly(false)
       return
     }
-    setFilters((current) => ({
-      ...current,
-      statuses: [...WARNING_STATUSES],
-    }))
-    setFilterDraft((current) => ({
-      ...current,
-      statuses: [...WARNING_STATUSES],
-    }))
+    setInventoryWarningsOnly(true)
+    setFilters((current) => ({ ...current, statuses: [] }))
+    setFilterDraft((current) => ({ ...current, statuses: [] }))
   }
 
   const locationOptions = useMemo(() => {
@@ -4408,6 +4399,7 @@ function App() {
     }
     if (page === 'Inventory' && options?.inventoryStatuses?.length) {
       const statuses = [...options.inventoryStatuses]
+      setInventoryWarningsOnly(false)
       setFilters((current) => ({ ...current, statuses }))
       setFilterDraft((current) => ({ ...current, statuses }))
     }
@@ -5247,6 +5239,7 @@ function App() {
                         className="btn-primary"
                         type="button"
                         onClick={() => {
+                          setInventoryWarningsOnly(false)
                           setFilters({
                             locations: [...filterDraft.locations],
                             statuses: [...filterDraft.statuses],

@@ -38,14 +38,18 @@ import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-tit
 import { isCleaningVisitType, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
+import { CollapsibleVisitTasks } from './CollapsibleVisitTasks'
+import { DismissibleNotice } from './DismissibleNotice'
+import { VisitTaskList } from './VisitTaskList'
 import { isManagementTeam } from './teamColors'
-import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
-import { isSpanishLocale } from '../i18n/display'
+import { displayTaskTitle } from './taskTitleDisplay'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import {
   buildApplyTemplateVisitPayload,
+  emptyDraftTask,
+  taskRecordToDraft,
   templateTasksToDrafts,
 } from './visitTemplateHelpers'
 import {
@@ -67,6 +71,7 @@ import type {
   VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
+import { isResolvedTaskStatus } from './types'
 
 type OpsMode = 'dashboard' | 'unassigned' | 'templates'
 type DashboardViewMode = 'dashboard' | 'kanban' | 'agenda' | 'day'
@@ -478,6 +483,8 @@ export function DailyOperationsView({
   )
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [draftVisitTasks, setDraftVisitTasks] = useState<VisitDraftTask[]>([])
+  const [editVisitTaskIds, setEditVisitTaskIds] = useState<string[]>([])
+  const [editingDraftIndex, setEditingDraftIndex] = useState<number | null>(null)
   const [openVisitTemplates, setOpenVisitTemplates] = useState<VisitTemplateRecord[]>(
     [],
   )
@@ -501,7 +508,6 @@ export function DailyOperationsView({
   const [isSavingVisitWithTasks, setIsSavingVisitWithTasks] = useState(false)
   const [isRefreshingFromGuesty, setIsRefreshingFromGuesty] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [commentsDraft, setCommentsDraft] = useState('')
 
   const isCreatingVisit = !visitForm.id
@@ -509,13 +515,7 @@ export function DailyOperationsView({
   const canCreateTasks = can(ACTION_KEYS.createTasks)
 
   const visitHasOpenTasks = useMemo(
-    () =>
-      visitTasks.some(
-        (task) =>
-          task.status !== 'COMPLETED' &&
-          task.status !== 'DISMISS' &&
-          task.status !== 'CANCELLED',
-      ),
+    () => visitTasks.some((task) => !isResolvedTaskStatus(task.status)),
     [visitTasks],
   )
 
@@ -820,9 +820,7 @@ export function DailyOperationsView({
 
   const loadReferenceData = useCallback(async () => {
     if (!endpoints.teams || !endpoints.users || !endpoints.visitTypes) {
-      setError(
-        'Missing operations endpoints. Deploy backend and set VITE_GET_TEAMS_URL, VITE_GET_USERS_URL, VITE_GET_VISIT_TYPES_URL.',
-      )
+      setError(t('operations.missingOperationsEndpoints'))
       return
     }
     const [teamsPayload, usersPayload, typesPayload] = await Promise.all([
@@ -863,9 +861,7 @@ export function DailyOperationsView({
       const payload = await getVisitsByDateRange(endpoints.visits, from, to)
       setVisits((payload.items ?? []).map((entry) => mapVisit(entry)))
     } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : t('operations.unableLoadVisits'),
-      )
+      setError(t('operations.unableLoadVisits'))
     } finally {
       setIsLoading(false)
     }
@@ -988,11 +984,7 @@ export function DailyOperationsView({
               : entry,
           ),
         )
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : t('operations.unableSaveEarlyCheckIn'),
-        )
+        setError(t('operations.unableSaveEarlyCheckIn'))
       }
     },
     [endpoints.upsertPlannerFields, t],
@@ -1016,9 +1008,7 @@ export function DailyOperationsView({
       const payload = await getUnassignedPool(endpoints.tasks)
       setPoolTasks((payload.items ?? []).map((entry) => mapTask(entry)))
     } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : t('operations.unableLoadTasks'),
-      )
+      setError(t('operations.unableLoadTasks'))
     }
   }, [endpoints.tasks])
 
@@ -1326,6 +1316,8 @@ export function DailyOperationsView({
     setVisitForm(emptyVisitForm())
     setSelectedTemplateId('')
     setDraftVisitTasks([])
+    setEditVisitTaskIds([])
+    setEditingDraftIndex(null)
     setPropertyTemplates([])
     setIsVisitFormOpen(true)
   }
@@ -1338,6 +1330,8 @@ export function DailyOperationsView({
     })
     setSelectedTemplateId('')
     setDraftVisitTasks([])
+    setEditVisitTaskIds([])
+    setEditingDraftIndex(null)
     setPropertyTemplates([])
     setIsVisitFormOpen(true)
   }
@@ -1368,6 +1362,7 @@ export function DailyOperationsView({
       priority: 'MEDIUM',
     }))
     setDraftVisitTasks(templateTasksToDrafts(template))
+    setEditingDraftIndex(null)
   }
 
   const applyTemplateToSelectedVisit = async () => {
@@ -1402,18 +1397,8 @@ export function DailyOperationsView({
       }
       await loadVisitTasks(selectedVisit.id)
       setOpenVisitTemplateId('')
-      const createdCount = Array.isArray(
-        (response as { createdTasks?: unknown[] }).createdTasks,
-      )
-        ? (response as { createdTasks: unknown[] }).createdTasks.length
-        : template.tasks.length
-      setMessage(t('operations.templateApplied', { count: createdCount }))
     } catch (applyError) {
-      setError(
-        applyError instanceof Error
-          ? applyError.message
-          : t('operations.unableApplyTemplate'),
-      )
+      setError(t('operations.unableApplyTemplate'))
     } finally {
       setIsApplyingVisitTemplate(false)
     }
@@ -1437,7 +1422,12 @@ export function DailyOperationsView({
         : '',
       appliesToHourBank: visit.appliesToHourBank,
     })
-    setDraftVisitTasks([])
+    const editableTasks = visitTasks.filter(
+      (task) => task.status !== 'CANCELLED' && task.status !== 'DISMISS',
+    )
+    setDraftVisitTasks(editableTasks.map(taskRecordToDraft))
+    setEditVisitTaskIds(editableTasks.map((task) => task.id))
+    setEditingDraftIndex(null)
     setIsVisitFormOpen(true)
   }
 
@@ -1496,7 +1486,9 @@ export function DailyOperationsView({
 
     const pendingDraftTasks = [...draftVisitTasks]
     const tasksToCreate = pendingDraftTasks
-      .filter((draft) => draft.title.trim() || draft.titleEs?.trim())
+      .filter(
+        (draft) => !draft.id && (draft.title.trim() || draft.titleEs?.trim()),
+      )
       .map((draft) => ({
         title: draft.title.trim() || draft.titleEs?.trim() || '',
         titleEs: draft.titleEs?.trim() || undefined,
@@ -1506,9 +1498,12 @@ export function DailyOperationsView({
       }))
     payload.title = appendUrgentTaskTitles(
       title,
-      tasksToCreate
-        .filter((task) => task.priority === 'URGENT')
-        .map((task) => task.title),
+      [
+        ...tasksToCreate.filter((task) => task.priority === 'URGENT').map((task) => task.title),
+        ...pendingDraftTasks
+          .filter((draft) => draft.id && draft.urgent)
+          .map((draft) => draft.title.trim() || draft.titleEs?.trim() || ''),
+      ].filter(Boolean),
     )
 
     if (tasksToCreate.length > 0 && (isCreatingVisit || canCreateTasks)) {
@@ -1528,11 +1523,6 @@ export function DailyOperationsView({
       const response = await saveVisit(endpoints.upsertVisit, payload)
       const savedItem = response.item as Record<string, unknown> | undefined
       const mapped = savedItem ? mapVisit(savedItem) : null
-      const createdTasks = Array.isArray(
-        (response as { createdTasks?: unknown[] }).createdTasks,
-      )
-        ? (response as { createdTasks: unknown[] }).createdTasks.length
-        : 0
 
       if (mapped && isCreatingVisit) {
         setVisits((current) => {
@@ -1541,16 +1531,37 @@ export function DailyOperationsView({
         })
       }
 
+      if (!isCreatingVisit && endpoints.upsertTask) {
+        const keptIds = new Set(
+          pendingDraftTasks
+            .map((draft) => draft.id)
+            .filter((id): id is string => Boolean(id)),
+        )
+        const idsToDelete = editVisitTaskIds.filter((id) => !keptIds.has(id))
+        for (const taskId of idsToDelete) {
+          await saveTask(endpoints.upsertTask, { id: taskId, action: 'delete' })
+        }
+        for (const draft of pendingDraftTasks) {
+          if (!draft.id || !(draft.title.trim() || draft.titleEs?.trim())) {
+            continue
+          }
+          await saveTask(endpoints.upsertTask, {
+            id: draft.id,
+            visitId: visitForm.id,
+            title: draft.title.trim() || draft.titleEs?.trim() || '',
+            titleEs: draft.titleEs?.trim() || undefined,
+            description: draft.description,
+            descriptionEs: draft.descriptionEs?.trim() || undefined,
+            priority: draft.urgent ? 'URGENT' : 'MEDIUM',
+            ...(draft.status ? { status: draft.status } : {}),
+          })
+        }
+      }
+
       setIsVisitFormOpen(false)
       setSelectedTemplateId('')
       setDraftVisitTasks([])
-      setMessage(
-        hasBulkTasks
-          ? t('operations.visitSavedWithTasks', {
-              count: createdTasks || tasksToCreate.length,
-            })
-          : t('operations.visitSaved'),
-      )
+      setEditVisitTaskIds([])
       clearTodaySummaryCache()
       setDashboardRefreshKey((current) => current + 1)
       if (!mapped || !isCreatingVisit) {
@@ -1560,7 +1571,7 @@ export function DailyOperationsView({
         await loadVisitTasks(selectedVisitId)
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveVisit'))
+      setError(t('operations.unableSaveVisit'))
     } finally {
       setIsSavingVisitWithTasks(false)
     }
@@ -1609,22 +1620,11 @@ export function DailyOperationsView({
           current.map((entry) => (entry.id === visitId ? mapped : entry)),
         )
       }
-      const tasksUpdated =
-        typeof (response as { tasksUpdated?: number }).tasksUpdated === 'number'
-          ? (response as { tasksUpdated: number }).tasksUpdated
-          : 0
-      if (tasksUpdated > 0) {
-        setMessage(`Visit rescheduled. ${tasksUpdated} task due dates updated.`)
-      }
     } catch (rescheduleError) {
       setVisits((current) =>
         current.map((entry) => (entry.id === visitId ? previous : entry)),
       )
-      setError(
-        rescheduleError instanceof Error
-          ? rescheduleError.message
-          : 'Unable to reschedule visit.',
-      )
+      setError(t('operations.unableUpdateVisit'))
     } finally {
       markVisitSyncing(visitId, false)
     }
@@ -1675,11 +1675,7 @@ export function DailyOperationsView({
       setVisits((current) =>
         current.map((entry) => (entry.id === visitId ? previous : entry)),
       )
-      setError(
-        timeChangeError instanceof Error
-          ? timeChangeError.message
-          : 'Unable to update visit time.',
-      )
+      setError(t('operations.unableUpdateVisit'))
     } finally {
       markVisitSyncing(visitId, false)
     }
@@ -1688,9 +1684,7 @@ export function DailyOperationsView({
   const openCompleteVisitModal = () => {
     if (!selectedVisit) return
     if (visitHasOpenTasks) {
-      setError(
-        'Complete or dismiss all tasks before completing the visit.',
-      )
+      setError(t('operations.completeTasksFirst'))
       return
     }
     if (!requiresCompleteVisitWizard(selectedVisit.visitTypeId)) {
@@ -1712,13 +1706,11 @@ export function DailyOperationsView({
     if (!selectedVisit) return
     const hours = Number(completeVisitForm.hours)
     if (!Number.isFinite(hours) || hours <= 0) {
-      setError('Enter a valid number of hours.')
+      setError(t('operations.enterValidHours'))
       return
     }
     if (visitHasOpenTasks) {
-      setError(
-        'Complete or dismiss all tasks before completing the visit.',
-      )
+      setError(t('operations.completeTasksFirst'))
       return
     }
     await updateVisitStatus(selectedVisit, 'COMPLETED', {
@@ -1739,24 +1731,15 @@ export function DailyOperationsView({
   const submitCancelVisit = async () => {
     if (!selectedVisit) return
     if (cancelVisitForm.taskAction === 'cancel' && !cancelVisitForm.cancelConfirmed) {
-      setError('Confirm that you want to mark open tasks as cancelled.')
+      setError(t('operations.cancelVisitConfirmNeeded'))
       return
     }
     const cancelTaskAction =
       visitTasks.length > 0 ? cancelVisitForm.taskAction : undefined
-    const successMessage =
-      cancelTaskAction === 'cancel'
-        ? visitTasksToRelease.length > 0
-          ? 'Visit cancelled. Open tasks were marked as CANCELLED.'
-          : 'Visit cancelled.'
-        : visitTasksToRelease.length > 0
-          ? 'Visit cancelled. Tasks moved to Tasks not on a visit.'
-          : 'Visit cancelled.'
     await updateVisitStatus(
       selectedVisit,
       'CANCELLED',
       cancelTaskAction ? { cancelTaskAction } : undefined,
-      successMessage,
     )
     setIsCancelVisitOpen(false)
     if (cancelTaskAction === 'release') {
@@ -1768,7 +1751,6 @@ export function DailyOperationsView({
     visit: VisitRecord,
     status: VisitRecord['status'],
     extra?: Record<string, unknown>,
-    successMessage?: string,
   ) => {
     if (!endpoints.upsertVisit) return
     const closedBy = await getCurrentUserEmail()
@@ -1782,7 +1764,6 @@ export function DailyOperationsView({
           : {}),
         ...extra,
       })
-      setMessage(successMessage ?? `Visit marked as ${status}.`)
       clearTodaySummaryCache()
       setDashboardRefreshKey((current) => current + 1)
       await loadVisits()
@@ -1797,9 +1778,7 @@ export function DailyOperationsView({
         await loadVisitTasks(visit.id)
       }
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : 'Unable to update visit.',
-      )
+      setError(t('operations.unableUpdateVisit'))
     }
   }
 
@@ -1826,11 +1805,7 @@ export function DailyOperationsView({
         ),
       )
     } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : t('operations.unableUpdateVisit'),
-      )
+      setError(t('operations.unableUpdateVisit'))
     }
   }
 
@@ -1856,17 +1831,8 @@ export function DailyOperationsView({
       } else {
         await loadVisits()
       }
-      setMessage(
-        response.changed
-          ? t('operations.visitRefreshed')
-          : t('operations.visitAlreadyInSync'),
-      )
     } catch (refreshError) {
-      setError(
-        refreshError instanceof Error
-          ? refreshError.message
-          : t('operations.unableRefreshFromGuesty'),
-      )
+      setError(t('operations.unableRefreshFromGuesty'))
     } finally {
       setIsRefreshingFromGuesty(false)
     }
@@ -1893,7 +1859,6 @@ export function DailyOperationsView({
     try {
       await saveTask(endpoints.upsertTask, payload)
       setIsTaskFormOpen(false)
-      setMessage(t('operations.taskSaved'))
       await loadPool()
       if (taskForm.visitId || selectedVisitId) {
         const visitId = taskForm.visitId || selectedVisitId || ''
@@ -1912,7 +1877,7 @@ export function DailyOperationsView({
         }
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : t('operations.unableSaveTask'))
+      setError(t('operations.unableSaveTask'))
     }
   }
 
@@ -1922,42 +1887,60 @@ export function DailyOperationsView({
     try {
       await saveTask(endpoints.upsertTask, { id: taskForm.id, action: 'delete' })
       setIsTaskFormOpen(false)
-      setMessage(t('operations.taskDeleted'))
       await loadPool()
     } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : t('operations.unableSaveTask'),
-      )
+      setError(t('operations.unableSaveTask'))
     }
   }
 
   const completeTask = async (task: TaskRecord) => {
     if (!endpoints.upsertTask) return
-    const closedBy = await getCurrentUserEmail()
-    await saveTask(endpoints.upsertTask, {
-      id: task.id,
-      status: 'COMPLETED',
-      closedBy,
-    })
-    setMessage(t('operations.taskCompleted'))
-    await loadPool()
-    if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+    try {
+      const closedBy = await getCurrentUserEmail()
+      await saveTask(endpoints.upsertTask, {
+        id: task.id,
+        status: 'COMPLETED',
+        closedBy,
+        visitId: task.visitId,
+      })
+      await loadPool()
+      if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+    } catch {
+      setError(t('operations.unableSaveTask'))
+    }
   }
 
   const dismissTask = async (task: TaskRecord) => {
     if (!endpoints.upsertTask) return
-    await saveTask(endpoints.upsertTask, { id: task.id, action: 'dismiss' })
-    setMessage(t('operations.taskDismissed'))
-    await loadPool()
-    if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+    try {
+      await saveTask(endpoints.upsertTask, { id: task.id, action: 'dismiss' })
+      await loadPool()
+      if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+    } catch {
+      setError(t('operations.unableSaveTask'))
+    }
   }
 
-  const handleDismissTask = async (task: TaskRecord) => {
+  const skipTask = async (task: TaskRecord) => {
+    if (!endpoints.upsertTask) return
+    try {
+      await saveTask(endpoints.upsertTask, {
+        id: task.id,
+        action: 'skip',
+        status: 'SKIPPED',
+        visitId: task.visitId,
+      })
+      await loadPool()
+      if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+    } catch {
+      setError(t('operations.unableSaveTask'))
+    }
+  }
+
+  const handleSkipTask = async (task: TaskRecord) => {
     setDismissingTaskId(task.id)
     try {
-      await dismissTask(task)
+      await skipTask(task)
     } finally {
       setDismissingTaskId(null)
     }
@@ -1965,16 +1948,19 @@ export function DailyOperationsView({
 
   const assignTaskToVisit = async () => {
     if (!endpoints.upsertTask || !assignTaskId || !assignVisitId) return
-    await saveTask(endpoints.upsertTask, {
-      id: assignTaskId,
-      action: 'assign',
-      assignVisitId,
-    })
-    setIsAssignVisitOpen(false)
-    setMessage('Task assigned to visit.')
-    await loadPool()
-    if (selectedVisitId) await loadVisitTasks(selectedVisitId)
-    await loadVisits()
+    try {
+      await saveTask(endpoints.upsertTask, {
+        id: assignTaskId,
+        action: 'assign',
+        assignVisitId,
+      })
+      setIsAssignVisitOpen(false)
+      await loadPool()
+      if (selectedVisitId) await loadVisitTasks(selectedVisitId)
+      await loadVisits()
+    } catch {
+      setError(t('operations.unableSaveTask'))
+    }
   }
 
   const [assignVisitOptions, setAssignVisitOptions] = useState<VisitRecord[]>([])
@@ -1996,11 +1982,7 @@ export function DailyOperationsView({
       })
       .catch((loadError) => {
         setPropertyTemplates([])
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t('operations.unableLoadTemplates'),
-        )
+        setError(t('operations.unableLoadTemplates'))
       })
   }, [
     endpoints.visitTemplates,
@@ -2038,11 +2020,7 @@ export function DailyOperationsView({
           return
         }
         setOpenVisitTemplates([])
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t('operations.unableLoadTemplates'),
-        )
+        setError(t('operations.unableLoadTemplates'))
       })
 
     return () => {
@@ -2112,6 +2090,23 @@ export function DailyOperationsView({
     if (status === 'COMPLETED') return t('operations.completed')
     return t('operations.cancelled')
   }
+
+  const errorNotice = error ? (
+    <DismissibleNotice
+      dismissLabel={t('common.close')}
+      onDismiss={() => setError(null)}
+    >
+      {error}
+    </DismissibleNotice>
+  ) : null
+
+  const visitWorkModalOpen = Boolean(selectedVisitId)
+  const stackedVisitModalOpen =
+    isVisitFormOpen ||
+    isCompleteVisitOpen ||
+    isCancelVisitOpen ||
+    isTaskFormOpen ||
+    isAssignVisitOpen
 
   return (
     <>
@@ -2377,8 +2372,7 @@ export function DailyOperationsView({
         </MobileBodyPortal>
       </header>
 
-      {message ? <p className="notice success">{message}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      {!visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
 
       {mode === 'dashboard' ? (
         <>
@@ -2638,12 +2632,8 @@ export function DailyOperationsView({
           visitTypes={visitTypes}
           searchQuery={searchQuery}
           onFilterCountChange={setTemplateFilterCount}
-          onMessage={(value) => {
-            setError(null)
-            setMessage(value)
-          }}
+          onMessage={() => undefined}
           onError={(value) => {
-            setMessage(null)
             setError(value)
           }}
         />
@@ -2950,8 +2940,7 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body operations-detail-body">
-              {message ? <p className="notice success">{message}</p> : null}
-              {error ? <p className="notice error">{error}</p> : null}
+              {visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
               <div className="operations-detail-fields">
                 <span className="operations-detail-plain">
                   {propertyById.get(selectedVisit.propertyId) ??
@@ -3150,85 +3139,33 @@ export function DailyOperationsView({
                 </section>
               ) : null}
 
-              <h4 className="section-title">{t('operations.tasks')}</h4>
-              {visitTasks.length === 0 ? (
-                <p className="operations-empty-tasks">
-                  {t('operations.emptyTasksHint')}
-                </p>
-              ) : (
-                <ul className="operations-task-list">
-                  {visitTasks.map((task) => {
-                  const isCompleted = task.status === 'COMPLETED'
-                  const isCancelled = task.status === 'CANCELLED'
-                  const canActOnTask =
-                    task.status === 'PENDING' || task.status === 'BLOCKED'
-                  const isDismissing = dismissingTaskId === task.id
-                  const description = displayTaskDescription(
-                    i18n.language,
-                    task.description,
-                    task.descriptionEs,
-                  )
-
-                  return (
-                    <li key={task.id}>
-                      <div className="operations-task-content">
-                        <div className="operations-task-copy">
-                          <span className="operations-task-title">
-                            {displayTaskTitle(
-                              i18n.language,
-                              task.title,
-                              task.titleEs,
-                            )}
-                          </span>
-                          {description ? (
-                            <span className="operations-task-description">
-                              {description}
-                            </span>
-                          ) : null}
-                        </div>
-                        {task.priority === 'URGENT' ? (
-                          <span className="status status-danger">Urgent</span>
-                        ) : null}
-                        {isCancelled ? (
-                          <span className="status status-neutral">
-                            Cancelled with visit
-                          </span>
-                        ) : null}
-                        {selectedVisit.status === 'OVERDUE' && canActOnTask ? (
-                          <span className="status status-warning">Overdue visit</span>
-                        ) : null}
-                      </div>
-                      <div className="action-buttons">
-                        <button
-                          type="button"
-                          className={`btn-icon btn-icon-ghost${
-                            isCompleted ? ' is-task-complete' : ''
-                          }`}
-                          aria-label={t('operations.completeTask')}
-                          disabled={isCompleted || isCancelled || !canActOnTask}
-                          onClick={() => void completeTask(task)}
-                        >
-                          ✓
-                        </button>
-                        {canActOnTask ? (
-                          <button
-                            type="button"
-                            className={`btn-icon btn-icon-ghost${
-                              isDismissing ? ' is-task-dismiss-active' : ''
-                            }`}
-                            aria-label={t('operations.dismissTask')}
-                            disabled={isDismissing}
-                            onClick={() => void handleDismissTask(task)}
-                          >
-                            ✕
-                          </button>
-                        ) : null}
-                      </div>
-                    </li>
-                  )
-                  })}
-                </ul>
-              )}
+              <CollapsibleVisitTasks
+                title={t('operations.tasks')}
+                badgeCount={
+                  visitTasks.filter((task) => !isResolvedTaskStatus(task.status))
+                    .length
+                }
+                badgeLabel={t('operations.draftTasksCount', {
+                  count: visitTasks.filter(
+                    (task) => !isResolvedTaskStatus(task.status),
+                  ).length,
+                })}
+              >
+                <VisitTaskList
+                  mode="work"
+                  tasks={visitTasks}
+                  emptyLabel={t('operations.emptyTasksHint')}
+                  visitOverdue={selectedVisit.status === 'OVERDUE'}
+                  visitClosed={
+                    selectedVisit.status === 'COMPLETED' ||
+                    selectedVisit.status === 'CANCELLED'
+                  }
+                  canAct={Boolean(endpoints.upsertTask)}
+                  skippingId={dismissingTaskId ?? undefined}
+                  onComplete={(task) => void completeTask(task)}
+                  onSkip={(task) => void handleSkipTask(task)}
+                />
+              </CollapsibleVisitTasks>
               <label className="full-width operations-visit-comments">
                 {t('operations.comments')}
                 <textarea
@@ -3251,9 +3188,7 @@ export function DailyOperationsView({
 
       {isVisitFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div
-            className={`modal${isCreatingVisit || canCreateTasks ? ' modal-wide modal-scrollable' : ''}`}
-          >
+          <div className="modal modal-wide modal-scrollable">
             <div className="modal-header">
               <h3 className="modal-title">
                 {visitForm.id ? t('operations.editVisit') : t('operations.createVisit')}
@@ -3267,13 +3202,16 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body form-grid">
+              {isVisitFormOpen ? errorNotice : null}
               <label>
                 Property
                 <select
                   value={visitForm.propertyId}
                   onChange={(event) => {
                     setSelectedTemplateId('')
-                    setDraftVisitTasks([])
+                    if (isCreatingVisit) {
+                      setDraftVisitTasks([])
+                    }
                     setVisitForm((c) => ({
                       ...c,
                       propertyId: event.target.value,
@@ -3421,114 +3359,51 @@ export function DailyOperationsView({
                   />
                 </label>
               )}
-              {isCreatingVisit || canCreateTasks ? (
-                <div className="full-width visit-draft-tasks">
-                  <div className="visit-tasks-header">
-                    <div>
-                      <h4>{t('operations.tasks')}</h4>
-                    </div>
-                    {canCreateTasks ? (
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() =>
+              <CollapsibleVisitTasks
+                title={t('operations.tasks')}
+                badgeCount={draftVisitTasks.length}
+                badgeLabel={t('operations.draftTasksCount', {
+                  count: draftVisitTasks.length,
+                })}
+                addLabel={canCreateTasks ? t('operations.addTask') : undefined}
+                onAdd={
+                  canCreateTasks
+                    ? () => {
                         setDraftVisitTasks((current) => [
-                          {
-                            title: '',
-                            titleEs: '',
-                            description: '',
-                            descriptionEs: '',
-                            priority: 'MEDIUM',
-                            urgent: false,
-                          },
+                          emptyDraftTask(),
                           ...current,
                         ])
+                        setEditingDraftIndex(0)
                       }
-                    >
-                      {t('operations.addTask')}
-                    </button>
-                    ) : null}
-                  </div>
-                  {draftVisitTasks.length === 0 ? (
-                    <p className="subtitle">{t('operations.noDraftTasks')}</p>
-                  ) : null}
-                  {draftVisitTasks.map((task, index) => (
-                    <div key={`draft-${index}`} className="template-task-row">
-                      <input
-                        placeholder={t('operations.taskTitle')}
-                        value={displayTaskTitle(
-                          i18n.language,
-                          task.title,
-                          task.titleEs,
-                        )}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          const spanish = isSpanishLocale(i18n.language)
-                          setDraftVisitTasks((current) =>
-                            current.map((entry, entryIndex) =>
-                              entryIndex === index
-                                ? spanish
-                                  ? { ...entry, titleEs: value }
-                                  : { ...entry, title: value }
-                                : entry,
-                            ),
-                          )
-                        }}
-                      />
-                      <input
-                        placeholder={t('operations.description')}
-                        value={displayTaskDescription(
-                          i18n.language,
-                          task.description,
-                          task.descriptionEs,
-                        )}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          const spanish = isSpanishLocale(i18n.language)
-                          setDraftVisitTasks((current) =>
-                            current.map((entry, entryIndex) =>
-                              entryIndex === index
-                                ? spanish
-                                  ? { ...entry, descriptionEs: value }
-                                  : { ...entry, description: value }
-                                : entry,
-                            ),
-                          )
-                        }}
-                      />
-                      <label className="checkbox-row compact">
-                        <input
-                          type="checkbox"
-                          checked={task.urgent}
-                          onChange={(event) =>
-                            setDraftVisitTasks((current) =>
-                              current.map((entry, entryIndex) =>
-                                entryIndex === index
-                                  ? { ...entry, urgent: event.target.checked }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        Urgent
-                      </label>
-                      <button
-                        type="button"
-                        className="btn-link"
-                        onClick={() =>
-                          setDraftVisitTasks((current) =>
-                            current.filter(
-                              (_, entryIndex) => entryIndex !== index,
-                            ),
-                          )
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+                    : undefined
+                }
+              >
+                <VisitTaskList
+                  mode="design"
+                  tasks={draftVisitTasks}
+                  emptyLabel={t('operations.noDraftTasks')}
+                  editingIndex={editingDraftIndex}
+                  onEdit={setEditingDraftIndex}
+                  onDelete={(index) => {
+                    setDraftVisitTasks((current) =>
+                      current.filter((_, entryIndex) => entryIndex !== index),
+                    )
+                    setEditingDraftIndex((current) => {
+                      if (current === null) return null
+                      if (current === index) return null
+                      if (current > index) return current - 1
+                      return current
+                    })
+                  }}
+                  onChange={(index, patch) =>
+                    setDraftVisitTasks((current) =>
+                      current.map((entry, entryIndex) =>
+                        entryIndex === index ? { ...entry, ...patch } : entry,
+                      ),
+                    )
+                  }
+                />
+              </CollapsibleVisitTasks>
             </div>
             <div className="modal-footer">
               {isSavingVisitWithTasks ? (
@@ -3564,6 +3439,7 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body form-grid">
+              {isTaskFormOpen ? errorNotice : null}
               {!taskForm.visitId ? (
                 <>
                   <label>
@@ -3701,6 +3577,7 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body">
+              {isCancelVisitOpen ? errorNotice : null}
               <p>
                 {visitTasks.length === 0
                   ? t('operations.cancelVisitNoTasks')
@@ -3810,6 +3687,7 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body form-grid">
+              {isCompleteVisitOpen ? errorNotice : null}
               <label>
                 Hours
                 <input
@@ -3879,6 +3757,7 @@ export function DailyOperationsView({
               </button>
             </div>
             <div className="modal-body">
+              {isAssignVisitOpen ? errorNotice : null}
               <label>
                 Visit
                 <select

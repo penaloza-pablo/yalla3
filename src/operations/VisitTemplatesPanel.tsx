@@ -8,6 +8,7 @@ import {
   type Ref,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DismissibleNotice } from './DismissibleNotice'
 import { getVisitTemplates, saveVisitTemplate } from './api'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { sortVisitTypes } from './visitTypeHelpers'
@@ -69,7 +70,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
     teams,
     users,
     visitTypes,
-    onMessage,
+    onMessage: _onMessage,
     onError,
     hideSectionHeader = false,
     searchQuery = '',
@@ -87,6 +88,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   const [templates, setTemplates] = useState<VisitTemplateRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [templateForm, setTemplateForm] = useState(emptyTemplateForm())
 
   const sortedPropertyOptions = useMemo(
@@ -123,9 +125,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
 
   const loadTemplates = useCallback(async () => {
     if (!getVisitTemplatesEndpoint) {
-      onError(
-        'Missing get visit templates endpoint (VITE_GET_VISIT_TEMPLATES_URL).',
-      )
+      onError(t('operations.missingTemplatesEndpoint'))
       return
     }
     setIsLoading(true)
@@ -138,21 +138,18 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
       )
       setTemplates(items)
     } catch (loadError) {
-      onError(
-        loadError instanceof Error
-          ? loadError.message
-          : 'Unable to load visit templates.',
-      )
+      onError(t('operations.unableLoadTemplates'))
     } finally {
       setIsLoading(false)
     }
-  }, [getVisitTemplatesEndpoint, onError])
+  }, [getVisitTemplatesEndpoint, onError, t])
 
   useEffect(() => {
     void loadTemplates()
   }, [loadTemplates])
 
   const openCreateTemplate = () => {
+    setFormError(null)
     setTemplateForm({
       ...emptyTemplateForm(),
       propertyId: filters.propertyIds[0] ?? '',
@@ -174,6 +171,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   }))
 
   const openEditTemplate = (template: VisitTemplateRecord) => {
+    setFormError(null)
     setTemplateForm({
       id: template.id,
       name: template.name,
@@ -203,6 +201,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
   }
 
   const openDuplicateTemplate = (template: VisitTemplateRecord) => {
+    setFormError(null)
     setTemplateForm({
       id: '',
       name: `${template.name} (copy)`,
@@ -254,9 +253,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
 
   const submitTemplate = async () => {
     if (!upsertVisitTemplateEndpoint) {
-      onError(
-        'Missing upsert visit template endpoint (VITE_UPSERT_VISIT_TEMPLATE_URL).',
-      )
+      setFormError(t('operations.missingUpsertTemplate'))
       return
     }
     const payload: Record<string, unknown> = {
@@ -287,17 +284,13 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         templateForm.estimatedDurationMinutes,
       )
     }
+    setFormError(null)
     try {
       await saveVisitTemplate(upsertVisitTemplateEndpoint, payload)
       setIsFormOpen(false)
-      onMessage(templateForm.id ? 'Template updated.' : 'Template created.')
       await loadTemplates()
-    } catch (saveError) {
-      onError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to save visit template.',
-      )
+    } catch {
+      setFormError(t('operations.unableSaveTemplate'))
     }
   }
 
@@ -308,14 +301,9 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         id: template.id,
         active: false,
       })
-      onMessage('Template deactivated.')
       await loadTemplates()
-    } catch (saveError) {
-      onError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to deactivate template.',
-      )
+    } catch {
+      onError(t('operations.unableDeactivateTemplate'))
     }
   }
 
@@ -326,14 +314,9 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         id: template.id,
         active: true,
       })
-      onMessage('Template reactivated.')
       await loadTemplates()
-    } catch (saveError) {
-      onError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to reactivate template.',
-      )
+    } catch {
+      onError(t('operations.unableReactivateTemplate'))
     }
   }
 
@@ -697,12 +680,25 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
               <button
                 className="btn-icon"
                 type="button"
-                onClick={() => setIsFormOpen(false)}
+                onClick={() => {
+                  setIsFormOpen(false)
+                  setFormError(null)
+                }}
               >
                 ✕
               </button>
             </div>
             <div className="modal-body form-grid">
+              {formError ? (
+                <div className="full-width">
+                  <DismissibleNotice
+                    dismissLabel={t('common.close')}
+                    onDismiss={() => setFormError(null)}
+                  >
+                    {formError}
+                  </DismissibleNotice>
+                </div>
+              ) : null}
               <label>
                 Template name
                 <input
