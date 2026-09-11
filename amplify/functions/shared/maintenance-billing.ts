@@ -1,6 +1,6 @@
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { isHiddenBillingMonth } from './billing-months';
-import { scanAllItems } from './cleaning-plan';
+import { isCleaningVisitType, scanAllItems } from './cleaning-plan';
 import { resolveYallaPropertyLabelFromRecord } from './property-identity';
 import {
   docClient,
@@ -32,8 +32,6 @@ export const MAINTENANCE_VISIT_TYPE_ID =
   process.env.MAINTENANCE_VISIT_TYPE_ID || MAINTENANCE_VISIT_TYPE_IDS[0];
 export const MAINTENANCE_TEAM_ID =
   process.env.MAINTENANCE_TEAM_ID || 'team_maintenance';
-export const CLEANING_VISIT_TYPE_ID =
-  process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
 export const SETTINGS_ID = 'GLOBAL';
 export const VISIBLE_PAST_MONTHS = 3;
 export const DEFAULT_HOURS_POOL = 100;
@@ -161,7 +159,7 @@ export const isMaintenanceVisitType = (visitTypeId?: string) => {
 export const isBillingMaintenanceVisit = (visit: Record<string, unknown>) => {
   const visitTypeId =
     asString(visit.visitTypeId) || asString(visit.visit_type_id);
-  if (visitTypeId === CLEANING_VISIT_TYPE_ID) {
+  if (isCleaningVisitType(visitTypeId)) {
     return false;
   }
   if (isMaintenanceVisitType(visitTypeId)) {

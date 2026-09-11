@@ -50,6 +50,7 @@ export type CleaningPlanRow = {
   startTime: string
   qualityReview: boolean
   cleaningTypeId: string
+  durationHours?: number
   cleaningTypes: PropertyCleaningType[]
   bookingContext?: CleaningPlanBookingContext | null
   kit?: AmenitiesKit | null

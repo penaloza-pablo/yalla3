@@ -22,6 +22,7 @@ import { TodayView, clearTodaySummaryCache } from '../today/TodayView'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
+  addHoursToTimeString,
   formatAgendaDayLabel,
   getAgendaDateRange,
   isTerminalVisit,
@@ -34,7 +35,7 @@ import {
 } from '../../amplify/functions/shared/property-identity'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-title'
-import { CLEANING_VISIT_TYPE_ID, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
+import { isCleaningVisitType, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { isManagementTeam } from './teamColors'
@@ -142,12 +143,29 @@ type CleaningPlanDayLookup = {
   status: 'READY' | 'DRAFT'
   typeNameByVisitId: Record<string, string>
   cleanerIdByVisitId: Record<string, string>
+  startTimeByVisitId: Record<string, string>
+  durationHoursByVisitId: Record<string, number>
 }
 
 type MaintenancePlanDayLookup = {
   status: 'READY' | 'DRAFT'
   agentIdByVisitId: Record<string, string>
   visitIds: string[]
+}
+
+const durationHoursFromPlanRow = (item: Record<string, unknown>) => {
+  const direct = Number(item.durationHours)
+  if (Number.isFinite(direct) && direct > 0) {
+    return direct
+  }
+  const types = Array.isArray(item.cleaningTypes) ? item.cleaningTypes : []
+  const typeId = String(item.cleaningTypeId ?? '').trim()
+  const matched = types.find((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>
+    return String(row.id ?? '').trim() === typeId
+  }) as Record<string, unknown> | undefined
+  const fromType = Number(matched?.durationHours)
+  return Number.isFinite(fromType) && fromType > 0 ? fromType : 0
 }
 
 const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
@@ -586,8 +604,44 @@ export function DailyOperationsView({
     [visitTypes],
   )
 
+  const overlayVisitWithCleaningPlan = useCallback(
+    (visit: VisitRecord) => {
+      const plan = cleaningPlansByDate[visit.scheduledDate]
+      if (!plan) {
+        return visit
+      }
+      const plannedStart = plan.startTimeByVisitId[visit.id]?.trim()
+      const durationHours = plan.durationHoursByVisitId[visit.id] ?? 0
+      const shouldApplyStart = plan.status === 'READY' && Boolean(plannedStart)
+      const shouldApplyDuration = durationHours > 0
+      if (!shouldApplyStart && !shouldApplyDuration) {
+        return visit
+      }
+      const startTime = shouldApplyStart
+        ? plannedStart
+        : visit.scheduledStartTime
+      if (!startTime) {
+        return visit
+      }
+      const endTime = shouldApplyDuration
+        ? addHoursToTimeString(startTime, durationHours)
+        : visit.scheduledEndTime
+      return {
+        ...visit,
+        scheduledStartTime: startTime,
+        scheduledEndTime: endTime || visit.scheduledEndTime,
+        estimatedDurationMinutes: shouldApplyDuration
+          ? Math.round(durationHours * 60)
+          : visit.estimatedDurationMinutes,
+      }
+    },
+    [cleaningPlansByDate],
+  )
+
   const filteredVisits = useMemo(() => {
-    return visits.filter((visit) => {
+    return visits
+      .map(overlayVisitWithCleaningPlan)
+      .filter((visit) => {
       if (filters.teamIds.length === 0) {
         if (isManagementTeam(visit.teamId, teamById)) {
           return false
@@ -615,7 +669,7 @@ export function DailyOperationsView({
       }
       return true
     })
-  }, [visits, filters, teamById])
+  }, [visits, filters, teamById, overlayVisitWithCleaningPlan])
 
   const activeFilterCount = useMemo(() => {
     const statusCount = listsMatch(filters.statuses, DEFAULT_STATUS_FILTER)
@@ -659,15 +713,15 @@ export function DailyOperationsView({
     return map
   }, [filteredVisits])
 
-  const selectedVisit = useMemo(
-    () => visits.find((visit) => visit.id === selectedVisitId) ?? null,
-    [visits, selectedVisitId],
-  )
+  const selectedVisit = useMemo(() => {
+    const match = visits.find((visit) => visit.id === selectedVisitId)
+    return match ? overlayVisitWithCleaningPlan(match) : null
+  }, [visits, selectedVisitId, overlayVisitWithCleaningPlan])
 
   const cleaningTypeBadge = useMemo(() => {
     if (
       !selectedVisit ||
-      selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID
+      !isCleaningVisitType(selectedVisit.visitTypeId)
     ) {
       return null
     }
@@ -690,7 +744,7 @@ export function DailyOperationsView({
   const cleanerBadge = useMemo(() => {
     if (
       !selectedVisit ||
-      selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID
+      !isCleaningVisitType(selectedVisit.visitTypeId)
     ) {
       return null
     }
@@ -707,7 +761,7 @@ export function DailyOperationsView({
   const maintenanceAssigneeBadge = useMemo(() => {
     if (
       !selectedVisit ||
-      selectedVisit.visitTypeId === CLEANING_VISIT_TYPE_ID
+      isCleaningVisitType(selectedVisit.visitTypeId)
     ) {
       return null
     }
@@ -1031,76 +1085,102 @@ export function DailyOperationsView({
   }, [endpoints.maintenanceAgents])
 
   useEffect(() => {
-    if (mode !== 'dashboard' || !selectedVisit) {
+    if (mode !== 'dashboard') {
       return
     }
-    if (selectedVisit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
-      return
-    }
-    const date = selectedVisit.scheduledDate.trim()
     const endpoint = endpoints.cleaningPlan
-    if (!date || !endpoint) {
+    if (!endpoint) {
       return
     }
-    if (cleaningPlansByDate[date] || cleaningPlanInflight.current.has(date)) {
-      return
+    const dates = [
+      ...new Set(
+        [
+          ...visitQueryRange.dates,
+          selectedVisit && isCleaningVisitType(selectedVisit.visitTypeId)
+            ? selectedVisit.scheduledDate.trim()
+            : '',
+        ].filter(Boolean),
+      ),
+    ]
+    for (const date of dates) {
+      if (cleaningPlansByDate[date] || cleaningPlanInflight.current.has(date)) {
+        continue
+      }
+      cleaningPlanInflight.current.add(date)
+      void fetchJson<{
+        status?: string
+        rows?: Record<string, unknown>[]
+      }>(`${endpoint}?date=${encodeURIComponent(date)}`)
+        .then((payload) => {
+          const typeNameByVisitId: Record<string, string> = {}
+          const cleanerIdByVisitId: Record<string, string> = {}
+          const startTimeByVisitId: Record<string, string> = {}
+          const durationHoursByVisitId: Record<string, number> = {}
+          for (const row of payload.rows ?? []) {
+            const visitId = String(row.visitId ?? '').trim()
+            if (!visitId) {
+              continue
+            }
+            const name = cleaningTypeNameFromPlanRow(row)
+            if (name) {
+              typeNameByVisitId[visitId] = name
+            }
+            const cleanerId = String(row.cleanerId ?? '').trim()
+            if (cleanerId) {
+              cleanerIdByVisitId[visitId] = cleanerId
+            }
+            const startTime = String(row.startTime ?? '').trim()
+            if (startTime) {
+              startTimeByVisitId[visitId] = startTime
+            }
+            const durationHours = durationHoursFromPlanRow(row)
+            if (durationHours > 0) {
+              durationHoursByVisitId[visitId] = durationHours
+            }
+          }
+          setCleaningPlansByDate((current) => ({
+            ...current,
+            [date]: {
+              status:
+                String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+                  ? 'READY'
+                  : 'DRAFT',
+              typeNameByVisitId,
+              cleanerIdByVisitId,
+              startTimeByVisitId,
+              durationHoursByVisitId,
+            },
+          }))
+        })
+        .catch(() => {
+          setCleaningPlansByDate((current) => ({
+            ...current,
+            [date]: {
+              status: 'DRAFT',
+              typeNameByVisitId: {},
+              cleanerIdByVisitId: {},
+              startTimeByVisitId: {},
+              durationHoursByVisitId: {},
+            },
+          }))
+        })
+        .finally(() => {
+          cleaningPlanInflight.current.delete(date)
+        })
     }
-    cleaningPlanInflight.current.add(date)
-    void fetchJson<{
-      status?: string
-      rows?: Record<string, unknown>[]
-    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
-      .then((payload) => {
-        const typeNameByVisitId: Record<string, string> = {}
-        const cleanerIdByVisitId: Record<string, string> = {}
-        for (const row of payload.rows ?? []) {
-          const visitId = String(row.visitId ?? '').trim()
-          const name = cleaningTypeNameFromPlanRow(row)
-          if (visitId && name) {
-            typeNameByVisitId[visitId] = name
-          }
-          const cleanerId = String(row.cleanerId ?? '').trim()
-          if (visitId && cleanerId) {
-            cleanerIdByVisitId[visitId] = cleanerId
-          }
-        }
-        setCleaningPlansByDate((current) => ({
-          ...current,
-          [date]: {
-            status:
-              String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
-                ? 'READY'
-                : 'DRAFT',
-            typeNameByVisitId,
-            cleanerIdByVisitId,
-          },
-        }))
-      })
-      .catch(() => {
-        setCleaningPlansByDate((current) => ({
-          ...current,
-          [date]: {
-            status: 'DRAFT',
-            typeNameByVisitId: {},
-            cleanerIdByVisitId: {},
-          },
-        }))
-      })
-      .finally(() => {
-        cleaningPlanInflight.current.delete(date)
-      })
   }, [
     cleaningPlansByDate,
     endpoints.cleaningPlan,
     mode,
     selectedVisit,
+    visitQueryRange.dates,
   ])
 
   useEffect(() => {
     if (mode !== 'dashboard' || !selectedVisit) {
       return
     }
-    if (selectedVisit.visitTypeId === CLEANING_VISIT_TYPE_ID) {
+    if (isCleaningVisitType(selectedVisit.visitTypeId)) {
       return
     }
     const date = selectedVisit.scheduledDate.trim()

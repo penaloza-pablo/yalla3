@@ -1106,6 +1106,11 @@ propertiesTable.grantReadData(
 );
 visitsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+cleaningPlansTable.grantReadData(backend.getVisits.resources.lambda);
+backend.getVisits.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
 visitsTable.grantReadData(backend.upsertCleaningIncident.resources.lambda);
 propertiesTable.grantReadData(backend.upsertCleaningIncident.resources.lambda);
 cleaningPlansTable.grantReadData(

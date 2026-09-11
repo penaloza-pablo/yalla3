@@ -146,6 +146,7 @@ const mapPlanRow = (item: Record<string, unknown>): CleaningPlanRow => {
       .replace(/^(\d):/, '0$1'),
     qualityReview: Boolean(item.qualityReview),
     cleaningTypeId,
+    durationHours: Number(item.durationHours ?? defaultType?.durationHours ?? 0),
     cleaningTypes,
     bookingContext: mapBookingContext(item.bookingContext),
     kit: mapKit(item.kit),

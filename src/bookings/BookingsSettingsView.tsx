@@ -57,6 +57,10 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
         'upsertBookingsPlannerSettingsUrl',
         import.meta.env.VITE_UPSERT_BOOKINGS_PLANNER_SETTINGS_URL,
       ),
+      applyPlanner: getEndpoint(
+        'applyBookingsPlannerUrl',
+        import.meta.env.VITE_APPLY_BOOKINGS_PLANNER_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -65,6 +69,7 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
   const [settings, setSettings] = useState<PlannerSettings>(defaultPlannerSettings())
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<PlannerRuleId | null>(null)
@@ -136,6 +141,52 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
       )
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const applyPlannerNow = async () => {
+    if (!endpoints.applyPlanner) {
+      setError(t('bookingsSettings.missingApply'))
+      return
+    }
+    setIsApplying(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const payload = await fetchJson<{
+        updated?: number
+        synced?: number
+        errors?: string[]
+      }>(endpoints.applyPlanner, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ syncGuesty: true }),
+      })
+      const errors = payload.errors ?? []
+      if (errors.length > 0) {
+        setError(
+          t('bookingsSettings.applyPartial', {
+            updated: payload.updated ?? 0,
+            synced: payload.synced ?? 0,
+            failed: errors.length,
+          }),
+        )
+        return
+      }
+      setMessage(
+        t('bookingsSettings.applySuccess', {
+          updated: payload.updated ?? 0,
+          synced: payload.synced ?? 0,
+        }),
+      )
+    } catch (applyError) {
+      setError(
+        applyError instanceof Error
+          ? applyError.message
+          : t('bookingsSettings.applyError'),
+      )
+    } finally {
+      setIsApplying(false)
     }
   }
 
@@ -264,6 +315,21 @@ export function BookingsSettingsView({ getEndpoint, propertyOptions }: Props) {
                 ? t('bookingsSettings.on')
                 : t('bookingsSettings.off')}
             </span>
+          </div>
+          <p className="subtitle">{t('bookingsSettings.applyHelp')}</p>
+          <div className="header-actions">
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => void applyPlannerNow()}
+              disabled={
+                isApplying || isSaving || isLoading || !settings.plannerEnabled
+              }
+            >
+              {isApplying
+                ? t('bookingsSettings.applying')
+                : t('bookingsSettings.applyNow')}
+            </button>
           </div>
         </section>
       ) : null}

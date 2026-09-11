@@ -22,7 +22,7 @@ import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { displayTaskDescription, displayTaskTitle } from './taskTitleDisplay'
 import { buildApplyTemplateVisitPayload } from './visitTemplateHelpers'
 import {
-  CLEANING_VISIT_TYPE_ID,
+  isCleaningVisitType,
   isMaintenanceVisitType,
   requiresCompleteVisitWizard,
   resolveTeamIdForVisitType,
@@ -529,7 +529,7 @@ export function VisitDetailModal({
   ])
 
   useEffect(() => {
-    if (!visit || visit.visitTypeId !== CLEANING_VISIT_TYPE_ID) {
+    if (!visit || !isCleaningVisitType(visit.visitTypeId)) {
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
       return
@@ -604,7 +604,7 @@ export function VisitDetailModal({
   }, [endpoints.cleaners, endpoints.cleaningPlan, t, visit])
 
   useEffect(() => {
-    if (!visit || visit.visitTypeId === CLEANING_VISIT_TYPE_ID) {
+    if (!visit || isCleaningVisitType(visit.visitTypeId)) {
       setMaintenanceAssigneeBadge(null)
       return
     }

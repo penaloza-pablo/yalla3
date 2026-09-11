@@ -1,6 +1,6 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { recordCleaningCompletion } from './cleaner-stats';
-import { CLEANING_VISIT_TYPE_ID, normalizeStartTime } from './cleaning-plan';
+import { isCleaningVisitType, normalizeStartTime } from './cleaning-plan';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
@@ -75,7 +75,7 @@ export const isOpenCleaningVisit = (visit: Record<string, unknown>) => {
   const typeId = asString(visit.visitTypeId);
   const status = asString(visit.status).toUpperCase();
   return (
-    typeId === CLEANING_VISIT_TYPE_ID && !TERMINAL_VISIT_STATUSES.has(status)
+    isCleaningVisitType(typeId) && !TERMINAL_VISIT_STATUSES.has(status)
   );
 };
 

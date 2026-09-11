@@ -4,6 +4,17 @@ import { docClient } from './visit-task-utils';
 export const CLEANING_VISIT_TYPE_ID =
   process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
 
+export const isCleaningVisitType = (visitTypeId?: unknown) => {
+  const id =
+    typeof visitTypeId === 'string' ? visitTypeId.trim().toLowerCase() : '';
+  if (!id) {
+    return false;
+  }
+  return (
+    id === CLEANING_VISIT_TYPE_ID.toLowerCase() || id.includes('cleaning')
+  );
+};
+
 export const CLEANING_SETTINGS_ID = 'GLOBAL';
 
 export const isCleaningSettingsRecord = (item: Record<string, unknown>) => {
@@ -219,9 +230,84 @@ export const queryCleaningVisitsForDate = async (
   scheduledDate: string,
 ) => {
   const items = await queryVisitsForScheduledDate(visitsTable, scheduledDate);
-  return items.filter((visit) => {
-    const visitTypeId =
-      typeof visit.visitTypeId === 'string' ? visit.visitTypeId : '';
-    return visitTypeId === CLEANING_VISIT_TYPE_ID;
+  return items.filter((visit) => isCleaningVisitType(visit.visitTypeId));
+};
+
+const asPlanScheduleItems = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter(
+        (entry): entry is Record<string, unknown> =>
+          Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
+      )
+    : [];
+
+export const overlayVisitWithCleaningPlanItem = (
+  visit: Record<string, unknown>,
+  planItem?: Record<string, unknown>,
+) => {
+  if (!planItem) {
+    return visit;
+  }
+  const start = normalizeStartTime(
+    typeof planItem.startTime === 'string' ? planItem.startTime : '',
+  );
+  if (!start) {
+    return visit;
+  }
+  const durationHours = normalizeDurationHours(planItem.durationHours);
+  const end =
+    durationHours > 0 ? addHoursToTime(start, durationHours) : '';
+  return {
+    ...visit,
+    scheduledStartTime: start,
+    ...(end ? { scheduledEndTime: end } : {}),
+    ...(durationHours > 0
+      ? { estimatedDurationMinutes: Math.round(durationHours * 60) }
+      : {}),
+  };
+};
+
+export const overlayVisitsWithReadyCleaningPlans = async (
+  plansTable: string | undefined,
+  visits: Record<string, unknown>[],
+) => {
+  if (!plansTable || visits.length === 0) {
+    return visits;
+  }
+  const dates = [
+    ...new Set(
+      visits
+        .map((visit) =>
+          typeof visit.scheduledDate === 'string'
+            ? visit.scheduledDate.trim()
+            : '',
+        )
+        .filter((date) => isDateOnly(date)),
+    ),
+  ];
+  const plans = await Promise.all(
+    dates.map((date) => getPlanByDate(plansTable, date)),
+  );
+  const itemByVisitId = new Map<string, Record<string, unknown>>();
+  for (const plan of plans) {
+    const status =
+      typeof plan?.status === 'string' ? plan.status.toUpperCase() : '';
+    if (status !== 'READY') {
+      continue;
+    }
+    for (const item of asPlanScheduleItems(plan?.items)) {
+      const visitId =
+        typeof item.visitId === 'string' ? item.visitId.trim() : '';
+      if (visitId) {
+        itemByVisitId.set(visitId, item);
+      }
+    }
+  }
+  if (itemByVisitId.size === 0) {
+    return visits;
+  }
+  return visits.map((visit) => {
+    const visitId = typeof visit.id === 'string' ? visit.id : '';
+    return overlayVisitWithCleaningPlanItem(visit, itemByVisitId.get(visitId));
   });
 };

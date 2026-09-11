@@ -4,7 +4,7 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
-  CLEANING_VISIT_TYPE_ID,
+  isCleaningVisitType,
   getPlanByDate,
   scanAllItems,
 } from './cleaning-plan';
@@ -46,7 +46,7 @@ export const computeStarRating = (
 export const dateOnly = (value: unknown) => asString(value).slice(0, 10);
 
 export const isCleaningVisit = (visit: Record<string, unknown>) =>
-  asString(visit.visitTypeId) === CLEANING_VISIT_TYPE_ID;
+  isCleaningVisitType(visit.visitTypeId);
 
 const normalizeCompletions = (value: unknown): CleanerCompletion[] => {
   if (!Array.isArray(value)) {

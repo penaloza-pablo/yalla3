@@ -31,6 +31,17 @@ export const formatMinutesAsTime = (minutes: number) => {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
 }
 
+export const addHoursToTimeString = (
+  startTime: string,
+  durationHours: number,
+) => {
+  const start = parseTimeToMinutes(startTime)
+  if (!startTime.trim() || !Number.isFinite(durationHours) || durationHours <= 0) {
+    return ''
+  }
+  return formatMinutesAsTime(start + Math.round(durationHours * 60))
+}
+
 export const getVisitTimeRange = (visit: VisitRecord) => {
   const start = parseTimeToMinutes(visit.scheduledStartTime)
   let end = parseTimeToMinutes(visit.scheduledEndTime)

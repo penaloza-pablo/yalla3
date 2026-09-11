@@ -91,6 +91,7 @@ const mergePlanRows = (
         startTime: saved?.startTime?.trim() || visitStart,
         qualityReview: Boolean(saved?.qualityReview),
         cleaningTypeId: selectedType?.id ?? '',
+        durationHours: selectedType?.durationHours ?? 0,
         cleaningTypes,
         bookingContext,
         guestyTaskId:

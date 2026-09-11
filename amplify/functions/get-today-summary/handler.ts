@@ -6,7 +6,7 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import { addDaysToDateString } from '../shared/date-range';
-import { getPlanByDate, scanAllItems } from '../shared/cleaning-plan';
+import { getPlanByDate, isCleaningVisitType, scanAllItems } from '../shared/cleaning-plan';
 import {
   countVisibleBillingWarnings,
   getMonthRecord,
@@ -35,8 +35,6 @@ type HttpEvent = {
   requestContext?: { http?: { method?: string } };
 };
 
-const CLEANING_VISIT_TYPE_ID =
-  process.env.CLEANING_VISIT_TYPE_ID || 'visit_type_cleaning';
 const MAINTENANCE_TEAM_ID =
   process.env.MAINTENANCE_TEAM_ID || 'team_maintenance';
 const MAINTENANCE_VISIT_TYPE_IDS = (
@@ -202,7 +200,7 @@ const isDashboardMaintenanceVisit = (
   visitTypeIds: Set<string>,
 ) => {
   const typeId = visitTypeIdOf(item);
-  if (typeId === CLEANING_VISIT_TYPE_ID) {
+  if (isCleaningVisitType(typeId)) {
     return false;
   }
   if (visitTypeIds.has(typeId)) {
@@ -324,7 +322,7 @@ export const handler = async (event: HttpEvent) => {
     const cleaning = countScheduledVisits(
       visits,
       today,
-      (item) => visitTypeIdOf(item) === CLEANING_VISIT_TYPE_ID,
+      (item) => isCleaningVisitType(visitTypeIdOf(item)),
     );
     const maintenanceTypeIds = new Set(MAINTENANCE_VISIT_TYPE_IDS);
     const maintenance = countScheduledVisits(visits, today, (item) =>

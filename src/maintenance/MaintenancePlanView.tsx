@@ -18,6 +18,15 @@ import type {
   MaintenancePlanStatus,
 } from './types'
 
+const addOneHour = (value: string) => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) {
+    return ''
+  }
+  const hours = (Number(match[1]) + 1) % 24
+  return `${String(hours).padStart(2, '0')}:${match[2]}`
+}
+
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
   propertyOptions: PropertyOption[]
@@ -385,11 +394,13 @@ export function MaintenancePlanView({
               type="time"
               value={row.startTime}
               disabled={isReady}
-              onChange={(event) =>
+              onChange={(event) => {
+                const startTime = event.target.value
                 updateRow(row.visitId, {
-                  startTime: event.target.value,
+                  startTime,
+                  endTime: addOneHour(startTime) || row.endTime,
                 })
-              }
+              }}
             />
           </td>
           <td>

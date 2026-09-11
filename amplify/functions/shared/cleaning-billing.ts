@@ -5,7 +5,7 @@ import {
   type AmenitiesKit,
 } from './amenities-kit';
 import {
-  CLEANING_VISIT_TYPE_ID,
+  isCleaningVisitType,
   getPlanByDate,
   normalizeCleaningTypes,
   normalizePrice,
@@ -496,7 +496,7 @@ export const countVisibleBillingWarnings = (
       const typeId = asString(
         visit.visitTypeId ?? visit.visit_type_id ?? visit.VisitTypeId,
       );
-      if (typeId !== CLEANING_VISIT_TYPE_ID) {
+      if (!isCleaningVisitType(typeId)) {
         return false;
       }
       const date = asString(visit.scheduledDate).slice(0, 10);

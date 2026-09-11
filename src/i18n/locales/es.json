@@ -142,7 +142,14 @@
     "saveError": "No se pudieron guardar los ajustes del planner.",
     "saved": "Ajustes del planner guardados.",
     "enabledSuccess": "Bookings Planner está ON. Se aplicaron las reglas a los próximos 7 días.",
-    "disabled": "Bookings Planner está OFF."
+    "disabled": "Bookings Planner está OFF.",
+    "applyNow": "Ejecutar planner en los próximos 7 días",
+    "applying": "Aplicando…",
+    "applyHelp": "Úsalo cuando entren reservas en la ventana de 7 días sin webhook de Guesty. Recalcula Gift Card, Linen, Access y Early check-in, y los escribe de vuelta en Guesty.",
+    "applySuccess": "Planner aplicado a {{updated}} reservas y sincronizado {{synced}} en Guesty.",
+    "applyPartial": "Planner aplicado a {{updated}} reservas y sincronizado {{synced}} en Guesty. Fallaron {{failed}}.",
+    "applyError": "No se pudo ejecutar el Bookings Planner.",
+    "missingApply": "Falta el endpoint para ejecutar el planner. Redesplega el backend."
   },
   "chatbot": {
     "clear": "Limpiar",

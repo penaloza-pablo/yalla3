@@ -142,7 +142,14 @@
     "saveError": "Unable to save planner settings.",
     "saved": "Planner settings saved.",
     "enabledSuccess": "Bookings Planner is on. Rules were applied to the next 7 days.",
-    "disabled": "Bookings Planner is off."
+    "disabled": "Bookings Planner is off.",
+    "applyNow": "Run planner on the next 7 days",
+    "applying": "Applying…",
+    "applyHelp": "Use this when bookings entered the 7-day window without a Guesty webhook. It recalculates Gift Card, Linen, Access and Early check-in, and writes them back to Guesty.",
+    "applySuccess": "Planner applied to {{updated}} bookings and synced {{synced}} to Guesty.",
+    "applyPartial": "Planner applied to {{updated}} bookings and synced {{synced}} to Guesty. {{failed}} failed.",
+    "applyError": "Unable to run the bookings planner.",
+    "missingApply": "Missing planner apply endpoint. Redeploy the backend."
   },
   "chatbot": {
     "clear": "Clear",
