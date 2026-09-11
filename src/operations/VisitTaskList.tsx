@@ -69,7 +69,10 @@ export function VisitTaskList(props: Props) {
             task.descriptionEs,
           )
           return (
-            <li key={task.id ?? `draft-${index}`}>
+            <li
+              key={task.id ?? `draft-${index}`}
+              className={isEditing ? 'is-editing' : undefined}
+            >
               <div className="operations-task-content">
                 {isEditing ? (
                   <div className="operations-task-copy operations-task-edit-fields">
@@ -88,7 +91,9 @@ export function VisitTaskList(props: Props) {
                         )
                       }}
                     />
-                    <input
+                    <textarea
+                      className="visit-create-description"
+                      rows={2}
                       placeholder={t('operations.description')}
                       value={editableTaskDescription(
                         i18n.language,
@@ -134,7 +139,7 @@ export function VisitTaskList(props: Props) {
                     ) : null}
                   </div>
                 )}
-                {task.urgent || task.priority === 'URGENT' ? (
+                {!isEditing && (task.urgent || task.priority === 'URGENT') ? (
                   <span className="status status-danger">
                     {t('operations.priorityUrgent')}
                   </span>

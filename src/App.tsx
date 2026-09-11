@@ -23,7 +23,13 @@ import {
   ReviewWorkflowPanel,
   type ReviewWorkflowPersistPayload,
 } from './ReviewWorkflowPanel'
+import { fetchJson } from './operations/api'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import {
+  canonicalizeLinenValue,
+  isCanonicalLinenValue,
+  isEarlyCheckInEnabled,
+} from '../amplify/functions/shared/bookings-planner'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
@@ -37,6 +43,8 @@ import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { BookingsPlanView } from './bookings/BookingsPlanView'
 import { BookingsSettingsView } from './bookings/BookingsSettingsView'
+import { LinenBadgeSelect } from './bookings/LinenBadgeSelect'
+import { YallaSwitch } from './bookings/YallaSwitch'
 import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView'
 import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
@@ -278,6 +286,7 @@ type BookingRow = {
   linen: string
   guestCount: string
   earlyCheckIn: string
+  earlyCheckInOn: boolean
   access: string
 }
 
@@ -340,6 +349,7 @@ const pagesWithMobileSearch = new Set([
   'Users',
   'Roles',
   'Visit templates',
+  'Bookings',
   'Cleaning Incidents',
   'Maintenance Incidents',
 ])
@@ -877,6 +887,13 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
 
 const PURCHASE_WAITING_INVOICE = 'Waiting invoice'
 const PURCHASE_EXCLUDED = 'Excluded'
+const PURCHASE_STORAGE_LOCATIONS = ['P2 Storage', 'JCL Storage'] as const
+const DIRECT_PURCHASE_FILTER = '__direct_purchase__'
+const PURCHASE_WARNING_STATUSES = [
+  'To be confirmed',
+  'Waiting Delivery',
+  'Waiting invoice',
+] as const
 const isReceivedPurchaseStatus = (status: string) =>
   status === 'Confirmed' || status === PURCHASE_WAITING_INVOICE
 const isExcludedPurchase = (row: { excluded?: boolean; status: string }) =>
@@ -1294,7 +1311,10 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
     status: getStringValue(getItemValue(item, bookingFieldMap.status)) || 'Unknown',
     source: getStringValue(getItemValue(item, bookingFieldMap.source)),
     giftCard: getStringValue(getItemValue(item, bookingFieldMap.giftCard)),
-    linen: getStringValue(getItemValue(item, bookingFieldMap.linen)),
+    linen: canonicalizeLinenValue(
+      getItemValue(item, bookingFieldMap.linen),
+      listingId,
+    ),
     guestCount:
       guestCountValue === undefined || guestCountValue === null
         ? ''
@@ -1302,6 +1322,11 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
     earlyCheckIn: getStringValue(
       getItemValue(item, bookingFieldMap.earlyCheckIn),
     ),
+    earlyCheckInOn:
+      getBooleanValue(getItemValue(item, ['EarlyCheckInOn', 'earlyCheckInOn'])) ||
+      isEarlyCheckInEnabled(
+        getItemValue(item, bookingFieldMap.earlyCheckIn),
+      ),
     access: getStringValue(getItemValue(item, bookingFieldMap.access)),
   }
 }
@@ -1673,6 +1698,10 @@ function App() {
   const [expandedBookingIds, setExpandedBookingIds] = useState<Set<string>>(
     new Set(),
   )
+  const [openBookingLinenId, setOpenBookingLinenId] = useState<string | null>(
+    null,
+  )
+  const [savingBookingId, setSavingBookingId] = useState<string | null>(null)
   const [bookingsAvailableStatuses, setBookingsAvailableStatuses] = useState<
     string[]
   >([...DEFAULT_BOOKING_STATUSES])
@@ -1736,6 +1765,7 @@ function App() {
     useState<PurchaseFormState>(emptyPurchaseFormState)
   const [purchaseFormError, setPurchaseFormError] = useState<string | null>(null)
   const [isPurchaseSaving, setIsPurchaseSaving] = useState(false)
+  const [isPurchaseDeleting, setIsPurchaseDeleting] = useState(false)
   const [isSubtractionFormOpen, setIsSubtractionFormOpen] = useState(false)
   const [subtractionFormValues, setSubtractionFormValues] =
     useState<SubtractionFormState>(emptySubtractionFormState)
@@ -1807,10 +1837,11 @@ function App() {
   ]
 
   const purchaseLocationOptions = useMemo(() => {
-    const unique = new Set(
-      purchaseRows.map((row) => row.location).filter(Boolean),
+    const hasDirect = purchaseRows.some((row) => row.direct)
+    const storage = PURCHASE_STORAGE_LOCATIONS.filter((location) =>
+      purchaseRows.some((row) => !row.direct && row.location === location),
     )
-    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+    return hasDirect ? [...storage, DIRECT_PURCHASE_FILTER] : [...storage]
   }, [purchaseRows])
 
   const purchasesFilteredRows = useMemo(() => {
@@ -1825,7 +1856,11 @@ function App() {
       .filter((row) => {
         const locationMatch =
           purchasesFilters.locations.length === 0 ||
-          purchasesFilters.locations.includes(row.location)
+          purchasesFilters.locations.some((location) =>
+            location === DIRECT_PURCHASE_FILTER
+              ? row.direct
+              : !row.direct && row.location === location,
+          )
         const statusMatch =
           purchasesFilters.statuses.length === 0 ||
           purchasesFilters.statuses.includes(row.status)
@@ -1904,6 +1939,14 @@ function App() {
     [purchasesFilters.statuses],
   )
 
+  const isPurchaseWarningsQuickFilterActive = useMemo(() => {
+    if (purchasesFilters.statuses.length !== PURCHASE_WARNING_STATUSES.length) {
+      return false
+    }
+    const selected = new Set(purchasesFilters.statuses)
+    return PURCHASE_WARNING_STATUSES.every((status) => selected.has(status))
+  }, [purchasesFilters.statuses])
+
   const toggleWaitingQuickFilter = () => {
     if (isWaitingQuickFilterActive) {
       setPurchasesFilters((current) => ({ ...current, statuses: [] }))
@@ -1918,6 +1961,17 @@ function App() {
       ...current,
       statuses: ['Waiting Delivery'],
     }))
+  }
+
+  const togglePurchaseWarningsQuickFilter = () => {
+    if (isPurchaseWarningsQuickFilterActive) {
+      setPurchasesFilters((current) => ({ ...current, statuses: [] }))
+      setPurchasesFilterDraft((current) => ({ ...current, statuses: [] }))
+      return
+    }
+    const statuses = [...PURCHASE_WARNING_STATUSES]
+    setPurchasesFilters((current) => ({ ...current, statuses }))
+    setPurchasesFilterDraft((current) => ({ ...current, statuses }))
   }
 
   const subtractionStatusOptions = [
@@ -2980,6 +3034,20 @@ function App() {
   ])
 
   useEffect(() => {
+    if (!openBookingLinenId) {
+      return
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target?.closest('.linen-badge-wrap')) {
+        setOpenBookingLinenId(null)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [openBookingLinenId])
+
+  useEffect(() => {
     const needsProperties =
       activePage === 'Purchases' ||
       activePage === 'Properties' ||
@@ -3241,6 +3309,65 @@ function App() {
       }
       return next
     })
+  }
+
+  const saveBookingPlannerFields = async (
+    row: BookingRow,
+    patch: { linen?: string; earlyCheckInOn?: boolean },
+  ) => {
+    const endpoint = getEndpoint(
+      'upsertBookingPlannerFieldsUrl',
+      import.meta.env.VITE_UPSERT_BOOKING_PLANNER_FIELDS_URL,
+    )
+    if (!endpoint) {
+      setBookingsError(t('bookingsPlan.missingWrite'))
+      return
+    }
+    setSavingBookingId(row.id)
+    setBookingsError(null)
+    try {
+      const payload = await fetchJson<{
+        item?: Record<string, unknown>
+      }>(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          reservationId: row.id,
+          ...patch,
+        }),
+      })
+      const next = payload.item
+        ? mapBookingRow({ ...payload.item, ReservationID: row.id })
+        : row
+      setBookingRows((current) =>
+        current.map((entry) =>
+          entry.id === row.id
+            ? {
+                ...entry,
+                ...next,
+                id: row.id,
+                listingId: row.listingId,
+                guestName: row.guestName,
+                property: row.property,
+                checkIn: row.checkIn,
+                checkInRaw: row.checkInRaw,
+                checkOut: row.checkOut,
+                checkOutRaw: row.checkOutRaw,
+                guestCount: row.guestCount,
+                status: row.status,
+              }
+            : entry,
+        ),
+      )
+    } catch (saveError) {
+      setBookingsError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('bookings.savePlannerError'),
+      )
+    } finally {
+      setSavingBookingId(null)
+    }
   }
 
   const toggleSort = (key: 'name' | 'status') => {
@@ -3532,12 +3659,30 @@ function App() {
 
   const sortedBookingsRows = useMemo(() => {
     const direction = bookingsSortDirection === 'asc' ? 1 : -1
-    return [...bookingRows].sort((a, b) => {
-      const left = parseDateValue(a.checkInRaw)?.getTime() ?? 0
-      const right = parseDateValue(b.checkInRaw)?.getTime() ?? 0
-      return (left - right) * direction
-    })
-  }, [bookingRows, bookingsSortDirection])
+    return [...bookingRows]
+      .filter((row) =>
+        matchesTableSearch(tableSearchQuery, [
+          row.id,
+          row.confirmationCode,
+          row.guestName,
+          row.property,
+          row.status,
+          row.source,
+          row.giftCard,
+          row.linen,
+          row.guestCount,
+          row.earlyCheckIn,
+          row.access,
+          row.checkIn,
+          row.checkOut,
+        ]),
+      )
+      .sort((a, b) => {
+        const left = parseDateValue(a.checkInRaw)?.getTime() ?? 0
+        const right = parseDateValue(b.checkInRaw)?.getTime() ?? 0
+        return (left - right) * direction
+      })
+  }, [bookingRows, bookingsSortDirection, tableSearchQuery])
 
   const reviewsFilteredRows = useMemo(() => {
     const minRating =
@@ -3680,11 +3825,46 @@ function App() {
   }
 
   const closePurchaseForm = () => {
-    if (isPurchaseSaving) {
+    if (isPurchaseSaving || isPurchaseDeleting) {
       return
     }
     setIsPurchaseFormOpen(false)
     setPurchaseFormError(null)
+  }
+
+  const deleteDirectPurchase = async () => {
+    const purchaseId = purchaseFormValues.id.trim()
+    if (!purchaseFormValues.direct || !purchaseId) {
+      return
+    }
+    if (!window.confirm(t('purchases.deleteDirectConfirm'))) {
+      return
+    }
+    const endpoint = getEndpoint(
+      'upsertPurchaseUrl',
+      import.meta.env.VITE_UPSERT_PURCHASE_URL,
+    )
+    if (!endpoint) {
+      setPurchaseFormError(t('purchases.missingUpsert'))
+      return
+    }
+    setIsPurchaseDeleting(true)
+    setPurchaseFormError(null)
+    try {
+      await fetchJson(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: purchaseId }),
+      })
+      setPurchaseRows((current) =>
+        current.filter((row) => row.id !== purchaseId),
+      )
+      setIsPurchaseFormOpen(false)
+    } catch {
+      setPurchaseFormError(t('purchases.deleteError'))
+    } finally {
+      setIsPurchaseDeleting(false)
+    }
   }
 
   const closeSubtractionForm = () => {
@@ -4377,7 +4557,11 @@ function App() {
 
   const navigateToPage = (
     page: string,
-    options?: { inventoryStatuses?: string[]; billingMonth?: string },
+    options?: {
+      inventoryStatuses?: string[]
+      purchaseStatuses?: string[]
+      billingMonth?: string
+    },
   ) => {
     setActivePage(page)
     rememberActivePage(page)
@@ -4402,6 +4586,19 @@ function App() {
       setInventoryWarningsOnly(false)
       setFilters((current) => ({ ...current, statuses }))
       setFilterDraft((current) => ({ ...current, statuses }))
+    }
+    if (page === 'Purchases' && options?.purchaseStatuses?.length) {
+      const statuses = [...options.purchaseStatuses]
+      setPurchasesFilters((current) => ({
+        ...current,
+        locations: [],
+        statuses,
+      }))
+      setPurchasesFilterDraft((current) => ({
+        ...current,
+        locations: [],
+        statuses,
+      }))
     }
   }
 
@@ -4547,6 +4744,8 @@ function App() {
     switch (activePage) {
       case 'Inventory':
         return t('inventory.search')
+      case 'Bookings':
+        return t('bookings.search')
       case 'Purchases':
         return t('purchases.search')
       case 'Subtractions':
@@ -5817,7 +6016,11 @@ function App() {
                                         })
                                       }}
                                     />
-                                    <span>{option}</span>
+                                    <span>
+                                      {option === DIRECT_PURCHASE_FILTER
+                                        ? t('purchases.directPurchaseFilter')
+                                        : option}
+                                    </span>
                                   </label>
                                 )
                               })
@@ -5959,6 +6162,22 @@ function App() {
                       <th scope="col" className="mobile-quick-filter-col">
                         <button
                           className={`btn-quick-filter ${
+                            isPurchaseWarningsQuickFilterActive ? 'is-active' : ''
+                          }`}
+                          type="button"
+                          aria-pressed={isPurchaseWarningsQuickFilterActive}
+                          onClick={togglePurchaseWarningsQuickFilter}
+                        >
+                          {t('purchases.quickFilterWarnings')}
+                          <span
+                            className="quick-filter-indicator"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </th>
+                      <th scope="col" className="mobile-quick-filter-col">
+                        <button
+                          className={`btn-quick-filter ${
                             isWaitingQuickFilterActive ? 'is-active' : ''
                           }`}
                           type="button"
@@ -5978,13 +6197,13 @@ function App() {
                   <tbody>
                     {isPurchasesLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={7}>
                           {t('purchases.loading')}
                         </td>
                       </tr>
                     ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={7}>
                           {purchaseRows.length > 0
                             ? t('purchases.emptyFiltered')
                             : t('purchases.empty')}
@@ -7192,8 +7411,51 @@ function App() {
                 <p className="subtitle">{t('bookings.subtitle')}</p>
               </div>
               <MobileBodyPortal>
-              <div className="page-action-bar">
+              <div
+                className={`page-action-bar ${
+                  isMobileSearchOpen ? 'is-search-open' : ''
+                }`}
+              >
+                <input
+                  className="search-input"
+                  placeholder={t('bookings.search')}
+                  type="search"
+                  aria-label={t('bookings.search')}
+                  value={tableSearchQuery}
+                  onChange={(event) => setTableSearchQuery(event.target.value)}
+                />
                 <div className="header-actions">
+                <button
+                  className={`btn-ghost btn-search-toggle ${
+                    isMobileSearchOpen ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={
+                    isMobileSearchOpen
+                      ? t('common.hideSearch')
+                      : t('common.showSearch')
+                  }
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() =>
+                    setIsMobileSearchOpen((current) => !current)
+                  }
+                >
+                  {isMobileSearchOpen ? (
+                    <span aria-hidden="true">✕</span>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                    >
+                      <path
+                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </button>
                 <button
                   className={`btn-ghost btn-filter ${
                     isBookingsFilterOpen ? 'is-active' : ''
@@ -7472,25 +7734,38 @@ function App() {
                       </th>
                       <th scope="col">{t('common.checkOut')}</th>
                       <th scope="col">{t('common.status')}</th>
+                      <th scope="col">{t('bookingsPlan.linen')}</th>
+                      <th scope="col">{t('bookingsPlan.earlyCheckIn')}</th>
                       <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isBookingsLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={8}>
                           {t('bookings.loading')}
                         </td>
                       </tr>
                     ) : sortedBookingsRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
-                          {t('bookings.emptyPage')}
+                        <td className="table-empty" colSpan={8}>
+                          {bookingRows.length > 0
+                            ? t('bookings.emptyFiltered')
+                            : t('bookings.emptyPage')}
                         </td>
                       </tr>
                     ) : (
                       sortedBookingsRows.map((row) => {
                         const isExpanded = expandedBookingIds.has(row.id)
+                        const isSavingBooking = savingBookingId === row.id
+                        const canEditBooking =
+                          row.status.toLowerCase() === 'confirmed'
+                        const linenValue = isCanonicalLinenValue(
+                          row.linen,
+                          row.listingId,
+                        )
+                          ? row.linen
+                          : ''
                         return (
                           <Fragment key={row.id}>
                             <tr>
@@ -7502,6 +7777,35 @@ function App() {
                                 <span className="status status-neutral">
                                   {row.status}
                                 </span>
+                              </td>
+                              <td>
+                                <LinenBadgeSelect
+                                  value={linenValue}
+                                  listingId={row.listingId}
+                                  disabled={!canEditBooking || isSavingBooking}
+                                  open={openBookingLinenId === row.id}
+                                  onToggle={() =>
+                                    setOpenBookingLinenId((current) =>
+                                      current === row.id ? null : row.id,
+                                    )
+                                  }
+                                  onSelect={(linen) => {
+                                    setOpenBookingLinenId(null)
+                                    void saveBookingPlannerFields(row, { linen })
+                                  }}
+                                />
+                              </td>
+                              <td>
+                                <YallaSwitch
+                                  on={row.earlyCheckInOn}
+                                  disabled={!canEditBooking || isSavingBooking}
+                                  label={t('bookingsPlan.earlyCheckIn')}
+                                  onToggle={() =>
+                                    void saveBookingPlannerFields(row, {
+                                      earlyCheckInOn: !row.earlyCheckInOn,
+                                    })
+                                  }
+                                />
                               </td>
                               <td>
                                 <div className="action-buttons">
@@ -7519,7 +7823,7 @@ function App() {
                             </tr>
                             {isExpanded ? (
                               <tr className="detail-row">
-                                <td colSpan={6}>
+                                <td colSpan={8}>
                                   <div className="detail-grid">
                                     <div>
                                       <p className="detail-label">
@@ -7551,9 +7855,25 @@ function App() {
                                       <p className="detail-label">
                                         {t('common.linen')}
                                       </p>
-                                      <p className="detail-value">
-                                        {displayBookingDetail(row.linen)}
-                                      </p>
+                                      <LinenBadgeSelect
+                                        value={linenValue}
+                                        listingId={row.listingId}
+                                        disabled={!canEditBooking || isSavingBooking}
+                                        open={openBookingLinenId === `${row.id}-detail`}
+                                        onToggle={() =>
+                                          setOpenBookingLinenId((current) =>
+                                            current === `${row.id}-detail`
+                                              ? null
+                                              : `${row.id}-detail`,
+                                          )
+                                        }
+                                        onSelect={(linen) => {
+                                          setOpenBookingLinenId(null)
+                                          void saveBookingPlannerFields(row, {
+                                            linen,
+                                          })
+                                        }}
+                                      />
                                     </div>
                                     <div>
                                       <p className="detail-label">
@@ -7567,9 +7887,16 @@ function App() {
                                       <p className="detail-label">
                                         {t('common.earlyCheckIn')}
                                       </p>
-                                      <p className="detail-value">
-                                        {displayBookingDetail(row.earlyCheckIn)}
-                                      </p>
+                                      <YallaSwitch
+                                        on={row.earlyCheckInOn}
+                                        disabled={!canEditBooking || isSavingBooking}
+                                        label={t('bookingsPlan.earlyCheckIn')}
+                                        onToggle={() =>
+                                          void saveBookingPlannerFields(row, {
+                                            earlyCheckInOn: !row.earlyCheckInOn,
+                                          })
+                                        }
+                                      />
                                     </div>
                                     <div>
                                       <p className="detail-label">
@@ -9053,11 +9380,23 @@ function App() {
               </div>
 
               <div className="modal-footer">
+                {purchaseFormValues.direct && purchaseFormValues.id ? (
+                  <button
+                    className="btn-secondary modal-footer-start"
+                    type="button"
+                    onClick={() => void deleteDirectPurchase()}
+                    disabled={isPurchaseSaving || isPurchaseDeleting}
+                  >
+                    {isPurchaseDeleting
+                      ? t('common.saving')
+                      : t('purchases.deleteDirect')}
+                  </button>
+                ) : null}
                 <button
                   className="btn-secondary"
                   type="button"
                   onClick={closePurchaseForm}
-                  disabled={isPurchaseSaving}
+                  disabled={isPurchaseSaving || isPurchaseDeleting}
                 >
                   Cancel
                 </button>
@@ -9065,7 +9404,7 @@ function App() {
                   className="btn-primary"
                   type="button"
                   onClick={savePurchase}
-                  disabled={isPurchaseSaving}
+                  disabled={isPurchaseSaving || isPurchaseDeleting}
                 >
                   {isPurchaseSaving ? 'Saving...' : 'Save purchase'}
                 </button>

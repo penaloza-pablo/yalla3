@@ -8,6 +8,7 @@ export const getTodaySummary = defineFunction({
     VISITS_TABLE: 'yalla-visits',
     TASKS_TABLE: 'yalla-tasks',
     INVENTORY_TABLE: 'yalla-inventory',
+    PURCHASES_TABLE: 'yalla-purchases',
     REVIEWS_TABLE: 'yalla-reviews',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
     MAINTENANCE_VISIT_TYPE_IDS:

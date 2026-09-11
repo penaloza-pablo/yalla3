@@ -406,6 +406,7 @@ alarmsTable.grantReadWriteData(backend.updateAlertStatus.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertAlert.resources.lambda);
 alarmsTable.grantReadWriteData(backend.upsertInventory.resources.lambda);
 purchasesTable.grantReadData(backend.getPurchases.resources.lambda);
+purchasesTable.grantReadData(backend.getTodaySummary.resources.lambda);
 purchasesTable.grantReadWriteData(backend.upsertPurchase.resources.lambda);
 substractionsTable.grantReadData(backend.getSubtractions.resources.lambda);
 substractionsTable.grantReadData(backend.exportSubtractions.resources.lambda);

@@ -30,7 +30,8 @@
     "reviews": "Reseñas",
     "unassignedTasks": "Tareas sin asignar",
     "plannerWarnings": "Planner warnings",
-    "inventory": "Inventario",
+    "inventory": "Purchases & Inventory",
+    "purchasesWarnings": "Purchases warnings",
     "planning": "Planificación",
     "currentCleanings": "Limpiezas de hoy",
     "previousCleanings": "Advertencias",
@@ -63,6 +64,8 @@
     "filterSubtitle": "Filtra las reservas por propiedad, estado y rango de check-in.",
     "emptyFiltered": "Ninguna reserva coincide con los filtros actuales.",
     "emptyPage": "No se encontraron reservas para esta página y combinación de filtros.",
+    "search": "Buscar reservas",
+    "savePlannerError": "No se pudieron guardar los campos de la reserva. Inténtalo de nuevo.",
     "updateFromGuesty": "Actualizar desde Guesty",
     "updatingFromGuesty": "Actualizando...",
     "missingSyncEndpoint": "Falta el proxy de sync de reservas de Guesty. Redesplega el backend o configura VITE_PROXY_GUESTY_BOOKINGS_SYNC_URL.",
@@ -513,7 +516,12 @@
     "costInvalid": "El precio con IVA debe ser cero o mayor.",
     "confirmDirectDeliveryPrompt": "¿Marcar esta entrega como recibida? El inventario no se actualizará y la compra quedará en Waiting invoice.",
     "excludeFromReport": "Excluir esta compra del listado activo",
-    "excludedTag": "Excluida"
+    "excludedTag": "Excluida",
+    "directPurchaseFilter": "Direct Purchase",
+    "deleteDirect": "Eliminar compra",
+    "deleteDirectConfirm": "¿Eliminar esta compra directa? Esta acción no se puede deshacer.",
+    "deleteError": "No se pudo eliminar la compra. Inténtalo de nuevo.",
+    "quickFilterWarnings": "Warnings"
   },
   "reviews": {
     "eyebrow": "Ops / Reseñas",

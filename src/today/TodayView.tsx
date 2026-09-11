@@ -30,18 +30,20 @@ type TodaySummary = {
   unassignedTasks?: {
     pending: number
   }
-  planner?: {
-    warnings?: number
+    planner?: {
+      warnings?: number
+    }
+    inventory: {
+      waitingDelivery: number
+      reorder: number
+      lowStock: number
+      purchaseWarnings?: number
+    }
   }
-  inventory: {
-    waitingDelivery: number
-    reorder: number
-    lowStock: number
-  }
-}
 
 type NavigateOptions = {
   inventoryStatuses?: string[]
+  purchaseStatuses?: string[]
 }
 
 type Props = {
@@ -51,7 +53,7 @@ type Props = {
   refreshKey?: number
 }
 
-const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v4'
+const TODAY_SUMMARY_CACHE_KEY = 'yalla.todaySummary.v5'
 
 const readCachedSummary = (): TodaySummary | null => {
   try {
@@ -89,6 +91,12 @@ const TODAY_INVENTORY_STATUSES = [
   'Waiting Delivery',
   'Low Stock',
   'Reorder',
+]
+
+const TODAY_PURCHASE_WARNING_STATUSES = [
+  'To be confirmed',
+  'Waiting Delivery',
+  'Waiting invoice',
 ]
 
 const formatRatio = (t: TFunction, done: number, total: number) =>
@@ -324,11 +332,13 @@ export function TodayView({
       unassignedPending === 0 &&
       plannerWarnings === 0,
   )
+  const purchaseWarnings = summary?.inventory.purchaseWarnings ?? 0
   const inventoryDone = Boolean(
     summary &&
       summary.inventory.waitingDelivery === 0 &&
       summary.inventory.reorder === 0 &&
-      summary.inventory.lowStock === 0,
+      summary.inventory.lowStock === 0 &&
+      purchaseWarnings === 0,
   )
 
   const cards = summary ? (
@@ -436,6 +446,15 @@ export function TodayView({
             })
           }
         >
+          <CountMetric
+            label={t('today.purchasesWarnings')}
+            value={purchaseWarnings}
+            onClick={() =>
+              onNavigate('Purchases', {
+                purchaseStatuses: TODAY_PURCHASE_WARNING_STATUSES,
+              })
+            }
+          />
           <CountMetric
             label={t('today.waitingDelivery')}
             value={summary.inventory.waitingDelivery}

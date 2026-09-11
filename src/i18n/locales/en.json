@@ -30,7 +30,8 @@
     "reviews": "Reviews",
     "unassignedTasks": "Unassigned tasks",
     "plannerWarnings": "Planner warnings",
-    "inventory": "Inventory",
+    "inventory": "Purchases & Inventory",
+    "purchasesWarnings": "Purchases warnings",
     "planning": "Planning",
     "currentCleanings": "Today cleanings",
     "previousCleanings": "Warnings",
@@ -63,6 +64,8 @@
     "filterSubtitle": "Filter bookings by property, status, and check-in date range.",
     "emptyFiltered": "No bookings match the current filters.",
     "emptyPage": "No bookings found for this page and filter combination.",
+    "search": "Search bookings",
+    "savePlannerError": "Unable to save booking fields. Please try again.",
     "updateFromGuesty": "Update from Guesty",
     "updatingFromGuesty": "Updating...",
     "missingSyncEndpoint": "Missing Guesty bookings sync proxy. Redeploy backend or set VITE_PROXY_GUESTY_BOOKINGS_SYNC_URL.",
@@ -513,7 +516,12 @@
     "costInvalid": "Price incl. IVA must be zero or greater.",
     "confirmDirectDeliveryPrompt": "Mark this delivery as received? Inventory will not be updated and the purchase will wait for the invoice.",
     "excludeFromReport": "Exclude this purchase from the active list",
-    "excludedTag": "Excluded"
+    "excludedTag": "Excluded",
+    "directPurchaseFilter": "Direct Purchase",
+    "deleteDirect": "Delete purchase",
+    "deleteDirectConfirm": "Delete this direct purchase? This cannot be undone.",
+    "deleteError": "Unable to delete the purchase. Please try again.",
+    "quickFilterWarnings": "Warnings"
   },
   "reviews": {
     "eyebrow": "Ops / Reviews",

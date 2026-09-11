@@ -228,6 +228,7 @@ export const handler = async (event: HttpEvent) => {
   const plansTable = process.env.CLEANING_PLANS_TABLE;
   const reviewsTable = process.env.REVIEWS_TABLE;
   const inventoryTable = process.env.INVENTORY_TABLE;
+  const purchasesTable = process.env.PURCHASES_TABLE || 'yalla-purchases';
   const cleaningBillingTable = process.env.CLEANING_BILLING_TABLE;
   const maintenanceBillingTable = process.env.MAINTENANCE_BILLING_TABLE;
   const maintenanceSettingsTable = process.env.MAINTENANCE_SETTINGS_TABLE;
@@ -261,6 +262,7 @@ export const handler = async (event: HttpEvent) => {
       tomorrowPlan,
       reviews,
       inventory,
+      purchases,
       detailItems,
       planItems,
       storedMonths,
@@ -282,6 +284,10 @@ export const handler = async (event: HttpEvent) => {
         names: { '#status': 'Status' },
       }),
       scanProjected(inventoryTable, {
+        expression: '#status',
+        names: { '#status': 'Status' },
+      }),
+      scanProjected(purchasesTable, {
         expression: '#status',
         names: { '#status': 'Status' },
       }),
@@ -396,6 +402,14 @@ export const handler = async (event: HttpEvent) => {
       }
     }
 
+    let purchaseWarnings = 0;
+    for (const item of purchases) {
+      const status = asString(itemField(item, ['Status', 'status']));
+      if (status === 'Waiting invoice' || status === 'To be confirmed') {
+        purchaseWarnings += 1;
+      }
+    }
+
     const bookingsTable = process.env.BOOKINGS_TABLE || 'yalla-bookings';
     const plannerSettingsTable = process.env.BOOKINGS_PLANNER_SETTINGS_TABLE;
     let plannerWarnings = 0;
@@ -442,6 +456,7 @@ export const handler = async (event: HttpEvent) => {
         waitingDelivery,
         reorder,
         lowStock,
+        purchaseWarnings,
       },
     });
   } catch (error) {

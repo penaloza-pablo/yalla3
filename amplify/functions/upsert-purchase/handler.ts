@@ -7,6 +7,7 @@ import {
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
   DynamoDBDocumentClient,
+  DeleteCommand,
   GetCommand,
   PutCommand,
   ScanCommand,
@@ -21,6 +22,7 @@ const corsHeaders = {
 };
 
 type PurchasePayload = {
+  action?: string;
   id?: string;
   itemId?: string;
   itemName?: string;
@@ -481,6 +483,49 @@ export const handler = async (event: {
       return buildHttpResponse(400, { message });
     }
     throw new Error(message);
+  }
+
+  if (String(payload.action ?? '').trim().toLowerCase() === 'delete') {
+    const deleteId = payload.id?.trim();
+    if (!deleteId) {
+      const message = 'Purchase id is required.';
+      if (isHttp) {
+        return buildHttpResponse(400, { message });
+      }
+      throw new Error(message);
+    }
+    try {
+      const deleted = await client.send(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: { id: deleteId },
+          ReturnValues: 'ALL_OLD',
+        }),
+      );
+      const purchaseName =
+        typeof deleted.Attributes?.['Item name'] === 'string'
+          ? deleted.Attributes['Item name']
+          : deleteId;
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.PURCHASES,
+        action: 'delete',
+        entityId: deleteId,
+        entityName: purchaseName,
+        summary: `deleted purchase of ${quoted(purchaseName)}`,
+      });
+      return isHttp
+        ? buildHttpResponse(200, { deleted: deleteId })
+        : { deleted: deleteId };
+    } catch (error) {
+      const message = 'Failed to delete purchase.';
+      if (isHttp) {
+        return buildHttpResponse(500, {
+          message,
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+      throw new Error(message);
+    }
   }
 
   const id = payload.id?.trim() || (await getNextPurchaseId(tableName));

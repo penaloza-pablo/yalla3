@@ -66,6 +66,7 @@ export type PlannerFieldPatch = {
   access: string;
   giftCardOn: boolean;
   earlyCheckInOn: boolean;
+  linenManual: boolean;
   warnings: PlannerWarningCode[];
   warningCount: number;
   dismissedWarnings: PlannerWarningCode[];
@@ -94,6 +95,7 @@ export type BookingPlannerItem = {
   Access?: unknown;
   GiftCardOn?: unknown;
   EarlyCheckInOn?: unknown;
+  LinenManual?: unknown;
   PlannerDismissedWarnings?: unknown;
 };
 
@@ -402,7 +404,7 @@ export const canonicalizeLinenValue = (value: unknown, listingId = '') => {
 export const linenMenuValuesForListing = (listingId: string) =>
   isVerdejoBedListing(listingId)
     ? [...VERDEJO_LINEN_OPTIONS, '']
-    : [...LINEN_OPTIONS];
+    : [...LINEN_OPTIONS, ''];
 
 export const DISMISSABLE_PLANNER_WARNINGS: PlannerWarningCode[] = [
   'single_guest',
@@ -445,6 +447,8 @@ export const computePlannerFields = ({
   overrides?: PlannerOverrides;
 }): PlannerFieldPatch => {
   const listingId = asString(item.ListingID);
+  const linenManual =
+    overrides?.linen !== undefined || asBoolean(item.LinenManual) === true;
   let linen =
     overrides?.linen !== undefined
       ? asString(overrides.linen)
@@ -484,8 +488,11 @@ export const computePlannerFields = ({
   const nights = toNightsCount(item);
   const inWindow = isInPlannerWindow(asString(item.CheckInDate), today);
   const active = isActivePlannerStatus(item.Status);
+  const hasOverrides = Boolean(overrides);
+  const shouldApplyRules =
+    settings.plannerEnabled && active && (inWindow || hasOverrides);
 
-  if (!settings.plannerEnabled || !inWindow || !active) {
+  if (!shouldApplyRules) {
     return {
       linen,
       giftCard,
@@ -493,6 +500,7 @@ export const computePlannerFields = ({
       access,
       giftCardOn,
       earlyCheckInOn,
+      linenManual,
       warnings: [],
       warningCount: 0,
       dismissedWarnings,
@@ -510,11 +518,7 @@ export const computePlannerFields = ({
     !isPropertyExcluded(doubleRule, listingId);
 
   if (appliesDoubleOrTwoSingles) {
-    if (
-      overrides?.linen === undefined &&
-      !isVerdejoLinenValue(linen) &&
-      !linen
-    ) {
+    if (!linenManual && !isVerdejoLinenValue(linen) && !linen) {
       if (guests === 1) {
         linen = LINEN_VALUES.DOUBLE;
       }
@@ -525,7 +529,7 @@ export const computePlannerFields = ({
   } else if (linenRule.enabled) {
     if (isPropertyExcluded(linenRule, listingId) && !isSofaLinenValue(linen)) {
       linen = LINEN_VALUES.NA;
-    } else if (overrides?.linen === undefined && !linen) {
+    } else if (!linenManual && !linen) {
       if (guests === 1) {
         linen = LINEN_VALUES.NO;
       } else if (guests >= 3) {
@@ -577,6 +581,7 @@ export const computePlannerFields = ({
     access,
     giftCardOn,
     earlyCheckInOn,
+    linenManual,
     warnings,
     warningCount: warnings.length,
     dismissedWarnings,

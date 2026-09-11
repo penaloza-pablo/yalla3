@@ -467,6 +467,7 @@ async function applyPlannerInline(item) {
     !doubleRule.excluded.includes(listingId);
 
   let linen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
+  const linenManual = Boolean(item.LinenManual?.BOOL);
   let giftCard = String(item.GiftCard?.S || "");
   let giftCardOn = item.GiftCardOn?.BOOL;
   if (giftCardOn == null) giftCardOn = giftCard ? giftCard !== GIFT_CARD_OFF : true;
@@ -474,7 +475,7 @@ async function applyPlannerInline(item) {
   const warnings = [];
 
   if (appliesDoubleOrTwoSingles) {
-    if (!linen && guests === 1) {
+    if (!linenManual && !linen && guests === 1) {
       linen = LINEN_DOUBLE;
     }
     if (linen !== LINEN_DOUBLE && linen !== LINEN_SINGLE) {
@@ -483,7 +484,7 @@ async function applyPlannerInline(item) {
   } else if (linenRule.enabled) {
     if (linenRule.excluded.includes(listingId) && linen !== LINEN_NA && linen !== LINEN_YES && linen !== LINEN_NO) {
       linen = LINEN_NA;
-    } else if (!linen) {
+    } else if (!linenManual && !linen) {
       if (guests === 1) linen = LINEN_NO;
       else if (guests >= 3) linen = LINEN_YES;
     }
@@ -729,6 +730,12 @@ export const handler = async (event) => {
     copyExistingAttribute(item, existing, "PlannerWarnings");
     copyExistingAttribute(item, existing, "PlannerWarningCount");
     copyExistingAttribute(item, existing, "PlannerDismissedWarnings");
+    copyExistingAttribute(item, existing, "LinenManual");
+
+    const incomingLinen = getNestedOptionalText(reservation?.notes, "cleaning");
+    if (incomingLinen === undefined || String(incomingLinen).trim() === "") {
+      copyExistingAttribute(item, existing, "Linen");
+    }
 
     await ddb.send(new PutItemCommand({
       TableName: TABLE_NAME,
