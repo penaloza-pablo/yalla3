@@ -180,6 +180,9 @@ const markNotified = async (
   );
 };
 
+const earlyCheckInReadyMessage = (label: string, guestName: string) =>
+  `${escapeMrkdwn(label)} lista para Early check-in. Guest: ${escapeMrkdwn(guestName)}`;
+
 const propertyLabel = (
   booking: Record<string, unknown>,
   propertyId: string,
@@ -276,7 +279,7 @@ export const notifyEarlyCheckInReady = async (options?: {
         });
         continue;
       }
-      const text = `Early check-in listo: ${escapeMrkdwn(label)} · ${escapeMrkdwn(guestName)}. No hay visitas hoy. El huésped está en la ciudad esperando confirmación para entrar.`;
+      const text = earlyCheckInReadyMessage(label, guestName);
       await slackApi('chat.postMessage', {
         channel: warningsChannelId,
         text,
@@ -300,7 +303,7 @@ export const notifyEarlyCheckInReady = async (options?: {
       continue;
     }
 
-    const text = `Early check-in listo: ${escapeMrkdwn(label)} · ${escapeMrkdwn(guestName)}. Las visitas de hoy están completadas. El huésped está en la ciudad esperando confirmación para entrar.`;
+    const text = earlyCheckInReadyMessage(label, guestName);
     await slackApi('chat.postMessage', {
       channel: warningsChannelId,
       text,

@@ -1,4 +1,5 @@
-import { GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { nowIso } from './dynamo-http';
 import { docClient } from './visit-task-utils';
 
 export const SLACK_NOTIFICATION_IDS = {
@@ -8,6 +9,10 @@ export const SLACK_NOTIFICATION_IDS = {
   cleaningPlanReopened: 'notify_cleaning_plan_reopened',
   cleaningPlanChanges: 'notify_cleaning_plan_changes',
   earlyCheckInReady: 'notify_early_check_in_ready',
+  cleaningPlanEod: 'notify_cleaning_plan_eod',
+  maintenancePlanEod: 'notify_maintenance_plan_eod',
+  inventoryLateDelivery: 'notify_inventory_late_delivery',
+  planReadyLateVisit: 'notify_plan_ready_late_visit',
 } as const;
 
 export type SlackNotificationId =
@@ -22,6 +27,10 @@ export const SLACK_NOTIFICATION_DEFINITIONS: {
   { id: SLACK_NOTIFICATION_IDS.cleaningPlanReopened },
   { id: SLACK_NOTIFICATION_IDS.cleaningPlanChanges },
   { id: SLACK_NOTIFICATION_IDS.earlyCheckInReady },
+  { id: SLACK_NOTIFICATION_IDS.cleaningPlanEod },
+  { id: SLACK_NOTIFICATION_IDS.maintenancePlanEod },
+  { id: SLACK_NOTIFICATION_IDS.inventoryLateDelivery },
+  { id: SLACK_NOTIFICATION_IDS.planReadyLateVisit },
 ];
 
 export const isKnownSlackNotificationId = (
@@ -94,5 +103,42 @@ export const isSlackNotificationEnabled = async (
   } catch (error) {
     console.error(`Failed to read Slack notification flag ${id}`, error);
     return true;
+  }
+};
+
+export const dailySlackSendCursorId = (id: SlackNotificationId) => `sent:${id}`;
+
+export const claimDailySlackSend = async (
+  id: SlackNotificationId,
+  today: string,
+): Promise<boolean> => {
+  const tableName = process.env.SLACK_NOTIFICATIONS_TABLE;
+  if (!tableName) {
+    return true;
+  }
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: { id: dailySlackSendCursorId(id) },
+        UpdateExpression: 'SET lastSentDate = :today, updatedAt = :now',
+        ConditionExpression:
+          'attribute_not_exists(lastSentDate) OR lastSentDate <> :today',
+        ExpressionAttributeValues: {
+          ':today': today,
+          ':now': nowIso(),
+        },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'ConditionalCheckFailedException'
+    ) {
+      return false;
+    }
+    console.error(`Failed to claim daily Slack send ${id}`, error);
+    return false;
   }
 };

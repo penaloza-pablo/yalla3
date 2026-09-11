@@ -1374,6 +1374,22 @@
       "notify_early_check_in_ready": {
         "name": "Early check-in ready",
         "description": "Posts in #yalla-warnings when a guest is waiting to enter: after all visits for that property are completed, or at 11:00 if there are no visits that day."
+      },
+      "notify_cleaning_plan_eod": {
+        "name": "Cleaning plan pending (17:30)",
+        "description": "At 17:30 posts in #cleanings-aptos if tomorrow's plan is not ready or today's tasks are still open."
+      },
+      "notify_maintenance_plan_eod": {
+        "name": "Maintenance plan pending (17:30)",
+        "description": "At 17:30 posts in #maintenance if tomorrow's plan is not ready or today's tasks are still open."
+      },
+      "notify_inventory_late_delivery": {
+        "name": "Late purchase delivery (10:00)",
+        "description": "At 10:00 posts in #inventory if a Waiting Delivery purchase is at least one day late."
+      },
+      "notify_plan_ready_late_visit": {
+        "name": "Plan closed with a visit after 13:01",
+        "description": "Posts in #Warning when a cleaning or maintenance plan is marked ready with a visit scheduled after 13:01."
       }
     }
   },

@@ -32,6 +32,8 @@ type Props = {
   propertyOptions: PropertyOption[]
   isSummaryInfoOpen: boolean
   onToggleSummaryInfo: () => void
+  initialPlanDate?: string
+  onInitialPlanDateConsumed?: () => void
 }
 
 const mapAgent = (item: Record<string, unknown>): MaintenanceAgentRecord => ({
@@ -84,6 +86,8 @@ export function MaintenancePlanView({
   propertyOptions,
   isSummaryInfoOpen,
   onToggleSummaryInfo,
+  initialPlanDate,
+  onInitialPlanDateConsumed,
 }: Props) {
   const { t, i18n } = useTranslation()
   const currentMonth = useMemo(() => getMadridMonthRange(0), [])
@@ -235,6 +239,17 @@ export function MaintenancePlanView({
     setError('')
     await loadPlan(date)
   }
+
+  useEffect(() => {
+    const date = initialPlanDate?.trim()
+    if (!date) {
+      return
+    }
+    void openDay(date).finally(() => {
+      onInitialPlanDateConsumed?.()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPlanDate])
 
   const closeDay = () => {
     setOpenVisitId('')

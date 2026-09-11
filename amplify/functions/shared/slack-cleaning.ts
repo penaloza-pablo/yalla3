@@ -89,12 +89,20 @@ export const cleaningDisplayTitle = (
   return title || fallback;
 };
 
-export const visitAppUrl = (visitId: string) => {
-  const base = (process.env.APP_BASE_URL || DEFAULT_APP_BASE_URL).replace(
-    /\/$/,
-    '',
-  );
-  return `${base}/?visit=${encodeURIComponent(visitId)}`;
+const appBaseUrl = () =>
+  (process.env.APP_BASE_URL || DEFAULT_APP_BASE_URL).replace(/\/$/, '');
+
+export const visitAppUrl = (visitId: string) =>
+  `${appBaseUrl()}/?visit=${encodeURIComponent(visitId)}`;
+
+export const appPageUrl = (page: string, extra?: Record<string, string>) => {
+  const parts = [`page=${encodeURIComponent(page)}`];
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value) {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    }
+  }
+  return `${appBaseUrl()}/?${parts.join('&')}`;
 };
 
 export const overdueCleaningMessage = (title: string) =>

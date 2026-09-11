@@ -14,6 +14,7 @@ type SlackSecretCache = {
   cleaningChannelId: string;
   p2CleaningChannelId: string;
   maintenanceChannelId: string;
+  inventoryChannelId: string;
   warningsChannelId: string;
 };
 
@@ -95,6 +96,11 @@ export const loadSlackSecrets = async (options?: { forceRefresh?: boolean }) => 
       'maintenanceChannelId',
       'Maintenance Channel Id',
       'MAINTENANCE_CHANNEL_ID',
+    ]),
+    inventoryChannelId: readSecretField(parsed, [
+      'inventoryChannelId',
+      'Inventory Channel Id',
+      'INVENTORY_CHANNEL_ID',
     ]),
     warningsChannelId: readSecretField(parsed, [
       'warningsChannelId',

@@ -8,7 +8,8 @@ export const notifyCleaningOverdue = defineFunction({
     SLACK_SECRET_ID: 'yalla/slack',
     TABLE_NAME: 'yalla-visits',
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
+    APP_BASE_URL: 'https://main.dd8kh4wy2zlme.amplifyapp.com',
   },
   schedule: 'every 1m',
-  timeoutSeconds: 60,
+    timeoutSeconds: 90,
 });

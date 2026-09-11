@@ -9,6 +9,7 @@ export const upsertCleaningPlan = defineFunction({
     CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
     SYNC_TASK_TO_GUESTY_FUNCTION: 'yalla-syncTaskToGuesty',
     SLACK_SECRET_ID: 'yalla/slack',
+    APP_BASE_URL: 'https://main.dd8kh4wy2zlme.amplifyapp.com',
   },
   timeoutSeconds: 60,
 });

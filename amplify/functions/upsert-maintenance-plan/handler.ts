@@ -23,6 +23,12 @@ import {
 } from '../shared/dynamo-http';
 import { invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
+  isStartTimeAfterAfternoonCutoff,
+  notifyPlanReadyWithLateVisits,
+  visitSlackLabel,
+  type LatePlanVisit,
+} from '../shared/slack-plan-late-visit';
+import {
   getTodayInMadrid,
   patchUserOriginatedRecord,
   putItem,
@@ -202,6 +208,38 @@ export const handler = async (event: {
     }
 
     await putItem(plansTable, item);
+
+    if (action === 'ready') {
+      try {
+        const lateVisits: LatePlanVisit[] = [];
+        for (const planItem of normalizedItems) {
+          if (!isStartTimeAfterAfternoonCutoff(planItem.startTime)) {
+            continue;
+          }
+          const visit = visitById.get(planItem.visitId);
+          const agent = planItem.agentId
+            ? await loadAgent(agentsTable, planItem.agentId)
+            : undefined;
+          lateVisits.push({
+            visitId: planItem.visitId,
+            title: visitSlackLabel(visit, planItem.visitId),
+            startTime: planItem.startTime,
+            assigneeName:
+              typeof agent?.name === 'string' ? agent.name.trim() : '',
+          });
+        }
+        await notifyPlanReadyWithLateVisits({
+          kind: 'maintenance',
+          plannedDate: plannedDate as string,
+          visits: lateVisits,
+        });
+      } catch (error) {
+        console.error(
+          'Failed to notify Slack of late afternoon maintenance visits',
+          error,
+        );
+      }
+    }
 
     const syncedVisitIds: string[] = [];
     const syncErrors: { visitId: string; error: string }[] = [];

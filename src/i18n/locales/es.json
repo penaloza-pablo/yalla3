@@ -1374,6 +1374,22 @@
       "notify_early_check_in_ready": {
         "name": "Early check-in listo para entrar",
         "description": "Avisa en #yalla-warnings cuando el huésped espera para entrar: al completar todas las visitas de esa propiedad, o a las 11:00 si no hay visitas ese día."
+      },
+      "notify_cleaning_plan_eod": {
+        "name": "Plan de limpieza pendiente (17:30)",
+        "description": "A las 17:30 avisa en #cleanings-aptos si el plan de mañana no está listo o si quedan tareas de hoy sin cerrar."
+      },
+      "notify_maintenance_plan_eod": {
+        "name": "Plan de mantenimiento pendiente (17:30)",
+        "description": "A las 17:30 avisa en #maintenance si el plan de mañana no está listo o si quedan tareas de hoy sin cerrar."
+      },
+      "notify_inventory_late_delivery": {
+        "name": "Compra con entrega atrasada (10:00)",
+        "description": "A las 10:00 avisa en #inventory si una compra en Waiting Delivery lleva al menos un día de atraso."
+      },
+      "notify_plan_ready_late_visit": {
+        "name": "Plan cerrado con visita después de las 13:01",
+        "description": "Avisa en #Warning al marcar listo un plan de limpieza o mantenimiento si hay una visita programada después de las 13:01."
       }
     }
   },

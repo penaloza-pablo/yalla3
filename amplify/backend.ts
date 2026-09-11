@@ -996,6 +996,7 @@ slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
 slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
 slackSecret.grantRead(backend.upsertVisit.resources.lambda);
 slackSecret.grantRead(backend.upsertCleaningPlan.resources.lambda);
+slackSecret.grantRead(backend.upsertMaintenancePlan.resources.lambda);
 
 const slackNotificationsTable = new Table(dataStack, 'SlackNotificationsTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
@@ -1020,6 +1021,7 @@ const slackNotificationReaders = [
   backend.handleSlackCommand,
   backend.processSlackHoy,
   backend.upsertCleaningPlan,
+  backend.upsertMaintenancePlan,
 ];
 for (const lambdaFunction of slackNotificationReaders) {
   lambdaFunction.addEnvironment(
@@ -1028,6 +1030,21 @@ for (const lambdaFunction of slackNotificationReaders) {
   );
   slackNotificationsTable.grantReadData(lambdaFunction.resources.lambda);
 }
+slackNotificationsTable.grantReadWriteData(
+  backend.notifyCleaningOverdue.resources.lambda,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'PURCHASES_TABLE',
+  purchasesTable.tableName,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'APP_BASE_URL',
+  'https://main.dd8kh4wy2zlme.amplifyapp.com',
+);
 backend.handleSlackCommand.addEnvironment(
   'CLEANERS_TABLE',
   cleanersTable.tableName,
@@ -1074,6 +1091,8 @@ backend.notifyCleaningOverdue.resources.lambda.addToRolePolicy(
       bookingsTable.tableArn,
       `${bookingsTable.tableArn}/index/CheckInDate-index`,
       propertiesTable.tableArn,
+      cleaningPlansTable.tableArn,
+      purchasesTable.tableArn,
     ],
   }),
 );
@@ -1636,6 +1655,13 @@ backend.upsertMaintenancePlan.addEnvironment(
 backend.getTodaySummary.addEnvironment(
   'MAINTENANCE_PLANS_TABLE',
   maintenancePlansTable.tableName,
+);
+backend.notifyCleaningOverdue.addEnvironment(
+  'MAINTENANCE_PLANS_TABLE',
+  maintenancePlansTable.tableName,
+);
+maintenancePlansTable.grantReadData(
+  backend.notifyCleaningOverdue.resources.lambda,
 );
 maintenanceAgentsTable.grantReadData(backend.getMaintenanceAgents.resources.lambda);
 maintenanceAgentsTable.grantReadWriteData(

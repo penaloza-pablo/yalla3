@@ -33,6 +33,12 @@ import {
   type CleaningPlanChangeItem,
 } from '../shared/slack-cleaning';
 import {
+  isStartTimeAfterAfternoonCutoff,
+  notifyPlanReadyWithLateVisits,
+  visitSlackLabel,
+  type LatePlanVisit,
+} from '../shared/slack-plan-late-visit';
+import {
   docClient,
   getTodayInMadrid,
   patchUserOriginatedRecord,
@@ -260,6 +266,38 @@ export const handler = async (event: {
     }
 
     await putItem(plansTable, item);
+
+    if (action === 'ready') {
+      try {
+        const lateVisits: LatePlanVisit[] = [];
+        for (const planItem of normalizedItems) {
+          if (!isStartTimeAfterAfternoonCutoff(planItem.startTime)) {
+            continue;
+          }
+          const visit = visitById.get(planItem.visitId);
+          const cleaner = planItem.cleanerId
+            ? await loadCleaner(cleanersTable, planItem.cleanerId)
+            : undefined;
+          lateVisits.push({
+            visitId: planItem.visitId,
+            title: visitSlackLabel(visit, planItem.visitId),
+            startTime: planItem.startTime,
+            assigneeName:
+              typeof cleaner?.name === 'string' ? cleaner.name.trim() : '',
+          });
+        }
+        await notifyPlanReadyWithLateVisits({
+          kind: 'cleaning',
+          plannedDate: plannedDate as string,
+          visits: lateVisits,
+        });
+      } catch (error) {
+        console.error(
+          'Failed to notify Slack of late afternoon cleaning visits',
+          error,
+        );
+      }
+    }
 
     if (action === 'reopen' && currentStatus === 'READY') {
       try {

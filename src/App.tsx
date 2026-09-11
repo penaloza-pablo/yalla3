@@ -1753,6 +1753,7 @@ function App() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [deepLinkVisitId, setDeepLinkVisitId] = useState('')
+  const [deepLinkPlanDate, setDeepLinkPlanDate] = useState('')
   const [billingMonthDeepLink, setBillingMonthDeepLink] = useState('')
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [tableSearchQuery, setTableSearchQuery] = useState('')
@@ -4425,14 +4426,46 @@ function App() {
     }
   }, [activePage, canPage, firstAllowedPage, permissionsReady])
 
+  const clearDeepLinkPlanDate = useCallback(() => {
+    setDeepLinkPlanDate('')
+  }, [])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const visitId = params.get('visit')?.trim() || ''
-    if (!visitId) {
+    const page = params.get('page')?.trim() || ''
+    const planDate = params.get('planDate')?.trim() || ''
+    let changed = false
+    if (visitId) {
+      setDeepLinkVisitId(visitId)
+      params.delete('visit')
+      changed = true
+    }
+    if (page && validPages.has(page)) {
+      setActivePage(page)
+      rememberActivePage(page)
+      const section = sectionForPage(page)
+      if (section) {
+        setCollapsedSections((current) => {
+          if (!current.has(section)) {
+            return current
+          }
+          const next = new Set(current)
+          next.delete(section)
+          return next
+        })
+      }
+      params.delete('page')
+      changed = true
+    }
+    if (planDate && /^\d{4}-\d{2}-\d{2}$/.test(planDate)) {
+      setDeepLinkPlanDate(planDate)
+      params.delete('planDate')
+      changed = true
+    }
+    if (!changed) {
       return
     }
-    setDeepLinkVisitId(visitId)
-    params.delete('visit')
     const query = params.toString()
     const next = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
     window.history.replaceState({}, '', next)
@@ -8230,6 +8263,8 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
             propertyOptions={activeManagedPropertyOptions}
+            initialPlanDate={deepLinkPlanDate}
+            onInitialPlanDateConsumed={clearDeepLinkPlanDate}
           />
         ) : activePage === 'Cleaning Incidents' ? (
           <CleaningIncidentsView
@@ -8265,6 +8300,8 @@ function App() {
               setIsSummaryInfoOpen((current) => !current)
             }
             propertyOptions={activeManagedPropertyOptions}
+            initialPlanDate={deepLinkPlanDate}
+            onInitialPlanDateConsumed={clearDeepLinkPlanDate}
           />
         ) : activePage === 'Maintenance Incidents' ? (
           <MaintenanceIncidentsView

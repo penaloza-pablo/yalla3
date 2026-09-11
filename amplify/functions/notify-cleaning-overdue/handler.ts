@@ -13,10 +13,10 @@ import {
   overdueNotifyKey,
   resolveOverdueChannel,
   SLACK_OVERDUE_FIELD,
-  type OverdueChannelKey,
 } from '../shared/slack-cleaning';
 import { loadSlackSecrets, slackApi } from '../shared/slack';
 import { notifyEarlyCheckInReady } from '../shared/slack-early-check-in';
+import { notifyScheduledOpsDigests } from '../shared/slack-ops-digest';
 import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
@@ -70,13 +70,14 @@ const isTestChannelsEvent = (event: unknown) =>
 const postTestMessages = async () => {
   const secrets = await loadSlackSecrets({ forceRefresh: true });
   const stamp = new Date().toISOString();
-  const channels: Array<{ key: OverdueChannelKey; channelId: string }> = [
+  const channels: Array<{ key: string; channelId: string }> = [
     { key: 'cleaningChannelId', channelId: secrets.cleaningChannelId },
     { key: 'P2cleaningChannelId', channelId: secrets.p2CleaningChannelId },
     { key: 'maintenanceChannelId', channelId: secrets.maintenanceChannelId },
+    { key: 'inventoryChannelId', channelId: secrets.inventoryChannelId },
+    { key: 'warningsChannelId', channelId: secrets.warningsChannelId },
   ];
-  const results: Array<{ key: OverdueChannelKey; ok: boolean; error?: string }> =
-    [];
+  const results: Array<{ key: string; ok: boolean; error?: string }> = [];
   for (const channel of channels) {
     if (!channel.channelId) {
       results.push({
@@ -109,6 +110,13 @@ const isEarlyCheckInEvent = (event: unknown) =>
       (event as { action?: string }).action === 'earlyCheckIn',
   );
 
+const isOpsDigestEvent = (event: unknown) =>
+  Boolean(
+    event &&
+      typeof event === 'object' &&
+      (event as { action?: string }).action === 'opsDigest',
+  );
+
 export const handler = async (event?: unknown) => {
   if (isTestChannelsEvent(event)) {
     return postTestMessages();
@@ -134,17 +142,29 @@ export const handler = async (event?: unknown) => {
     return { early };
   }
 
+  const opsDigestForce = isOpsDigestEvent(event);
+  let digest;
+  try {
+    digest = await notifyScheduledOpsDigests({ force: opsDigestForce });
+  } catch (error) {
+    console.error('Failed to send scheduled ops Slack digests', error);
+  }
+
+  if (opsDigestForce) {
+    return { early, digest };
+  }
+
   if (
     !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
   ) {
     console.log('Slack overdue notify skipped: automation disabled.');
-    return { early };
+    return { early, digest };
   }
 
   const secrets = await loadSlackSecrets({ forceRefresh: true });
   if (!secrets.botToken) {
     console.error('Slack notify skipped: missing botToken in yalla/slack.');
-    return { early };
+    return { early, digest };
   }
 
   const today = getTodayInMadrid();
@@ -216,5 +236,5 @@ export const handler = async (event?: unknown) => {
     }
   }
 
-  return { early };
+  return { early, digest };
 };
