@@ -516,7 +516,7 @@ export function VisitDetailModal({
           setOpenVisitTemplates(items)
         }
       })
-      .catch((loadError) => {
+      .catch(() => {
         if (cancelled) {
           return
         }

@@ -1980,7 +1980,7 @@ export function DailyOperationsView({
       .then((items) => {
         setPropertyTemplates(items)
       })
-      .catch((loadError) => {
+      .catch(() => {
         setPropertyTemplates([])
         setError(t('operations.unableLoadTemplates'))
       })
@@ -2015,7 +2015,7 @@ export function DailyOperationsView({
           setOpenVisitTemplates(items)
         }
       })
-      .catch((loadError) => {
+      .catch(() => {
         if (cancelled) {
           return
         }
