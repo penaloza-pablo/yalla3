@@ -539,6 +539,8 @@ export function MaintenancePlanView({
         <p className="notice success">{message}</p>
       ) : null}
 
+      {!isDayModalOpen ? (
+      <>
       <section
         className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
       >
@@ -755,88 +757,81 @@ export function MaintenancePlanView({
           </table>
         </div>
       </section>
-
-      {isDayModalOpen ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal modal-wide modal-scrollable cleaning-plan-modal">
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">
-                  {formatDateOnlyLabel(plannedDate, i18n.language)}
-                </h3>
-                <p className="modal-subtitle">
-                  <span
-                    className={`cleaning-status-tag ${
-                      isReady ? 'is-ready' : 'is-draft'
-                    }`}
-                  >
-                    {statusLabel(status)}
-                  </span>
-                </p>
-              </div>
+      </>
+      ) : (
+        <section className="yl-day-page" aria-label={t('pages.Maintenance Plan')}>
+          <div className="yl-day-page-header">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={closeDay}
+            >
+              {t('common.back')}
+            </button>
+            <div>
+              <h2>{formatDateOnlyLabel(plannedDate, i18n.language)}</h2>
+              <p className="subtitle">
+                <span
+                  className={`cleaning-status-tag ${
+                    isReady ? 'is-ready' : 'is-draft'
+                  }`}
+                >
+                  {statusLabel(status)}
+                </span>
+              </p>
+            </div>
+          </div>
+          {message ? <p className="notice success">{message}</p> : null}
+          {error ? <p className="notice error">{error}</p> : null}
+          {!isReady && !canMarkReady ? (
+            <p className="notice">{t('maintenancePlan.draftOnlyFuture')}</p>
+          ) : null}
+          <div className="table-wrap">
+            <table className="data-table yl-day-page-table">
+              <thead>
+                <tr>
+                  <th>{t('maintenancePlan.visit')}</th>
+                  <th>{t('maintenancePlan.agent')}</th>
+                  <th>{t('maintenancePlan.startTime')}</th>
+                  <th>{t('maintenancePlan.endTime')}</th>
+                </tr>
+              </thead>
+              <tbody>{renderVisitRows()}</tbody>
+            </table>
+          </div>
+          <div className="yl-day-page-actions">
+            {isReady ? (
               <button
-                className="btn-icon"
+                className="btn-secondary"
                 type="button"
-                onClick={closeDay}
-                aria-label={t('common.cancel')}
+                disabled={isSaving}
+                onClick={() => void savePlan('reopen')}
               >
-                ✕
+                {t('maintenancePlan.editPlan')}
               </button>
-            </div>
-            <div className="modal-body">
-              {message ? <p className="notice success">{message}</p> : null}
-              {error ? <p className="notice error">{error}</p> : null}
-              {!isReady && !canMarkReady ? (
-                <p className="notice">{t('maintenancePlan.draftOnlyFuture')}</p>
-              ) : null}
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t('maintenancePlan.visit')}</th>
-                      <th>{t('maintenancePlan.agent')}</th>
-                      <th>{t('maintenancePlan.startTime')}</th>
-                      <th>{t('maintenancePlan.endTime')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>{renderVisitRows()}</tbody>
-                </table>
-              </div>
-            </div>
-            <div className="modal-footer">
-              {isReady ? (
+            ) : (
+              <>
                 <button
                   className="btn-secondary"
                   type="button"
-                  disabled={isSaving}
-                  onClick={() => void savePlan('reopen')}
+                  disabled={isSaving || isLoading}
+                  onClick={() => void savePlan('save')}
                 >
-                  {t('maintenancePlan.editPlan')}
+                  {isSaving ? t('common.saving') : t('maintenancePlan.saveDraft')}
                 </button>
-              ) : (
-                <>
-                  <button
-                    className="btn-secondary"
-                    type="button"
-                    disabled={isSaving || isLoading}
-                    onClick={() => void savePlan('save')}
-                  >
-                    {isSaving ? t('common.saving') : t('maintenancePlan.saveDraft')}
-                  </button>
-                  <button
-                    className="btn-primary"
-                    type="button"
-                    disabled={isSaving || isLoading || !canMarkReady}
-                    onClick={() => void savePlan('ready')}
-                  >
-                    {t('maintenancePlan.markReady')}
-                  </button>
-                </>
-              )}
-            </div>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={isSaving || isLoading || !canMarkReady}
+                  onClick={() => void savePlan('ready')}
+                >
+                  {t('maintenancePlan.markReady')}
+                </button>
+              </>
+            )}
           </div>
-        </div>
-      ) : null}
+        </section>
+      )}
 
       {openVisitId ? (
         <VisitDetailModal

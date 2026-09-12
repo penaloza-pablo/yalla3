@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from './rbac/PermissionsProvider'
+import { useConfirm } from './design/ConfirmDialog'
 import { displayInventoryName, translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
 import { MobileBodyPortal } from './MobileBodyPortal'
@@ -128,6 +129,7 @@ export function SpotCheckPanel({
 }: SpotCheckPanelProps) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const confirmAction = useConfirm()
   const [rows, setRows] = useState<SpotCheckRow[]>([])
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -444,9 +446,10 @@ export function SpotCheckPanel({
       return
     }
     if (skippedCount > 0) {
-      const shouldContinue = window.confirm(
-        t('spotCheck.skippedWarning', { count: skippedCount }),
-      )
+      const shouldContinue = await confirmAction({
+        title: t('spotCheck.cardTitle'),
+        message: t('spotCheck.skippedWarning', { count: skippedCount }),
+      })
       if (!shouldContinue) {
         return
       }
@@ -883,11 +886,11 @@ export function SpotCheckPanel({
                   ) : (
                     sortedRows.map((row) => (
                       <tr key={row.id}>
-                        <td>
+                        <td data-label={t('common.date')}>
                           {formatSpotCheckDate(row.createdAt, i18n.language)}
                         </td>
-                        <td>{row.userEmail || '—'}</td>
-                        <td>{row.location}</td>
+                        <td data-label={t('common.email')}>{row.userEmail || '—'}</td>
+                        <td data-label={t('common.location')}>{row.location}</td>
                         <td className="mobile-quick-filter-col" />
                         <td className="mobile-quick-filter-col" />
                       </tr>

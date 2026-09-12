@@ -4,6 +4,7 @@ import { fetchUserAttributes } from 'aws-amplify/auth'
 import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
+import { useToast } from '../design/Toast'
 import {
   fetchJson,
   getReferenceList,
@@ -216,6 +217,7 @@ export function VisitDetailModal({
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const toast = useToast()
   const [visit, setVisit] = useState<VisitRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -831,6 +833,7 @@ export function VisitDetailModal({
       })
       await reloadVisit()
       notifyChanged()
+      toast(t('operations.visitSaved'))
       return true
     } catch {
       setError(t('operations.unableUpdateVisit'))
@@ -1008,6 +1011,7 @@ export function VisitDetailModal({
       setEditingDraftIndex(null)
       setIsEditOpen(false)
       notifyChanged()
+      toast(t('operations.visitSaved'))
     } catch (saveError) {
       setError(t('operations.unableSaveVisit'))
     } finally {
@@ -1088,7 +1092,7 @@ export function VisitDetailModal({
 
   const detail = (
     <div
-      className="modal-overlay is-stacked"
+      className="modal-overlay is-stacked yl-visit-sheet"
       role="dialog"
       aria-modal="true"
       aria-labelledby="visit-detail-title"

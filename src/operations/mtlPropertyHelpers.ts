@@ -4,6 +4,7 @@ import {
   sortPropertyOptions,
 } from './propertyHelpers'
 import type { PropertyOption, VisitRecord } from './types'
+import i18n from '../i18n'
 
 export type MtlStandaloneRow = {
   kind: 'standalone'
@@ -126,6 +127,8 @@ export const rowHasBookings = <T extends { propertyId: string }>(
 export const getMtlGroupLabel = (row: MtlGroupRow) => {
   const roomCount = row.children.length
   const suffix =
-    roomCount > 0 ? ` (${roomCount} room${roomCount === 1 ? '' : 's'})` : ''
+    roomCount > 0
+      ? ` (${i18n.t('operations.roomCount', { count: roomCount })})`
+      : ''
   return `${getPropertyLabel(row.principal)}${suffix}`
 }

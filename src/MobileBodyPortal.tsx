@@ -4,7 +4,11 @@ import { createPortal } from 'react-dom'
 const MOBILE_QUERY = '(max-width: 768px)'
 
 export function useIsMobileLayout() {
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia(MOBILE_QUERY).matches
+      : false,
+  )
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_QUERY)

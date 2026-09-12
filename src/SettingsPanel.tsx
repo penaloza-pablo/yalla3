@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { fetchUserAttributes } from 'aws-amplify/auth'
+import { fetchUserAttributes, signOut } from 'aws-amplify/auth'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
 
 type SettingsPanelProps = {
@@ -123,6 +123,10 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
     setIsOpen(false)
   }
 
+  const handleSignOut = () => {
+    void signOut()
+  }
+
   const displayName = profile?.name || t('settings.unknownUser')
   const triggerName =
     firstNameFrom(
@@ -204,6 +208,16 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
                     {t('language.label')}
                   </h4>
                   <LanguageSwitcher embedded />
+                </section>
+
+                <section className="settings-section">
+                  <button
+                    type="button"
+                    className="btn-secondary settings-sign-out"
+                    onClick={handleSignOut}
+                  >
+                    {t('settings.signOut')}
+                  </button>
                 </section>
               </div>
             </div>

@@ -3,19 +3,15 @@ import { createRoot } from 'react-dom/client'
 import { Amplify } from 'aws-amplify'
 import outputs from '../amplify_outputs.json'
 import '@aws-amplify/ui-react/styles.css'
-import { Authenticator } from '@aws-amplify/ui-react'
+import { Authenticator, ThemeProvider } from '@aws-amplify/ui-react'
 import './i18n'
 import './index.css'
 import App from './App.tsx'
+import { ConfirmProvider } from './design/ConfirmDialog'
+import { ToastProvider } from './design/Toast'
 import { PermissionsProvider } from './rbac/PermissionsProvider'
-
-function AuthHeader() {
-  return (
-    <div className="auth-brand">
-      <img src="/Yalla_logo/full_logo.png" alt="Yalla!" />
-    </div>
-  )
-}
+import { AuthFooter, AuthHeader } from './design/AuthChrome'
+import { yallaAuthTheme } from './design/amplify-theme'
 
 const loadAmplifyOutputs = async () => {
   // Prefer runtime file when present (Amplify Hosting copies it into dist).
@@ -61,11 +57,19 @@ const startApp = async () => {
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Authenticator components={{ Header: AuthHeader }}>
-        <PermissionsProvider>
-          <App />
-        </PermissionsProvider>
-      </Authenticator>
+      <ThemeProvider theme={yallaAuthTheme} colorMode="light">
+        <Authenticator
+          components={{ Header: AuthHeader, Footer: AuthFooter }}
+        >
+          <PermissionsProvider>
+            <ConfirmProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </ConfirmProvider>
+          </PermissionsProvider>
+        </Authenticator>
+      </ThemeProvider>
     </StrictMode>,
   )
 }

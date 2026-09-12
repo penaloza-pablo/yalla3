@@ -90,3 +90,41 @@ export const rememberActivePage = (page: string) => {
     // Ignore storage failures (private mode, quota, etc.).
   }
 }
+
+const SECTION_PAGES_KEY = 'yalla.lastPageBySection'
+
+export const rememberPageInSection = (section: string, page: string) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    const raw = window.localStorage.getItem(SECTION_PAGES_KEY)
+    const current = raw ? (JSON.parse(raw) as Record<string, string>) : {}
+    current[section] = page
+    window.localStorage.setItem(SECTION_PAGES_KEY, JSON.stringify(current))
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.).
+  }
+}
+
+export const readLastPageInSection = (section: string, allowed: string[]) => {
+  if (!allowed.length) {
+    return null
+  }
+  if (typeof window === 'undefined') {
+    return allowed[0]
+  }
+  try {
+    const raw = window.localStorage.getItem(SECTION_PAGES_KEY)
+    if (raw) {
+      const current = JSON.parse(raw) as Record<string, string>
+      const page = current[section]
+      if (page && allowed.includes(page)) {
+        return page
+      }
+    }
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.).
+  }
+  return allowed[0]
+}

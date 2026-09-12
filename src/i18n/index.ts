@@ -1,14 +1,32 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { I18n } from 'aws-amplify/utils'
+import { translations } from '@aws-amplify/ui'
 import en from './locales/en.json'
 import es from './locales/es.json'
 
 export const LOCALE_STORAGE_KEY = 'yalla.locale'
 export const SUPPORTED_LOCALES = ['en', 'es'] as const
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]
+export const RTL_LOCALES = new Set(['he', 'ar'])
+
+I18n.putVocabularies(translations)
 
 const isAppLocale = (value: string): value is AppLocale =>
   SUPPORTED_LOCALES.includes(value as AppLocale)
+
+export const isRtlLocale = (value: string) =>
+  RTL_LOCALES.has(value.slice(0, 2).toLowerCase())
+
+const applyDocumentLocale = (locale: string) => {
+  if (typeof document === 'undefined') {
+    return
+  }
+  const language = isAppLocale(locale) ? locale : locale.slice(0, 2)
+  document.documentElement.lang = language
+  document.documentElement.dir = isRtlLocale(locale) ? 'rtl' : 'ltr'
+  I18n.setLanguage(isAppLocale(locale) ? locale : 'en')
+}
 
 export const resolveInitialLocale = (): AppLocale => {
   if (typeof window === 'undefined') {
@@ -47,9 +65,7 @@ void i18n.use(initReactI18next).init({
 
 i18n.on('languageChanged', (lng) => {
   const locale = isAppLocale(lng) ? lng : 'en'
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = locale
-  }
+  applyDocumentLocale(locale)
   try {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
   } catch {
@@ -57,8 +73,6 @@ i18n.on('languageChanged', (lng) => {
   }
 })
 
-if (typeof document !== 'undefined') {
-  document.documentElement.lang = i18n.language
-}
+applyDocumentLocale(i18n.language)
 
 export default i18n

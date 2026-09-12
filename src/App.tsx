@@ -32,7 +32,14 @@ import {
 } from '../amplify/functions/shared/bookings-planner'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
-import { readRememberedPage, rememberActivePage } from './lib/lastActivePage'
+import { readRememberedPage, rememberActivePage, rememberPageInSection, readLastPageInSection } from './lib/lastActivePage'
+import { readPageFromLocation, writePageToUrl } from './lib/page-route'
+import { visibleNavGroups } from './nav/catalog'
+import { DomainTabs } from './nav/DomainTabs'
+import { FieldBottomNav } from './nav/FieldBottomNav'
+import { fieldMobileTabs, workspaceForRole } from './nav/workspace'
+import { EmptyState, TableSkeleton } from './design/Feedback'
+import { useToast } from './design/Toast'
 import {
   readDismissedGuestyNameMismatches,
   rememberDismissedGuestyNameMismatches,
@@ -60,6 +67,7 @@ import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
 import { usePermissions } from './rbac/PermissionsProvider'
+import { useConfirm } from './design/ConfirmDialog'
 import { ACTION_KEYS, CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
 import {
   collectGuestyNicknameMismatches,
@@ -78,10 +86,11 @@ import {
   resolveIvaRate,
   type IvaRate,
 } from '../amplify/functions/shared/finance-services'
-import { MobileBodyPortal } from './MobileBodyPortal'
+import { MobileBodyPortal, useIsMobileLayout } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
 import './App.css'
+import './design/chrome.css'
 
 type ConsumptionRule = {
   amount: number
@@ -333,14 +342,15 @@ type PropertyDiff = {
   row: PropertyRow
 }
 
-const navigation = NAVIGATION
+const navigationCatalog = NAVIGATION
+const navigation = visibleNavGroups(NAVIGATION)
 const coreItems: string[] = [...CORE_PAGES]
 const validPages = new Set([
   ...coreItems,
-  ...navigation.flatMap((group) => group.items),
+  ...navigationCatalog.flatMap((group) => group.items),
 ])
 const sectionForPage = (page: string) =>
-  navigation.find((group) => group.items.includes(page))?.section
+  navigationCatalog.find((group) => group.items.includes(page))?.section
 const pagesWithMobileSearch = new Set([
   'Inventory',
   'Purchases',
@@ -1538,8 +1548,10 @@ const emptySubtractionFormState: SubtractionFormState = {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions } =
+  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions, roleId } =
     usePermissions()
+  const confirmAction = useConfirm()
+  const toast = useToast()
   const canEditInventoryItems = can(ACTION_KEYS.inventoryEditItems)
   const pageLabel = (page: string) => translatePage(t, page)
   const navItemLabel = (page: string) =>
@@ -1554,6 +1566,8 @@ function App() {
     .filter((group) => group.items.length > 0)
   const firstAllowedPage =
     visibleCoreItems[0] ?? visibleNavigation[0]?.items[0] ?? null
+  const workspace = workspaceForRole(roleId)
+  const isMobileLayout = useIsMobileLayout()
   const statusLabel = (status: string) => translateStatus(t, status)
   const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
     displayInventoryName(i18n.language, row.name, row.nameEs)
@@ -1773,8 +1787,8 @@ function App() {
     null,
   )
   const [isSubtractionSaving, setIsSubtractionSaving] = useState(false)
-  const [activePage, setActivePage] = useState(() =>
-    readRememberedPage(validPages),
+  const [activePage, setActivePage] = useState(
+    () => readPageFromLocation(validPages) ?? readRememberedPage(validPages),
   )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -1787,16 +1801,24 @@ function App() {
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [titleProgress, setTitleProgress] = useState(0)
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => {
-      const collapsed = new Set(navigation.map((group) => group.section))
-      const section = sectionForPage(readRememberedPage(validPages))
-      if (section) {
-        collapsed.delete(section)
-      }
-      return collapsed
-    },
+  const fieldTabs = fieldMobileTabs(roleId)
+  const activeDomain = visibleNavigation.find((group) =>
+    group.items.includes(activePage),
   )
+  const domainPages = activeDomain?.items ?? []
+  const showDomainTabs =
+    domainPages.length > 1 &&
+    !(
+      workspace === 'field' &&
+      domainPages.every((page) => fieldTabs.includes(page))
+    )
+  const showMobileDomainTabs =
+    isMobileLayout &&
+    showDomainTabs &&
+    permissionsReady &&
+    canPage(activePage) &&
+    !isMobileSearchOpen
+  const domainTabsOffset = showMobileDomainTabs ? '52px' : '0px'
   const [sortConfig, setSortConfig] = useState<{
     key: 'name' | 'status' | null
     direction: 'asc' | 'desc'
@@ -3086,7 +3108,13 @@ function App() {
   }, [activePage, fetchInventory])
 
   useEffect(() => {
-    const persist = () => rememberActivePage(activePage)
+    const persist = () => {
+      rememberActivePage(activePage)
+      const section = sectionForPage(activePage)
+      if (section) {
+        rememberPageInSection(section, activePage)
+      }
+    }
     persist()
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -3236,9 +3264,12 @@ function App() {
     if (!canEditInventoryItems) {
       return
     }
-    const confirmed = window.confirm(
-      t('inventory.deleteConfirm', { name: itemDisplayName(row), id: row.id }),
-    )
+    const confirmed = await confirmAction({
+      title: t('common.delete'),
+      message: t('inventory.deleteConfirm', { name: itemDisplayName(row), id: row.id }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    })
     if (!confirmed) return
 
     const endpoint = getEndpoint(
@@ -3837,7 +3868,13 @@ function App() {
     if (!purchaseFormValues.direct || !purchaseId) {
       return
     }
-    if (!window.confirm(t('purchases.deleteDirectConfirm'))) {
+    const confirmed = await confirmAction({
+      title: t('common.delete'),
+      message: t('purchases.deleteDirectConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    })
+    if (!confirmed) {
       return
     }
     const endpoint = getEndpoint(
@@ -4092,13 +4129,15 @@ function App() {
       row.status === PURCHASE_WAITING_INVOICE
         ? 'Confirmed'
         : PURCHASE_WAITING_INVOICE
-    const shouldConfirm = window.confirm(
-      nextStatus === 'Confirmed'
-        ? t('purchases.confirmInvoicePrompt')
-        : row.direct
-          ? t('purchases.confirmDirectDeliveryPrompt')
-          : t('purchases.confirmDeliveryPrompt'),
-    )
+    const shouldConfirm = await confirmAction({
+      title: t('common.confirm'),
+      message:
+        nextStatus === 'Confirmed'
+          ? t('purchases.confirmInvoicePrompt')
+          : row.direct
+            ? t('purchases.confirmDirectDeliveryPrompt')
+            : t('purchases.confirmDeliveryPrompt'),
+    })
     if (!shouldConfirm) {
       return
     }
@@ -4336,9 +4375,10 @@ function App() {
     if (row.status !== 'Pending Billing') {
       return
     }
-    const shouldConfirm = window.confirm(
-      t('subtractions.markBilledPrompt'),
-    )
+    const shouldConfirm = await confirmAction({
+      title: t('common.markBilled'),
+      message: t('subtractions.markBilledPrompt'),
+    })
     if (!shouldConfirm) {
       return
     }
@@ -4387,9 +4427,11 @@ function App() {
     if (row.status === 'Reversed') {
       return
     }
-    const shouldConfirm = window.confirm(
-      t('subtractions.reversePrompt'),
-    )
+    const shouldConfirm = await confirmAction({
+      title: t('common.reverse'),
+      message: t('subtractions.reversePrompt'),
+      destructive: true,
+    })
     if (!shouldConfirm) {
       return
     }
@@ -4526,33 +4568,26 @@ function App() {
       }
 
       setIsFormOpen(false)
+      toast(t('inventory.saved'))
       await fetchInventory()
     } catch (saveError) {
       setFormError(t('inventory.saveError'))
+      toast(t('inventory.saveError'), 'error')
     } finally {
       setIsSaving(false)
     }
   }
 
-  const toggleSection = (section: string) => {
-    setCollapsedSections((current) => {
-      const next = new Set(current)
-      if (next.has(section)) {
-        next.delete(section)
-      } else {
-        next.add(section)
-      }
-      return next
-    })
+  const handleSidebarToggle = () => {
+    setIsSidebarCollapsed((current) => !current)
   }
 
-  const handleSidebarToggle = () => {
-    setIsSidebarCollapsed((current) => {
-      if (!current) {
-        setCollapsedSections(new Set(navigation.map((group) => group.section)))
-      }
-      return !current
-    })
+  const persistPage = (page: string) => {
+    rememberActivePage(page)
+    const section = sectionForPage(page)
+    if (section) {
+      rememberPageInSection(section, page)
+    }
   }
 
   const navigateToPage = (
@@ -4564,23 +4599,13 @@ function App() {
     },
   ) => {
     setActivePage(page)
-    rememberActivePage(page)
+    persistPage(page)
+    writePageToUrl(page, 'push')
     setIsMobileNavOpen(false)
     setIsSummaryInfoOpen(false)
     setIsMobileSearchOpen(false)
     setTableSearchQuery('')
     setBillingMonthDeepLink(options?.billingMonth?.trim() || '')
-    const section = sectionForPage(page)
-    if (section) {
-      setCollapsedSections((current) => {
-        if (!current.has(section)) {
-          return current
-        }
-        const next = new Set(current)
-        next.delete(section)
-        return next
-      })
-    }
     if (page === 'Inventory' && options?.inventoryStatuses?.length) {
       const statuses = [...options.inventoryStatuses]
       setInventoryWarningsOnly(false)
@@ -4611,7 +4636,8 @@ function App() {
     }
     if (firstAllowedPage) {
       setActivePage(firstAllowedPage)
-      rememberActivePage(firstAllowedPage)
+      persistPage(firstAllowedPage)
+      writePageToUrl(firstAllowedPage, 'replace')
     }
   }, [activePage, canPage, firstAllowedPage, permissionsReady])
 
@@ -4632,19 +4658,11 @@ function App() {
     }
     if (page && validPages.has(page)) {
       setActivePage(page)
-      rememberActivePage(page)
-      const section = sectionForPage(page)
-      if (section) {
-        setCollapsedSections((current) => {
-          if (!current.has(section)) {
-            return current
-          }
-          const next = new Set(current)
-          next.delete(section)
-          return next
-        })
-      }
-      params.delete('page')
+      persistPage(page)
+    } else {
+      const fallback =
+        readPageFromLocation(validPages) ?? readRememberedPage(validPages)
+      params.set('page', fallback)
       changed = true
     }
     if (planDate && /^\d{4}-\d{2}-\d{2}$/.test(planDate)) {
@@ -4657,7 +4675,20 @@ function App() {
     }
     const query = params.toString()
     const next = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
-    window.history.replaceState({}, '', next)
+    window.history.replaceState({ page: params.get('page') }, '', next)
+  }, [])
+
+  useEffect(() => {
+    const onPop = () => {
+      const page = readPageFromLocation(validPages)
+      if (!page) {
+        return
+      }
+      setActivePage(page)
+      persistPage(page)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   const openMobileNav = () => {
@@ -4669,13 +4700,11 @@ function App() {
     setIsMobileNavOpen(false)
   }
 
-  const handleSectionShortcut = (section: string) => {
-    setIsSidebarCollapsed(false)
-    setCollapsedSections((current) => {
-      const next = new Set(current)
-      next.delete(section)
-      return next
-    })
+  const navigateToSection = (section: string, items: string[]) => {
+    const target = readLastPageInSection(section, items)
+    if (target) {
+      navigateToPage(target)
+    }
   }
 
   useEffect(() => {
@@ -4779,10 +4808,12 @@ function App() {
     <div
       className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
         isMobileNavOpen ? 'mobile-nav-is-open' : ''
-      }`}
+      } ${showMobileDomainTabs ? 'has-mobile-domain-tabs' : ''}`}
+      data-workspace={workspace}
       style={
         {
           '--title-progress': String(titleProgress),
+          '--domain-tabs-h': domainTabsOffset,
         } as CSSProperties
       }
     >
@@ -4790,10 +4821,13 @@ function App() {
       <header
         className={`mobile-topbar ${titleProgress >= 0.25 ? 'is-frosted' : ''} ${
           titleProgress >= 0.99 ? 'is-collapsed' : ''
-        } ${isMobileSearchOpen ? 'is-search-open' : ''}`}
+        } ${isMobileSearchOpen ? 'is-search-open' : ''} ${
+          showMobileDomainTabs ? 'has-domain-tabs' : ''
+        }`}
         style={
           {
             '--title-progress': String(titleProgress),
+          '--domain-tabs-h': domainTabsOffset,
           } as CSSProperties
         }
       >
@@ -4836,6 +4870,7 @@ function App() {
             )
           ) : null}
         </div>
+        {workspace === 'office' || isMobileSearchOpen ? (
         <button
           className="btn-icon btn-icon-ghost mobile-menu-button"
           type="button"
@@ -4879,6 +4914,18 @@ function App() {
             </svg>
           )}
         </button>
+        ) : null}
+        {showMobileDomainTabs ? (
+          <DomainTabs
+            pages={domainPages}
+            activePage={activePage}
+            onNavigate={navigateToPage}
+            ariaLabel={t('common.domainPages', {
+              section: sectionLabel(activeDomain?.section ?? ''),
+            })}
+            labelFor={navItemLabel}
+          />
+        ) : null}
       </header>
       </MobileBodyPortal>
 
@@ -4894,16 +4941,14 @@ function App() {
         }`}
       >
         <div className="brand">
-          <img
-            className="brand-logo brand-logo-full"
-            src="/Yalla_logo/full_logo.png"
-            alt="Yalla!"
-          />
-          <img
-            className="brand-logo brand-logo-icon"
-            src="/Yalla_logo/icon.png"
-            alt="Yalla!"
-          />
+          <div className="brand-lockup">
+            <img
+              className="brand-logo brand-logo-icon"
+              src="/brand/yalla-mark.svg"
+              alt="Yalla!"
+            />
+            <span className="brand-wordmark">Yalla!</span>
+          </div>
           <button
             className="btn-icon btn-icon-ghost mobile-nav-close"
             type="button"
@@ -4970,57 +5015,51 @@ function App() {
                 })}
               </ul>
               <ul className="nav-items nav-section-shortcuts">
-                {visibleNavigation.map((group) => (
-                  <li key={group.section}>
-                    <button
-                      className="nav-button nav-section-shortcut"
-                      type="button"
-                      aria-label={t('common.openSection', {
-                        section: sectionLabel(group.section),
-                      })}
-                      onClick={() => handleSectionShortcut(group.section)}
-                    >
-                      {group.section.charAt(0)}
-                    </button>
-                  </li>
-                ))}
+                {visibleNavigation.map((group) => {
+                  const isActive = group.items.includes(activePage)
+                  return (
+                    <li key={group.section}>
+                      <button
+                        className={`nav-button nav-section-shortcut ${
+                          isActive ? 'active' : ''
+                        }`}
+                        type="button"
+                        aria-current={isActive ? 'page' : undefined}
+                        aria-label={sectionLabel(group.section)}
+                        onClick={() =>
+                          navigateToSection(group.section, group.items)
+                        }
+                      >
+                        {sectionLabel(group.section).charAt(0)}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             </>
-          ) : null}
-          {visibleNavigation.map((group) => (
-            <div className="nav-section" key={group.section}>
-              <button
-                className="nav-section-title nav-section-toggle"
-                type="button"
-                onClick={() => toggleSection(group.section)}
-                aria-expanded={!collapsedSections.has(group.section)}
-              >
-                <span>{sectionLabel(group.section)}</span>
-                <span className="nav-section-caret">
-                  {collapsedSections.has(group.section) ? '▸' : '▾'}
-                </span>
-              </button>
-              {!collapsedSections.has(group.section) ? (
-                <ul className="nav-items">
-                  {group.items.map((item) => {
-                    const isActive = activePage === item
-                    return (
-                      <li key={item}>
-                        <button
-                          className={`nav-button ${isActive ? 'active' : ''}`}
-                          aria-current={isActive ? 'page' : undefined}
-                          type="button"
-                          onClick={() => navigateToPage(item)}
-                        >
-                          {navItemLabel(item)}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : null}
-            </div>
-          ))}
+          ) : (
+            <ul className="nav-items nav-domains">
+              {visibleNavigation.map((group) => {
+                const isActive = group.items.includes(activePage)
+                return (
+                  <li key={group.section}>
+                    <button
+                      className={`nav-button nav-domain ${
+                        isActive ? 'active' : ''
+                      }`}
+                      type="button"
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() =>
+                        navigateToSection(group.section, group.items)
+                      }
+                    >
+                      {sectionLabel(group.section)}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </nav>
         <SettingsPanel
           compact={isSidebarCollapsed}
@@ -5057,6 +5096,20 @@ function App() {
               ×
             </button>
           </div>
+        ) : null}
+        {!isMobileLayout &&
+        permissionsReady &&
+        canPage(activePage) &&
+        showDomainTabs ? (
+          <DomainTabs
+            pages={domainPages}
+            activePage={activePage}
+            onNavigate={navigateToPage}
+            ariaLabel={t('common.domainPages', {
+              section: sectionLabel(activeDomain?.section ?? ''),
+            })}
+            labelFor={navItemLabel}
+          />
         ) : null}
         {!permissionsReady ? (
           <div
@@ -5213,6 +5266,7 @@ function App() {
                   type="button"
                   onClick={openNewItem}
                   aria-label={t('common.addItem')}
+                  title={t('common.addItem')}
                 >
                   <svg
                     aria-hidden="true"
@@ -5290,7 +5344,7 @@ function App() {
                       <div>
                         <h3 className="modal-title">{t('common.filters')}</h3>
                         <p className="modal-subtitle">
-                          Select one or more values to filter the inventory.
+                          {t('inventory.filterSubtitle')}
                         </p>
                       </div>
                       <button
@@ -5537,14 +5591,24 @@ function App() {
                   <tbody>
                     {isLoading ? (
                       <tr>
-                    <td className="table-empty" colSpan={5}>
-                          {t('inventory.loading')}
+                        <td className="table-empty" colSpan={5}>
+                          <TableSkeleton rows={5} label={t('inventory.loading')} />
                         </td>
                       </tr>
                     ) : inventoryRows.length === 0 ? (
                       <tr>
-                    <td className="table-empty" colSpan={5}>
-                          {t('inventory.empty')}
+                        <td className="table-empty" colSpan={5}>
+                          <EmptyState
+                            message={t('inventory.empty')}
+                            actionLabel={
+                              canEditInventoryItems
+                                ? t('common.addItem')
+                                : undefined
+                            }
+                            onAction={
+                              canEditInventoryItems ? openNewItem : undefined
+                            }
+                          />
                         </td>
                       </tr>
                 ) : (
@@ -5553,15 +5617,15 @@ function App() {
                       return (
                         <Fragment key={row.id}>
                         <tr>
-                          <td>{itemDisplayName(row)}</td>
-                          <td>{row.location}</td>
-                          <td>
+                          <td data-label={t('common.name')}>{itemDisplayName(row)}</td>
+                          <td data-label={t('common.location')}>{row.location}</td>
+                          <td data-label={t('common.status')}>
                             <span className={getStatusClassName(row.status)}>
                               {statusLabel(row.status)}
                             </span>
                           </td>
-                          <td>{row.quantity}</td>
-                          <td>
+                          <td data-label={t('common.quantity')}>{row.quantity}</td>
+                          <td data-label={t('common.actions')}>
                             <div className="action-buttons">
                               <button
                                 className={`btn-icon btn-icon-ghost${
@@ -6215,7 +6279,7 @@ function App() {
                         return (
                           <Fragment key={row.id}>
                             <tr className={isExcludedPurchase(row) ? 'muted-row' : undefined}>
-                              <td>
+                              <td data-label={t('common.itemName')}>
                                 <div className="purchase-name-cell">
                                   <span>{row.itemName}</span>
                                   {row.direct ? (
@@ -6230,14 +6294,14 @@ function App() {
                                   ) : null}
                                 </div>
                               </td>
-                              <td>{row.location}</td>
-                              <td>
+                              <td data-label={t('common.location')}>{row.location}</td>
+                              <td data-label={t('common.status')}>
                                 <span className={getStatusClassName(row.status)}>
                                   {statusLabel(row.status)}
                                 </span>
                               </td>
-                              <td>{row.deliveryDate}</td>
-                              <td>
+                              <td data-label={t('common.deliveryDate')}>{row.deliveryDate}</td>
+                              <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -6886,21 +6950,21 @@ function App() {
                         return (
                           <Fragment key={row.id}>
                             <tr>
-                              <td>{row.itemName}</td>
-                              <td>{row.location}</td>
-                              <td>
+                              <td data-label={t('common.itemName')}>{row.itemName}</td>
+                              <td data-label={t('common.location')}>{row.location}</td>
+                              <td data-label={t('common.status')}>
                                 <span className={getStatusClassName(row.status)}>
                                   {statusLabel(row.status)}
                                 </span>
                               </td>
-                              <td>{row.date}</td>
-                              <td>
+                              <td data-label={t('common.date')}>{row.date}</td>
+                              <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
                                     aria-label={t('common.markBilled')}
-                                    title="Mark billed"
+                                    title={t('common.markBilled')}
                                     onClick={() => markSubtractionBilled(row)}
                                     disabled={row.status !== 'Pending Billing'}
                                   >
@@ -7068,12 +7132,30 @@ function App() {
                 <button
                   className="btn-primary"
                   type="button"
+                  aria-label={
+                    isPropertiesLoading
+                      ? t('bookings.updatingFromGuesty')
+                      : t('bookings.updateFromGuesty')
+                  }
+                  title={
+                    isPropertiesLoading
+                      ? t('bookings.updatingFromGuesty')
+                      : t('bookings.updateFromGuesty')
+                  }
                   onClick={() => void refreshPropertiesDiff()}
                   disabled={isPropertiesLoading}
                 >
-                  {isPropertiesLoading
-                    ? t('bookings.updatingFromGuesty')
-                    : t('bookings.updateFromGuesty')}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
                 ) : null}
                 </div>
@@ -7361,12 +7443,12 @@ function App() {
                     ) : (
                       sortedPropertiesRows.map((row) => (
                         <tr key={row.id}>
-                          <td>{row.nickname}</td>
-                          <td>{row.title}</td>
-                          <td>{row.type}</td>
-                          <td>{row.roomType}</td>
-                          <td>{row.neighborhood}</td>
-                          <td>
+                          <td data-label={t('properties.nickname')}>{row.nickname}</td>
+                          <td data-label={t('common.title')}>{row.title}</td>
+                          <td data-label={t('common.type')}>{row.type}</td>
+                          <td data-label={t('common.roomType')}>{row.roomType}</td>
+                          <td data-label={t('common.neighborhood')}>{row.neighborhood}</td>
+                          <td data-label={t('common.status')}>
                             <span
                               className={`status ${
                                 row.active ? 'status-success' : 'status-neutral'
@@ -7490,20 +7572,50 @@ function App() {
                 <button
                   className="btn-ghost"
                   type="button"
+                  aria-label={t('common.refresh')}
+                  title={t('common.refresh')}
                   onClick={() => void fetchBookings(bookingsCurrentCursor)}
                   disabled={isBookingsLoading || isBookingsSyncing}
                 >
-                  Refresh
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
                 <button
                   className="btn-primary"
                   type="button"
+                  aria-label={
+                    isBookingsSyncing
+                      ? t('bookings.updatingFromGuesty')
+                      : t('bookings.updateFromGuesty')
+                  }
+                  title={
+                    isBookingsSyncing
+                      ? t('bookings.updatingFromGuesty')
+                      : t('bookings.updateFromGuesty')
+                  }
                   onClick={() => void refreshBookingsFromGuesty()}
                   disabled={isBookingsLoading || isBookingsSyncing}
                 >
-                  {isBookingsSyncing
-                    ? t('bookings.updatingFromGuesty')
-                    : t('bookings.updateFromGuesty')}
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
                 </div>
               </div>
@@ -7769,16 +7881,16 @@ function App() {
                         return (
                           <Fragment key={row.id}>
                             <tr>
-                              <td>{row.guestName}</td>
-                              <td>{row.property}</td>
-                              <td>{row.checkIn}</td>
-                              <td>{row.checkOut}</td>
-                              <td>
+                              <td data-label={t('common.guest')}>{row.guestName}</td>
+                              <td data-label={t('common.property')}>{row.property}</td>
+                              <td data-label={t('common.checkIn')}>{row.checkIn}</td>
+                              <td data-label={t('common.checkOut')}>{row.checkOut}</td>
+                              <td data-label={t('common.status')}>
                                 <span className="status status-neutral">
                                   {row.status}
                                 </span>
                               </td>
-                              <td>
+                              <td data-label={t('bookingsPlan.linen')}>
                                 <LinenBadgeSelect
                                   value={linenValue}
                                   listingId={row.listingId}
@@ -7795,7 +7907,7 @@ function App() {
                                   }}
                                 />
                               </td>
-                              <td>
+                              <td data-label={t('bookingsPlan.earlyCheckIn')}>
                                 <YallaSwitch
                                   on={row.earlyCheckInOn}
                                   disabled={!canEditBooking || isSavingBooking}
@@ -7807,7 +7919,7 @@ function App() {
                                   }
                                 />
                               </td>
-                              <td>
+                              <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -8186,7 +8298,7 @@ function App() {
                           </div>
                         </div>
                         <div className="filter-group">
-                          <p className="filter-title">Created at</p>
+                          <p className="filter-title">{t('common.createdAt')}</p>
                           <div className="filter-options">
                             <label className="form-field">
                               <span>{t('common.from')}</span>
@@ -8368,14 +8480,14 @@ function App() {
                         return (
                           <Fragment key={rowId}>
                             <tr>
-                              <td>{row.guestName}</td>
-                              <td>{row.listingNickname}</td>
-                              <td>{row.rating || '—'}</td>
-                              <td>{row.createdAt}</td>
-                              <td>
+                              <td data-label={t('common.guest')}>{row.guestName}</td>
+                              <td data-label={t('common.listing')}>{row.listingNickname}</td>
+                              <td data-label={t('common.rating')}>{row.rating || '—'}</td>
+                              <td data-label={t('common.createdAt')}>{row.createdAt}</td>
+                              <td data-label={t('common.status')}>
                                 <span className="status status-neutral">{row.status}</span>
                               </td>
-                              <td>
+                              <td data-label={t('common.details')}>
                                 <button
                                   className="btn-link"
                                   type="button"
@@ -9615,6 +9727,24 @@ function App() {
           />
         ) : null}
       </main>
+      {workspace === 'field' ? (
+        <MobileBodyPortal>
+          <FieldBottomNav
+            roleId={roleId}
+            activePage={activePage}
+            canPage={canPage}
+            onNavigate={navigateToPage}
+            onMore={() => {
+              if (isMobileNavOpen) {
+                closeMobileNav()
+                return
+              }
+              openMobileNav()
+            }}
+            moreOpen={isMobileNavOpen}
+          />
+        </MobileBodyPortal>
+      ) : null}
     </div>
   )
 }

@@ -338,7 +338,9 @@ export function OperationsDayView({
 
       {tableRows.length === 0 ? (
         <p className="subtitle operations-day-empty">
-          No visits scheduled for {formatAgendaDayLabel(dayViewDate)}.
+          {t('operations.emptyDayVisits', {
+            date: formatAgendaDayLabel(dayViewDate),
+          })}
         </p>
       ) : (
       <>
@@ -376,7 +378,7 @@ export function OperationsDayView({
         <table className="operations-day-table">
           <thead>
             <tr>
-              <th className="operations-day-property-header">Property</th>
+              <th className="operations-day-property-header">{t('operations.property')}</th>
               <th className="operations-day-timeline-header">
                 <div className="operations-day-hours-wrap">
                   <button
@@ -565,8 +567,8 @@ function DayPropertyRow({
             aria-expanded={row.isExpanded}
             aria-label={
               row.isExpanded
-                ? `Collapse ${row.propertyLabel}`
-                : `Expand ${row.propertyLabel}`
+                ? t('operations.collapseProperty', { name: row.propertyLabel })
+                : t('operations.expandProperty', { name: row.propertyLabel })
             }
           >
             {row.isExpanded ? '▾' : '▸'}
@@ -674,6 +676,7 @@ function DayTimelineTrack({
   onCheckInLayoutChange,
   onBookingClick,
 }: DayTimelineTrackProps) {
+  const { t } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
   const [previewRange, setPreviewRange] = useState<{
@@ -871,7 +874,10 @@ function DayTimelineTrack({
       {overflow.hasEarly ? (
         <span
           className="operations-day-overflow-indicator operations-day-overflow-indicator--start"
-          title={`Visits before ${formatMinutesAsTime(timelineWindow.startMinutes)} (earliest ${formatMinutesAsTime(overflow.earliestBefore)})`}
+          title={t('operations.visitsBeforeWindow', {
+            time: formatMinutesAsTime(timelineWindow.startMinutes),
+            earliest: formatMinutesAsTime(overflow.earliestBefore),
+          })}
         >
           ‹ {formatMinutesAsTime(overflow.earliestBefore)}
         </span>
@@ -879,7 +885,10 @@ function DayTimelineTrack({
       {overflow.hasLate ? (
         <span
           className="operations-day-overflow-indicator operations-day-overflow-indicator--end"
-          title={`Visits after ${formatMinutesAsTime(timelineWindow.endMinutes)} (latest ${formatMinutesAsTime(overflow.latestAfter)})`}
+          title={t('operations.visitsAfterWindow', {
+            time: formatMinutesAsTime(timelineWindow.endMinutes),
+            latest: formatMinutesAsTime(overflow.latestAfter),
+          })}
         >
           {formatMinutesAsTime(overflow.latestAfter)} ›
         </span>
@@ -987,7 +996,9 @@ function DayVisitBlock({
     endTime: visit.scheduledEndTime,
   })}${
     entry.hasTimeOverlap
-      ? ` · Overlaps with ${entry.overlapCount - 1} other visit(s)`
+      ? ` · ${t('operations.overlapsWithVisits', {
+          count: entry.overlapCount - 1,
+        })}`
       : ''
   }${clickHint ? ` · ${clickHint}` : ''}`
 
@@ -1025,7 +1036,7 @@ function DayVisitBlock({
             <span
               className="operations-day-resize-handle operations-day-resize-handle--start"
               onPointerDown={(event) => beginDrag(event, entry, 'resize-start')}
-              aria-label="Resize start time"
+              aria-label={t('operations.resizeStartTime')}
             />
           )}
           <div
@@ -1057,7 +1068,7 @@ function DayVisitBlock({
             <span
               className="operations-day-resize-handle operations-day-resize-handle--end"
               onPointerDown={(event) => beginDrag(event, entry, 'resize-end')}
-              aria-label="Resize end time"
+              aria-label={t('operations.resizeEndTime')}
             />
           )}
         </>
@@ -1195,6 +1206,7 @@ function DayBookingBlock({
   ) => void
   onBookingClick: (booking: DayBookingEvent) => void
 }) {
+  const { t } = useTranslation()
   const layout = resolveCheckInLayout(booking)
   const [preview, setPreview] = useState<StoredCheckInLayout | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1326,7 +1338,7 @@ function DayBookingBlock({
         end={BOOKING_CHECK_OUT_END}
         timelineWindow={timelineWindow}
         className="operations-day-booking-block is-check-out"
-        title={`Check-out · ${booking.guestName}`}
+        title={`${t('common.checkOut')} · ${booking.guestName}`}
       >
         <DayBookingIcon kind="check-out" />
       </DayBookingTimeBlock>
@@ -1347,7 +1359,7 @@ function DayBookingBlock({
           className={`operations-day-booking-block is-early-check-in${
             isDragging ? ' is-dragging' : ''
           }`}
-          title={`Early check-in · ${booking.guestName}`}
+          title={`${t('bookingsPlan.earlyCheckIn')} · ${booking.guestName}`}
           onMovePointerDown={(event) => beginDrag(event, 'move', 'early')}
         >
           <span
@@ -1357,7 +1369,7 @@ function DayBookingBlock({
               beginDrag(event, 'resize-early', 'early')
             }}
             onClick={(event) => event.stopPropagation()}
-            aria-label="Resize early check-in"
+            aria-label={t('operations.resizeEarlyCheckIn')}
           />
         </DayBookingTimeBlock>
       ) : null}
@@ -1368,7 +1380,7 @@ function DayBookingBlock({
         className={`operations-day-booking-block is-check-in${
           showEarlyCheckIn ? ' has-early-lead' : ''
         }${isDragging ? ' is-dragging' : ''}`}
-        title={`Check-in · ${booking.guestName}`}
+        title={`${t('common.checkIn')} · ${booking.guestName}`}
         onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
         onClick={handleCheckInClick}
       >
@@ -1380,7 +1392,7 @@ function DayBookingBlock({
               beginDrag(event, 'resize-early', 'check-in')
             }}
             onClick={(event) => event.stopPropagation()}
-            aria-label="Add early check-in"
+            aria-label={t('operations.addEarlyCheckIn')}
           />
         )}
         <DayBookingIcon kind="check-in" />

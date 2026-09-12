@@ -523,10 +523,10 @@ export function LogsPanel({
               ) : (
                 visibleRows.map((row) => (
                   <tr key={row.id || `${row.createdAt}-${row.summary}`}>
-                    <td>{row.userEmail || 'system'}</td>
-                    <td>{translatePage(t, row.feature)}</td>
-                    <td>{formatLogDate(row.createdAt, i18n.language)}</td>
-                    <td>{row.summary}</td>
+                    <td data-label={t('logs.user')}>{row.userEmail || 'system'}</td>
+                    <td data-label={t('logs.feature')}>{translatePage(t, row.feature)}</td>
+                    <td data-label={t('common.date')}>{formatLogDate(row.createdAt, i18n.language)}</td>
+                    <td data-label={t('logs.summary')}>{row.summary}</td>
                   </tr>
                 ))
               )}

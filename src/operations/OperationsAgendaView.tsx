@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getPropertyLabel } from './propertyHelpers'
 import {
   getMtlGroupLabel,
@@ -70,6 +71,7 @@ export function OperationsAgendaView({
   onVisitReschedule,
   onShiftDates,
 }: Props) {
+  const { t } = useTranslation()
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
   const [dragOverCell, setDragOverCell] = useState<string | null>(null)
 
@@ -213,8 +215,8 @@ export function OperationsAgendaView({
                   <button
                     type="button"
                     className="operations-range-nav"
-                    aria-label="Previous days"
-                    title={`Previous ${shiftDays} days`}
+                    aria-label={t('operations.previousDays')}
+                    title={t('operations.previousNDays', { count: shiftDays })}
                     onClick={() => onShiftDates(-shiftDays)}
                   >
                     &laquo;
@@ -235,8 +237,8 @@ export function OperationsAgendaView({
                   <button
                     type="button"
                     className="operations-range-nav"
-                    aria-label="Next days"
-                    title={`Next ${shiftDays} days`}
+                    aria-label={t('operations.nextDays')}
+                    title={t('operations.nextNDays', { count: shiftDays })}
                     onClick={() => onShiftDates(shiftDays)}
                   >
                     &gt;
@@ -267,8 +269,12 @@ export function OperationsAgendaView({
                       aria-expanded={row.isExpanded}
                       aria-label={
                         row.isExpanded
-                          ? `Collapse ${row.propertyLabel}`
-                          : `Expand ${row.propertyLabel}`
+                          ? t('operations.collapseProperty', {
+                              name: row.propertyLabel,
+                            })
+                          : t('operations.expandProperty', {
+                              name: row.propertyLabel,
+                            })
                       }
                     >
                       {row.isExpanded ? '▾' : '▸'}

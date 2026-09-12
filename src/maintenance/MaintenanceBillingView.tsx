@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
+import { useConfirm } from '../design/ConfirmDialog'
 import {
   isBeforeHiddenBillingGap,
   isHiddenBillingMonth,
@@ -192,6 +193,7 @@ export function MaintenanceBillingView({
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const confirmAction = useConfirm()
   const canSeeRemainingHours = can(ACTION_KEYS.maintenanceBillingHoursRemaining)
   const endpoints = useMemo(
     () => ({
@@ -1144,9 +1146,17 @@ export function MaintenanceBillingView({
                   type="button"
                   disabled={isSaving}
                   onClick={() => {
-                    if (window.confirm(t('maintenanceBilling.closeConfirm'))) {
-                      void save({ month: selectedMonthId, action: 'close' })
-                    }
+                    void (async () => {
+                      if (
+                        await confirmAction({
+                          title: t('maintenanceBilling.close'),
+                          message: t('maintenanceBilling.closeConfirm'),
+                          destructive: true,
+                        })
+                      ) {
+                        void save({ month: selectedMonthId, action: 'close' })
+                      }
+                    })()
                   }}
                 >
                   {t('maintenanceBilling.close')}
@@ -1445,17 +1455,21 @@ export function MaintenanceBillingView({
                                     aria-label={t('maintenanceBilling.ungroup')}
                                     title={t('maintenanceBilling.ungroup')}
                                     onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          t('maintenanceBilling.ungroupConfirm'),
-                                        )
-                                      ) {
-                                        void save({
-                                          month: selectedMonthId,
-                                          action: 'unmerge',
-                                          lineId: line.id,
-                                        })
-                                      }
+                                      void (async () => {
+                                        if (
+                                          await confirmAction({
+                                            title: t('maintenanceBilling.ungroup'),
+                                            message: t('maintenanceBilling.ungroupConfirm'),
+                                            destructive: true,
+                                          })
+                                        ) {
+                                          void save({
+                                            month: selectedMonthId,
+                                            action: 'unmerge',
+                                            lineId: line.id,
+                                          })
+                                        }
+                                      })()
                                     }}
                                   >
                                     <svg
@@ -1479,17 +1493,22 @@ export function MaintenanceBillingView({
                                     aria-label={t('common.delete')}
                                     title={t('common.delete')}
                                     onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          t('maintenanceBilling.deleteConfirm'),
-                                        )
-                                      ) {
-                                        void save({
-                                          month: selectedMonthId,
-                                          action: 'delete-manual',
-                                          lineId: line.id,
-                                        })
-                                      }
+                                      void (async () => {
+                                        if (
+                                          await confirmAction({
+                                            title: t('common.delete'),
+                                            message: t('maintenanceBilling.deleteConfirm'),
+                                            confirmLabel: t('common.delete'),
+                                            destructive: true,
+                                          })
+                                        ) {
+                                          void save({
+                                            month: selectedMonthId,
+                                            action: 'delete-manual',
+                                            lineId: line.id,
+                                          })
+                                        }
+                                      })()
                                     }}
                                   >
                                     <svg
@@ -1656,16 +1675,16 @@ export function MaintenanceBillingView({
                 ) : (
                   months.map((item) => (
                     <tr key={item.id}>
-                      <td>{formatMonthLabel(item.id)}</td>
-                      <td>
+                      <td data-label={t('maintenanceBilling.month')}>{formatMonthLabel(item.id)}</td>
+                      <td data-label={t('maintenanceBilling.status')}>
                         <span className={`tag ${item.status === 'CLOSED' ? 'muted' : ''}`}>
                           {statusLabel(item.status, item.canClose)}
                         </span>
                       </td>
-                      <td>{item.lineCount}</td>
-                      <td>{item.warningCount}</td>
-                      <td>{money.format(item.total)}</td>
-                      <td>
+                      <td data-label={t('maintenanceBilling.lines')}>{item.lineCount}</td>
+                      <td data-label={t('maintenanceBilling.warnings')}>{item.warningCount}</td>
+                      <td data-label={t('maintenanceBilling.total')}>{money.format(item.total)}</td>
+                      <td data-label={t('common.actions')}>
                         <button
                           className="btn-secondary"
                           type="button"

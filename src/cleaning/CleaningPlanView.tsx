@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TableSkeleton } from '../design/Feedback'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
@@ -487,14 +488,20 @@ export function CleaningPlanView({
     if (isLoading) {
       return (
         <tr>
-          <td colSpan={5}>{t('common.loading')}</td>
+          <td className="table-empty" colSpan={5}>
+            <TableSkeleton rows={4} label={t('common.loading')} />
+          </td>
         </tr>
       )
     }
     if (rows.length === 0) {
       return (
         <tr>
-          <td colSpan={5}>{t('cleaningPlan.emptyVisits')}</td>
+          <td className="table-empty" colSpan={5}>
+            <div className="yl-empty">
+              <p>{t('cleaningPlan.emptyVisits')}</p>
+            </div>
+          </td>
         </tr>
       )
     }
@@ -510,7 +517,7 @@ export function CleaningPlanView({
       }
       return (
         <tr key={row.visitId}>
-          <td>
+          <td data-label={t('cleaningPlan.visit')}>
             <div className="cleaning-visit-cell">
               <div className="cleaning-visit-title-row">
                 <button
@@ -572,7 +579,7 @@ export function CleaningPlanView({
               ) : null}
             </div>
           </td>
-          <td>
+          <td data-label={t('cleaningPlan.type')}>
             <select
               value={row.cleaningTypeId}
               disabled={isReady || row.cleaningTypes.length === 0}
@@ -593,7 +600,7 @@ export function CleaningPlanView({
               )}
             </select>
           </td>
-          <td>
+          <td data-label={t('cleaningPlan.cleaner')}>
             <select
               value={row.cleanerId}
               disabled={isReady}
@@ -612,7 +619,7 @@ export function CleaningPlanView({
               ))}
             </select>
           </td>
-          <td>
+          <td data-label={t('cleaningPlan.startTime')}>
             <input
               type="time"
               value={row.startTime}
@@ -629,7 +636,7 @@ export function CleaningPlanView({
               }}
             />
           </td>
-          <td className="cleaning-quality-cell">
+          <td className="cleaning-quality-cell" data-label={t('cleaningPlan.qualityCheck')}>
             <input
               type="checkbox"
               checked={row.qualityReview}
@@ -751,6 +758,8 @@ export function CleaningPlanView({
         <p className="notice success">{message}</p>
       ) : null}
 
+      {!isDayModalOpen ? (
+      <>
       <section
         className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
       >
@@ -980,89 +989,82 @@ export function CleaningPlanView({
           </table>
         </div>
       </section>
-
-      {isDayModalOpen ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal modal-wide modal-scrollable cleaning-plan-modal">
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">
-                  {formatDateOnlyLabel(plannedDate, i18n.language)}
-                </h3>
-                <p className="modal-subtitle">
-                  <span
-                    className={`cleaning-status-tag ${
-                      isReady ? 'is-ready' : 'is-draft'
-                    }`}
-                  >
-                    {statusLabel(status)}
-                  </span>
-                </p>
-              </div>
+      </>
+      ) : (
+        <section className="yl-day-page" aria-label={t('pages.Cleaning Plan')}>
+          <div className="yl-day-page-header">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={closeDay}
+            >
+              {t('common.back')}
+            </button>
+            <div>
+              <h2>{formatDateOnlyLabel(plannedDate, i18n.language)}</h2>
+              <p className="subtitle">
+                <span
+                  className={`cleaning-status-tag ${
+                    isReady ? 'is-ready' : 'is-draft'
+                  }`}
+                >
+                  {statusLabel(status)}
+                </span>
+              </p>
+            </div>
+          </div>
+          {message ? <p className="notice success">{message}</p> : null}
+          {error ? <p className="notice error">{error}</p> : null}
+          {!isReady && !canMarkReady ? (
+            <p className="notice">{t('cleaningPlan.draftOnlyFuture')}</p>
+          ) : null}
+          <div className="table-wrap">
+            <table className="data-table yl-day-page-table">
+              <thead>
+                <tr>
+                  <th>{t('cleaningPlan.visit')}</th>
+                  <th>{t('cleaningPlan.type')}</th>
+                  <th>{t('cleaningPlan.cleaner')}</th>
+                  <th>{t('cleaningPlan.startTime')}</th>
+                  <th>{t('cleaningPlan.qualityCheck')}</th>
+                </tr>
+              </thead>
+              <tbody>{renderVisitRows()}</tbody>
+            </table>
+          </div>
+          <div className="yl-day-page-actions">
+            {isReady ? (
               <button
-                className="btn-icon"
+                className="btn-secondary"
                 type="button"
-                onClick={closeDay}
-                aria-label={t('common.cancel')}
+                disabled={isSaving}
+                onClick={() => void savePlan('reopen')}
               >
-                ✕
+                {t('cleaningPlan.editPlan')}
               </button>
-            </div>
-            <div className="modal-body">
-              {message ? <p className="notice success">{message}</p> : null}
-              {error ? <p className="notice error">{error}</p> : null}
-              {!isReady && !canMarkReady ? (
-                <p className="notice">{t('cleaningPlan.draftOnlyFuture')}</p>
-              ) : null}
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t('cleaningPlan.visit')}</th>
-                      <th>{t('cleaningPlan.type')}</th>
-                      <th>{t('cleaningPlan.cleaner')}</th>
-                      <th>{t('cleaningPlan.startTime')}</th>
-                      <th>{t('cleaningPlan.qualityCheck')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>{renderVisitRows()}</tbody>
-                </table>
-              </div>
-            </div>
-            <div className="modal-footer">
-              {isReady ? (
+            ) : (
+              <>
                 <button
                   className="btn-secondary"
                   type="button"
-                  disabled={isSaving}
-                  onClick={() => void savePlan('reopen')}
+                  disabled={isSaving || isLoading}
+                  onClick={() => void savePlan('save')}
                 >
-                  {t('cleaningPlan.editPlan')}
+                  {isSaving ? t('common.saving') : t('cleaningPlan.saveDraft')}
                 </button>
-              ) : (
-                <>
-                  <button
-                    className="btn-secondary"
-                    type="button"
-                    disabled={isSaving || isLoading}
-                    onClick={() => void savePlan('save')}
-                  >
-                    {isSaving ? t('common.saving') : t('cleaningPlan.saveDraft')}
-                  </button>
-                  <button
-                    className="btn-primary"
-                    type="button"
-                    disabled={isSaving || isLoading || !canMarkReady}
-                    onClick={() => void savePlan('ready')}
-                  >
-                    {t('cleaningPlan.markReady')}
-                  </button>
-                </>
-              )}
-            </div>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={isSaving || isLoading || !canMarkReady}
+                  onClick={() => void savePlan('ready')}
+                >
+                  {t('cleaningPlan.markReady')}
+                </button>
+              </>
+            )}
           </div>
-        </div>
-      ) : null}
+        </section>
+      )}
 
       {openVisitId ? (
         <VisitDetailModal

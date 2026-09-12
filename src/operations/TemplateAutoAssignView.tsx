@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useConfirm } from '../design/ConfirmDialog'
 import { YallaSwitch } from '../bookings/YallaSwitch'
 import {
   fetchJson,
@@ -59,6 +60,7 @@ export function TemplateAutoAssignView({
   propertyOptions,
 }: Props) {
   const { t } = useTranslation()
+  const confirmAction = useConfirm()
   const endpoints = useMemo(
     () => ({
       list: getEndpoint('getVisitTemplateAutoAssignUrl'),
@@ -477,14 +479,21 @@ export function TemplateAutoAssignView({
                             aria-label={t('common.delete')}
                             title={t('common.delete')}
                             onClick={() => {
-                              if (
-                                window.confirm(t('templateAutoAssign.deleteConfirm'))
-                              ) {
-                                void saveRule(
-                                  { id: rule.id, action: 'delete' },
-                                  'templateAutoAssign.deleted',
-                                )
-                              }
+                              void (async () => {
+                                if (
+                                  await confirmAction({
+                                    title: t('common.delete'),
+                                    message: t('templateAutoAssign.deleteConfirm'),
+                                    confirmLabel: t('common.delete'),
+                                    destructive: true,
+                                  })
+                                ) {
+                                  void saveRule(
+                                    { id: rule.id, action: 'delete' },
+                                    'templateAutoAssign.deleted',
+                                  )
+                                }
+                              })()
                             }}
                           >
                             ✕

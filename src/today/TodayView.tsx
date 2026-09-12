@@ -6,6 +6,7 @@ import { fetchJson } from '../operations/api'
 import { addDaysToDateString, getTodayMadrid } from '../operations/dateHelpers'
 import { ACTION_KEYS, DASHBOARD_CARD_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
+import { humanizeRequestError } from '../lib/humanize-error'
 
 type TodaySummary = {
   date: string
@@ -287,9 +288,7 @@ export function TodayView({
       setSummary(next)
       writeCachedSummary(next)
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : t('today.loadError'),
-      )
+      setError(humanizeRequestError(requestError, t('today.loadError')))
     } finally {
       setIsLoading(false)
     }
@@ -491,7 +490,14 @@ export function TodayView({
   if (embedded) {
     return (
       <>
-        {error ? <div className="alert">{error}</div> : null}
+        {error && !summary ? (
+          <div className="alert" role="alert">
+            {error}
+            <button type="button" className="btn-link" onClick={() => void loadSummary()}>
+              {t('common.retry')}
+            </button>
+          </div>
+        ) : null}
         {isLoading && !summary ? <TodayLoader label={t('today.loading')} /> : null}
         {cards}
       </>
@@ -530,7 +536,7 @@ export function TodayView({
         </MobileBodyPortal>
       </header>
 
-      {error ? <div className="alert">{error}</div> : null}
+      {error && !summary ? <div className="alert">{error}</div> : null}
       {isLoading && !summary ? <TodayLoader label={t('today.loading')} /> : null}
       {cards}
     </>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useConfirm } from '../design/ConfirmDialog'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
 import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
@@ -79,6 +80,7 @@ export function CleaningIncidentsView({
   onSearchQueryChange,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const confirmAction = useConfirm()
   const endpoints = useMemo(
     () => ({
       getIncidents: getEndpoint(
@@ -343,7 +345,12 @@ export function CleaningIncidentsView({
       setError(t('cleaningIncidents.missingWrite'))
       return
     }
-    if (!window.confirm(t('cleaningIncidents.deleteConfirm'))) {
+    if (!(await confirmAction({
+      title: t('common.delete'),
+      message: t('cleaningIncidents.deleteConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    }))) {
       return
     }
     setIsSaving(true)
@@ -516,17 +523,17 @@ export function CleaningIncidentsView({
               ) : (
                 filteredIncidents.map((incident) => (
                   <tr key={incident.id}>
-                    <td>
+                    <td data-label={t('cleaningIncidents.property')}>
                       {propertyById.get(incident.propertyId) || incident.property}
                     </td>
-                    <td>{formatDateOnlyLabel(incident.date, i18n.language)}</td>
-                    <td>
+                    <td data-label={t('cleaningIncidents.date')}>{formatDateOnlyLabel(incident.date, i18n.language)}</td>
+                    <td data-label={t('cleaningIncidents.cleaner')}>
                       {cleanerById.get(incident.cleanerId) || incident.cleanerName}
                     </td>
-                    <td className="incident-description-cell">
+                    <td className="incident-description-cell" data-label={t('cleaningIncidents.description')}>
                       {incident.description}
                     </td>
-                    <td>
+                    <td data-label={t('common.actions')}>
                       <div className="table-actions">
                         <button
                           className="btn-secondary"

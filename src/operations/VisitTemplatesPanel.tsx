@@ -390,10 +390,9 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
         {hideSectionHeader ? null : (
           <div className="page-header">
             <div>
-              <h2 className="section-title">Visit templates</h2>
+              <h2 className="section-title">{t('operations.templatesCardTitle')}</h2>
               <p className="subtitle">
-                Reusable visit and task presets per property. Applying a template
-                pre-fills a new visit; you still choose the date before saving.
+                {t('operations.templatesCardSubtitle')}
               </p>
             </div>
             <div className="header-actions">
@@ -402,16 +401,16 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 type="button"
                 onClick={() => void loadTemplates()}
               >
-                Refresh
+                {t('operations.refresh')}
               </button>
               <button className="btn-primary" type="button" onClick={openCreateTemplate}>
-                Create template
+                {t('operations.createTemplate')}
               </button>
             </div>
           </div>
         )}
 
-        {isLoading ? <p>Loading templates…</p> : null}
+        {isLoading ? <p>{t('operations.loadingTemplates')}</p> : null}
 
         <div className="table-wrap">
           <table className="data-table">
@@ -444,20 +443,20 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
             <tbody>
               {filteredTemplates.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>No templates found.</td>
+                  <td colSpan={7}>{t('operations.emptyTemplates')}</td>
                 </tr>
               ) : (
                 filteredTemplates.map((template) => (
                   <tr key={template.id} className={template.active ? '' : 'muted-row'}>
-                    <td>{template.name}</td>
-                    <td>{propertyById.get(template.propertyId) ?? template.propertyId}</td>
-                    <td>
+                    <td data-label={t('common.name')}>{template.name}</td>
+                    <td data-label={t('operations.property')}>{propertyById.get(template.propertyId) ?? template.propertyId}</td>
+                    <td data-label={t('operations.visitType')}>
                       {visitTypeById.get(template.visitTypeId) ?? template.visitTypeId}
                     </td>
-                    <td>{teamById.get(template.teamId) ?? template.teamId}</td>
-                    <td>{template.tasks.length}</td>
-                    <td>{template.active ? 'Active' : 'Inactive'}</td>
-                    <td>
+                    <td data-label={t('operations.team')}>{teamById.get(template.teamId) ?? template.teamId}</td>
+                    <td data-label={t('operations.tasks')}>{template.tasks.length}</td>
+                    <td data-label={t('common.status')}>{template.active ? t('common.active') : t('common.inactive')}</td>
+                    <td data-label={t('common.actions')}>
                       <div className="action-buttons">
                         <button
                           type="button"
@@ -669,12 +668,14 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {templateForm.id ? 'Edit template' : 'Create template'}
+                  {templateForm.id
+                    ? t('operations.editTemplateTitle')
+                    : t('operations.createTemplate')}
                 </h3>
                 <p className="modal-subtitle">
-                  {templateForm.tasks.length} task
-                  {templateForm.tasks.length === 1 ? '' : 's'} in this template.
-                  Add or remove tasks below, then save.
+                  {t('operations.templateFormHelp', {
+                    count: templateForm.tasks.length,
+                  })}
                 </p>
               </div>
               <button
@@ -700,7 +701,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 </div>
               ) : null}
               <label>
-                Template name
+                {t('operations.templateName')}
                 <input
                   value={templateForm.name}
                   onChange={(event) =>
@@ -709,11 +710,11 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                       name: event.target.value,
                     }))
                   }
-                  placeholder="e.g. Property check"
+                  placeholder={t('operations.templateNamePlaceholder')}
                 />
               </label>
               <label>
-                Property
+                {t('operations.property')}
                 <select
                   value={templateForm.propertyId}
                   onChange={(event) =>
@@ -723,7 +724,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                     }))
                   }
                 >
-                  <option value="">Select property</option>
+                  <option value="">{t('templateAutoAssign.selectProperty')}</option>
                   {sortedPropertyOptions.map((property) => (
                     <option key={property.id} value={property.id}>
                       {getPropertyLabel(property)}
@@ -732,12 +733,12 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 </select>
               </label>
               <label>
-                Visit type
+                {t('operations.visitType')}
                 <select
                   value={templateForm.visitTypeId}
                   onChange={(event) => handleVisitTypeChange(event.target.value)}
                 >
-                  <option value="">Select type</option>
+                  <option value="">{t('operations.selectType')}</option>
                   {sortedVisitTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name}
@@ -746,7 +747,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 </select>
               </label>
               <label>
-                Team
+                {t('operations.team')}
                 <select
                   value={templateForm.teamId}
                   onChange={(event) =>
@@ -757,7 +758,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                     }))
                   }
                 >
-                  <option value="">Select team</option>
+                  <option value="">{t('operations.selectTeam')}</option>
                   {teams.map((team) => (
                     <option key={team.id} value={team.id}>
                       {team.name}
@@ -766,7 +767,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 </select>
               </label>
               <label>
-                Default assignee
+                {t('operations.defaultAssignee')}
                 <select
                   value={templateForm.assignedUserId}
                   onChange={(event) =>
@@ -776,7 +777,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                     }))
                   }
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">{t('operations.unassigned')}</option>
                   {teamUsers.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}
@@ -785,7 +786,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 </select>
               </label>
               <label>
-                Default start
+                {t('operations.defaultStart')}
                 <input
                   type="time"
                   value={templateForm.scheduledStartTime}
@@ -798,7 +799,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 />
               </label>
               <label>
-                Default end
+                {t('operations.defaultEnd')}
                 <input
                   type="time"
                   value={templateForm.scheduledEndTime}
@@ -811,7 +812,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 />
               </label>
               <label>
-                Visit title
+                {t('operations.visitTitle')}
                 <input
                   value={templateForm.title}
                   onChange={(event) =>
@@ -823,7 +824,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 />
               </label>
               <label className="full-width">
-                Description
+                {t('operations.description')}
                 <textarea
                   value={templateForm.description}
                   onChange={(event) =>
@@ -835,7 +836,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 />
               </label>
               <label>
-                Est. duration (min)
+                {t('operations.estimatedDuration')}
                 <input
                   type="number"
                   value={templateForm.estimatedDurationMinutes}
@@ -849,7 +850,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
               </label>
 
               <div className="full-width template-tasks-editor">
-                <h4>Template tasks</h4>
+                <h4>{t('operations.templateTasks')}</h4>
                 <p className="subtitle">{t('operations.templateTaskTitleEsHint')}</p>
                 {templateForm.tasks.map((task, index) => (
                   <div key={`task-${index}`} className="template-task-row">
@@ -938,7 +939,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                         }))
                       }
                     >
-                      Remove
+                      {t('operations.removeTask')}
                     </button>
                   </div>
                 ))}
@@ -961,7 +962,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                     }))
                   }
                 >
-                  Add task
+                  {t('operations.addTask')}
                 </button>
               </div>
             </div>
@@ -971,7 +972,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 className="btn-primary"
                 onClick={() => void submitTemplate()}
               >
-                Save template
+                {t('common.save')}
               </button>
             </div>
           </div>

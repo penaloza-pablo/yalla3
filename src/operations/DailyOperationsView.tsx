@@ -46,6 +46,8 @@ import { displayTaskTitle } from './taskTitleDisplay'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
+import { useConfirm } from '../design/ConfirmDialog'
+import { SegmentedControl } from '../design/SegmentedControl'
 import {
   buildApplyTemplateVisitPayload,
   emptyDraftTask,
@@ -422,6 +424,7 @@ export function DailyOperationsView({
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const confirmAction = useConfirm()
   const visitColumns = useMemo(
     () =>
       VISIT_COLUMN_DEFS.map((column) => ({
@@ -449,7 +452,6 @@ export function DailyOperationsView({
     useState<DashboardViewMode>('dashboard')
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [templateFilterCount, setTemplateFilterCount] = useState(0)
-  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<OpsFilters>(emptyOpsFilters)
   const [filterDraft, setFilterDraft] = useState<OpsFilters>(emptyOpsFilters)
@@ -1883,7 +1885,12 @@ export function DailyOperationsView({
 
   const deleteTask = async () => {
     if (!endpoints.upsertTask || !taskForm.id) return
-    if (!window.confirm(t('operations.deleteTaskConfirm'))) return
+    if (!(await confirmAction({
+      title: t('common.delete'),
+      message: t('operations.deleteTaskConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    }))) return
     try {
       await saveTask(endpoints.upsertTask, { id: taskForm.id, action: 'delete' })
       setIsTaskFormOpen(false)
@@ -2071,7 +2078,13 @@ export function DailyOperationsView({
       ? t('pages.Unassigned tasks')
       : mode === 'templates'
         ? t('pages.Visit templates')
-        : t('pages.Daily Operations')
+        : dashboardViewMode === 'dashboard'
+          ? t('pages.Today')
+          : dashboardViewMode === 'day'
+            ? t('operations.day')
+            : dashboardViewMode === 'agenda'
+              ? t('operations.agenda')
+              : t('operations.kanban')
   const pageEyebrow =
     mode === 'unassigned'
       ? t('operations.eyebrowUnassigned')
@@ -2116,9 +2129,24 @@ export function DailyOperationsView({
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
           </div>
-          {mode === 'dashboard' ? null : (
+          {mode === 'dashboard' ? (
+            <p className="subtitle">{t('today.subtitle')}</p>
+          ) : (
             <p className="subtitle">{pageSubtitle}</p>
           )}
+          {mode === 'dashboard' ? (
+            <SegmentedControl
+              ariaLabel={t('operations.changeView')}
+              value={dashboardViewMode}
+              onChange={setDashboardViewMode}
+              options={[
+                { id: 'dashboard', label: t('pages.Today') },
+                { id: 'day', label: t('operations.day') },
+                { id: 'kanban', label: t('operations.kanban') },
+                { id: 'agenda', label: t('operations.agenda') },
+              ]}
+            />
+          ) : null}
         </div>
         <MobileBodyPortal>
           <div
@@ -2167,80 +2195,6 @@ export function DailyOperationsView({
                     </svg>
                   )}
                 </button>
-              ) : null}
-              {mode === 'dashboard' ? (
-                <>
-                  <button
-                    className="btn-ghost"
-                    type="button"
-                    aria-label={
-                      dashboardViewMode === 'dashboard'
-                        ? t('operations.openDayView')
-                        : t('operations.openDashboard')
-                    }
-                    title={
-                      dashboardViewMode === 'dashboard'
-                        ? t('operations.openDayView')
-                        : t('operations.openDashboard')
-                    }
-                    onClick={() =>
-                      setDashboardViewMode(
-                        dashboardViewMode === 'dashboard'
-                          ? 'day'
-                          : 'dashboard',
-                      )
-                    }
-                  >
-                    {dashboardViewMode === 'dashboard' ? (
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  <button
-                    className={`btn-ghost ${
-                      isViewMenuOpen || dashboardViewMode !== 'dashboard'
-                        ? 'is-active'
-                        : ''
-                    }`}
-                    type="button"
-                    aria-label={t('operations.changeView')}
-                    aria-expanded={isViewMenuOpen}
-                    onClick={() => setIsViewMenuOpen(true)}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M10 4C5.2 4 1.4 7.4.5 10c.9 2.6 4.7 6 9.5 6s8.6-3.4 9.5-6c-.9-2.6-4.7-6-9.5-6zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </button>
-                </>
               ) : null}
               {mode !== 'dashboard' || can(ACTION_KEYS.dailyOpsCreate) ? (
               <button
@@ -2372,6 +2326,22 @@ export function DailyOperationsView({
         </MobileBodyPortal>
       </header>
 
+      {mode === 'dashboard' ? (
+        <div className="yl-ops-toolbar">
+          <SegmentedControl
+            ariaLabel={t('operations.changeView')}
+            value={dashboardViewMode}
+            onChange={setDashboardViewMode}
+            options={[
+              { id: 'dashboard', label: t('pages.Today') },
+              { id: 'day', label: t('operations.day') },
+              { id: 'kanban', label: t('operations.kanban') },
+              { id: 'agenda', label: t('operations.agenda') },
+            ]}
+          />
+        </div>
+      ) : null}
+
       {!visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
 
       {mode === 'dashboard' ? (
@@ -2440,7 +2410,7 @@ export function DailyOperationsView({
           ) : null}
 
           {isLoading && dashboardViewMode !== 'dashboard' ? (
-            <p className="subtitle">Loading visits…</p>
+            <p className="subtitle">{t('common.loading')}</p>
           ) : null}
 
           {dashboardViewMode === 'dashboard' ? (
@@ -2506,33 +2476,33 @@ export function DailyOperationsView({
             <h2 className="section-title">{t('operations.tasksNotOnVisit')}</h2>
           </div>
           <div className="table-wrapper">
-            <table>
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Property</th>
-                  <th>Team</th>
-                  <th>Priority</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                  <th>{t('common.title')}</th>
+                  <th>{t('common.status')}</th>
+                  <th>{t('common.property')}</th>
+                  <th>{t('operations.team')}</th>
+                  <th>{t('operations.priority')}</th>
+                  <th>{t('operations.created')}</th>
+                  <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {poolTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>No unassigned or dismissed tasks.</td>
+                    <td colSpan={7}>{t('operations.emptyUnassigned')}</td>
                   </tr>
                 ) : (
                   poolTasks.map((task) => (
                     <tr key={task.id}>
-                      <td>{displayTaskTitle(i18n.language, task.title, task.titleEs)}</td>
-                      <td>{task.status}</td>
-                      <td>{propertyById.get(task.propertyId) ?? task.propertyId}</td>
-                      <td>{teamById.get(task.teamId) ?? task.teamId}</td>
-                      <td>{task.priority}</td>
-                      <td>{formatTaskCreatedDate(task.createdAt)}</td>
-                      <td className="table-actions">
+                      <td data-label={t('common.title')}>{displayTaskTitle(i18n.language, task.title, task.titleEs)}</td>
+                      <td data-label={t('common.status')}>{task.status}</td>
+                      <td data-label={t('common.property')}>{propertyById.get(task.propertyId) ?? task.propertyId}</td>
+                      <td data-label={t('operations.team')}>{teamById.get(task.teamId) ?? task.teamId}</td>
+                      <td data-label={t('operations.priority')}>{task.priority}</td>
+                      <td data-label={t('operations.created')}>{formatTaskCreatedDate(task.createdAt)}</td>
+                      <td className="table-actions" data-label={t('common.actions')}>
                         <div className="action-buttons">
                         <button
                           type="button"
@@ -2638,58 +2608,6 @@ export function DailyOperationsView({
           }}
         />
       )}
-
-      {isViewMenuOpen ? (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setIsViewMenuOpen(false)}
-        >
-          <div
-            className="modal operations-view-picker-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">{t('operations.changeView')}</h3>
-              </div>
-              <button
-                className="btn-icon"
-                type="button"
-                onClick={() => setIsViewMenuOpen(false)}
-                aria-label={t('common.close')}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="modal-body operations-view-picker">
-              {(
-                [
-                  { id: 'dashboard', label: t('operations.dashboard') },
-                  { id: 'day', label: t('operations.day') },
-                  { id: 'kanban', label: t('operations.kanban') },
-                  { id: 'agenda', label: t('operations.agenda') },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={
-                    dashboardViewMode === option.id ? 'btn-primary' : 'btn-secondary'
-                  }
-                  onClick={() => {
-                    setDashboardViewMode(option.id)
-                    setIsViewMenuOpen(false)
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {isFilterOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -2883,7 +2801,7 @@ export function DailyOperationsView({
       ) : null}
 
       {selectedVisit && mode === 'dashboard' ? (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
+        <div className="modal-overlay yl-visit-sheet" role="dialog" aria-modal="true">
           <div className="modal operations-detail-modal modal-scrollable">
             <div className="modal-header">
               <div>
@@ -3204,7 +3122,7 @@ export function DailyOperationsView({
             <div className="modal-body form-grid">
               {isVisitFormOpen ? errorNotice : null}
               <label>
-                Property
+                {t('operations.property')}
                 <select
                   value={visitForm.propertyId}
                   onChange={(event) => {
@@ -3218,7 +3136,7 @@ export function DailyOperationsView({
                     }))
                   }}
                 >
-                  <option value="">Select property</option>
+                  <option value="">{t('templateAutoAssign.selectProperty')}</option>
                   {sortedPropertyOptions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {getPropertyLabel(p)}
@@ -3254,12 +3172,12 @@ export function DailyOperationsView({
                 </label>
               ) : null}
               <label>
-                Visit type
+                {t('operations.visitType')}
                 <select
                   value={visitForm.visitTypeId}
                   onChange={(event) => handleVisitTypeChange(event.target.value)}
                 >
-                  <option value="">Select type</option>
+                  <option value="">{t('operations.selectType')}</option>
                   {sortedVisitTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name}
@@ -3268,7 +3186,7 @@ export function DailyOperationsView({
                 </select>
               </label>
               <label>
-                Date
+                {t('common.date')}
                 <input
                   type="date"
                   required
@@ -3320,7 +3238,7 @@ export function DailyOperationsView({
                 </div>
               ) : (
                 <label>
-                  Title
+                  {t('common.title')}
                   <input
                     value={visitForm.title}
                     onChange={(event) =>
@@ -3347,7 +3265,7 @@ export function DailyOperationsView({
                 </div>
               ) : (
                 <label className="full-width">
-                  Description
+                  {t('operations.description')}
                   <textarea
                     value={visitForm.description}
                     onChange={(event) =>
@@ -3409,7 +3327,7 @@ export function DailyOperationsView({
               {isSavingVisitWithTasks ? (
                 <p className="subtitle operations-saving-tasks-notice">
                   <span className="operations-sync-spinner" aria-hidden="true" />
-                  Saving visit and tasks…
+                  {t('operations.savingVisitAndTasks')}
                 </p>
               ) : null}
               <button
@@ -3443,7 +3361,7 @@ export function DailyOperationsView({
               {!taskForm.visitId ? (
                 <>
                   <label>
-                    Property
+                    {t('operations.property')}
                     <select
                       value={taskForm.propertyId}
                       onChange={(event) =>
@@ -3453,7 +3371,7 @@ export function DailyOperationsView({
                         }))
                       }
                     >
-                      <option value="">Select property</option>
+                      <option value="">{t('templateAutoAssign.selectProperty')}</option>
                       {sortedPropertyOptions.map((p) => (
                         <option key={p.id} value={p.id}>
                           {getPropertyLabel(p)}
@@ -3462,14 +3380,14 @@ export function DailyOperationsView({
                     </select>
                   </label>
                   <label>
-                    Team
+                    {t('operations.team')}
                     <select
                       value={taskForm.teamId}
                       onChange={(event) =>
                         setTaskForm((c) => ({ ...c, teamId: event.target.value }))
                       }
                     >
-                      <option value="">Select team</option>
+                      <option value="">{t('operations.selectTeam')}</option>
                       {teams.map((team) => (
                         <option key={team.id} value={team.id}>
                           {team.name}
@@ -3480,7 +3398,7 @@ export function DailyOperationsView({
                 </>
               ) : null}
               <label className="full-width">
-                Title
+                {t('common.title')}
                 <input
                   value={taskForm.title}
                   onChange={(event) =>
@@ -3489,7 +3407,7 @@ export function DailyOperationsView({
                 />
               </label>
               <label className="full-width">
-                Description
+                {t('operations.description')}
                 <textarea
                   value={taskForm.description}
                   onChange={(event) =>
@@ -3509,11 +3427,11 @@ export function DailyOperationsView({
                       }))
                     }
                   />
-                  Urgent
+                  {t('operations.urgent')}
                 </label>
               ) : (
                 <label>
-                  Priority
+                  {t('operations.priority')}
                   <select
                     value={taskForm.priority}
                     onChange={(event) =>
@@ -3522,7 +3440,9 @@ export function DailyOperationsView({
                   >
                     {PRIORITIES.map((priority) => (
                       <option key={priority} value={priority}>
-                        {priority}
+                        {t(
+                          `operations.priority${priority.charAt(0)}${priority.slice(1).toLowerCase()}`,
+                        )}
                       </option>
                     ))}
                   </select>
@@ -3530,7 +3450,7 @@ export function DailyOperationsView({
               )}
               {!taskForm.visitId ? (
                 <label>
-                  Due date
+                  {t('operations.dueDate')}
                   <input
                     type="date"
                     value={taskForm.dueDate}
@@ -3556,7 +3476,7 @@ export function DailyOperationsView({
                 className="btn-primary"
                 onClick={() => void submitTask()}
               >
-                Save task
+                {t('common.save')}
               </button>
             </div>
           </div>
@@ -3567,7 +3487,7 @@ export function DailyOperationsView({
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">Cancel visit</h3>
+              <h3 className="modal-title">{t('operations.cancelVisit')}</h3>
               <button
                 className="btn-icon"
                 type="button"
@@ -3600,11 +3520,11 @@ export function DailyOperationsView({
                       }
                     />
                     <span>
-                      Move {visitTasksToRelease.length} open task
-                      {visitTasksToRelease.length === 1 ? '' : 's'} to{' '}
-                      <strong>Tasks not on a visit</strong>
+                      {t('operations.cancelVisitRelease', {
+                        count: visitTasksToRelease.length,
+                      })}
                       {visitTasks.length !== visitTasksToRelease.length
-                        ? ' (completed and cancelled tasks stay on this visit)'
+                        ? ` ${t('operations.cancelVisitCompletedStay')}`
                         : ''}
                     </span>
                   </label>
@@ -3621,11 +3541,11 @@ export function DailyOperationsView({
                       }
                     />
                     <span>
-                      Mark {visitTasksToRelease.length} open task
-                      {visitTasksToRelease.length === 1 ? '' : 's'} as{' '}
-                      <strong>CANCELLED</strong> and keep them on this visit
+                      {t('operations.cancelVisitMarkCancelled', {
+                        count: visitTasksToRelease.length,
+                      })}
                       {visitTasks.length !== visitTasksToRelease.length
-                        ? ' (completed tasks stay unchanged)'
+                        ? ` ${t('operations.cancelVisitCompletedStayShort')}`
                         : ''}
                     </span>
                   </label>
@@ -3641,8 +3561,7 @@ export function DailyOperationsView({
                           }))
                         }
                       />
-                      I understand open tasks will be marked as CANCELLED and
-                      remain visible on this cancelled visit.
+                      {t('operations.cancelVisitConfirm')}
                     </label>
                   ) : null}
                 </div>
@@ -3654,7 +3573,7 @@ export function DailyOperationsView({
                 className="btn-secondary"
                 onClick={() => setIsCancelVisitOpen(false)}
               >
-                Keep visit
+                {t('operations.keepVisit')}
               </button>
               <button
                 type="button"
@@ -3666,7 +3585,7 @@ export function DailyOperationsView({
                 }
                 onClick={() => void submitCancelVisit()}
               >
-                Cancel visit
+                {t('operations.cancelVisit')}
               </button>
             </div>
           </div>
@@ -3677,7 +3596,7 @@ export function DailyOperationsView({
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">Complete visit</h3>
+              <h3 className="modal-title">{t('operations.completeVisit')}</h3>
               <button
                 className="btn-icon"
                 type="button"
@@ -3689,7 +3608,7 @@ export function DailyOperationsView({
             <div className="modal-body form-grid">
               {isCompleteVisitOpen ? errorNotice : null}
               <label>
-                Hours
+                {t('operations.hours')}
                 <input
                   type="number"
                   min="0.25"
@@ -3714,7 +3633,7 @@ export function DailyOperationsView({
                     }))
                   }
                 />
-                Pool of hours
+                {t('operations.poolOfHours')}
               </label>
               <label className="checkbox-row full-width">
                 <input
@@ -3727,7 +3646,7 @@ export function DailyOperationsView({
                     }))
                   }
                 />
-                Special hours
+                {t('operations.specialHours')}
               </label>
             </div>
             <div className="modal-footer">
@@ -3736,7 +3655,7 @@ export function DailyOperationsView({
                 className="btn-primary"
                 onClick={() => void submitCompleteVisit()}
               >
-                Complete visit
+                {t('operations.completeVisit')}
               </button>
             </div>
           </div>
@@ -3747,7 +3666,7 @@ export function DailyOperationsView({
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">Assign task to visit</h3>
+              <h3 className="modal-title">{t('operations.assignTaskToVisit')}</h3>
               <button
                 className="btn-icon"
                 type="button"
@@ -3759,12 +3678,12 @@ export function DailyOperationsView({
             <div className="modal-body">
               {isAssignVisitOpen ? errorNotice : null}
               <label>
-                Visit
+                {t('operations.visit')}
                 <select
                   value={assignVisitId}
                   onChange={(event) => setAssignVisitId(event.target.value)}
                 >
-                  <option value="">Select visit</option>
+                  <option value="">{t('operations.selectVisit')}</option>
                   {assignVisitOptions.map((visit) => (
                     <option key={visit.id} value={visit.id}>
                       {visit.scheduledDate} {visit.scheduledStartTime} – {visit.title}
@@ -3773,8 +3692,7 @@ export function DailyOperationsView({
                 </select>
               </label>
               <p className="modal-subtitle">
-                Only open visits for today or future dates with matching property
-                and team are listed.
+                {t('operations.assignVisitHelp')}
               </p>
             </div>
             <div className="modal-footer">
@@ -3783,7 +3701,7 @@ export function DailyOperationsView({
                 className="btn-primary"
                 onClick={() => void assignTaskToVisit()}
               >
-                Assign
+                {t('operations.assignTask')}
               </button>
             </div>
           </div>

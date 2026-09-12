@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
+import { useConfirm } from '../design/ConfirmDialog'
 import {
   isBeforeHiddenBillingGap,
   isHiddenBillingMonth,
@@ -124,6 +125,7 @@ export function CleaningBillingView({
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
+  const confirmAction = useConfirm()
   const canSeePrices = can(ACTION_KEYS.cleaningBillingPrices)
   const endpoints = useMemo(
     () => ({
@@ -740,9 +742,17 @@ export function CleaningBillingView({
                   type="button"
                   disabled={isSaving}
                   onClick={() => {
-                    if (window.confirm(t('cleaningBilling.closeConfirm'))) {
-                      void save({ month: selectedMonthId, action: 'close' })
-                    }
+                    void (async () => {
+                      if (
+                        await confirmAction({
+                          title: t('cleaningBilling.close'),
+                          message: t('cleaningBilling.closeConfirm'),
+                          destructive: true,
+                        })
+                      ) {
+                        void save({ month: selectedMonthId, action: 'close' })
+                      }
+                    })()
                   }}
                 >
                   {t('cleaningBilling.close')}
@@ -801,7 +811,7 @@ export function CleaningBillingView({
                       key={line.id}
                       className={line.warnings.length ? 'billing-warning-row' : ''}
                     >
-                      <td>
+                      <td data-label={t('cleaningBilling.property')}>
                         {line.visitId ? (
                           <button
                             type="button"
@@ -822,24 +832,24 @@ export function CleaningBillingView({
                           </p>
                         ) : null}
                       </td>
-                      <td>{formatDateOnlyLabel(line.date, i18n.language)}</td>
-                      <td>
+                      <td data-label={t('cleaningBilling.date')}>{formatDateOnlyLabel(line.date, i18n.language)}</td>
+                      <td data-label={t('cleaningBilling.visitStatus')}>
                         {line.isManual
                           ? t('cleaningBilling.manualStatus')
                           : visitStatusLabel(line.status)}
                       </td>
-                      <td>{line.cleaningTypeName || '—'}</td>
+                      <td data-label={t('cleaningBilling.cleaningType')}>{line.cleaningTypeName || '—'}</td>
                       {canSeePrices ? (
                         <>
-                          <td>
+                          <td data-label={t('cleaningBilling.price')}>
                             {line.price === null ? '—' : money.format(line.price)}
                           </td>
-                          <td>
+                          <td data-label={t('cleaningBilling.source')}>
                             {line.isManual
                               ? t('cleaningBilling.sourceManual')
                               : t('cleaningBilling.sourceVisit')}
                           </td>
-                          <td>
+                          <td data-label={t('common.actions')}>
                             {month?.canEdit ? (
                               <div className="table-actions">
                                 {can(ACTION_KEYS.cleaningBillingEdit) ? (
@@ -859,15 +869,22 @@ export function CleaningBillingView({
                                     type="button"
                                     disabled={isSaving}
                                     onClick={() => {
-                                      if (
-                                        window.confirm(t('cleaningBilling.deleteConfirm'))
-                                      ) {
-                                        void save({
-                                          month: selectedMonthId,
-                                          action: 'delete-manual',
-                                          lineId: line.id,
-                                        })
-                                      }
+                                      void (async () => {
+                                        if (
+                                          await confirmAction({
+                                            title: t('common.delete'),
+                                            message: t('cleaningBilling.deleteConfirm'),
+                                            confirmLabel: t('common.delete'),
+                                            destructive: true,
+                                          })
+                                        ) {
+                                          void save({
+                                            month: selectedMonthId,
+                                            action: 'delete-manual',
+                                            lineId: line.id,
+                                          })
+                                        }
+                                      })()
                                     }}
                                   >
                                     {t('common.delete')}
@@ -921,16 +938,18 @@ export function CleaningBillingView({
                 ) : (
                   months.map((item) => (
                     <tr key={item.id}>
-                      <td>{formatMonthLabel(item.id)}</td>
-                      <td>
+                      <td data-label={t('cleaningBilling.month')}>{formatMonthLabel(item.id)}</td>
+                      <td data-label={t('cleaningBilling.status')}>
                         <span className={`tag ${item.status === 'CLOSED' ? 'muted' : ''}`}>
                           {statusLabel(item.status, item.canClose)}
                         </span>
                       </td>
-                      <td>{item.lineCount}</td>
-                      <td>{item.warningCount}</td>
-                      {canSeePrices ? <td>{money.format(item.total)}</td> : null}
-                      <td>
+                      <td data-label={t('cleaningBilling.lines')}>{item.lineCount}</td>
+                      <td data-label={t('cleaningBilling.warnings')}>{item.warningCount}</td>
+                      {canSeePrices ? (
+                        <td data-label={t('cleaningBilling.total')}>{money.format(item.total)}</td>
+                      ) : null}
+                      <td data-label={t('common.actions')}>
                         <button
                           className="btn-secondary"
                           type="button"

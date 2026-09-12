@@ -1,5 +1,6 @@
 import { addDaysToDateString, getTodayMadrid } from './dateHelpers'
 import type { VisitRecord } from './types'
+import i18n from '../i18n'
 
 export const AGENDA_DAY_COUNT = 7
 
@@ -361,11 +362,12 @@ export const formatAgendaDayLabel = (date: string) => {
   if (Number.isNaN(parsed.getTime())) {
     return date
   }
-  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(
+  const locale = i18n.language?.startsWith('es') ? 'es-ES' : 'en-GB'
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(
     parsed,
   )
   const day = parsed.getDate()
-  const month = new Intl.DateTimeFormat('en-GB', { month: 'short' })
+  const month = new Intl.DateTimeFormat(locale, { month: 'short' })
     .format(parsed)
     .replace('.', '')
     .slice(0, 3)

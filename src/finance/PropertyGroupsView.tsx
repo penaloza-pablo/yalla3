@@ -14,6 +14,7 @@ import {
 } from '../../amplify/functions/shared/property-identity'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { fetchJson } from '../operations/api'
+import { useConfirm } from '../design/ConfirmDialog'
 import {
   filterPropertySelectOptions,
   getPropertyLabel,
@@ -50,6 +51,7 @@ export function PropertyGroupsView({
   onGroupsChanged,
 }: Props) {
   const { t } = useTranslation()
+  const confirmAction = useConfirm()
   const endpoints = useMemo(
     () => ({
       upsert: getEndpoint('upsertPropertyUrl'),
@@ -256,7 +258,12 @@ export function PropertyGroupsView({
       setError(t('propertyGroups.missingWrite'))
       return
     }
-    if (!window.confirm(t('propertyGroups.confirmDelete', { name: group.name }))) {
+    if (!(await confirmAction({
+      title: t('common.delete'),
+      message: t('propertyGroups.confirmDelete', { name: group.name }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    }))) {
       return
     }
     setIsSaving(true)

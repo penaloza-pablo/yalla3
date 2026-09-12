@@ -658,29 +658,29 @@ export function MovementsView({
               ) : (
                 filteredRows.map((row) => (
                   <tr key={row.id}>
-                    <td>{formatDateOnlyLabel(row.date, i18n.language)}</td>
-                    <td>{propertyById.get(row.propertyId) || row.propertyName}</td>
-                    <td>{row.description}</td>
-                    <td>
+                    <td data-label={t('movements.date')}>{formatDateOnlyLabel(row.date, i18n.language)}</td>
+                    <td data-label={t('movements.property')}>{propertyById.get(row.propertyId) || row.propertyName}</td>
+                    <td data-label={t('movements.description')}>{row.description}</td>
+                    <td data-label={t('common.status')}>
                       <span className={statusClassName(row.status)}>
                         {translateStatus(t, row.status)}
                       </span>
                     </td>
-                    <td>
+                    <td data-label={t('movements.kind')}>
                       {row.kind === 'income'
                         ? t('movements.income')
                         : t('movements.outcome')}
                     </td>
-                    <td>{money.format(row.amount)}</td>
-                    <td>
+                    <td data-label={t('movements.amount')}>{money.format(row.amount)}</td>
+                    <td data-label={t('movements.appliesIva')}>
                       {row.ivaRate === 10
                         ? t('common.iva10')
                         : row.ivaRate === 21
                           ? t('common.iva21')
                           : t('common.ivaNone')}
                     </td>
-                    <td>{money.format(row.totalAmount)}</td>
-                    <td>
+                    <td data-label={t('movements.totalAmount')}>{money.format(row.totalAmount)}</td>
+                    <td data-label={t('common.actions')}>
                       <div className="table-actions">
                         <button
                           className="btn-secondary"
