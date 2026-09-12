@@ -48,18 +48,12 @@ body.mobile-nav-open {
   padding-inline: 16px;
 }
 
-.auth-brand img {
+.auth-brand .auth-logo,
+.auth-brand .brand-logo-full {
   display: block;
-  width: 56px;
-  height: 56px;
-}
-
-.auth-wordmark {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--yl-ink);
+  width: min(248px, 78vw);
+  height: auto;
+  max-height: 72px;
 }
 
 .auth-footer {

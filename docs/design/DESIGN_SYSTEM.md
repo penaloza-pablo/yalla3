@@ -39,15 +39,16 @@ Problemas:
 
 ### Dirección
 
-**Evolucionar, no tirar.** Conservar la Y de flechas.
+**El logotipo e isotipo originales se conservan.** No se redibujan.
 
-Trabajo de implementación (después del checkpoint):
+Archivos canónicos en `public/brand/`:
 
-1. Redibujar en SVG: wordmark + mark compacto.
-2. App icon / favicon / PWA: mark centrado en square con margen, fondo claro sólido (no negro del PNG actual).
-3. Versión para fondo oscuro si más adelante hay dark mode (no en v1).
-4. Una sola carpeta canónica: `public/brand/`.
-5. El verde y el coral del logo **entran al sistema como acentos**, no como fondo de toda la app.
+- `yalla-logo.png` — lockup (isotipo + **Yalla!**)
+- `yalla-mark.png` — isotipo (flechas)
+
+Favicon y PWA siguen en `public/Yalla_logo/icon-*.png` (el mismo isotipo en recuadro claro).
+
+El verde y el coral del logo **entran al sistema como acentos**, no como fondo de toda la app.
 
 ---
 

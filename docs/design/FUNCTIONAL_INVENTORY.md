@@ -237,7 +237,7 @@ Destino de diseño interno, no un módulo operativo. Visible para **admin** (`al
 | Visual Action bars | `page-action-bar` escritorio vs pastilla móvil | `yl.actionBar.page` |
 | Visual Cards | `card`, compact, `StatCard`, `ProgressCard` | `yl.card.*` |
 | Visual Inputs | search, select, switch, segmented | `yl.input.*`, `yl.switch`, `yl.segment` |
-| Visual Tokens | Swatches de `tokens.css` | Nombre CSS, no hex suelto |
+| Visual Tokens | Swatches de `tokens.css` + marca original | Logotipo `yl.brand.logo`, isotipo `yl.brand.mark` |
 | Visual Icons | Set `YlIcon` con nombres al estilo SF Symbols | `yl.icon.*`; regular en chrome, fill en destinos |
 | Visual Lab | Alta de borradores en `localStorage` (`yalla.visualKit.custom.v1`) | Aparecen como pendiente en su categoría |
 

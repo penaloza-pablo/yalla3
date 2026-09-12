@@ -37,6 +37,7 @@ import { readPageFromLocation, writePageToUrl } from './lib/page-route'
 import { visibleNavGroups } from './nav/catalog'
 import { DomainTabs } from './nav/DomainTabs'
 import { DomainGlyph } from './nav/DomainGlyph'
+import { BrandMark } from './design/Brand'
 import { readDeviceLayout, useDeviceLayout } from './nav/layout'
 import { EmptyState, TableSkeleton } from './design/Feedback'
 import { useToast } from './design/Toast'
@@ -5014,12 +5015,7 @@ function App() {
       >
         <div className="brand">
           <div className="brand-lockup">
-            <img
-              className="brand-logo brand-logo-icon"
-              src="/brand/yalla-mark.svg"
-              alt="Yalla!"
-            />
-            <span className="brand-wordmark">Yalla!</span>
+            <BrandMark compact={isSidebarCollapsed && !isMobileNavOpen} />
           </div>
           <button
             className="btn-icon btn-icon-ghost mobile-nav-close"

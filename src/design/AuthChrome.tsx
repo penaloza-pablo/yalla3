@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher'
+import { BrandMark } from './Brand'
 
 export function AuthHeader() {
   return (
     <div className="auth-brand">
-      <img src="/brand/yalla-mark.svg" alt="" width={56} height={56} />
-      <p className="auth-wordmark">Yalla!</p>
+      <BrandMark className="auth-logo" />
     </div>
   )
 }

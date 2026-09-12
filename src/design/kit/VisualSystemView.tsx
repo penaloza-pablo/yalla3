@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BrandMark, BRAND_LOGO_SRC, BRAND_MARK_SRC } from '../Brand'
 import { ICON_GROUPS, ICON_HAS_FILL, YlIcon, type YlIconName } from '../icons'
 import { EmptyState } from '../Feedback'
 import { ProgressCard } from '../ProgressCard'
@@ -704,27 +705,68 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
   )
 
   const tokens: ReactNode = (
-    <Specimen
-      refName="yl.token.color"
-      title={t('kit.tokens')}
-      usage={t('kit.tokensUsage')}
-      desktop={
-        <div className="yl-kit-swatches">
-          {COLOR_TOKENS.map(([name, value]) => (
-            <div className="yl-kit-swatch" key={name}>
-              <div
-                className="yl-kit-swatch-chip"
-                style={{ background: `var(${name})` }}
-              />
-              <div className="yl-kit-swatch-meta">
-                <span className="yl-kit-swatch-name">{name}</span>
-                <span className="yl-kit-swatch-value">{value}</span>
-              </div>
+    <>
+      <Specimen
+        refName="yl.brand.logo"
+        title={t('kit.brandLogo')}
+        usage={t('kit.brandLogoUsage')}
+        desktop={
+          <img
+            className="yl-kit-brand-logo"
+            src={BRAND_LOGO_SRC}
+            alt="Yalla!"
+          />
+        }
+      />
+      <Specimen
+        refName="yl.brand.mark"
+        title={t('kit.brandMark')}
+        usage={t('kit.brandMarkUsage')}
+        desktop={
+          <img
+            className="yl-kit-brand-mark"
+            src={BRAND_MARK_SRC}
+            alt=""
+          />
+        }
+      />
+      <Specimen
+        refName="yl.brand.lockup.sidebar"
+        title={t('kit.brandLockup')}
+        usage={t('kit.brandLockupUsage')}
+        desktop={
+          <div className="yl-kit-brand-lockups">
+            <div className="yl-kit-brand-frame is-expanded">
+              <BrandMark />
             </div>
-          ))}
-        </div>
-      }
-    />
+            <div className="yl-kit-brand-frame is-compact">
+              <BrandMark compact />
+            </div>
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.token.color"
+        title={t('kit.tokens')}
+        usage={t('kit.tokensUsage')}
+        desktop={
+          <div className="yl-kit-swatches">
+            {COLOR_TOKENS.map(([name, value]) => (
+              <div className="yl-kit-swatch" key={name}>
+                <div
+                  className="yl-kit-swatch-chip"
+                  style={{ background: `var(${name})` }}
+                />
+                <div className="yl-kit-swatch-meta">
+                  <span className="yl-kit-swatch-name">{name}</span>
+                  <span className="yl-kit-swatch-value">{value}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        }
+      />
+    </>
   )
 
   const icons: ReactNode = (

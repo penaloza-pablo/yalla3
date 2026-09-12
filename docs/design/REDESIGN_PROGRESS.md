@@ -42,7 +42,7 @@ Estados: `Not Audited` · `Audited` · `Designed` · `Implementing` · `Implemen
 | Finance * | Implementing | Movements con data-label |
 | Users / Roles / Logs / Slack | Implementing | Logs con data-label |
 | Grow placeholders | Audited | Ocultos de nav (B1) |
-| Logo / brand assets | Implementing | Nombre Yalla! intocable |
+| Logo / brand assets | Implemented | PNG original en login, sidebar y PWA; nombre Yalla! intocable |
 | i18n | Audited | es/en ahora; he N8 (dir-ready) |
 | Accesibilidad | Audited | Pendiente pase sistemático en implementación |
 | QA regresiones | Not Audited | Ver `QA_REPORT.md` |
