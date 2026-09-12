@@ -401,11 +401,17 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 className="btn-secondary"
                 type="button"
                 onClick={() => void loadTemplates()}
+                aria-label={t('operations.refresh')}
               >
-                {t('operations.refresh')}
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
-              <button className="btn-primary" type="button" onClick={openCreateTemplate}>
-                {t('operations.createTemplate')}
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={openCreateTemplate}
+                aria-label={t('operations.createTemplate')}
+              >
+                <YlIcon name="plus" size={16} />
               </button>
             </div>
           </div>

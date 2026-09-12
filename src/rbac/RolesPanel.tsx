@@ -9,16 +9,28 @@ import {
   pagePermission,
   withDefaultDashboardCardPermissions,
 } from '../../amplify/functions/shared/rbac-catalog'
+import {
+  DEFAULT_DASHBOARD_LAYOUT_ID,
+  dashboardLayoutNumber,
+  isDashboardLayoutId,
+} from '../../amplify/functions/shared/dashboard-layout'
 import { translatePage, translateSection } from '../i18n/display'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { YlIcon } from '../design/icons'
+import {
+  resolveRoleLayoutId,
+  useDashboardLayouts,
+  writeRoleLayoutAssignment,
+} from '../dashboard/layout-store'
+import { usePermissions } from './PermissionsProvider'
 
 type RoleRow = {
   id: string
   name: string
   permissions: string[]
+  dashboardLayoutId?: string
 }
 
 type RolesPanelProps = {
@@ -38,6 +50,8 @@ export function RolesPanel({
   onToggleMobileSearch,
 }: RolesPanelProps) {
   const { t } = useTranslation()
+  const { roleId: currentRoleId, refresh } = usePermissions()
+  const dashboardLayouts = useDashboardLayouts()
   const [roles, setRoles] = useState<RoleRow[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<string[]>([])
@@ -45,6 +59,7 @@ export function RolesPanel({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
+  const [layoutDraft, setLayoutDraft] = useState(DEFAULT_DASHBOARD_LAYOUT_ID)
   const [roleNameDrafts, setRoleNameDrafts] = useState<Record<string, string>>(
     {},
   )
@@ -66,7 +81,10 @@ export function RolesPanel({
         throw new Error(await response.text())
       }
       const payload = (await response.json()) as { items?: RoleRow[] }
-      const items = payload.items ?? []
+      const items = (payload.items ?? []).map((item) => ({
+        ...item,
+        dashboardLayoutId: resolveRoleLayoutId(item.id, item.dashboardLayoutId),
+      }))
       setRoles(items)
       setRoleNameDrafts(
         Object.fromEntries(items.map((item) => [item.id, item.name])),
@@ -91,7 +109,12 @@ export function RolesPanel({
       )
     : roles
 
-  const persistRole = async (role: RoleRow, name: string, permissions: string[]) => {
+  const persistRole = async (
+    role: RoleRow,
+    name: string,
+    permissions: string[],
+    dashboardLayoutId: string,
+  ) => {
     const nextName = name.trim()
     if (!nextName) {
       setError(t('rbac.nameRequired'))
@@ -109,8 +132,12 @@ export function RolesPanel({
       setError(t('rbac.missingSaveRoleEndpoint'))
       return
     }
+    const nextLayoutId = isDashboardLayoutId(dashboardLayoutId)
+      ? dashboardLayoutId
+      : DEFAULT_DASHBOARD_LAYOUT_ID
     setIsSaving(true)
     setError(null)
+    writeRoleLayoutAssignment(role.id, nextLayoutId)
     try {
       const response = await authFetch(endpoint, {
         method: 'POST',
@@ -119,6 +146,7 @@ export function RolesPanel({
           id: role.id,
           name: nextName,
           permissions,
+          dashboardLayoutId: nextLayoutId,
         }),
       })
       if (!response.ok) {
@@ -127,6 +155,10 @@ export function RolesPanel({
       await fetchRoles()
       if (selectedId === role.id) {
         setNameDraft(nextName)
+        setLayoutDraft(nextLayoutId)
+      }
+      if (currentRoleId === role.id) {
+        await refresh()
       }
     } catch {
       setError(t('rbac.saveRoleError'))
@@ -139,6 +171,9 @@ export function RolesPanel({
     setSelectedId(role.id)
     setDraft(withDefaultDashboardCardPermissions([...role.permissions]))
     setNameDraft(roleNameDrafts[role.id] ?? role.name)
+    setLayoutDraft(
+      resolveRoleLayoutId(role.id, role.dashboardLayoutId),
+    )
     setError(null)
   }
 
@@ -146,14 +181,19 @@ export function RolesPanel({
     if (name.trim() === role.name.trim()) {
       return
     }
-    void persistRole(role, name, role.permissions)
+    void persistRole(
+      role,
+      name,
+      role.permissions,
+      role.dashboardLayoutId ?? DEFAULT_DASHBOARD_LAYOUT_ID,
+    )
   }
 
   const saveRole = async () => {
     if (!selected) {
       return
     }
-    await persistRole(selected, nameDraft, draft)
+    await persistRole(selected, nameDraft, draft, layoutDraft)
   }
 
   const renderPageRows = (sectionLabel: string, items: readonly string[]) =>
@@ -288,6 +328,7 @@ export function RolesPanel({
                 <thead>
                   <tr>
                     <th>{t('common.name')}</th>
+                    <th>{t('dashboard.layout')}</th>
                     <th>{t('rbac.permissionsCount')}</th>
                     <th>{t('common.actions')}</th>
                   </tr>
@@ -318,6 +359,14 @@ export function RolesPanel({
                           }}
                         />
                       </td>
+                      <td>
+                        {t('dashboard.layoutName', {
+                          n: dashboardLayoutNumber(
+                            role.dashboardLayoutId ??
+                              DEFAULT_DASHBOARD_LAYOUT_ID,
+                          ),
+                        })}
+                      </td>
                       <td>{role.permissions.length}</td>
                       <td>
                         <button
@@ -345,6 +394,25 @@ export function RolesPanel({
               aria-label={t('common.name')}
               onChange={(event) => setNameDraft(event.target.value)}
             />
+          </label>
+          <label className="form-field" style={{ marginBottom: 16, maxWidth: '22rem' }}>
+            {t('dashboard.layout')}
+            <select
+              className="select-input"
+              value={layoutDraft}
+              disabled={isSaving}
+              aria-label={t('dashboard.layout')}
+              onChange={(event) => setLayoutDraft(event.target.value)}
+            >
+              {dashboardLayouts.map((layout) => (
+                <option key={layout.id} value={layout.id}>
+                  {t('dashboard.layoutName', {
+                    n: dashboardLayoutNumber(layout.id),
+                  })}
+                </option>
+              ))}
+            </select>
+            <span className="form-field-hint">{t('rbac.dashboardLayoutHint')}</span>
           </label>
           <div className="table-wrap">
             <table className="data-table">

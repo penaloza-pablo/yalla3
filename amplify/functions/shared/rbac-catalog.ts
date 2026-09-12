@@ -70,6 +70,7 @@ export const NAVIGATION: NavGroup[] = [
       'Visual Inputs',
       'Visual Tokens',
       'Visual Icons',
+      'Visual Widgets',
       'Visual Lab',
     ],
   },

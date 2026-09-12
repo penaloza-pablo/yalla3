@@ -1,4 +1,5 @@
 import { GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { isDashboardLayoutId } from './dashboard-layout';
 import {
   ADMIN_ROLE_ID,
   ROLE_SEEDS,
@@ -17,6 +18,7 @@ export type RoleRecord = {
   id: string;
   name: string;
   permissions: string[];
+  dashboardLayoutId?: string;
 };
 
 export type UserRoleRecord = {
@@ -93,6 +95,9 @@ export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
     id,
     name: typeof item.name === 'string' ? item.name : id,
     permissions,
+    dashboardLayoutId: isDashboardLayoutId(item.dashboardLayoutId)
+      ? item.dashboardLayoutId
+      : undefined,
   };
 };
 
@@ -138,11 +143,12 @@ export const resolvePermissions = async (
   tableName: string,
   email: string,
 ): Promise<{
-  roleId: string | null;
-  roleName: string | null;
-  permissions: string[];
-  bootstrap: boolean;
-}> => {
+      roleId: string | null;
+      roleName: string | null;
+      permissions: string[];
+      bootstrap: boolean;
+      dashboardLayoutId?: string;
+    }> => {
   await ensureRolesSeeded(tableName);
   const normalized = normalizeEmail(email);
   const assignment = await getItemByPk(tableName, userPk(normalized));
@@ -162,6 +168,7 @@ export const resolvePermissions = async (
           ? allPermissionKeys()
           : (record?.permissions ?? []),
       bootstrap: false,
+      dashboardLayoutId: record?.dashboardLayoutId,
     };
   }
 

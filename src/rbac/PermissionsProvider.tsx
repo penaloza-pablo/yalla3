@@ -13,6 +13,8 @@ import {
   allPermissionKeys,
   pagePermission,
 } from '../../amplify/functions/shared/rbac-catalog'
+import { DEFAULT_DASHBOARD_LAYOUT_ID } from '../../amplify/functions/shared/dashboard-layout'
+import { resolveRoleLayoutId } from '../dashboard/layout-store'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
 
@@ -21,12 +23,14 @@ type PermissionsResponse = {
   roleName?: string | null
   permissions?: string[]
   bootstrap?: boolean
+  dashboardLayoutId?: string | null
 }
 
 type PermissionsContextValue = {
   ready: boolean
   roleId: string | null
   roleName: string | null
+  dashboardLayoutId: string
   bootstrap: boolean
   loadError: string | null
   can: (key: string) => boolean
@@ -42,6 +46,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [roleId, setRoleId] = useState<string | null>(null)
   const [roleName, setRoleName] = useState<string | null>(null)
+  const [dashboardLayoutId, setDashboardLayoutId] = useState(
+    DEFAULT_DASHBOARD_LAYOUT_ID,
+  )
   const [bootstrap, setBootstrap] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [permissions, setPermissions] = useState<Set<string>>(new Set())
@@ -55,6 +62,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (!endpoint) {
       setRoleId('admin')
       setRoleName('admin')
+      setDashboardLayoutId(resolveRoleLayoutId('admin'))
       setBootstrap(true)
       setLoadError(null)
       setPermissions(new Set(allPermissionKeys()))
@@ -78,6 +86,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         const isBootstrap = Boolean(payload.bootstrap)
         setRoleId(nextRoleId)
         setRoleName(payload.roleName ?? null)
+        setDashboardLayoutId(
+          resolveRoleLayoutId(nextRoleId, payload.dashboardLayoutId),
+        )
         setBootstrap(isBootstrap)
         setPermissions(
           new Set(
@@ -98,6 +109,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (!silent) {
       setRoleId(null)
       setRoleName(null)
+      setDashboardLayoutId(DEFAULT_DASHBOARD_LAYOUT_ID)
       setBootstrap(false)
       setPermissions(new Set())
       setLoadError(
@@ -130,6 +142,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       ready,
       roleId,
       roleName,
+      dashboardLayoutId,
       bootstrap,
       loadError,
       can: (key: string) => permissions.has(key),
@@ -149,7 +162,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           permissions.has(pagePermission('Finance solution 3'))),
       refresh: () => load(),
     }),
-    [bootstrap, load, loadError, permissions, ready, roleId, roleName],
+    [bootstrap, dashboardLayoutId, load, loadError, permissions, ready, roleId, roleName],
   )
 
   return (

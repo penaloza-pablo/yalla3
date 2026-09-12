@@ -19,6 +19,7 @@ import { OperationsAgendaView } from './OperationsAgendaView'
 import { OperationsDayView, type DayBookingEvent } from './OperationsDayView'
 import { OperationsKanbanView } from './OperationsKanbanView'
 import { TodayView, clearTodaySummaryCache } from '../today/TodayView'
+import { TodayDashboardView } from '../dashboard/TodayDashboardView'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
@@ -47,7 +48,7 @@ import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
-import type { TodayViewMode } from '../nav/todayViews'
+import { isTodayVisitView, type TodayViewMode } from '../nav/todayViews'
 import {
   buildApplyTemplateVisitPayload,
   emptyDraftTask,
@@ -59,8 +60,6 @@ import {
   formatDayMonthLabel,
   formatTaskCreatedDate,
   getTodayMadrid,
-  getTomorrowMadrid,
-  normalizeDateRange,
 } from './dateHelpers'
 import type {
   PropertyOption,
@@ -131,20 +130,6 @@ const toggleListValue = (values: string[], value: string) =>
   values.includes(value)
     ? values.filter((entry) => entry !== value)
     : [...values, value]
-
-const VISIT_COLUMN_DEFS: {
-  key: VisitStatus | 'DONE'
-  labelKey: string
-  statuses: VisitStatus[]
-}[] = [
-  { key: 'SCHEDULED', labelKey: 'operations.scheduled', statuses: ['SCHEDULED'] },
-  { key: 'OVERDUE', labelKey: 'operations.overdue', statuses: ['OVERDUE'] },
-  {
-    key: 'DONE',
-    labelKey: 'operations.completedCancelled',
-    statuses: ['COMPLETED', 'CANCELLED'],
-  },
-]
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
 
@@ -429,14 +414,6 @@ export function DailyOperationsView({
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
   const confirmAction = useConfirm()
-  const visitColumns = useMemo(
-    () =>
-      VISIT_COLUMN_DEFS.map((column) => ({
-        ...column,
-        label: t(column.labelKey),
-      })),
-    [t],
-  )
   const templatesPanelRef = useRef<VisitTemplatesPanelHandle>(null)
   const cleaningPlanInflight = useRef(new Set<string>())
   const maintenancePlanInflight = useRef(new Set<string>())
@@ -468,8 +445,6 @@ export function DailyOperationsView({
   const [filterDraft, setFilterDraft] = useState<OpsFilters>(emptyOpsFilters)
   const [dayViewDate, setDayViewDate] = useState(getTodayMadrid())
   const [agendaAnchorDate, setAgendaAnchorDate] = useState(getTodayMadrid())
-  const [filterDateFrom, setFilterDateFrom] = useState(getTodayMadrid())
-  const [filterDateTo, setFilterDateTo] = useState(getTodayMadrid())
 
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [dayBookings, setDayBookings] = useState<DayBookingEvent[]>([])
@@ -518,6 +493,9 @@ export function DailyOperationsView({
   })
   const [isLoading, setIsLoading] = useState(false)
   const [syncingVisitIds, setSyncingVisitIds] = useState<Set<string>>(new Set())
+  const [completingVisitIds, setCompletingVisitIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [isSavingVisitWithTasks, setIsSavingVisitWithTasks] = useState(false)
   const [isRefreshingFromGuesty, setIsRefreshingFromGuesty] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -624,16 +602,8 @@ export function DailyOperationsView({
     if (dashboardViewMode === 'agenda') {
       return getAgendaDateRange(agendaAnchorDate)
     }
-    if (dashboardViewMode === 'day' || dashboardViewMode === 'dashboard') {
-      return { from: dayViewDate, to: dayViewDate, dates: [dayViewDate] }
-    }
-    const normalized = normalizeDateRange(filterDateFrom, filterDateTo)
-    return {
-      from: normalized.from,
-      to: normalized.to,
-      dates: normalized.dates,
-    }
-  }, [dashboardViewMode, dayViewDate, agendaAnchorDate, filterDateFrom, filterDateTo])
+    return { from: dayViewDate, to: dayViewDate, dates: [dayViewDate] }
+  }, [dashboardViewMode, dayViewDate, agendaAnchorDate])
 
   const propertyById = useMemo(
     () =>
@@ -735,32 +705,6 @@ export function DailyOperationsView({
       bookingCount
     )
   }, [filters])
-
-  const isMultiDayRange = filterDateFrom !== filterDateTo
-
-  const visitsByColumn = useMemo(() => {
-    const map = new Map<string, VisitRecord[]>()
-    visitColumns.forEach((column) => map.set(column.key, []))
-    filteredVisits.forEach((visit) => {
-      const column = visitColumns.find((entry) =>
-        entry.statuses.includes(visit.status),
-      )
-      if (column) {
-        map.get(column.key)?.push(visit)
-      }
-    })
-    visitColumns.forEach((column) => {
-      const rows = map.get(column.key) ?? []
-      rows.sort((a, b) => {
-        const dateCompare = a.scheduledDate.localeCompare(b.scheduledDate)
-        if (dateCompare !== 0) {
-          return dateCompare
-        }
-        return a.scheduledStartTime.localeCompare(b.scheduledStartTime)
-      })
-    })
-    return map
-  }, [filteredVisits])
 
   const selectedVisit = useMemo(() => {
     const match = visits.find((visit) => visit.id === selectedVisitId)
@@ -1014,18 +958,6 @@ export function DailyOperationsView({
     [endpoints.upsertPlannerFields, t],
   )
 
-  const applyTodayRange = () => {
-    const today = getTodayMadrid()
-    setFilterDateFrom(today)
-    setFilterDateTo(today)
-  }
-
-  const applyTomorrowRange = () => {
-    const tomorrow = getTomorrowMadrid()
-    setFilterDateFrom(tomorrow)
-    setFilterDateTo(tomorrow)
-  }
-
   const loadPool = useCallback(async () => {
     if (!endpoints.tasks) return
     try {
@@ -1076,7 +1008,7 @@ export function DailyOperationsView({
   }, [propertyOptionsProp])
 
   useEffect(() => {
-    if (mode === 'dashboard' && dashboardViewMode !== 'dashboard') {
+    if (mode === 'dashboard' && isTodayVisitView(dashboardViewMode)) {
       void loadVisits()
     }
     if (mode === 'unassigned') {
@@ -1817,6 +1749,52 @@ export function DailyOperationsView({
     }
   }
 
+  const completeVisitFromKanban = async (visit: VisitRecord) => {
+    if (visit.status === 'COMPLETED' || visit.status === 'CANCELLED') {
+      return
+    }
+    if (!endpoints.tasks || !endpoints.upsertVisit) {
+      setError(t('operations.unableUpdateVisit'))
+      return
+    }
+    setCompletingVisitIds((current) => {
+      const next = new Set(current)
+      next.add(visit.id)
+      return next
+    })
+    setError(null)
+    try {
+      const payload = await getTasksByVisit(endpoints.tasks, visit.id)
+      const tasks = (payload.items ?? []).map((entry) =>
+        mapTask(entry as Record<string, unknown>),
+      )
+      if (tasks.some((task) => !isResolvedTaskStatus(task.status))) {
+        setError(t('operations.completeTasksFirst'))
+        return
+      }
+      if (requiresCompleteVisitWizard(visit.visitTypeId)) {
+        setSelectedVisitId(visit.id)
+        await loadVisitTasks(visit.id)
+        setCompleteVisitForm({
+          hours: '1',
+          poolOfHours: visit.appliesToHourBank ?? false,
+          specialHours: visit.specialHours ?? false,
+        })
+        setIsCompleteVisitOpen(true)
+        return
+      }
+      await updateVisitStatus(visit, 'COMPLETED')
+    } catch {
+      setError(t('operations.unableLoadTasks'))
+    } finally {
+      setCompletingVisitIds((current) => {
+        const next = new Set(current)
+        next.delete(visit.id)
+        return next
+      })
+    }
+  }
+
   const persistVisitComments = async () => {
     if (!selectedVisit || !endpoints.upsertVisit) return
     if (
@@ -2141,11 +2119,15 @@ export function DailyOperationsView({
     isCancelVisitOpen ||
     isTaskFormOpen ||
     isAssignVisitOpen
-  const isDayTimeline = mode === 'dashboard' && dashboardViewMode === 'day'
+  const hideDashboardPageHeader =
+    mode === 'dashboard' &&
+    (dashboardViewMode === 'day' ||
+      dashboardViewMode === 'kanban' ||
+      dashboardViewMode === 'board')
 
   return (
     <>
-      {isDayTimeline ? null : (
+      {hideDashboardPageHeader ? null : (
       <header className={`page-header${mode === 'dashboard' ? ' page-header--no-title' : ''}`}>
         {mode !== 'dashboard' ? (
         <div className="page-header-leading">
@@ -2282,70 +2264,18 @@ export function DailyOperationsView({
 
       {mode === 'dashboard' ? (
         <>
-          {dashboardViewMode !== 'day' && dashboardViewMode !== 'dashboard' ? (
+          {dashboardViewMode === 'agenda' ? (
           <section className="card filters-card">
-            {dashboardViewMode === 'kanban' ? (
-              <div className="operations-date-presets">
-                <button
-                  type="button"
-                  className={
-                    filterDateFrom === getTodayMadrid() &&
-                    filterDateTo === getTodayMadrid()
-                      ? 'btn-primary'
-                      : 'btn-secondary'
-                  }
-                  onClick={applyTodayRange}
-                >
-                  {t('operations.today')}
-                </button>
-                <button
-                  type="button"
-                  className={
-                    filterDateFrom === getTomorrowMadrid() &&
-                    filterDateTo === getTomorrowMadrid()
-                      ? 'btn-primary'
-                      : 'btn-secondary'
-                  }
-                  onClick={applyTomorrowRange}
-                >
-                  {t('operations.tomorrow')}
-                </button>
-              </div>
-            ) : (
-              <p className="subtitle operations-view-hint">
-                {t('operations.agendaHint', {
-                  from: formatAgendaDayLabel(visitQueryRange.from),
-                  to: formatAgendaDayLabel(visitQueryRange.to),
-                })}
-              </p>
-            )}
-
-            {dashboardViewMode === 'kanban' ? (
-              <div className="filters-grid">
-                <label>
-                  {t('operations.from')}
-                  <input
-                    type="date"
-                    value={filterDateFrom}
-                    max={filterDateTo}
-                    onChange={(event) => setFilterDateFrom(event.target.value)}
-                  />
-                </label>
-                <label>
-                  {t('operations.to')}
-                  <input
-                    type="date"
-                    value={filterDateTo}
-                    min={filterDateFrom}
-                    onChange={(event) => setFilterDateTo(event.target.value)}
-                  />
-                </label>
-              </div>
-            ) : null}
+            <p className="subtitle operations-view-hint">
+              {t('operations.agendaHint', {
+                from: formatAgendaDayLabel(visitQueryRange.from),
+                to: formatAgendaDayLabel(visitQueryRange.to),
+              })}
+            </p>
           </section>
           ) : null}
 
-          {isLoading && dashboardViewMode !== 'dashboard' ? (
+          {isLoading && isTodayVisitView(dashboardViewMode) ? (
             <p className="subtitle">{t('common.loading')}</p>
           ) : null}
 
@@ -2362,16 +2292,27 @@ export function DailyOperationsView({
                 onNavigate?.(page, options)
               }}
             />
+          ) : dashboardViewMode === 'board' ? (
+            <TodayDashboardView />
           ) : dashboardViewMode === 'kanban' ? (
             <OperationsKanbanView
-              columns={visitColumns}
-              visitsByColumn={visitsByColumn}
-              isMultiDayRange={isMultiDayRange}
-              propertyById={propertyById}
-              visitTypeById={visitTypeById}
+              dayViewDate={dayViewDate}
+              visits={filteredVisits.filter(
+                (visit) => visit.scheduledDate === dayViewDate,
+              )}
+              propertiesById={propertiesById}
               teamById={teamById}
               userById={userById}
+              completingVisitIds={completingVisitIds}
+              syncingVisitIds={syncingVisitIds}
+              onDayDateChange={setDayViewDate}
               onSelectVisit={setSelectedVisitId}
+              onCompleteVisit={(visit) => void completeVisitFromKanban(visit)}
+              canCreateVisit={can(ACTION_KEYS.dailyOpsCreate)}
+              onCreateVisit={openCreateVisit}
+              onOpenFilters={openFilters}
+              activeFilterCount={activeFilterCount}
+              filtersActive={isFilterOpen}
             />
           ) : dashboardViewMode === 'agenda' ? (
             <OperationsAgendaView

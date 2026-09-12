@@ -21,6 +21,7 @@ import {
   type KitCategory,
 } from './custom-store'
 import { Specimen } from './Specimen'
+import { WidgetsSpecimens } from './WidgetsSpecimens'
 import './kit.css'
 
 type VisualSystemViewProps = {
@@ -35,6 +36,7 @@ const PAGE_TO_CATEGORY: Record<string, KitCategory | 'lab'> = {
   'Visual Inputs': 'inputs',
   'Visual Tokens': 'tokens',
   'Visual Icons': 'icons',
+  'Visual Widgets': 'widgets',
   'Visual Lab': 'lab',
 }
 
@@ -222,11 +224,20 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
         usage={t('kit.buttonPrimaryUsage')}
         desktop={
           <div className="yl-kit-row">
-            <button className="btn-primary" type="button">
-              {t('kit.add')}
+            <button
+              className="btn-primary"
+              type="button"
+              aria-label={t('kit.add')}
+            >
+              <YlIcon name="plus" size={16} />
             </button>
-            <button className="btn-primary" type="button" disabled>
-              {t('kit.disabled')}
+            <button
+              className="btn-primary"
+              type="button"
+              disabled
+              aria-label={t('kit.disabled')}
+            >
+              <YlIcon name="plus" size={16} />
             </button>
           </div>
         }
@@ -236,8 +247,12 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
         title={t('kit.buttonPrimaryIcon')}
         usage={t('kit.buttonPrimaryIconUsage')}
         desktop={
-          <button className="btn-primary" type="button">
-            <YlIcon name="plus" size={16} /> {t('kit.add')}
+          <button
+            className="btn-primary"
+            type="button"
+            aria-label={t('kit.add')}
+          >
+            <YlIcon name="plus" size={16} />
           </button>
         }
       />
@@ -257,11 +272,19 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
         usage={t('kit.buttonGhostUsage')}
         desktop={
           <div className="yl-kit-row">
-            <button className="btn-ghost" type="button">
-              {t('common.filters')}
+            <button
+              className="btn-ghost"
+              type="button"
+              aria-label={t('common.filters')}
+            >
+              <YlIcon name="line.3.horizontal.decrease" size={16} />
             </button>
-            <button className="btn-ghost is-active" type="button">
-              {t('kit.active')}
+            <button
+              className="btn-ghost is-active"
+              type="button"
+              aria-label={t('kit.active')}
+            >
+              <YlIcon name="line.3.horizontal.decrease" size={16} />
             </button>
           </div>
         }
@@ -271,8 +294,12 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
         title={t('kit.buttonDanger')}
         usage={t('kit.buttonDangerUsage')}
         desktop={
-          <button className="btn-danger" type="button">
-            {t('kit.deleteAction')}
+          <button
+            className="btn-danger"
+            type="button"
+            aria-label={t('kit.deleteAction')}
+          >
+            <YlIcon name="trash" size={16} />
           </button>
         }
       />
@@ -319,6 +346,52 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
               aria-label={t('kit.active')}
             >
               <YlIcon name="line.3.horizontal.decrease" size={16} />
+            </button>
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.button.group"
+        title={t('kit.buttonGroup')}
+        usage={t('kit.buttonGroupUsage')}
+        desktop={
+          <div className="yl-kit-row">
+            <div className="btn-group" role="group" aria-label={t('kit.buttonGroup')}>
+              <button
+                className="btn-icon btn-icon-ghost"
+                type="button"
+                aria-label={t('common.createPurchase')}
+              >
+                <YlIcon name="cart" size={16} />
+              </button>
+              <button
+                className="btn-icon btn-icon-ghost"
+                type="button"
+                aria-label={t('common.createSubtraction')}
+              >
+                <YlIcon name="minus" size={16} />
+              </button>
+              <button
+                className="btn-icon btn-icon-ghost"
+                type="button"
+                aria-label={t('common.edit')}
+              >
+                <YlIcon name="pencil" size={16} />
+              </button>
+              <button
+                className="btn-icon btn-icon-ghost"
+                type="button"
+                aria-label={t('common.delete')}
+              >
+                <YlIcon name="trash" size={16} />
+              </button>
+            </div>
+            <button
+              className="btn-icon btn-icon-ghost"
+              type="button"
+              aria-label={t('common.toggleDetails')}
+            >
+              <YlIcon name="chevron.down" size={16} />
             </button>
           </div>
         }
@@ -917,7 +990,9 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
                 ? tokens
                 : section === 'icons'
                   ? icons
-                  : lab
+                  : section === 'widgets'
+                    ? <WidgetsSpecimens />
+                    : lab
 
   return (
     <div className="yl-kit">

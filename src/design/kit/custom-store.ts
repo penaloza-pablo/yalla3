@@ -6,6 +6,7 @@ export type KitCategory =
   | 'inputs'
   | 'tokens'
   | 'icons'
+  | 'widgets'
 
 export type CustomKitElement = {
   id: string
@@ -26,6 +27,7 @@ const CATEGORIES: KitCategory[] = [
   'inputs',
   'tokens',
   'icons',
+  'widgets',
 ]
 
 export const isKitCategory = (value: string): value is KitCategory =>

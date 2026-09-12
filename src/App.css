@@ -28,6 +28,7 @@
   height: calc(100vh - (var(--yl-space-3) * 2));
   max-height: calc(100vh - (var(--yl-space-3) * 2));
   overflow: hidden;
+  z-index: 20;
 }
 
 .sidebar .nav {
@@ -87,6 +88,7 @@
   min-width: 32px;
   min-height: 32px;
   border: 0;
+  border-radius: 999px;
   background: transparent !important;
   color: #667085;
   box-shadow: none;
@@ -107,7 +109,7 @@
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  border-radius: 12px;
+  border-radius: 999px;
   background: #ffffff !important;
   border: 1px solid #e4e7ec;
   color: #344054;
@@ -313,9 +315,19 @@
   overflow: visible;
 }
 
+.main:has(.yl-dashboard.is-board) {
+  padding: 0;
+  min-height: calc(100vh - (var(--yl-space-3) * 2));
+  overflow: hidden;
+}
+
 @media (min-width: 769px) {
   .app.app-collapsed .main {
     padding-inline-start: 72px;
+  }
+
+  .app.app-collapsed .main:has(.yl-dashboard.is-board) {
+    padding-inline-start: 0;
   }
 }
 
@@ -636,7 +648,7 @@
 .btn-primary,
 .btn-secondary,
 .btn-ghost {
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 10px 16px;
   font-size: 0.95rem;
   font-weight: 600;
@@ -688,7 +700,7 @@
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -2883,6 +2895,112 @@ th {
   gap: 8px;
 }
 
+.operations-kanban-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.operations-kanban-visit {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  background: #f7f9fa;
+}
+
+.operations-kanban-visit:hover {
+  border-color: #c7d7d5;
+}
+
+.operations-kanban-visit.is-cancelled,
+.operations-kanban-visit.is-busy {
+  opacity: 0.72;
+}
+
+.operations-kanban-visit-open {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 8px 12px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.operations-kanban-visit-time {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: #7a8a96;
+  font-variant-numeric: tabular-nums;
+}
+
+.operations-kanban-visit-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.operations-kanban-team-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.operations-kanban-visit-nickname {
+  font-weight: 600;
+  color: #415364;
+}
+
+.operations-kanban-visit-assignee {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: #5b6b78;
+}
+
+.operations-kanban-complete {
+  align-self: end;
+  margin: 0 8px 8px 0;
+  background: transparent;
+  color: #7a8a96;
+}
+
+.operations-kanban-complete.is-checked,
+.operations-kanban-complete.is-checked:disabled {
+  color: #027a48;
+  background: transparent;
+  opacity: 1;
+}
+
+.operations-kanban-complete-empty {
+  width: 20px;
+  height: 20px;
+  border: 1.7px solid currentColor;
+  border-radius: 50%;
+  display: block;
+}
+
 .operations-kanban {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3875,7 +3993,8 @@ th {
   gap: 8px;
 }
 
-.operations-day-title-row .section-title {
+.operations-day-title-row .section-title,
+.operations-day-title-row .today-card-title {
   margin: 0;
 }
 
@@ -3935,10 +4054,6 @@ th {
   display: inline-flex;
   align-items: stretch;
   flex-shrink: 0;
-  border: 1px solid var(--yl-stroke, #e4e7ec);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #ffffff;
 }
 
 .operations-day-calendar-btn,
@@ -3961,15 +4076,10 @@ th {
 .operations-day-date-stepper .operations-day-nav-btn {
   appearance: none;
   border: 0;
-  border-radius: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
-}
-
-.operations-day-date-stepper .operations-day-nav-btn + .operations-day-nav-btn {
-  border-inline-start: 1px solid var(--yl-stroke, #e4e7ec);
 }
 
 .operations-day-date-stepper .operations-day-nav-btn:hover,
@@ -5866,6 +5976,14 @@ th {
   .operations-kanban {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .operations-kanban-list {
+    padding: 0 2px 16px;
+  }
+
+  .operations-kanban-visit {
+    background: #ffffff;
   }
 
   .operations-column {

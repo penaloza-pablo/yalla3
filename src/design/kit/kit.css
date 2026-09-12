@@ -88,6 +88,11 @@
   background: var(--yl-bg);
   padding: 14px;
   min-height: 88px;
+  min-width: 0;
+}
+
+.yl-kit-stage:has(.yl-dashboard-grid) {
+  overflow-x: auto;
 }
 
 .yl-kit-stage-label {
@@ -289,32 +294,22 @@
 .yl-kit-stage.is-desktop .page-action-bar .header-actions > .btn-ghost,
 .yl-kit-stage.is-desktop .page-action-bar .header-actions > .btn-icon {
   flex: 0 0 auto;
-  width: auto;
-  height: auto;
-  min-width: var(--yl-touch);
-  min-height: var(--yl-touch);
-  padding: 10px 16px;
-  border-radius: var(--yl-radius-control);
-}
-
-.yl-kit-stage.is-desktop .page-action-bar .header-actions > .btn-icon {
   width: var(--yl-touch);
   height: var(--yl-touch);
+  min-width: var(--yl-touch);
+  min-height: var(--yl-touch);
   padding: 0;
+  border-radius: 999px;
 }
 
 .yl-kit-stage.is-desktop .page-action-bar .header-actions > button[aria-label]:not(.btn-search-toggle) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
 }
 
 .yl-kit-stage.is-desktop .page-action-bar .header-actions > button[aria-label]:not(.btn-search-toggle)::after {
-  content: attr(aria-label);
-  font-size: 0.8rem;
-  font-weight: 600;
-  white-space: nowrap;
+  content: none;
 }
 
 .yl-kit-stage.is-desktop .btn-search-toggle {

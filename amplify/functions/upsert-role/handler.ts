@@ -4,6 +4,7 @@ import {
   isKnownPermission,
   isKnownRoleId,
 } from '../shared/rbac-catalog';
+import { isDashboardLayoutId } from '../shared/dashboard-layout';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -19,6 +20,7 @@ type Payload = {
   id?: string;
   name?: string;
   permissions?: unknown;
+  dashboardLayoutId?: unknown;
 };
 
 export const handler = async (event: {
@@ -77,6 +79,12 @@ export const handler = async (event: {
             )
           : [];
 
+  const dashboardLayoutId = isDashboardLayoutId(payload?.dashboardLayoutId)
+    ? payload.dashboardLayoutId
+    : isDashboardLayoutId(existing.dashboardLayoutId)
+      ? existing.dashboardLayoutId
+      : undefined;
+
   const item = {
     ...existing,
     pk: rolePk(roleId),
@@ -85,6 +93,7 @@ export const handler = async (event: {
     name: nextName,
     permissions,
     updatedAt: nowIso(),
+    ...(dashboardLayoutId ? { dashboardLayoutId } : {}),
   };
 
   try {

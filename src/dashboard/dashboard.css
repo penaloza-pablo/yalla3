@@ -1,0 +1,228 @@
+.yl-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.yl-dashboard.is-board {
+  position: fixed;
+  inset: var(--yl-space-3);
+  z-index: 1;
+  display: block;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.yl-dashboard-host {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.yl-dashboard-host.is-board {
+  height: 100%;
+  align-items: center;
+}
+
+.yl-dashboard.is-board .yl-dashboard-grid {
+  pointer-events: auto;
+}
+
+.yl-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    var(--yl-dashboard-columns, 4),
+    var(--yl-dashboard-cell, 156px)
+  );
+  grid-auto-rows: var(--yl-dashboard-cell, 156px);
+  grid-auto-flow: dense;
+  gap: var(--yl-dashboard-gap, 12px);
+  width: max-content;
+}
+
+.yl-dashboard-widget {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--yl-radius-card);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.yl-dashboard-widget-config {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.yl-dashboard-widget.is-ink .yl-dashboard-widget-config {
+  background: rgba(65, 83, 100, 0.12);
+}
+
+.yl-dashboard-widget-name {
+  margin: 0;
+  padding-inline-end: 32px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.yl-dashboard-widget-span {
+  margin: 0;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.88;
+}
+
+.yl-dashboard-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.yl-dashboard-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.yl-dashboard-editor-toolbar,
+.yl-dashboard-editor-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.yl-dashboard-editor-toolbar {
+  align-items: stretch;
+}
+
+.yl-dashboard-editor-select {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.yl-dashboard-editor .select-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.yl-dashboard-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.yl-dashboard-editor-actions .btn-secondary,
+.yl-dashboard-editor-add .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.yl-dashboard-editor-placements {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.yl-dashboard-editor-empty {
+  margin: 0;
+  color: var(--yl-text-2);
+  font-size: 0.9rem;
+}
+
+.yl-dashboard-editor .data-table .select-input {
+  min-width: 4.5rem;
+}
+
+.yl-dashboard-config {
+  width: min(560px, 100%);
+}
+
+.yl-dashboard-scale-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.yl-dashboard-scale-size .select-input {
+  width: auto;
+  min-width: 3.5rem;
+}
+
+.yl-dashboard-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.yl-dashboard-color-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(65, 83, 100, 0.18);
+  flex: 0 0 auto;
+}
+
+.yl-dashboard-color input[type='color'] {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.yl-dashboard-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.yl-dashboard-preset {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(65, 83, 100, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .yl-dashboard.is-board {
+    top: calc(env(safe-area-inset-top, 0px) + 56px + var(--yl-space-3));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--yl-space-3));
+    left: var(--yl-space-3);
+    right: var(--yl-space-3);
+  }
+}

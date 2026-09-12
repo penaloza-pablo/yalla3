@@ -5556,6 +5556,7 @@ function App() {
                           <td data-label={t('common.quantity')}>{row.quantity}</td>
                           <td data-label={t('common.actions')}>
                             <div className="action-buttons">
+                              <div className="btn-group">
                               <button
                                 className={`btn-icon btn-icon-ghost${
                                   canEditInventoryItems ? '' : ' is-disabled'
@@ -5620,6 +5621,7 @@ function App() {
                               >
                                 <YlIcon name="trash" size={16} />
                               </button>
+                              </div>
                               <button
                                 className="btn-icon btn-icon-ghost"
                                 type="button"
@@ -6169,6 +6171,7 @@ function App() {
                               <td data-label={t('common.deliveryDate')}>{row.deliveryDate}</td>
                               <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
+                                  <div className="btn-group">
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
@@ -6193,6 +6196,7 @@ function App() {
                                   >
                                     <YlIcon name="pencil" size={16} />
                                   </button>
+                                  </div>
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
@@ -6807,6 +6811,7 @@ function App() {
                               <td data-label={t('common.date')}>{row.date}</td>
                               <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
+                                  <div className="btn-group">
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
@@ -6827,6 +6832,7 @@ function App() {
                                   >
                                     <YlIcon name="arrow.uturn.backward" size={16} />
                                   </button>
+                                  </div>
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"

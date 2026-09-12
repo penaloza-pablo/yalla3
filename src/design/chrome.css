@@ -31,7 +31,7 @@
 }
 
 .btn-danger {
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 10px 16px;
   font-size: 0.95rem;
   font-weight: 600;
@@ -122,8 +122,89 @@
   height: var(--yl-touch);
   min-width: var(--yl-touch);
   min-height: var(--yl-touch);
-  border-radius: 12px;
+  border-radius: 999px;
   color: var(--yl-ink);
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+  border-radius: 999px;
+}
+
+.page-action-bar .header-actions > .btn-primary,
+.page-action-bar .header-actions > .btn-secondary,
+.page-action-bar .header-actions > .btn-ghost,
+.page-action-bar .header-actions > .btn-icon,
+.operations-day-card-actions > button {
+  width: var(--yl-touch);
+  height: var(--yl-touch);
+  min-width: var(--yl-touch);
+  min-height: var(--yl-touch);
+  padding: 0;
+  border-radius: 999px;
+  gap: 0;
+}
+
+.page-action-bar .header-actions > button[aria-label]::after,
+.operations-day-card-actions > button[aria-label]::after,
+.action-buttons .btn-icon[aria-label]::after {
+  content: none !important;
+}
+
+.btn-group {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 999px;
+  background: var(--yl-surface);
+}
+
+.btn-group > .btn-icon,
+.btn-group > .btn-ghost,
+.btn-group > .btn-primary,
+.btn-group > .btn-secondary,
+.btn-group > button {
+  width: var(--yl-touch);
+  height: var(--yl-touch);
+  min-width: var(--yl-touch);
+  min-height: var(--yl-touch);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.btn-group > button + button {
+  border-inline-start: 0;
+}
+
+.btn-group > button:hover,
+.btn-group > button:focus-visible {
+  background: var(--yl-go-soft);
+}
+
+.btn-group > button:disabled,
+.btn-group > button.is-disabled {
+  opacity: 0.45;
+}
+
+.btn-primary:has(> .yl-icon):not(:has(> span:not(.filter-badge))),
+.btn-secondary:has(> .yl-icon):not(:has(> span:not(.filter-badge))),
+.btn-ghost:has(> .yl-icon):not(:has(> span:not(.filter-badge))),
+.btn-danger:has(> .yl-icon):not(:has(> span:not(.filter-badge))) {
+  width: var(--yl-touch);
+  height: var(--yl-touch);
+  min-width: var(--yl-touch);
+  min-height: var(--yl-touch);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .card {
@@ -175,12 +256,14 @@
 
 .btn-icon.sidebar-toggle {
   color: var(--yl-text-2);
+  border-radius: 999px;
 }
 
 .btn-icon.sidebar-reveal {
   background: var(--yl-surface) !important;
   border-color: var(--yl-stroke);
   color: var(--yl-text);
+  border-radius: 999px;
 }
 
 .sidebar-nav-header .yl-icon {
@@ -347,24 +430,6 @@
     width: 100%;
     gap: 8px;
   }
-
-  .action-buttons .btn-icon[aria-label] {
-    width: auto;
-    flex: 1 1 calc(50% - 8px);
-    min-width: 44px;
-    min-height: var(--yl-touch);
-    padding-inline: 10px;
-    gap: 6px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .action-buttons .btn-icon[aria-label]::after {
-    content: attr(aria-label);
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
 }
 
 @media (min-width: 1024px) {
@@ -372,18 +437,6 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: auto;
-    min-width: var(--yl-touch);
-    min-height: var(--yl-touch);
-    gap: 8px;
-    padding-inline: 12px;
-  }
-
-  .page-action-bar .header-actions > button[aria-label]:not(.btn-search-toggle)::after {
-    content: attr(aria-label);
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
   }
 }
 
@@ -426,6 +479,7 @@
   background: var(--yl-surface);
   border: 1px solid var(--yl-stroke);
   color: var(--yl-ink);
+  border-radius: 999px;
 }
 
 .btn-link {
@@ -528,6 +582,36 @@
 
 .operations-visit-card:hover {
   border-color: #c7d7d5;
+}
+
+.operations-kanban-visit {
+  border-color: var(--yl-stroke);
+  background: var(--yl-surface-2);
+}
+
+.operations-kanban-visit:hover {
+  border-color: #c7d7d5;
+}
+
+.operations-kanban-visit-time {
+  color: var(--yl-text-3);
+}
+
+.operations-kanban-visit-nickname {
+  color: var(--yl-ink);
+}
+
+.operations-kanban-visit-assignee {
+  color: var(--yl-text-2);
+}
+
+.operations-kanban-complete {
+  color: var(--yl-text-3);
+}
+
+.operations-kanban-complete.is-checked,
+.operations-kanban-complete.is-checked:disabled {
+  color: var(--yl-success);
 }
 
 .operations-card-tags .tag {
@@ -688,24 +772,6 @@
     margin: 0;
     border: 1px solid var(--yl-stroke);
     align-self: stretch;
-  }
-
-  .operations-day-card-actions > button[aria-label] {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    min-width: var(--yl-touch);
-    min-height: var(--yl-touch);
-    gap: 8px;
-    padding-inline: 12px;
-  }
-
-  .operations-day-card-actions > button[aria-label]::after {
-    content: attr(aria-label);
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
   }
 }
 

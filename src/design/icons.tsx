@@ -649,6 +649,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   'Visual Inputs': 'pencil',
   'Visual Tokens': 'star',
   'Visual Icons': 'square.grid.2x2',
+  'Visual Widgets': 'rectangle.3.group',
   'Visual Lab': 'plus',
 }
 
