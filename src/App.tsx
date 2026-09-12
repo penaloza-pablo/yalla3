@@ -1604,7 +1604,7 @@ const emptySubtractionFormState: SubtractionFormState = {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions, roleId } =
+  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions } =
     usePermissions()
   const confirmAction = useConfirm()
   const toast = useToast()

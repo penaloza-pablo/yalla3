@@ -747,7 +747,7 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
                     ) : null}
                   </div>
                   <code className="yl-kit-swatch-name">
-                    {`yl.icon.${name}`.replaceAll('.', '.\u200b')}
+                    {`yl.icon.${name}`.replace(/\./g, '.\u200b')}
                   </code>
                   {ICON_HAS_FILL.has(name) ? (
                     <span className="yl-kit-swatch-value">{t('kit.iconVariants')}</span>
