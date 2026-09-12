@@ -298,11 +298,31 @@ const restoreInventoryQuantityStatus = async (params: {
 };
 
 const parseDirect = (payload: PurchasePayload, existing?: Record<string, unknown>) => {
+  const rawItemId = String(
+    payload.itemId ?? payload['Item id'] ?? payload['Item ID'] ?? '',
+  ).trim();
+  const cleanedItemId =
+    !rawItemId || rawItemId === '—' || rawItemId === '-' ? '' : rawItemId;
+  const propertyId = String(
+    payload.propertyId ?? payload['Property id'] ?? payload['Property ID'] ?? '',
+  ).trim();
+  if (existing?.Direct === true && !cleanedItemId) {
+    return true;
+  }
   if (typeof payload.Direct === 'boolean') {
+    if (payload.Direct === false && !cleanedItemId && propertyId) {
+      return true;
+    }
     return payload.Direct;
   }
   if (typeof payload.direct === 'boolean') {
+    if (payload.direct === false && !cleanedItemId && propertyId) {
+      return true;
+    }
     return payload.direct;
+  }
+  if (!cleanedItemId && (propertyId || existing?.Direct === true)) {
+    return true;
   }
   return existing?.Direct === true;
 };
@@ -420,8 +440,7 @@ const updateInventoryOnConfirm = async (params: {
         vatRate === null
           ? 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated'
           : 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #vatRate = :vatRate, #grossUnitPrice = :grossUnitPrice, #lastUpdated = :lastUpdated',
-      ConditionExpression:
-        'attribute_exists(id) AND (attribute_not_exists(#quantity) OR #quantity = :currentQuantity)',
+      ConditionExpression: 'attribute_exists(id)',
       ExpressionAttributeNames: {
         '#quantity': 'Quantity',
         '#status': 'Status',
@@ -439,7 +458,6 @@ const updateInventoryOnConfirm = async (params: {
         ':status': nextStatus,
         ':unitPrice': unitPriceValue,
         ':lastUpdated': formatDateForStorage(),
-        ':currentQuantity': currentQuantity,
         ...(vatRate === null
           ? {}
           : {
@@ -585,7 +603,11 @@ export const handler = async (event: {
     existingItem?.Excluded === true ||
     (typeof existingItem?.Status === 'string' &&
       existingItem.Status === PURCHASE_EXCLUDED);
-  const itemId = payload.itemId ?? payload['Item id'] ?? payload['Item ID'];
+  const rawItemId = payload.itemId ?? payload['Item id'] ?? payload['Item ID'];
+  const itemId = (() => {
+    const value = String(rawItemId ?? '').trim();
+    return !value || value === '—' || value === '-' ? '' : value;
+  })();
   const itemName = payload.itemName ?? payload['Item name'];
   const location = payload.location ?? payload.Location;
   const vendor = payload.vendor ?? payload.Vendor;
@@ -813,9 +835,11 @@ export const handler = async (event: {
     const response = { item };
     return isHttp ? buildHttpResponse(200, response) : response;
   } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    console.error('Failed to save purchase', { id, details, error });
     const message = 'Failed to save purchase.';
     if (isHttp) {
-      return buildHttpResponse(500, { message });
+      return buildHttpResponse(500, { message, details });
     }
     throw new Error(message);
   }

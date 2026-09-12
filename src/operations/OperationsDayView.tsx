@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { addDaysToDateString } from './dateHelpers'
-import { getPropertyLabel } from './propertyHelpers'
+import { getPropertyLabel, isYallaP2Property } from './propertyHelpers'
 import {
   getMtlGroupLabel,
   getBookingsForPropertyIds,
@@ -41,7 +42,7 @@ import {
   writeDayCheckInLayout,
   type StoredCheckInLayout,
 } from './dayCheckInLayoutStore'
-import { getTeamBlockStyle } from './teamColors'
+import { getTeamBlockStyle, getTeamSortKey } from './teamColors'
 import {
   buildDayTimelineVisits,
   dayVisitExpandsOverlapOnClick,
@@ -52,7 +53,7 @@ import {
   visitBlockTop,
   type DayTimelineVisit,
 } from './visitOverlapLayout'
-import type { VisitRecord } from './types'
+import type { PropertyOption, VisitRecord } from './types'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
@@ -86,7 +87,7 @@ type Props = {
   displayRows: MtlDisplayRow[]
   visits: VisitRecord[]
   bookings: DayBookingEvent[]
-  propertyById: Map<string, string>
+  propertiesById: Map<string, PropertyOption>
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
   onDayDateChange: (date: string) => void
@@ -97,6 +98,11 @@ type Props = {
     scheduledEndTime: string,
   ) => void
   onEarlyCheckInChange?: (booking: DayBookingEvent, enabled: boolean) => void
+  canCreateVisit?: boolean
+  onCreateVisit?: () => void
+  onOpenFilters?: () => void
+  activeFilterCount?: number
+  filtersActive?: boolean
 }
 
 type DayTableRow = {
@@ -118,17 +124,22 @@ export function OperationsDayView({
   displayRows,
   visits,
   bookings,
-  propertyById,
+  propertiesById,
   teamById,
   syncingVisitIds,
   onDayDateChange,
   onVisitClick,
   onVisitTimeChange,
   onEarlyCheckInChange,
+  canCreateVisit = false,
+  onCreateVisit,
+  onOpenFilters,
+  activeFilterCount = 0,
+  filtersActive = false,
 }: Props) {
   const { t } = useTranslation()
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
-  const [selectedCheckIn, setSelectedCheckIn] = useState<DayBookingEvent | null>(
+  const [selectedBooking, setSelectedBooking] = useState<DayBookingEvent | null>(
     null,
   )
   const [windowStartMinutes, setWindowStartMinutes] = useState(
@@ -171,7 +182,7 @@ export function OperationsDayView({
   )
 
   useEffect(() => {
-    setSelectedCheckIn(null)
+    setSelectedBooking(null)
   }, [dayViewDate])
   const timelineWindow = useMemo(
     () => getDayTimelineWindow(windowStartMinutes),
@@ -199,11 +210,19 @@ export function OperationsDayView({
   const visibleRows = displayRows.filter(
     (row) => rowHasVisits(row, visits) || rowHasBookings(row, bookings),
   )
+  const orderedRows = [
+    ...visibleRows.filter(
+      (row) => !(row.kind === 'mtl-group' && isYallaP2Property(row.principal)),
+    ),
+    ...visibleRows.filter(
+      (row) => row.kind === 'mtl-group' && isYallaP2Property(row.principal),
+    ),
+  ]
 
   const tableRows = useMemo(() => {
     const rows: DayTableRow[] = []
 
-    visibleRows.forEach((row) => {
+    orderedRows.forEach((row) => {
       if (row.kind === 'standalone') {
         rows.push({
           key: row.property.id,
@@ -223,28 +242,41 @@ export function OperationsDayView({
         return
       }
 
-      const isExpanded = expandedMtlIds.has(row.principal.id)
-      rows.push({
-        key: row.principal.id,
-        propertyLabel: getMtlGroupLabel(row),
-        propertyVisits: isExpanded
-          ? visits
-              .filter((visit) => visit.propertyId === row.principal.id)
-              .sort((a, b) =>
+      const isP2Group = isYallaP2Property(row.principal)
+      const isExpanded = isP2Group || expandedMtlIds.has(row.principal.id)
+      const principalVisits = visits
+        .filter((visit) => visit.propertyId === row.principal.id)
+        .sort((a, b) =>
+          a.scheduledStartTime.localeCompare(b.scheduledStartTime),
+        )
+      const principalBookings = getBookingsForPropertyIds(
+        bookingsWithLayout,
+        [row.principal.id],
+      )
+      const showPrincipalRow =
+        !isP2Group ||
+        principalVisits.length > 0 ||
+        principalBookings.length > 0
+
+      if (showPrincipalRow) {
+        rows.push({
+          key: row.principal.id,
+          propertyLabel: getMtlGroupLabel(row),
+          propertyVisits: isExpanded
+            ? principalVisits
+            : getVisitsForPropertyIds(visits, row.propertyIds).sort((a, b) =>
                 a.scheduledStartTime.localeCompare(b.scheduledStartTime),
-              )
-          : getVisitsForPropertyIds(visits, row.propertyIds).sort((a, b) =>
-              a.scheduledStartTime.localeCompare(b.scheduledStartTime),
-            ),
-        propertyBookings: isExpanded
-          ? getBookingsForPropertyIds(bookingsWithLayout, [row.principal.id])
-          : getBookingsForPropertyIds(bookingsWithLayout, row.propertyIds),
-        showRoomLabel: !isExpanded,
-        isChildRow: false,
-        canExpand: true,
-        isExpanded,
-        mtlPrincipalId: row.principal.id,
-      })
+              ),
+          propertyBookings: isExpanded
+            ? principalBookings
+            : getBookingsForPropertyIds(bookingsWithLayout, row.propertyIds),
+          showRoomLabel: !isExpanded,
+          isChildRow: false,
+          canExpand: !isP2Group,
+          isExpanded,
+          mtlPrincipalId: row.principal.id,
+        })
+      }
 
       if (isExpanded) {
         row.children.forEach((child) => {
@@ -276,7 +308,7 @@ export function OperationsDayView({
     })
 
     return rows
-  }, [visibleRows, visits, bookingsWithLayout, expandedMtlIds])
+  }, [orderedRows, visits, bookingsWithLayout, expandedMtlIds])
 
   const toggleMtlGroup = (principalId: string) => {
     setExpandedMtlIds((current) => {
@@ -294,41 +326,71 @@ export function OperationsDayView({
     <section className="card operations-day-card">
       <div className="operations-day-header">
         <div className="operations-day-title-row">
-          <h2 className="section-title">{formatAgendaDayLabel(dayViewDate)}</h2>
-          <div className="operations-day-date-controls">
+          <label className="operations-day-date-trigger">
+            <h2 className="section-title">
+              {formatAgendaDayLabel(dayViewDate)}
+            </h2>
+            <input
+              className="operations-day-date-input"
+              type="date"
+              value={dayViewDate}
+              onChange={(event) => onDayDateChange(event.target.value)}
+              aria-label={t('operations.chooseDate')}
+            />
+          </label>
+          <div className="operations-day-date-stepper">
             <button
               type="button"
-              className="btn-ghost operations-day-nav-btn"
+              className="operations-day-nav-btn"
               aria-label={t('operations.previousDay')}
               title={t('operations.previousDay')}
               onClick={() =>
                 onDayDateChange(addDaysToDateString(dayViewDate, -1))
               }
             >
-              <span aria-hidden="true">&lt;</span>
+              <YlIcon name="chevron.left" size={16} />
             </button>
-            <label className="btn-ghost operations-day-calendar-btn">
-              <YlIcon name="calendar" size={22} />
-              <input
-                className="operations-day-date-input"
-                type="date"
-                value={dayViewDate}
-                onChange={(event) => onDayDateChange(event.target.value)}
-                aria-label={t('operations.chooseDate')}
-              />
-            </label>
             <button
               type="button"
-              className="btn-ghost operations-day-nav-btn"
+              className="operations-day-nav-btn"
               aria-label={t('operations.nextDay')}
               title={t('operations.nextDay')}
               onClick={() =>
                 onDayDateChange(addDaysToDateString(dayViewDate, 1))
               }
             >
-              <span aria-hidden="true">&gt;</span>
+              <YlIcon name="chevron.right" size={16} />
             </button>
           </div>
+          {onCreateVisit || onOpenFilters ? (
+            <div className="operations-day-card-actions">
+              {canCreateVisit && onCreateVisit ? (
+                <button
+                  className="btn-ghost"
+                  type="button"
+                  onClick={onCreateVisit}
+                  aria-label={t('operations.createVisit')}
+                >
+                  <YlIcon name="plus" size={16} />
+                </button>
+              ) : null}
+              {onOpenFilters ? (
+                <button
+                  className={`btn-ghost btn-filter ${
+                    filtersActive ? 'is-active' : ''
+                  }`}
+                  type="button"
+                  aria-label={t('common.filters')}
+                  onClick={onOpenFilters}
+                >
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
+                  {activeFilterCount > 0 ? (
+                    <span className="filter-badge">{activeFilterCount}</span>
+                  ) : null}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -374,7 +436,6 @@ export function OperationsDayView({
         <table className="operations-day-table">
           <thead>
             <tr>
-              <th className="operations-day-property-header">{t('operations.property')}</th>
               <th className="operations-day-timeline-header">
                 <div className="operations-day-hours-wrap">
                   <button
@@ -420,14 +481,14 @@ export function OperationsDayView({
                 key={row.key}
                 row={row}
                 timelineWindow={timelineWindow}
-                propertyById={propertyById}
+                propertiesById={propertiesById}
                 teamById={teamById}
                 syncingVisitIds={syncingVisitIds}
                 onToggleMtlGroup={toggleMtlGroup}
                 onVisitClick={onVisitClick}
                 onVisitTimeChange={onVisitTimeChange}
                 onCheckInLayoutChange={handleCheckInLayoutChange}
-                onBookingClick={setSelectedCheckIn}
+                onBookingClick={setSelectedBooking}
               />
             ))}
           </tbody>
@@ -435,29 +496,37 @@ export function OperationsDayView({
       </div>
       </>
       )}
-      {selectedCheckIn ? (
+      {selectedBooking ? (
         <div
           className="modal-overlay"
           role="presentation"
-          onClick={() => setSelectedCheckIn(null)}
+          onClick={() => setSelectedBooking(null)}
         >
           <div
             className="modal operations-booking-popover"
             role="dialog"
             aria-modal="true"
-            aria-label={selectedCheckIn.guestName || t('operations.checkInDetails')}
+            aria-label={
+              selectedBooking.guestName ||
+              (selectedBooking.kind === 'check-out'
+                ? t('operations.checkOutDetails')
+                : t('operations.checkInDetails'))
+            }
             onClick={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {selectedCheckIn.guestName || t('operations.checkInDetails')}
+                  {selectedBooking.guestName ||
+                    (selectedBooking.kind === 'check-out'
+                      ? t('operations.checkOutDetails')
+                      : t('operations.checkInDetails'))}
                 </h3>
               </div>
               <button
                 className="btn-icon"
                 type="button"
-                onClick={() => setSelectedCheckIn(null)}
+                onClick={() => setSelectedBooking(null)}
                 aria-label={t('common.close')}
               >
                 <YlIcon name="xmark" size={16} />
@@ -468,25 +537,25 @@ export function OperationsDayView({
                 <div>
                   <p className="detail-label">{t('bookingsPlan.guests')}</p>
                   <p className="detail-value">
-                    {selectedCheckIn.guests || '—'}
+                    {selectedBooking.guests || '—'}
                   </p>
                 </div>
                 <div>
                   <p className="detail-label">{t('bookingsPlan.nights')}</p>
                   <p className="detail-value">
-                    {selectedCheckIn.nights || '—'}
+                    {selectedBooking.nights || '—'}
                   </p>
                 </div>
                 <div>
                   <p className="detail-label">{t('bookingsPlan.giftCard')}</p>
                   <p className="detail-value">
-                    {selectedCheckIn.giftCard || '—'}
+                    {selectedBooking.giftCard || '—'}
                   </p>
                 </div>
                 <div>
                   <p className="detail-label">{t('bookingsPlan.linen')}</p>
                   <p className="detail-value">
-                    {selectedCheckIn.linen || '—'}
+                    {selectedBooking.linen || '—'}
                   </p>
                 </div>
               </div>
@@ -501,7 +570,7 @@ export function OperationsDayView({
 type DayPropertyRowProps = {
   row: DayTableRow
   timelineWindow: DayTimelineWindow
-  propertyById: Map<string, string>
+  propertiesById: Map<string, PropertyOption>
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
   onToggleMtlGroup: (mtlPrincipalId: string) => void
@@ -521,7 +590,7 @@ type DayPropertyRowProps = {
 function DayPropertyRow({
   row,
   timelineWindow,
-  propertyById,
+  propertiesById,
   teamById,
   syncingVisitIds,
   onToggleMtlGroup,
@@ -548,53 +617,51 @@ function DayPropertyRow({
   )
 
   return (
-    <tr className={row.isChildRow ? 'operations-day-row-child' : undefined}>
-      <th
-        className={`operations-day-property-cell${
-          row.isChildRow ? ' is-child' : ''
-        }${row.canExpand ? ' is-mtl-header' : ''}`}
-        scope="row"
-      >
-        {row.canExpand ? (
-          <button
-            type="button"
-            className="operations-mtl-toggle"
-            onClick={() => onToggleMtlGroup(row.mtlPrincipalId!)}
-            aria-expanded={row.isExpanded}
-            aria-label={
-              row.isExpanded
-                ? t('operations.collapseProperty', { name: row.propertyLabel })
-                : t('operations.expandProperty', { name: row.propertyLabel })
-            }
-          >
-            <YlDisclosureIcon open={row.isExpanded} />
-          </button>
-        ) : null}
-        <span>{row.propertyLabel}</span>
-        {hasExpandedClusters ? (
-          <button
-            type="button"
-            className="operations-mtl-toggle operations-day-overlap-collapse"
-            aria-expanded
-            aria-label={t('operations.collapseOverlappingVisits')}
-            title={t('operations.collapseOverlappingVisits')}
-            onClick={() => setExpandedClusterKeys(new Set())}
-          >
-            <YlIcon name="chevron.down" size={14} />
-          </button>
-        ) : null}
-      </th>
+    <tr
+      className={row.isChildRow ? 'operations-day-row-child' : undefined}
+      aria-label={row.propertyLabel}
+    >
       <td className="operations-day-timeline-cell">
+        {row.canExpand || hasExpandedClusters ? (
+          <div className="operations-day-row-controls">
+            {row.canExpand ? (
+              <button
+                type="button"
+                className="operations-mtl-toggle"
+                onClick={() => onToggleMtlGroup(row.mtlPrincipalId!)}
+                aria-expanded={row.isExpanded}
+                aria-label={
+                  row.isExpanded
+                    ? t('operations.collapseProperty', { name: row.propertyLabel })
+                    : t('operations.expandProperty', { name: row.propertyLabel })
+                }
+              >
+                <YlDisclosureIcon open={row.isExpanded} />
+              </button>
+            ) : null}
+            {hasExpandedClusters ? (
+              <button
+                type="button"
+                className="operations-mtl-toggle operations-day-overlap-collapse"
+                aria-expanded
+                aria-label={t('operations.collapseOverlappingVisits')}
+                title={t('operations.collapseOverlappingVisits')}
+                onClick={() => setExpandedClusterKeys(new Set())}
+              >
+                <YlIcon name="chevron.down" size={14} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <DayTimelineTrack
           propertyVisits={row.propertyVisits}
           propertyBookings={row.propertyBookings}
           timelineVisits={timelineVisits}
           channelHeight={channelHeight}
           timelineWindow={timelineWindow}
-          propertyById={propertyById}
+          propertiesById={propertiesById}
           teamById={teamById}
           syncingVisitIds={syncingVisitIds}
-          showRoomLabel={row.showRoomLabel}
           expandMtlOnVisitClick={row.canExpand && !row.isExpanded}
           onExpandMtlGroup={
             row.canExpand && row.mtlPrincipalId
@@ -624,10 +691,9 @@ type DayTimelineTrackProps = {
   timelineVisits: DayTimelineVisit[]
   channelHeight: number
   timelineWindow: DayTimelineWindow
-  propertyById: Map<string, string>
+  propertiesById: Map<string, PropertyOption>
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
-  showRoomLabel: boolean
   expandMtlOnVisitClick: boolean
   onExpandMtlGroup?: () => void
   onExpandOverlapCluster: (clusterKey: string) => void
@@ -660,10 +726,9 @@ function DayTimelineTrack({
   timelineVisits,
   channelHeight,
   timelineWindow,
-  propertyById,
+  propertiesById,
   teamById,
   syncingVisitIds,
-  showRoomLabel,
   expandMtlOnVisitClick,
   onExpandMtlGroup,
   onExpandOverlapCluster,
@@ -680,6 +745,9 @@ function DayTimelineTrack({
     start: number
     end: number
   } | null>(null)
+  const [overlapPicker, setOverlapPicker] = useState<DayTimelineVisit | null>(
+    null,
+  )
   const dragMovedRef = useRef(false)
   const pointerHitOverlapRef = useRef(false)
 
@@ -805,7 +873,7 @@ function DayTimelineTrack({
     mode: DragMode,
   ) => {
     const visit = entry.visit
-    if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id)) {
+    if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id) || entry.isSameTeamMerge) {
       return
     }
     const hitsOverlap = pointerHitsOverlap(entry, event.clientX, event.clientY)
@@ -843,6 +911,10 @@ function DayTimelineTrack({
     if (dragMovedRef.current) {
       dragMovedRef.current = false
       pointerHitOverlapRef.current = false
+      return
+    }
+    if (entry.isSameTeamMerge) {
+      setOverlapPicker(entry)
       return
     }
     if (expandMtlOnVisitClick) {
@@ -904,16 +976,15 @@ function DayTimelineTrack({
       >
         {timelineVisits.map((entry) => (
           <DayVisitBlock
-            key={entry.visit.id}
+            key={entry.unitKey}
             entry={entry}
             timelineWindow={timelineWindow}
-            propertyById={propertyById}
+            propertiesById={propertiesById}
             teamById={teamById}
             syncingVisitIds={syncingVisitIds}
-            showRoomLabel={showRoomLabel}
             previewRange={previewRange}
             expandMtlOnVisitClick={expandMtlOnVisitClick}
-            lockDrag={expandMtlOnVisitClick}
+            lockDrag={expandMtlOnVisitClick || entry.isSameTeamMerge}
             beginDrag={beginDrag}
             handleBlockClick={handleBlockClick}
           />
@@ -928,6 +999,75 @@ function DayTimelineTrack({
           />
         ))}
       </div>
+      {overlapPicker
+        ? createPortal(
+            <div
+              className="modal-overlay"
+              role="presentation"
+              onClick={() => setOverlapPicker(null)}
+            >
+          <div
+            className="modal operations-overlap-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('operations.chooseOverlappingVisit')}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">
+                {formatSameTeamMergeLabel(
+                  overlapPicker.visit.teamId,
+                  teamById,
+                  t,
+                )}
+              </h3>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setOverlapPicker(null)}
+                aria-label={t('common.close')}
+              >
+                <YlIcon name="xmark" size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="subtitle">{t('operations.chooseOverlappingVisit')}</p>
+              <div className="operations-overlap-picker-list">
+                {overlapPicker.mergedVisits.map((visit) => {
+                  const property = propertiesById.get(visit.propertyId)
+                  return (
+                    <button
+                      key={visit.id}
+                      type="button"
+                      className="operations-overlap-picker-item"
+                      onClick={() => {
+                        setOverlapPicker(null)
+                        onVisitClick(visit.id)
+                      }}
+                    >
+                      <span className="operations-overlap-picker-name">
+                        {visit.title.trim() ||
+                          formatVisitBarTitle(visit, { property })}
+                      </span>
+                      <span className="operations-overlap-picker-meta">
+                        {visit.scheduledStartTime || '—'}
+                        {visit.scheduledEndTime
+                          ? ` – ${visit.scheduledEndTime}`
+                          : ''}
+                        {property
+                          ? ` · ${formatVisitBarTitle(visit, { property })}`
+                          : ''}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
@@ -935,10 +1075,9 @@ function DayTimelineTrack({
 type DayVisitBlockProps = {
   entry: DayTimelineVisit
   timelineWindow: DayTimelineWindow
-  propertyById: Map<string, string>
+  propertiesById: Map<string, PropertyOption>
   teamById: Map<string, string>
   syncingVisitIds: Set<string>
-  showRoomLabel: boolean
   previewRange: { visitId: string; start: number; end: number } | null
   expandMtlOnVisitClick: boolean
   lockDrag: boolean
@@ -954,13 +1093,29 @@ type DayVisitBlockProps = {
   ) => void
 }
 
+function formatSameTeamMergeLabel(
+  teamId: string,
+  teamById: Map<string, string>,
+  t: (key: string, options?: Record<string, string>) => string,
+) {
+  const key = getTeamSortKey(teamId, teamById)
+  if (key === 'limpieza') {
+    return t('operations.severalCleaning')
+  }
+  if (key === 'mantenimiento') {
+    return t('operations.severalMaintenance')
+  }
+  return t('operations.severalTeamVisits', {
+    team: teamById.get(teamId) || key,
+  })
+}
+
 function DayVisitBlock({
   entry,
   timelineWindow,
-  propertyById,
+  propertiesById,
   teamById,
   syncingVisitIds,
-  showRoomLabel,
   previewRange,
   expandMtlOnVisitClick,
   lockDrag,
@@ -980,19 +1135,29 @@ function DayVisitBlock({
       minutesToPositionPercent(clipped.visualStart, timelineWindow),
   )
   const isSyncing = syncingVisitIds.has(visit.id)
-  const isEditable = !isTerminalVisit(visit)
-  const roomLabel = showRoomLabel ? propertyById.get(visit.propertyId) : undefined
-  const expandsOverlap = dayVisitExpandsOverlapOnClick(entry)
+  const isEditable = !isTerminalVisit(visit) && !entry.isSameTeamMerge
+  const property = propertiesById.get(visit.propertyId)
+  const barLabel = entry.isSameTeamMerge
+    ? formatSameTeamMergeLabel(visit.teamId, teamById, t)
+    : formatVisitBarTitle(visit, { property })
+  const expandsOverlap =
+    entry.isSameTeamMerge || dayVisitExpandsOverlapOnClick(entry)
   const clickHint = expandMtlOnVisitClick
     ? t('operations.expandRoomsOnVisitClick')
-    : expandsOverlap
-      ? t('operations.expandOverlappingVisits')
-      : undefined
+    : entry.isSameTeamMerge
+      ? t('operations.chooseOverlappingVisit')
+      : dayVisitExpandsOverlapOnClick(entry)
+        ? t('operations.expandOverlappingVisits')
+        : undefined
 
-  const summaryTitle = `${formatVisitSummaryLine(visit, {
-    roomLabel,
-    endTime: visit.scheduledEndTime,
-  })}${
+  const summaryTitle = `${
+    entry.isSameTeamMerge
+      ? `${barLabel} · ${formatMinutesAsTime(start)} – ${formatMinutesAsTime(end)}`
+      : formatVisitSummaryLine(visit, {
+          property,
+          endTime: visit.scheduledEndTime,
+        })
+  }${
     entry.hasTimeOverlap
       ? ` · ${t('operations.overlapsWithVisits', {
           count: entry.overlapCount - 1,
@@ -1059,7 +1224,7 @@ function DayVisitBlock({
               />
             ) : null}
             <span className="operations-day-visit-summary">
-              {formatVisitBarTitle(visit, { roomLabel })}
+              {barLabel}
             </span>
           </div>
           {lockDrag ? null : (
@@ -1079,7 +1244,7 @@ function DayVisitBlock({
           }
         >
           <span className="operations-day-visit-summary">
-            {formatVisitBarTitle(visit, { roomLabel })}
+            {barLabel}
           </span>
         </button>
       )}
@@ -1307,6 +1472,7 @@ function DayBookingBlock({
         timelineWindow={timelineWindow}
         className="operations-day-booking-block is-check-out"
         title={`${t('common.checkOut')} · ${booking.guestName}`}
+        onClick={() => onBookingClick(booking)}
       >
         <DayBookingIcon kind="check-out" />
       </DayBookingTimeBlock>

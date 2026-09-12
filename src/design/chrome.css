@@ -138,6 +138,10 @@
   gap: 12px;
 }
 
+.page-header .eyebrow {
+  display: none;
+}
+
 .eyebrow {
   color: var(--yl-text-2);
   letter-spacing: 0.08em;
@@ -671,18 +675,37 @@
   .yl-visit-sheet {
     justify-content: flex-end;
     align-items: stretch;
-    padding: 0;
+    padding: var(--yl-space-3);
     background: rgba(65, 83, 100, 0.28);
   }
 
   .yl-visit-sheet .operations-detail-modal {
     width: min(480px, 42vw);
     max-width: 520px;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
+    height: calc(100vh - (var(--yl-space-3) * 2));
+    max-height: calc(100dvh - (var(--yl-space-3) * 2));
+    border-radius: var(--yl-radius-card);
     margin: 0;
-    border-inline-start: 1px solid var(--yl-stroke);
+    border: 1px solid var(--yl-stroke);
+    align-self: stretch;
+  }
+
+  .operations-day-card-actions > button[aria-label] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: var(--yl-touch);
+    min-height: var(--yl-touch);
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .operations-day-card-actions > button[aria-label]::after {
+    content: attr(aria-label);
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
   }
 }
 

@@ -31,6 +31,23 @@ export const P2_ROOM_NICKNAMES = new Set(Object.values(P2_ROOM_DISPLAY_BY_ID));
 export const yallaAliasForListingId = (id?: string | null) =>
   P2_ROOM_DISPLAY_BY_ID[(id ?? '').trim()] ?? '';
 
+/** Guesty listing nicknames that should display as a Yalla room number. */
+const P2_LISTING_NICKNAME_ALIASES: Record<string, string> = {
+  'p2 - 2dbpb 2pax': '201',
+};
+
+export const yallaAliasForListingNickname = (value?: string | null) =>
+  P2_LISTING_NICKNAME_ALIASES[(value ?? '').trim().toLowerCase()] ?? '';
+
+export const yallaAliasForProperty = (input: {
+  id?: string | null;
+  nickname?: string | null;
+  listingNickname?: string | null;
+}) =>
+  yallaAliasForListingId(input.id) ||
+  yallaAliasForListingNickname(input.listingNickname) ||
+  yallaAliasForListingNickname(input.nickname);
+
 export const isP2RoomListingId = (id?: string | null) =>
   Boolean(yallaAliasForListingId(id));
 

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { NavGroup } from '../../amplify/functions/shared/rbac-catalog'
-import { PAGE_ICON, YlIcon } from '../design/icons'
+import { PAGE_ICON, YlIcon, type YlIconName } from '../design/icons'
+import {
+  TODAY_NAV_ITEMS,
+  TODAY_SECTION_ID,
+  type TodayViewMode,
+} from './todayViews'
 
 const COLLAPSED_SECTIONS_KEY = 'yalla.sidebar.collapsedSections.v1'
 
@@ -8,7 +14,9 @@ type SidebarNavProps = {
   coreItems: string[]
   groups: NavGroup[]
   activePage: string
+  todayView: TodayViewMode
   onNavigate: (page: string) => void
+  onTodayViewChange: (view: TodayViewMode) => void
   labelForPage: (page: string) => string
   labelForSection: (section: string) => string
 }
@@ -41,32 +49,27 @@ function writeCollapsedSections(sections: Set<string>) {
 }
 
 function FeatureRow({
-  page,
-  activePage,
-  onNavigate,
-  labelForPage,
+  label,
+  icon,
+  isActive,
+  onClick,
 }: {
-  page: string
-  activePage: string
-  onNavigate: (page: string) => void
-  labelForPage: (page: string) => string
+  label: string
+  icon: YlIconName
+  isActive: boolean
+  onClick: () => void
 }) {
-  const isActive = activePage === page
   return (
     <li>
       <button
         className={`nav-button ${isActive ? 'active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         type="button"
-        onClick={() => onNavigate(page)}
+        onClick={onClick}
       >
         <span className="nav-button-label">
-          <YlIcon
-            name={PAGE_ICON[page] ?? 'list.bullet'}
-            size={18}
-            variant="regular"
-          />
-          <span>{labelForPage(page)}</span>
+          <YlIcon name={icon} size={18} variant="regular" />
+          <span>{label}</span>
         </span>
       </button>
     </li>
@@ -77,31 +80,41 @@ export function SidebarNav({
   coreItems,
   groups,
   activePage,
+  todayView,
   onNavigate,
+  onTodayViewChange,
   labelForPage,
   labelForSection,
 }: SidebarNavProps) {
+  const { t } = useTranslation()
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     () => readCollapsedSections(),
   )
+  const showTodayViews = coreItems.includes('Daily Operations')
+  const otherCoreItems = coreItems.filter((item) => item !== 'Daily Operations')
   const activeSection = groups.find((group) =>
     group.items.includes(activePage),
   )?.section
+  const todaySectionActive = activePage === 'Daily Operations'
 
   useEffect(() => {
-    if (!activeSection) {
+    if (!activeSection && !todaySectionActive) {
+      return
+    }
+    const sectionToOpen = todaySectionActive ? TODAY_SECTION_ID : activeSection
+    if (!sectionToOpen) {
       return
     }
     setCollapsedSections((current) => {
-      if (!current.has(activeSection)) {
+      if (!current.has(sectionToOpen)) {
         return current
       }
       const next = new Set(current)
-      next.delete(activeSection)
+      next.delete(sectionToOpen)
       writeCollapsedSections(next)
       return next
     })
-  }, [activePage, activeSection])
+  }, [activePage, activeSection, todaySectionActive])
 
   const toggleSection = (section: string) => {
     setCollapsedSections((current) => {
@@ -116,17 +129,50 @@ export function SidebarNav({
     })
   }
 
+  const todayOpen = !collapsedSections.has(TODAY_SECTION_ID)
+
   return (
     <div className="sidebar-nav">
-      {coreItems.length > 0 ? (
+      {showTodayViews ? (
+        <div className="sidebar-nav-group sidebar-nav-root">
+          <button
+            type="button"
+            className={`sidebar-nav-header ${todayOpen ? '' : 'is-collapsed'}`}
+            aria-expanded={todayOpen}
+            aria-controls="sidebar-section-today"
+            onClick={() => toggleSection(TODAY_SECTION_ID)}
+          >
+            <YlIcon
+              name={todayOpen ? 'chevron.down' : 'chevron.right'}
+              size={12}
+              variant="regular"
+            />
+            <span>{labelForPage('Daily Operations')}</span>
+          </button>
+          {todayOpen ? (
+            <ul className="sidebar-nav-list" id="sidebar-section-today">
+              {TODAY_NAV_ITEMS.map((item) => (
+                <FeatureRow
+                  key={item.view}
+                  label={t(item.labelKey)}
+                  icon={item.icon}
+                  isActive={todaySectionActive && todayView === item.view}
+                  onClick={() => onTodayViewChange(item.view)}
+                />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {otherCoreItems.length > 0 ? (
         <ul className="sidebar-nav-list sidebar-nav-root">
-          {coreItems.map((item) => (
+          {otherCoreItems.map((item) => (
             <FeatureRow
               key={item}
-              page={item}
-              activePage={activePage}
-              onNavigate={onNavigate}
-              labelForPage={labelForPage}
+              label={labelForPage(item)}
+              icon={PAGE_ICON[item] ?? 'list.bullet'}
+              isActive={activePage === item}
+              onClick={() => onNavigate(item)}
             />
           ))}
         </ul>
@@ -155,10 +201,10 @@ export function SidebarNav({
                 {group.items.map((item) => (
                   <FeatureRow
                     key={item}
-                    page={item}
-                    activePage={activePage}
-                    onNavigate={onNavigate}
-                    labelForPage={labelForPage}
+                    label={labelForPage(item)}
+                    icon={PAGE_ICON[item] ?? 'list.bullet'}
+                    isActive={activePage === item}
+                    onClick={() => onNavigate(item)}
                   />
                 ))}
               </ul>

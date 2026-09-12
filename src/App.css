@@ -327,6 +327,10 @@
   flex-wrap: wrap;
 }
 
+.page-header--no-title {
+  justify-content: flex-end;
+}
+
 .page-header-leading {
   min-width: 0;
   flex: 1 1 auto;
@@ -387,6 +391,10 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
+}
+
+.page-header .eyebrow {
+  display: none;
 }
 
 .page-title {
@@ -3326,7 +3334,6 @@ th {
 .notice-dismissible {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 8px;
 }
 
@@ -3337,6 +3344,7 @@ th {
 
 .notice-dismiss {
   flex-shrink: 0;
+  margin-block-start: -4px;
 }
 
 .operations-task-edit-fields {
@@ -3863,11 +3871,44 @@ th {
   position: relative;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .operations-day-title-row .section-title {
   margin: 0;
+}
+
+.operations-day-date-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.operations-day-date-trigger .operations-day-date-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+  color: transparent;
+  background: transparent;
+}
+
+.operations-day-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+  flex-shrink: 0;
 }
 
 .operations-dashboard-date-row {
@@ -3890,6 +3931,16 @@ th {
   flex-shrink: 0;
 }
 
+.operations-day-date-stepper {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border: 1px solid var(--yl-stroke, #e4e7ec);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
 .operations-day-calendar-btn,
 .operations-day-nav-btn,
 .operations-day-next-btn {
@@ -3905,6 +3956,25 @@ th {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.operations-day-date-stepper .operations-day-nav-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.operations-day-date-stepper .operations-day-nav-btn + .operations-day-nav-btn {
+  border-inline-start: 1px solid var(--yl-stroke, #e4e7ec);
+}
+
+.operations-day-date-stepper .operations-day-nav-btn:hover,
+.operations-day-date-stepper .operations-day-nav-btn:focus-visible {
+  background: var(--yl-go-soft, #eef3f2);
 }
 
 .operations-day-calendar-btn svg {
@@ -3955,11 +4025,11 @@ th {
 
 .operations-day-booking-block {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  height: auto;
-  min-height: 46px;
-  border-radius: 8px;
+  top: 2px;
+  bottom: auto;
+  height: 41px;
+  min-height: 41px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3976,8 +4046,9 @@ th {
 }
 
 .operations-day-booking-block.is-check-in {
-  background: #339668;
-  color: #ffffff;
+  background: rgba(51, 150, 104, 0.2);
+  color: #339668;
+  border-radius: 999px;
   z-index: 8;
   pointer-events: auto;
   cursor: grab;
@@ -3987,22 +4058,20 @@ th {
 }
 
 .operations-day-booking-block.is-check-in.has-early-lead {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+  border-radius: 0 999px 999px 0;
 }
 
 .operations-day-booking-block.is-early-check-in {
-  background-color: #e1d08f;
+  background-color: rgba(225, 208, 143, 0.2);
   background-image: repeating-linear-gradient(
     -45deg,
     transparent,
     transparent 8px,
-    #ccb042 8px,
-    #ccb042 16px
+    rgba(204, 176, 66, 0.2) 8px,
+    rgba(204, 176, 66, 0.2) 16px
   );
   color: #854d0e;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-radius: 999px 0 0 999px;
   z-index: 1;
   pointer-events: auto;
   cursor: grab;
@@ -4012,9 +4081,12 @@ th {
 }
 
 .operations-day-booking-block.is-check-out {
-  background: #6c727f;
-  color: #ffffff;
+  background: rgba(108, 114, 127, 0.2);
+  color: #6c727f;
+  border-radius: 999px;
   z-index: 8;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .operations-day-booking-block.is-dragging {
@@ -4039,7 +4111,7 @@ th {
 
 .operations-day-table {
   width: 100%;
-  min-width: 920px;
+  min-width: 720px;
   border-collapse: collapse;
 }
 
@@ -4098,8 +4170,23 @@ th {
 }
 
 .operations-day-timeline-cell {
+  position: relative;
   padding: 6px !important;
   min-width: 720px;
+}
+
+.operations-day-row-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.operations-day-row-controls .operations-mtl-toggle {
+  margin-right: 0;
 }
 
 .operations-day-hours-wrap {
@@ -4232,7 +4319,7 @@ th {
   position: absolute;
   min-height: 52px;
   border: 1px solid var(--team-color-border, rgba(255, 255, 255, 0.45));
-  border-radius: 8px;
+  border-radius: 999px;
   padding: 0;
   text-align: left;
   overflow: hidden;
@@ -4259,7 +4346,7 @@ th {
 .operations-day-visit-summary {
   display: block;
   width: 100%;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -4294,6 +4381,48 @@ th {
   left: 0;
   right: 0;
   z-index: 2;
+}
+
+.operations-overlap-picker {
+  width: min(420px, 100%);
+  gap: 12px;
+}
+
+.operations-overlap-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.operations-overlap-picker-item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--yl-stroke, #e4e7ec);
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: start;
+  cursor: pointer;
+}
+
+.operations-overlap-picker-item:hover,
+.operations-overlap-picker-item:focus-visible {
+  border-color: var(--yl-go, #3d5b58);
+  background: var(--yl-go-soft, #eef3f2);
+}
+
+.operations-overlap-picker-name {
+  font-weight: 650;
+  color: var(--yl-ink, #415364);
+}
+
+.operations-overlap-picker-meta {
+  font-size: 0.85rem;
+  color: var(--yl-text-2, #5b6b78);
 }
 
 .operations-day-visit-block.has-team-solid {
@@ -4838,6 +4967,10 @@ th {
 
   /* Title + info live in the collapsing mobile topbar */
   .page-header-leading {
+    display: none;
+  }
+
+  .page-header--no-title {
     display: none;
   }
 

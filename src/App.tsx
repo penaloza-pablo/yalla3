@@ -25,6 +25,7 @@ import {
 } from './ReviewWorkflowPanel'
 import { fetchJson } from './operations/api'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { DismissibleNotice } from './operations/DismissibleNotice'
 import {
   canonicalizeLinenValue,
   isCanonicalLinenValue,
@@ -33,7 +34,8 @@ import {
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage, rememberPageInSection } from './lib/lastActivePage'
-import { readPageFromLocation, writePageToUrl } from './lib/page-route'
+import { readPageFromLocation, readTodayViewFromLocation, writePageToUrl } from './lib/page-route'
+import { TODAY_NAV_ITEMS, type TodayViewMode } from './nav/todayViews'
 import { visibleNavGroups } from './nav/catalog'
 import { SidebarNav } from './nav/SidebarNav'
 import { BrandMark } from './design/Brand'
@@ -941,6 +943,11 @@ const isPendingPurchaseStatus = (status: string) =>
 const isPurchasePending = (row: PurchaseRow) =>
   isPendingPurchaseStatus(row.status) && !isExcludedPurchase(row)
 
+const blankPurchaseText = (value?: string | null) => {
+  const trimmed = (value ?? '').trim()
+  return !trimmed || trimmed === '—' ? '' : trimmed
+}
+
 const nextPurchasesSummary = (
   current: PurchasesSummary | null,
   params: { added?: boolean; before?: PurchaseRow; after: PurchaseRow },
@@ -1844,6 +1851,9 @@ function App() {
   const [isSubtractionSaving, setIsSubtractionSaving] = useState(false)
   const [activePage, setActivePage] = useState(
     () => readPageFromLocation(validPages) ?? readRememberedPage(validPages),
+  )
+  const [todayView, setTodayView] = useState<TodayViewMode>(
+    readTodayViewFromLocation,
   )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -4228,14 +4238,17 @@ function App() {
     }
 
     try {
-      const payload = {
+    const itemId = blankPurchaseText(row.itemId)
+    const propertyId = blankPurchaseText(row.propertyId)
+    const isDirect = row.direct || (!itemId && Boolean(propertyId))
+    const payload = {
         id: row.id,
-        Direct: row.direct,
-        'Item id': row.direct ? '' : row.itemId,
-        'Item name': row.itemName,
-        'Property id': row.propertyId,
-        Location: row.location,
-        Vendor: row.vendor,
+        Direct: isDirect,
+        'Item id': isDirect ? '' : itemId,
+        'Item name': blankPurchaseText(row.itemName),
+        'Property id': propertyId,
+        Location: blankPurchaseText(row.location),
+        Vendor: blankPurchaseText(row.vendor),
         Units: row.units,
         Cost: row.cost,
         Billable: row.billable,
@@ -4259,16 +4272,25 @@ function App() {
         body: JSON.stringify(payload),
       })
       if (!response.ok) {
-        throw new Error('Failed to update purchase.')
+        let details = ''
+        try {
+          const body = (await response.json()) as { message?: string }
+          details = typeof body.message === 'string' ? body.message.trim() : ''
+        } catch {
+          details = ''
+        }
+        throw new Error(details || 'Failed to update purchase.')
       }
       const hasOtherOpenPurchases = purchaseRows.some(
         (entry) => entry.id !== row.id && isOpenPurchase(entry) && entry.itemId === row.itemId,
       )
       const shouldUpdateInventory =
-        !row.direct && !isReceivedPurchaseStatus(row.status)
+        !isDirect && !isReceivedPurchaseStatus(row.status)
       setPurchaseRows((current) =>
         current.map((entry) =>
-          entry.id === row.id ? { ...entry, status: nextStatus } : entry,
+          entry.id === row.id
+            ? { ...entry, status: nextStatus, direct: isDirect }
+            : entry,
         ),
       )
       setPurchasesSummary((current) =>
@@ -4681,6 +4703,18 @@ function App() {
     }
   }
 
+  const navigateToTodayView = (view: TodayViewMode) => {
+    setActivePage('Daily Operations')
+    persistPage('Daily Operations')
+    setTodayView(view)
+    writePageToUrl('Daily Operations', 'push', { view })
+    setIsMobileNavOpen(false)
+    setIsSummaryInfoOpen(false)
+    setIsMobileSearchOpen(false)
+    setTableSearchQuery('')
+    setBillingMonthDeepLink('')
+  }
+
   const navigateToPage = (
     page: string,
     options?: {
@@ -4777,6 +4811,7 @@ function App() {
       }
       setActivePage(page)
       persistPage(page)
+      setTodayView(readTodayViewFromLocation())
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -4913,7 +4948,12 @@ function App() {
         <div className="mobile-topbar-title-group">
           {!isMobileSearchOpen ? (
             <h1 className="mobile-topbar-section-title">
-              {pageLabel(activePage)}
+              {activePage === 'Daily Operations'
+                ? t(
+                    TODAY_NAV_ITEMS.find((item) => item.view === todayView)
+                      ?.labelKey ?? 'pages.Today',
+                  )
+                : pageLabel(activePage)}
             </h1>
           ) : null}
           {pagesWithMobileSearch.has(activePage) ? (
@@ -5008,7 +5048,9 @@ function App() {
             coreItems={visibleCoreItems}
             groups={visibleNavigation}
             activePage={activePage}
+            todayView={todayView}
             onNavigate={navigateToPage}
+            onTodayViewChange={navigateToTodayView}
             labelForPage={navItemLabel}
             labelForSection={sectionLabel}
           />
@@ -5186,7 +5228,14 @@ function App() {
               </MobileBodyPortal>
             </header>
 
-            {error ? <div className="alert">{error}</div> : null}
+            {error ? (
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setError(null)}
+              >
+                {error}
+              </DismissibleNotice>
+            ) : null}
 
             <section
               className={`summary-cards summary-cards-4 ${isSummaryInfoOpen ? 'is-open' : ''}`}
@@ -5800,7 +5849,14 @@ function App() {
               </MobileBodyPortal>
             </header>
 
-            {purchasesError ? <div className="alert">{purchasesError}</div> : null}
+            {purchasesError ? (
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setPurchasesError(null)}
+              >
+                {purchasesError}
+              </DismissibleNotice>
+            ) : null}
 
             <section
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
@@ -6414,7 +6470,12 @@ function App() {
             </header>
 
             {subtractionsError ? (
-              <div className="alert">{subtractionsError}</div>
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setSubtractionsError(null)}
+              >
+                {subtractionsError}
+              </DismissibleNotice>
             ) : null}
 
             <section
@@ -6929,7 +6990,14 @@ function App() {
               </MobileBodyPortal>
             </header>
 
-            {propertiesError ? <div className="alert">{propertiesError}</div> : null}
+            {propertiesError ? (
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setPropertiesError(null)}
+              >
+                {propertiesError}
+              </DismissibleNotice>
+            ) : null}
             {propertiesSyncMessage ? (
               <div className="properties-note">{propertiesSyncMessage}</div>
             ) : null}
@@ -7348,7 +7416,14 @@ function App() {
               </MobileBodyPortal>
             </header>
 
-            {bookingsError ? <div className="alert">{bookingsError}</div> : null}
+            {bookingsError ? (
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setBookingsError(null)}
+              >
+                {bookingsError}
+              </DismissibleNotice>
+            ) : null}
 
             <section
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
@@ -7886,7 +7961,14 @@ function App() {
               </MobileBodyPortal>
             </header>
 
-            {reviewsError ? <div className="alert">{reviewsError}</div> : null}
+            {reviewsError ? (
+              <DismissibleNotice
+                dismissLabel={t('common.close')}
+                onDismiss={() => setReviewsError(null)}
+              >
+                {reviewsError}
+              </DismissibleNotice>
+            ) : null}
 
             <section
               className={`summary-cards ${isSummaryInfoOpen ? 'is-open' : ''}`}
@@ -8345,6 +8427,8 @@ function App() {
         ) : activePage === 'Daily Operations' ? (
           <DailyOperationsView
             mode="dashboard"
+            dashboardViewMode={todayView}
+            onDashboardViewModeChange={navigateToTodayView}
             getEndpoint={getEndpoint}
             getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
@@ -8829,7 +8913,14 @@ function App() {
                     </label>
                   </div>
                 )}
-                {formError ? <div className="alert">{formError}</div> : null}
+                {formError ? (
+                  <DismissibleNotice
+                    dismissLabel={t('common.close')}
+                    onDismiss={() => setFormError(null)}
+                  >
+                    {formError}
+                  </DismissibleNotice>
+                ) : null}
               </div>
 
               <div className="modal-footer">
@@ -9202,7 +9293,12 @@ function App() {
                   </label>
                 ) : null}
                 {purchaseFormError ? (
-                  <div className="alert">{purchaseFormError}</div>
+                  <DismissibleNotice
+                    dismissLabel={t('common.close')}
+                    onDismiss={() => setPurchaseFormError(null)}
+                  >
+                    {purchaseFormError}
+                  </DismissibleNotice>
                 ) : null}
               </div>
 
@@ -9408,7 +9504,12 @@ function App() {
                   )
                 })()}
                 {subtractionFormError ? (
-                  <div className="alert">{subtractionFormError}</div>
+                  <DismissibleNotice
+                    dismissLabel={t('common.close')}
+                    onDismiss={() => setSubtractionFormError(null)}
+                  >
+                    {subtractionFormError}
+                  </DismissibleNotice>
                 ) : null}
               </div>
 

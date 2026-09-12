@@ -47,7 +47,7 @@ import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
-import { SegmentedControl } from '../design/SegmentedControl'
+import type { TodayViewMode } from '../nav/todayViews'
 import {
   buildApplyTemplateVisitPayload,
   emptyDraftTask,
@@ -77,7 +77,6 @@ import { isResolvedTaskStatus } from './types'
 import { YlIcon } from '../design/icons'
 
 type OpsMode = 'dashboard' | 'unassigned' | 'templates'
-type DashboardViewMode = 'dashboard' | 'kanban' | 'agenda' | 'day'
 
 type BookingEventKind = 'check-in' | 'check-out'
 
@@ -99,6 +98,8 @@ type Props = {
   onSearchQueryChange?: (value: string) => void
   isMobileSearchOpen?: boolean
   onToggleMobileSearch?: () => void
+  dashboardViewMode?: TodayViewMode
+  onDashboardViewModeChange?: (mode: TodayViewMode) => void
 }
 
 const ALL_VISIT_STATUSES: VisitStatus[] = [
@@ -422,6 +423,8 @@ export function DailyOperationsView({
   onSearchQueryChange,
   isMobileSearchOpen = false,
   onToggleMobileSearch,
+  dashboardViewMode: dashboardViewModeProp,
+  onDashboardViewModeChange,
 }: Props) {
   const { t, i18n } = useTranslation()
   const { can } = usePermissions()
@@ -449,8 +452,15 @@ export function DailyOperationsView({
   const [agentNameById, setAgentNameById] = useState<Map<string, string>>(
     () => new Map(),
   )
-  const [dashboardViewMode, setDashboardViewMode] =
-    useState<DashboardViewMode>('dashboard')
+  const [internalDashboardViewMode, setInternalDashboardViewMode] =
+    useState<TodayViewMode>('dashboard')
+  const dashboardViewMode = dashboardViewModeProp ?? internalDashboardViewMode
+  const setDashboardViewMode = (mode: TodayViewMode) => {
+    onDashboardViewModeChange?.(mode)
+    if (dashboardViewModeProp === undefined) {
+      setInternalDashboardViewMode(mode)
+    }
+  }
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [templateFilterCount, setTemplateFilterCount] = useState(0)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -630,6 +640,10 @@ export function DailyOperationsView({
       new Map(
         propertyOptions.map((property) => [property.id, getPropertyLabel(property)]),
       ),
+    [propertyOptions],
+  )
+  const propertiesById = useMemo(
+    () => new Map(propertyOptions.map((property) => [property.id, property])),
     [propertyOptions],
   )
   const sortedVisitTypes = useMemo(() => sortVisitTypes(visitTypes), [visitTypes])
@@ -943,7 +957,14 @@ export function DailyOperationsView({
             id: `${reservationId || listingId}-out`,
             kind: 'check-out',
             propertyId,
+            reservationId,
             guestName: guestName || listingNickname || reservationId,
+            guests: asRecordDisplay(record, ['Guests', 'guests', 'GuestCount']),
+            nights:
+              asRecordDisplay(record, ['Nights', 'nights']) ||
+              nightsBetweenDates(checkInDate, checkOutDate),
+            giftCard: asRecordDisplay(record, ['GiftCard', 'giftCard']),
+            linen: asRecordDisplay(record, ['Linen', 'linen']),
           })
         }
       }
@@ -1323,6 +1344,17 @@ export function DailyOperationsView({
     setEditingDraftIndex(null)
     setPropertyTemplates([])
     setIsVisitFormOpen(true)
+  }
+
+  const openFilters = () => {
+    setFilterDraft({
+      teamIds: [...filters.teamIds],
+      statuses: [...filters.statuses],
+      propertyIds: [...filters.propertyIds],
+      userIds: [...filters.userIds],
+      bookingEvents: [...filters.bookingEvents],
+    })
+    setIsFilterOpen(true)
   }
 
   const openCreateVisitAtCell = (propertyId: string, scheduledDate: string) => {
@@ -2079,25 +2111,13 @@ export function DailyOperationsView({
       ? t('pages.Unassigned tasks')
       : mode === 'templates'
         ? t('pages.Visit templates')
-        : dashboardViewMode === 'dashboard'
-          ? t('pages.Today')
-          : dashboardViewMode === 'day'
-            ? t('operations.day')
-            : dashboardViewMode === 'agenda'
-              ? t('operations.agenda')
-              : t('operations.kanban')
-  const pageEyebrow =
-    mode === 'unassigned'
-      ? t('operations.eyebrowUnassigned')
-      : mode === 'templates'
-        ? t('operations.eyebrowTemplates')
-        : t('operations.eyebrow')
+        : ''
   const pageSubtitle =
     mode === 'unassigned'
       ? t('operations.subtitleUnassigned')
       : mode === 'templates'
         ? t('operations.subtitleTemplates')
-        : t('operations.subtitlePage')
+        : ''
   const statusLabel = (status: VisitStatus) => {
     if (status === 'SCHEDULED') return t('operations.statusScheduled')
     if (status === 'OVERDUE') return t('operations.overdue')
@@ -2121,34 +2141,20 @@ export function DailyOperationsView({
     isCancelVisitOpen ||
     isTaskFormOpen ||
     isAssignVisitOpen
+  const isDayTimeline = mode === 'dashboard' && dashboardViewMode === 'day'
 
   return (
     <>
-      <header className="page-header">
+      {isDayTimeline ? null : (
+      <header className={`page-header${mode === 'dashboard' ? ' page-header--no-title' : ''}`}>
+        {mode !== 'dashboard' ? (
         <div className="page-header-leading">
-          <p className="eyebrow">{pageEyebrow}</p>
           <div className="page-title-row">
             <h1 className="page-title">{pageTitle}</h1>
           </div>
-          {mode === 'dashboard' ? (
-            <p className="subtitle">{t('today.subtitle')}</p>
-          ) : (
-            <p className="subtitle">{pageSubtitle}</p>
-          )}
-          {mode === 'dashboard' ? (
-            <SegmentedControl
-              ariaLabel={t('operations.changeView')}
-              value={dashboardViewMode}
-              onChange={setDashboardViewMode}
-              options={[
-                { id: 'dashboard', label: t('pages.Today') },
-                { id: 'day', label: t('operations.day') },
-                { id: 'kanban', label: t('operations.kanban') },
-                { id: 'agenda', label: t('operations.agenda') },
-              ]}
-            />
-          ) : null}
+          <p className="subtitle">{pageSubtitle}</p>
         </div>
+        ) : null}
         <MobileBodyPortal>
           <div
             className={`page-action-bar ${
@@ -2221,16 +2227,7 @@ export function DailyOperationsView({
                   }`}
                   type="button"
                   aria-label={t('common.filters')}
-                  onClick={() => {
-                    setFilterDraft({
-                      teamIds: [...filters.teamIds],
-                      statuses: [...filters.statuses],
-                      propertyIds: [...filters.propertyIds],
-                      userIds: [...filters.userIds],
-                      bookingEvents: [...filters.bookingEvents],
-                    })
-                    setIsFilterOpen(true)
-                  }}
+                  onClick={openFilters}
                 >
                   <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {activeFilterCount > 0 ? (
@@ -2279,22 +2276,7 @@ export function DailyOperationsView({
           </div>
         </MobileBodyPortal>
       </header>
-
-      {mode === 'dashboard' ? (
-        <div className="yl-ops-toolbar">
-          <SegmentedControl
-            ariaLabel={t('operations.changeView')}
-            value={dashboardViewMode}
-            onChange={setDashboardViewMode}
-            options={[
-              { id: 'dashboard', label: t('pages.Today') },
-              { id: 'day', label: t('operations.day') },
-              { id: 'kanban', label: t('operations.kanban') },
-              { id: 'agenda', label: t('operations.agenda') },
-            ]}
-          />
-        </div>
-      ) : null}
+      )}
 
       {!visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
 
@@ -2414,13 +2396,18 @@ export function DailyOperationsView({
                 (visit) => visit.scheduledDate === dayViewDate,
               )}
               bookings={dayBookings}
-              propertyById={propertyById}
+              propertiesById={propertiesById}
               teamById={teamById}
               syncingVisitIds={syncingVisitIds}
               onDayDateChange={setDayViewDate}
               onVisitClick={setSelectedVisitId}
               onVisitTimeChange={handleVisitTimeChange}
               onEarlyCheckInChange={handleEarlyCheckInChange}
+              canCreateVisit={can(ACTION_KEYS.dailyOpsCreate)}
+              onCreateVisit={openCreateVisit}
+              onOpenFilters={openFilters}
+              activeFilterCount={activeFilterCount}
+              filtersActive={isFilterOpen}
             />
           )}
         </>

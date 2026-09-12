@@ -15,7 +15,6 @@ export function DismissibleNotice({
 }: Props) {
   return (
     <div className={`notice ${variant} notice-dismissible`} role="alert">
-      <p>{children}</p>
       <button
         type="button"
         className="btn-icon btn-icon-ghost notice-dismiss"
@@ -24,6 +23,7 @@ export function DismissibleNotice({
       >
         <YlIcon name="xmark" size={16} />
       </button>
+      <p>{children}</p>
     </div>
   )
 }

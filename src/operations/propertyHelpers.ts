@@ -26,6 +26,9 @@ export const getPropertyLabel = (property: PropertyOption) =>
     title: property.title,
   })
 
+export const getListingNicknameLabel = (property: PropertyOption) =>
+  property.listingNickname.trim() || getPropertyLabel(property)
+
 export const isOtherProperty = (property: PropertyOption) =>
   property.id.trim().toLowerCase() === 'other'
 
@@ -67,6 +70,8 @@ const isYallaP2Property = (property: PropertyOption) => {
   const label = getPropertyLabel(property).trim().toLowerCase()
   return label === 'p2'
 }
+
+export { isYallaP2Property }
 
 const isP2RoomProperty = (property: PropertyOption) =>
   isP2RoomListingId(property.id) ||
