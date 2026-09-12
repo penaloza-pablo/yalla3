@@ -36,8 +36,8 @@ import { readRememberedPage, rememberActivePage, rememberPageInSection, readLast
 import { readPageFromLocation, writePageToUrl } from './lib/page-route'
 import { visibleNavGroups } from './nav/catalog'
 import { DomainTabs } from './nav/DomainTabs'
-import { FieldBottomNav } from './nav/FieldBottomNav'
-import { fieldMobileTabs, workspaceForRole } from './nav/workspace'
+import { DomainGlyph } from './nav/DomainGlyph'
+import { readDeviceLayout, useDeviceLayout } from './nav/layout'
 import { EmptyState, TableSkeleton } from './design/Feedback'
 import { useToast } from './design/Toast'
 import {
@@ -62,6 +62,7 @@ import { PropertyGroupsView } from './finance/PropertyGroupsView'
 import { MovementsView } from './finance/MovementsView'
 import { ServicesSubscriptionsView } from './finance/ServicesSubscriptionsView'
 import { LogsPanel } from './LogsPanel'
+import { VisualSystemView } from './design/kit/VisualSystemView'
 import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
@@ -86,9 +87,20 @@ import {
   resolveIvaRate,
   type IvaRate,
 } from '../amplify/functions/shared/finance-services'
-import { MobileBodyPortal, useIsMobileLayout } from './MobileBodyPortal'
+import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
+import {
+  UnitPriceVatDetails,
+  UnitPriceVatFields,
+} from './inventory/UnitPriceVatFields'
+import {
+  emptyUnitPriceVat,
+  resolvedUnitPriceVat,
+  unitPriceVatFromStored,
+  type UnitPriceVatValue,
+} from './inventory/unitPriceVat'
+import { YlIcon, YlSortIcon, YlDisclosureIcon } from './design/icons'
 import './App.css'
 import './design/chrome.css'
 
@@ -115,6 +127,8 @@ type InventoryRow = {
   updatedRaw: string
   rebuyQty: number
   unitPrice: number
+  vatRate: IvaRate | null
+  grossUnitPrice: number
   tolerance: number
   consumptionRules: ConsumptionRules | null
 }
@@ -126,6 +140,9 @@ type PurchaseRow = {
   location: string
   vendor: string
   units: number
+  unitPrice: number
+  vatRate: IvaRate | null
+  grossUnitPrice: number
   totalPrice: number
   deliveryDate: string
   deliveryDateRaw: string
@@ -178,7 +195,7 @@ type InventoryFormState = {
   locationOther: string
   quantity: string
   rebuyQty: string
-  unitPrice: string
+  unitPriceVat: UnitPriceVatValue
   tolerance: string
 }
 
@@ -189,6 +206,7 @@ type PurchaseFormState = {
   location: string
   vendor: string
   units: string
+  unitPriceVat: UnitPriceVatValue
   totalPrice: string
   deliveryDate: string
   purchaseDate: string
@@ -376,6 +394,8 @@ const inventoryFieldMap = {
   updated: ['Last Updated', 'Last updated', 'last updated', 'updatedAt'],
   rebuyQty: ['rebuyQty', 'rebuyqty', 'Rebuy Qty'],
   unitPrice: ['unitPrice', 'unitprice', 'Unit Price'],
+  vatRate: ['vatRate', 'ivaRate', 'VAT rate', 'IVA rate'],
+  grossUnitPrice: ['grossUnitPrice', 'Gross unit price', 'gross unit price'],
   tolerance: ['Tolerance', 'tolerance'],
   consumptionRules: ['consumptionRules', 'Consumption Rules'],
 }
@@ -387,6 +407,9 @@ const purchaseFieldMap = {
   location: ['Location', 'location'],
   vendor: ['Vendor', 'vendor'],
   units: ['Units', 'units'],
+  unitPrice: ['unitPrice', 'Unit price', 'netUnitPrice'],
+  vatRate: ['vatRate', 'ivaRate', 'VAT rate', 'IVA rate'],
+  grossUnitPrice: ['grossUnitPrice', 'Gross unit price', 'gross unit price'],
   totalPrice: ['Total price', 'totalPrice', 'total price'],
   deliveryDate: ['Delivery date', 'deliveryDate', 'delivery date'],
   purchaseDate: ['Purchase date', 'purchaseDate', 'purchase date'],
@@ -851,6 +874,9 @@ const getPurchaseSortTime = (row: PurchaseRow) => {
 }
 
 const getPurchaseUnitPrice = (row: PurchaseRow) => {
+  if (row.unitPrice > 0) {
+    return row.unitPrice
+  }
   if (!row.units || row.units <= 0) {
     return 0
   }
@@ -936,16 +962,36 @@ const applyConfirmedPurchaseToInventory = (
   units: number,
   totalPrice: number,
   statusOverride?: string,
+  pricing?: {
+    unitPrice?: number
+    vatRate?: IvaRate | null
+    grossUnitPrice?: number
+  },
 ) =>
   rows.map((entry) => {
     if (entry.id !== itemId) {
       return entry
     }
     const nextQuantity = entry.quantity + units
+    const nextNet =
+      pricing?.unitPrice && pricing.unitPrice > 0
+        ? pricing.unitPrice
+        : units > 0
+          ? totalPrice / units
+          : entry.unitPrice
+    const nextVatRate =
+      pricing?.vatRate === undefined ? entry.vatRate : pricing.vatRate
     return {
       ...entry,
       quantity: nextQuantity,
-      unitPrice: units > 0 ? totalPrice / units : entry.unitPrice,
+      unitPrice: nextNet,
+      vatRate: nextVatRate,
+      grossUnitPrice:
+        pricing?.grossUnitPrice && pricing.grossUnitPrice > 0
+          ? pricing.grossUnitPrice
+          : nextVatRate === null
+            ? entry.grossUnitPrice
+            : occurrencePriceWithIva(nextNet, nextVatRate),
       status:
         statusOverride ?? computeInventoryStatus(nextQuantity, entry.rebuyQty),
     }
@@ -1006,6 +1052,10 @@ const mapInventoryRow = (item: Record<string, unknown>): InventoryRow => ({
   updated: formatUpdatedDate(getItemValue(item, inventoryFieldMap.updated)),
   rebuyQty: getNumberValue(getItemValue(item, inventoryFieldMap.rebuyQty)),
   unitPrice: getNumberValue(getItemValue(item, inventoryFieldMap.unitPrice)),
+  vatRate: parseIvaRate(getItemValue(item, inventoryFieldMap.vatRate)),
+  grossUnitPrice: getNumberValue(
+    getItemValue(item, inventoryFieldMap.grossUnitPrice),
+  ),
   tolerance: getNumberValue(getItemValue(item, inventoryFieldMap.tolerance)),
   consumptionRules:
     (getItemValue(item, inventoryFieldMap.consumptionRules) as
@@ -1038,6 +1088,11 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
       getStringValue(getItemValue(item, purchaseFieldMap.location)) || '—',
     vendor: getStringValue(getItemValue(item, purchaseFieldMap.vendor)) || '—',
     units: getNumberValue(getItemValue(item, purchaseFieldMap.units)),
+    unitPrice: getNumberValue(getItemValue(item, purchaseFieldMap.unitPrice)),
+    vatRate: parseIvaRate(getItemValue(item, purchaseFieldMap.vatRate)),
+    grossUnitPrice: getNumberValue(
+      getItemValue(item, purchaseFieldMap.grossUnitPrice),
+    ),
     totalPrice: getNumberValue(getItemValue(item, purchaseFieldMap.totalPrice)),
     deliveryDateRaw,
     deliveryDate: formatUpdatedDate(deliveryDateRaw),
@@ -1509,7 +1564,7 @@ const emptyFormState: InventoryFormState = {
   locationOther: '',
   quantity: '',
   rebuyQty: '',
-  unitPrice: '',
+  unitPriceVat: emptyUnitPriceVat(),
   tolerance: '',
 }
 
@@ -1520,6 +1575,7 @@ const emptyPurchaseFormState: PurchaseFormState = {
   location: '',
   vendor: '',
   units: '',
+  unitPriceVat: emptyUnitPriceVat(),
   totalPrice: '',
   deliveryDate: '',
   purchaseDate: '',
@@ -1566,8 +1622,8 @@ function App() {
     .filter((group) => group.items.length > 0)
   const firstAllowedPage =
     visibleCoreItems[0] ?? visibleNavigation[0]?.items[0] ?? null
-  const workspace = workspaceForRole(roleId)
-  const isMobileLayout = useIsMobileLayout()
+  const deviceLayout = useDeviceLayout()
+  const isMobileLayout = deviceLayout === 'mobile'
   const statusLabel = (status: string) => translateStatus(t, status)
   const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
     displayInventoryName(i18n.language, row.name, row.nameEs)
@@ -1791,7 +1847,9 @@ function App() {
     () => readPageFromLocation(validPages) ?? readRememberedPage(validPages),
   )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => readDeviceLayout() === 'tablet',
+  )
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [deepLinkVisitId, setDeepLinkVisitId] = useState('')
@@ -1801,17 +1859,11 @@ function App() {
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [titleProgress, setTitleProgress] = useState(0)
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null)
-  const fieldTabs = fieldMobileTabs(roleId)
   const activeDomain = visibleNavigation.find((group) =>
     group.items.includes(activePage),
   )
   const domainPages = activeDomain?.items ?? []
-  const showDomainTabs =
-    domainPages.length > 1 &&
-    !(
-      workspace === 'field' &&
-      domainPages.every((page) => fieldTabs.includes(page))
-    )
+  const showDomainTabs = domainPages.length > 1
   const showMobileDomainTabs =
     isMobileLayout &&
     showDomainTabs &&
@@ -3156,6 +3208,11 @@ function App() {
       location: row.location,
       status: '',
       direct: false,
+      unitPriceVat: unitPriceVatFromStored({
+        net: row.unitPrice,
+        gross: row.grossUnitPrice,
+        vatRate: row.vatRate,
+      }),
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
@@ -3209,6 +3266,12 @@ function App() {
       location: row.location === '—' ? '' : row.location,
       vendor: row.vendor === '—' ? '' : row.vendor,
       units: row.units ? String(row.units) : '',
+      unitPriceVat: unitPriceVatFromStored({
+        net: row.unitPrice,
+        gross: row.grossUnitPrice,
+        vatRate: row.vatRate,
+        fallbackUnit: getPurchaseUnitPrice(row),
+      }),
       totalPrice: row.totalPrice ? String(row.totalPrice) : '',
       deliveryDate: formatDateForInput(row.deliveryDateRaw),
       purchaseDate: row.purchaseDateRaw,
@@ -3252,7 +3315,11 @@ function App() {
       locationOther: resolvedLocationChoice === OTHER_OPTION ? row.location : '',
       quantity: row.quantity ? String(row.quantity) : '',
       rebuyQty: row.rebuyQty ? String(row.rebuyQty) : '',
-      unitPrice: row.unitPrice ? String(row.unitPrice) : '',
+      unitPriceVat: unitPriceVatFromStored({
+        net: row.unitPrice,
+        gross: row.grossUnitPrice,
+        vatRate: row.vatRate,
+      }),
       tolerance: row.tolerance ? String(row.tolerance) : '',
     })
     setFormStep('details')
@@ -3964,9 +4031,12 @@ function App() {
         return
       }
     }
-    if (!purchaseFormValues.direct && !purchaseFormValues.totalPrice.trim()) {
-      setPurchaseFormError(t('purchases.totalPriceRequired'))
-      return
+    if (!purchaseFormValues.direct) {
+      const vatPricing = resolvedUnitPriceVat(purchaseFormValues.unitPriceVat)
+      if (!vatPricing) {
+        setPurchaseFormError(t('purchases.totalPriceRequired'))
+        return
+      }
     }
     if (!purchaseFormValues.deliveryDate.trim()) {
       setPurchaseFormError(t('purchases.deliveryDateRequired'))
@@ -3987,6 +4057,12 @@ function App() {
     const selectedProperty = activePropertyOptions.find(
       (property) => property.id === purchaseFormValues.propertyId,
     )
+    const unitVat = purchaseFormValues.direct
+      ? null
+      : resolvedUnitPriceVat(purchaseFormValues.unitPriceVat)
+    const purchaseTotalPrice = unitVat
+      ? roundMoney(unitsValue * unitVat.gross)
+      : Number(purchaseFormValues.totalPrice) || 0
     const payload = purchaseFormValues.direct
       ? {
           id: purchaseFormValues.id.trim() || undefined,
@@ -4021,7 +4097,10 @@ function App() {
           Location: purchaseFormValues.location.trim(),
           Vendor: purchaseFormValues.vendor.trim(),
           Units: unitsValue,
-          'Total price': Number(purchaseFormValues.totalPrice) || 0,
+          unitPrice: unitVat?.net ?? 0,
+          vatRate: unitVat?.vatRate ?? 21,
+          grossUnitPrice: unitVat?.gross ?? 0,
+          'Total price': purchaseTotalPrice,
           'Delivery date': formatDateForStorage(purchaseFormValues.deliveryDate),
           'Purchase date': formatDateForStorage(
             purchaseFormValues.purchaseDate?.trim() || '',
@@ -4100,6 +4179,11 @@ function App() {
               updatedRow.units,
               updatedRow.totalPrice,
               hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
+              {
+                unitPrice: updatedRow.unitPrice,
+                vatRate: updatedRow.vatRate,
+                grossUnitPrice: updatedRow.grossUnitPrice,
+              },
             ),
           )
         } else if (!isReceivedPurchaseStatus(updatedRow.status)) {
@@ -4210,6 +4294,11 @@ function App() {
             row.units,
             row.totalPrice,
             hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
+            {
+              unitPrice: row.unitPrice,
+              vatRate: row.vatRate,
+              grossUnitPrice: row.grossUnitPrice,
+            },
           ),
         )
       }
@@ -4550,7 +4639,10 @@ function App() {
       Quantity: quantityValue,
       'Last updated': lastUpdatedValue,
       rebuyQty: rebuyQtyValue,
-      unitPrice: Number(formValues.unitPrice) || 0,
+      unitPrice: Number(formValues.unitPriceVat.net) || 0,
+      vatRate: formValues.unitPriceVat.vatRate,
+      grossUnitPrice:
+        resolvedUnitPriceVat(formValues.unitPriceVat)?.gross ?? 0,
       Tolerance: Number(formValues.tolerance) || 0,
       createdBy,
     }
@@ -4700,6 +4792,12 @@ function App() {
     setIsMobileNavOpen(false)
   }
 
+  useEffect(() => {
+    if (deviceLayout === 'tablet') {
+      setIsSidebarCollapsed(true)
+    }
+  }, [deviceLayout])
+
   const navigateToSection = (section: string, items: string[]) => {
     const target = readLastPageInSection(section, items)
     if (target) {
@@ -4809,7 +4907,7 @@ function App() {
       className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
         isMobileNavOpen ? 'mobile-nav-is-open' : ''
       } ${showMobileDomainTabs ? 'has-mobile-domain-tabs' : ''}`}
-      data-workspace={workspace}
+      data-layout={deviceLayout}
       style={
         {
           '--title-progress': String(titleProgress),
@@ -4855,22 +4953,11 @@ function App() {
                 aria-label={t('common.showSearch')}
                 onClick={openMobileSearch}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="18"
-                  height="18"
-                >
-                  <path
-                    d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="magnifyingglass" size={18} />
               </button>
             )
           ) : null}
         </div>
-        {workspace === 'office' || isMobileSearchOpen ? (
         <button
           className="btn-icon btn-icon-ghost mobile-menu-button"
           type="button"
@@ -4895,26 +4982,11 @@ function App() {
           }}
         >
           {isMobileSearchOpen || isMobileNavOpen ? (
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
+            <YlIcon name="xmark" size={18} />
           ) : (
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-              <path
-                d="M3 5h14M3 10h14M3 15h14"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
+            <YlIcon name="line.3.horizontal" size={18} />
           )}
         </button>
-        ) : null}
         {showMobileDomainTabs ? (
           <DomainTabs
             pages={domainPages}
@@ -4955,7 +5027,7 @@ function App() {
             aria-label={t('common.closeMenu')}
             onClick={closeMobileNav}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <nav className="nav">
@@ -4971,7 +5043,10 @@ function App() {
                       type="button"
                       onClick={() => navigateToPage(item)}
                     >
-                      <span>{navItemLabel(item)}</span>
+                      <span className="nav-button-label">
+                        <DomainGlyph name={item} />
+                        <span>{navItemLabel(item)}</span>
+                      </span>
                     </button>
                   </li>
                 )
@@ -4994,21 +5069,7 @@ function App() {
                         onClick={() => navigateToPage(item)}
                         aria-label={navItemLabel(item)}
                       >
-                        {item === 'Daily Operations' ? (
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            width="16"
-                            height="16"
-                          >
-                            <path
-                              d="M6 3h2v2h4V3h2v2h1.5A1.5 1.5 0 0 1 17 6.5v10A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-10A1.5 1.5 0 0 1 4.5 5H6V3zm9 6H5v7h10V9z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        ) : (
-                          <span>{item.charAt(0)}</span>
-                        )}
+                        <DomainGlyph name={item} />
                       </button>
                     </li>
                   )
@@ -5030,7 +5091,7 @@ function App() {
                           navigateToSection(group.section, group.items)
                         }
                       >
-                        {sectionLabel(group.section).charAt(0)}
+                        <DomainGlyph name={group.section} />
                       </button>
                     </li>
                   )
@@ -5050,10 +5111,13 @@ function App() {
                       type="button"
                       aria-current={isActive ? 'page' : undefined}
                       onClick={() =>
-                        navigateToSection(group.section, group.items)
+                          navigateToSection(group.section, group.items)
                       }
                     >
-                      {sectionLabel(group.section)}
+                      <span className="nav-button-label">
+                        <DomainGlyph name={group.section} />
+                        <span>{sectionLabel(group.section)}</span>
+                      </span>
                     </button>
                   </li>
                 )
@@ -5078,7 +5142,10 @@ function App() {
         }
         onClick={handleSidebarToggle}
       >
-        {isSidebarCollapsed ? '›' : '‹'}
+        <YlIcon
+          name={isSidebarCollapsed ? 'chevron.right' : 'chevron.left'}
+          size={16}
+        />
       </button>
 
       <main className="main">
@@ -5093,7 +5160,7 @@ function App() {
               aria-label={t('properties.dismissGuestyNameMismatch')}
               onClick={dismissGuestyNameMismatch}
             >
-              ×
+              <YlIcon name="xmark" size={14} />
             </button>
           </div>
         ) : null}
@@ -5160,7 +5227,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('inventory.subtitle')}</p>
@@ -5196,19 +5263,9 @@ function App() {
                   }
                 >
                   {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
+                    <YlIcon name="xmark" size={16} />
                   ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="magnifyingglass" size={16} />
                   )}
                 </button>
                 <button
@@ -5226,17 +5283,7 @@ function App() {
                     setIsFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {activeFilterCount > 0 ? (
                     <span className="filter-badge">{activeFilterCount}</span>
                   ) : null}
@@ -5248,17 +5295,7 @@ function App() {
                   disabled={isExporting}
                   aria-label={t('common.export')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="square.and.arrow.down" size={16} />
                 </button>
                 {can('action:inventory.create') ? (
                 <button
@@ -5268,14 +5305,7 @@ function App() {
                   aria-label={t('common.addItem')}
                   title={t('common.addItem')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                  </svg>
+                  <YlIcon name="plus" size={16} />
                 </button>
                 ) : null}
                 <button
@@ -5285,17 +5315,7 @@ function App() {
                   disabled={isLoading}
                   aria-label={t('common.refresh')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 </div>
               </div>
@@ -5353,7 +5373,7 @@ function App() {
                         onClick={() => setIsFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -5541,11 +5561,9 @@ function App() {
                         >
                           {t('common.name')}
                           <span className="sort-indicator">
-                            {sortConfig.key === 'name'
-                              ? sortConfig.direction === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : '↕'}
+                            <YlSortIcon
+                              direction={sortConfig.key === 'name' ? sortConfig.direction : null}
+                            />
                           </span>
                         </button>
                       </th>
@@ -5560,11 +5578,9 @@ function App() {
                         >
                           {t('common.status')}
                           <span className="sort-indicator">
-                            {sortConfig.key === 'status'
-                              ? sortConfig.direction === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : '↕'}
+                            <YlSortIcon
+                              direction={sortConfig.key === 'status' ? sortConfig.direction : null}
+                            />
                           </span>
                         </button>
                       </th>
@@ -5641,17 +5657,7 @@ function App() {
                                 onClick={() => openPurchaseWizard(row)}
                                 aria-label={t('common.createPurchase')}
                               >
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 20 20"
-                                  width="16"
-                                  height="16"
-                                >
-                                  <path
-                                    d="M6.2 5h9.6l-1 6H7.6l-1.4-6zM5 5H3.5a.5.5 0 0 0 0 1H4l1.8 7.4a1 1 0 0 0 1 .8h7.8a1 1 0 0 0 1-.8l1.1-6.4a.5.5 0 0 0-.5-.6H6.2zm3.3 10.5a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2zm5 0a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"
-                                    fill="currentColor"
-                                  />
-                                </svg>
+                                <YlIcon name="cart" size={16} />
                               </button>
                               <button
                                 className={`btn-icon btn-icon-ghost${
@@ -5667,17 +5673,7 @@ function App() {
                                 onClick={() => openSubtractionWizard(row)}
                                 aria-label={t('common.createSubtraction')}
                               >
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 20 20"
-                                  width="16"
-                                  height="16"
-                                >
-                                  <path
-                                    d="M4 9.25h12v1.5H4z"
-                                    fill="currentColor"
-                                  />
-                                </svg>
+                                <YlIcon name="minus" size={16} />
                               </button>
                               <button
                                 className={`btn-icon btn-icon-ghost${
@@ -5693,7 +5689,7 @@ function App() {
                                 onClick={() => openEditItem(row)}
                                 aria-label={t('common.edit')}
                               >
-                                ✎
+                                <YlIcon name="pencil" size={16} />
                               </button>
                               <button
                                 className={`btn-icon btn-icon-ghost${
@@ -5709,17 +5705,7 @@ function App() {
                                 onClick={() => deleteItem(row)}
                                 aria-label={t('common.delete')}
                               >
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 20 20"
-                                  width="16"
-                                  height="16"
-                                >
-                                  <path
-                                    d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
-                                    fill="currentColor"
-                                  />
-                                </svg>
+                                <YlIcon name="trash" size={16} />
                               </button>
                               <button
                                 className="btn-icon btn-icon-ghost"
@@ -5728,7 +5714,7 @@ function App() {
                                 aria-expanded={isExpanded}
                                 aria-label={t('common.toggleDetails')}
                               >
-                                {isExpanded ? '▾' : '▸'}
+                                <YlDisclosureIcon open={isExpanded} />
                               </button>
                             </div>
                           </td>
@@ -5757,12 +5743,11 @@ function App() {
                                     {row.rebuyQty || '—'}
                                   </p>
                                 </div>
-                                <div>
-                                  <p className="detail-label">{t('common.unitPrice')}</p>
-                                  <p className="detail-value">
-                                    {formatUnitPrice(row.unitPrice)}
-                                  </p>
-                                </div>
+                                <UnitPriceVatDetails
+                                  net={row.unitPrice}
+                                  vatRate={row.vatRate}
+                                  formatMoney={formatUnitPrice}
+                                />
                                 <div className="detail-span">
                                   <p className="detail-label">
                                     {t('inventory.recentPurchases')}
@@ -5863,7 +5848,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('purchases.subtitle')}</p>
@@ -5899,19 +5884,9 @@ function App() {
                   }
                 >
                   {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
+                    <YlIcon name="xmark" size={16} />
                   ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="magnifyingglass" size={16} />
                   )}
                 </button>
                 <button
@@ -5930,17 +5905,7 @@ function App() {
                     setIsPurchasesFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {purchasesActiveFilterCount > 0 ? (
                     <span className="filter-badge">
                       {purchasesActiveFilterCount}
@@ -5954,14 +5919,7 @@ function App() {
                   onClick={openDirectPurchaseWizard}
                   aria-label={t('purchases.addDirect')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                  </svg>
+                  <YlIcon name="plus" size={16} />
                 </button>
                 ) : null}
                 <button
@@ -5971,17 +5929,7 @@ function App() {
                   disabled={isPurchasesLoading}
                   aria-label={t('common.refresh')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 </div>
               </div>
@@ -6038,7 +5986,7 @@ function App() {
                         onClick={() => setIsPurchasesFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -6215,11 +6163,9 @@ function App() {
                         >
                           {t('common.date')}
                           <span className="sort-indicator">
-                            {purchasesSortConfig.key === 'date'
-                              ? purchasesSortConfig.direction === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : '↕'}
+                            <YlSortIcon
+                              direction={purchasesSortConfig.key === 'date' ? purchasesSortConfig.direction : null}
+                            />
                           </span>
                         </button>
                       </th>
@@ -6317,7 +6263,7 @@ function App() {
                                       isExcludedPurchase(row)
                                     }
                                   >
-                                    ✓
+                                    <YlIcon name="checkmark" size={16} />
                                   </button>
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -6325,7 +6271,7 @@ function App() {
                                     aria-label={t('common.editPurchase')}
                                     onClick={() => openPurchaseEdit(row)}
                                   >
-                                    ✎
+                                    <YlIcon name="pencil" size={16} />
                                   </button>
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -6334,7 +6280,7 @@ function App() {
                                     aria-expanded={isExpanded}
                                     aria-label={t('common.toggleDetails')}
                                   >
-                                    {isExpanded ? '▾' : '▸'}
+                                    <YlDisclosureIcon open={isExpanded} />
                                   </button>
                                 </div>
                               </td>
@@ -6361,12 +6307,30 @@ function App() {
                                       <p className="detail-label">{t('common.units')}</p>
                                       <p className="detail-value">{row.units}</p>
                                     </div>
-                                    <div>
-                                      <p className="detail-label">{t('common.totalPrice')}</p>
-                                      <p className="detail-value">
-                                        {row.totalPrice}
-                                      </p>
-                                    </div>
+                                    {row.direct ? (
+                                      <div>
+                                        <p className="detail-label">{t('common.totalPrice')}</p>
+                                        <p className="detail-value">
+                                          {row.totalPrice}
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <UnitPriceVatDetails
+                                          net={getPurchaseUnitPrice(row)}
+                                          vatRate={row.vatRate}
+                                          formatMoney={formatUnitPrice}
+                                        />
+                                        <div>
+                                          <p className="detail-label">
+                                            {t('common.totalPrice')}
+                                          </p>
+                                          <p className="detail-value">
+                                            {formatUnitPrice(row.totalPrice)}
+                                          </p>
+                                        </div>
+                                      </>
+                                    )}
                                     <div>
                                       <p className="detail-label">{t('common.purchaseDate')}</p>
                                       <p className="detail-value">
@@ -6476,7 +6440,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('subtractions.subtitle')}</p>
@@ -6512,19 +6476,9 @@ function App() {
                   }
                 >
                   {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
+                    <YlIcon name="xmark" size={16} />
                   ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="magnifyingglass" size={16} />
                   )}
                 </button>
                 <button
@@ -6543,17 +6497,7 @@ function App() {
                     setIsSubtractionsFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {subtractionsActiveFilterCount > 0 ? (
                     <span className="filter-badge">
                       {subtractionsActiveFilterCount}
@@ -6589,17 +6533,7 @@ function App() {
                   disabled={isSubtractionsExporting}
                   aria-label={t('common.export')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="square.and.arrow.down" size={16} />
                 </button>
                 <button
                   className="btn-primary"
@@ -6608,17 +6542,7 @@ function App() {
                   disabled={isSubtractionsLoading}
                   aria-label={t('common.refresh')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 </div>
               </div>
@@ -6675,7 +6599,7 @@ function App() {
                         onClick={() => setIsSubtractionsFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -6872,11 +6796,9 @@ function App() {
                         >
                           {t('common.date')}
                           <span className="sort-indicator">
-                            {subtractionsSortConfig.key === 'date'
-                              ? subtractionsSortConfig.direction === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : '↕'}
+                            <YlSortIcon
+                              direction={subtractionsSortConfig.key === 'date' ? subtractionsSortConfig.direction : null}
+                            />
                           </span>
                         </button>
                       </th>
@@ -6968,7 +6890,7 @@ function App() {
                                     onClick={() => markSubtractionBilled(row)}
                                     disabled={row.status !== 'Pending Billing'}
                                   >
-                                    ✓
+                                    <YlIcon name="checkmark" size={16} />
                                   </button>
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -6978,7 +6900,7 @@ function App() {
                                     onClick={() => reverseSubtraction(row)}
                                     disabled={row.status === 'Reversed'}
                                   >
-                                    ↺
+                                    <YlIcon name="arrow.uturn.backward" size={16} />
                                   </button>
                                   <button
                                     className="btn-icon btn-icon-ghost"
@@ -6987,7 +6909,7 @@ function App() {
                                     aria-expanded={isExpanded}
                                     aria-label={t('common.toggleDetails')}
                                   >
-                                    {isExpanded ? '▾' : '▸'}
+                                    <YlDisclosureIcon open={isExpanded} />
                                   </button>
                                 </div>
                               </td>
@@ -7089,7 +7011,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('properties.subtitle')}</p>
@@ -7113,17 +7035,7 @@ function App() {
                     setIsPropertiesFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {propertiesActiveFilterCount > 0 ? (
                     <span className="filter-badge">{propertiesActiveFilterCount}</span>
                   ) : null}
@@ -7145,17 +7057,7 @@ function App() {
                   onClick={() => void refreshPropertiesDiff()}
                   disabled={isPropertiesLoading}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 ) : null}
                 </div>
@@ -7214,7 +7116,7 @@ function App() {
                         onClick={() => setIsPropertiesFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -7416,7 +7318,7 @@ function App() {
                         >
                           {t('properties.nickname')}
                           <span className="sort-indicator">
-                            {propertiesSortDirection === 'asc' ? '▲' : '▼'}
+                            <YlSortIcon direction={propertiesSortDirection} />
                           </span>
                         </button>
                       </th>
@@ -7487,7 +7389,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('bookings.subtitle')}</p>
@@ -7523,19 +7425,9 @@ function App() {
                   }
                 >
                   {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
+                    <YlIcon name="xmark" size={16} />
                   ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="magnifyingglass" size={16} />
                   )}
                 </button>
                 <button
@@ -7554,17 +7446,7 @@ function App() {
                     setIsBookingsFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {bookingsActiveFilterCount > 0 ? (
                     <span className="filter-badge">{bookingsActiveFilterCount}</span>
                   ) : null}
@@ -7577,17 +7459,7 @@ function App() {
                   onClick={() => void fetchBookings(bookingsCurrentCursor)}
                   disabled={isBookingsLoading || isBookingsSyncing}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 <button
                   className="btn-primary"
@@ -7605,17 +7477,7 @@ function App() {
                   onClick={() => void refreshBookingsFromGuesty()}
                   disabled={isBookingsLoading || isBookingsSyncing}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 </div>
               </div>
@@ -7690,7 +7552,7 @@ function App() {
                         onClick={() => setIsBookingsFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -7840,7 +7702,7 @@ function App() {
                         >
                           {t('common.checkIn')}
                           <span className="sort-indicator">
-                            {bookingsSortDirection === 'asc' ? '▲' : '▼'}
+                            <YlSortIcon direction={bookingsSortDirection} />
                           </span>
                         </button>
                       </th>
@@ -7928,7 +7790,7 @@ function App() {
                                     aria-expanded={isExpanded}
                                     aria-label={t('common.toggleDetails')}
                                   >
-                                    {isExpanded ? '▾' : '▸'}
+                                    <YlDisclosureIcon open={isExpanded} />
                                   </button>
                                 </div>
                               </td>
@@ -8086,7 +7948,7 @@ function App() {
                     aria-expanded={isSummaryInfoOpen}
                     onClick={() => setIsSummaryInfoOpen((current) => !current)}
                   >
-                    i
+                    <YlIcon name="info.circle" size={14} />
                   </button>
                 </div>
                 <p className="subtitle">{t('reviews.subtitle')}</p>
@@ -8141,17 +8003,7 @@ function App() {
                     setIsReviewsFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {reviewsActiveFilterCount > 0 ? (
                     <span className="filter-badge">{reviewsActiveFilterCount}</span>
                   ) : null}
@@ -8163,17 +8015,7 @@ function App() {
                   disabled={isReviewsLoading || isReviewsSyncing}
                   aria-label={t('common.refresh')}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="arrow.clockwise" size={16} />
                 </button>
                 </div>
               </div>
@@ -8230,7 +8072,7 @@ function App() {
                         onClick={() => setIsReviewsFilterOpen(false)}
                         aria-label={t('common.closeFilters')}
                       >
-                        ✕
+                        <YlIcon name="xmark" size={16} />
                       </button>
                     </div>
 
@@ -8390,7 +8232,7 @@ function App() {
                         >
                           {t('common.date')}
                           <span className="sort-indicator">
-                            {reviewsSortDirection === 'asc' ? '▲' : '▼'}
+                            <YlSortIcon direction={reviewsSortDirection} />
                           </span>
                         </button>
                       </th>
@@ -8832,6 +8674,8 @@ function App() {
             searchQuery={tableSearchQuery}
             onSearchQueryChange={setTableSearchQuery}
           />
+        ) : activePage.startsWith('Visual ') ? (
+          <VisualSystemView page={activePage} />
         ) : (
           <section className="card">
             <h1 className="page-title">
@@ -8857,7 +8701,7 @@ function App() {
                   onClick={() => setIsPropertiesDiffOpen(false)}
                   aria-label={t('common.closePropertyChanges')}
                 >
-                  ✕
+                  <YlIcon name="xmark" size={16} />
                 </button>
               </div>
               <div className="modal-body">
@@ -8941,7 +8785,7 @@ function App() {
                   onClick={closeForm}
                   aria-label={t('common.closeForm')}
                 >
-                  ✕
+                  <YlIcon name="xmark" size={16} />
                 </button>
               </div>
 
@@ -9095,22 +8939,15 @@ function App() {
                         placeholder="0"
                       />
                     </label>
-                    <label className="form-field">
-                      <span>{t('common.unitPrice')}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formValues.unitPrice}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            unitPrice: event.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                      />
-                    </label>
+                    <UnitPriceVatFields
+                      value={formValues.unitPriceVat}
+                      onChange={(unitPriceVat) =>
+                        setFormValues((current) => ({
+                          ...current,
+                          unitPriceVat,
+                        }))
+                      }
+                    />
                     <label className="form-field">
                       <span>{t('common.tolerance')}</span>
                       <input
@@ -9219,7 +9056,7 @@ function App() {
                       onClick={closePurchaseForm}
                       aria-label={t('common.closePurchaseForm')}
                     >
-                      ✕
+                      <YlIcon name="xmark" size={16} />
                     </button>
                   </div>
                 )
@@ -9440,22 +9277,36 @@ function App() {
                         placeholder="0"
                       />
                     </label>
-                    <label className="form-field">
-                      <span>{t('common.totalPrice')}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={purchaseFormValues.totalPrice}
-                        onChange={(event) =>
-                          setPurchaseFormValues((current) => ({
-                            ...current,
-                            totalPrice: event.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                      />
-                    </label>
+                    <UnitPriceVatFields
+                      value={purchaseFormValues.unitPriceVat}
+                      onChange={(unitPriceVat) =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          unitPriceVat,
+                        }))
+                      }
+                    />
+                    {(() => {
+                      const pricing = resolvedUnitPriceVat(
+                        purchaseFormValues.unitPriceVat,
+                      )
+                      const units = Number(purchaseFormValues.units)
+                      if (
+                        !pricing ||
+                        !Number.isFinite(units) ||
+                        units <= 0
+                      ) {
+                        return null
+                      }
+                      return (
+                        <div className="form-field">
+                          <span>{t('common.totalPrice')}</span>
+                          <p className="detail-value">
+                            {formatUnitPrice(roundMoney(units * pricing.gross))}
+                          </p>
+                        </div>
+                      )
+                    })()}
                     <label className="form-field">
                       <span>{t('common.deliveryDate')}</span>
                       <input
@@ -9551,7 +9402,7 @@ function App() {
                   onClick={closeSubtractionForm}
                   aria-label={t('common.closeSubtractionForm')}
                 >
-                  ✕
+                  <YlIcon name="xmark" size={16} />
                 </button>
               </div>
               <div className="modal-body">
@@ -9727,24 +9578,6 @@ function App() {
           />
         ) : null}
       </main>
-      {workspace === 'field' ? (
-        <MobileBodyPortal>
-          <FieldBottomNav
-            roleId={roleId}
-            activePage={activePage}
-            canPage={canPage}
-            onNavigate={navigateToPage}
-            onMore={() => {
-              if (isMobileNavOpen) {
-                closeMobileNav()
-                return
-              }
-              openMobileNav()
-            }}
-            moreOpen={isMobileNavOpen}
-          />
-        </MobileBodyPortal>
-      ) : null}
     </div>
   )
 }

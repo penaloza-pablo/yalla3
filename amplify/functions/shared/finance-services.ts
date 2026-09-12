@@ -8,6 +8,7 @@ import {
 export {
   IVA_MULTIPLIER,
   IVA_RATES,
+  ivaAmountFromNet,
   occurrencePriceWithIva,
   parseIvaRate,
   persistIvaFields,

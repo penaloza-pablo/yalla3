@@ -1,3 +1,5 @@
+import { YlIcon } from '../design/icons'
+
 type Props = {
   value?: number
   emptyLabel?: string
@@ -15,7 +17,11 @@ export function StarRating({ value, emptyLabel = '—' }: Props) {
           key={index}
           className={`star-rating-star ${index < rounded ? 'is-filled' : ''}`}
         >
-          ★
+          <YlIcon
+            name="star"
+            size={14}
+            variant={index < rounded ? 'fill' : 'regular'}
+          />
         </span>
       ))}
       <span className="star-rating-number">{value.toFixed(1)}</span>

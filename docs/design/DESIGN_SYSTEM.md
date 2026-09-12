@@ -174,7 +174,8 @@ No construir un kit de 80 piezas. Construir **estas**:
 | `DateField` | | El plan de limpieza ya depende de fecha |
 | `StatusBadge` | OK, Listo, Pendiente, Programado, Overdue… | Color + texto |
 | `Chip` | huéspedes, early-CI, gap | |
-| `Card` | KPI, list-row, empty | |
+| `Card` | KPI, list-row, empty | `StatCard` / `ProgressCard` en el catálogo |
+| `DataTable` | desktop | |
 | `DataTable` | desktop | |
 | `ListRow` | móvil | |
 | `Notice` | error/success/warning/info | Sustituye banners “Failed to fetch” crudos |
@@ -194,8 +195,9 @@ Componentes HIG que **no** necesitamos ahora: breadcrumbs profundos (máx. Domin
 
 - Sidebar desktop: wordmark **Yalla!**; ítem activo con `--yl-go-soft`.
 - Colapsado: **iconos**, no la inicial de la sección.
-- Móvil oficina: topbar + drawer.
-- Móvil campo: bottom nav + Más = drawer.
+- Móvil (≤768): topbar + drawer de dominios, para todos los roles.
+- Tablet (769–1023): sidebar de iconos + tabs en el contenido.
+- Escritorio (≥1024): sidebar de dominios con texto.
 - Login: misma paleta, wordmark, caption opcional Knock Knock; Authenticator tematizado (B7).
 - Safe-area: `env(safe-area-inset-*)`.
 
@@ -203,7 +205,7 @@ Componentes HIG que **no** necesitamos ahora: breadcrumbs profundos (máx. Domin
 
 ## 7. Densidad
 
-- Desktop oficina: denso pero con fila ≥ 44px de hit area en acciones.
+- Desktop: denso pero con fila ≥ 44px de hit area en acciones.
 - Móvil: una visita / un ítem = una card; no 8 columnas.
 - KPIs: máximo 4 por bloque; el resto en “Más métricas”.
 
@@ -220,7 +222,18 @@ Componentes HIG que **no** necesitamos ahora: breadcrumbs profundos (máx. Domin
 
 ---
 
-## 9. Anti-patrones (failure modes)
+## 9. Catálogo en producto
+
+El dominio **Sistema visual** (admin) lista cada pieza con su nombre de referencia `yl.*`.
+
+- Usar ese nombre al asignar el elemento a una vista (`yl.button.primary`, `yl.card.stat`, `yl.actionBar.page`, `yl.icon.plus`, …).
+- Iconos de interfaz: lenguaje HIG (contorno en chrome, relleno en destino seleccionado). Nombres `yl.icon.*` al estilo SF Symbols; trazos originales Yalla, no el archivo de Apple.
+- Si hay variación de viewport, el catálogo muestra escritorio y móvil juntos.
+- Borradores nuevos se registran en Visual Lab (`localStorage`); no son producto hasta implementarlos.
+
+---
+
+## 10. Anti-patrones (failure modes)
 
 - Glass en tablas, inputs o listados.
 - Un lenguaje visual por módulo (Reviews púrpura, Ops slate, Finance “otro”).

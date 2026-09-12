@@ -1,6 +1,8 @@
+import { YlIcon } from '../design/icons'
+
 type Props = {
   children: string
-  variant?: 'error' | 'success'
+  variant?: 'error' | 'success' | 'warning'
   dismissLabel: string
   onDismiss: () => void
 }
@@ -20,7 +22,7 @@ export function DismissibleNotice({
         aria-label={dismissLabel}
         onClick={onDismiss}
       >
-        ✕
+        <YlIcon name="xmark" size={16} />
       </button>
     </div>
   )

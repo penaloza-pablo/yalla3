@@ -7,6 +7,7 @@ import { addDaysToDateString, getTodayMadrid } from '../operations/dateHelpers'
 import { ACTION_KEYS, DASHBOARD_CARD_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { humanizeRequestError } from '../lib/humanize-error'
+import { YlIcon } from '../design/icons'
 
 type TodaySummary = {
   date: string
@@ -130,7 +131,7 @@ const RatioMetric = ({
           {formatRatio(t, done, total)}
           {isRatioComplete(done, total) ? (
             <span className="today-metric-check" aria-hidden="true">
-              ✓
+              <YlIcon name="checkmark" size={14} />
             </span>
           ) : null}
         </strong>
@@ -524,12 +525,7 @@ export function TodayView({
                 disabled={isLoading}
                 aria-label={t('common.refresh')}
               >
-                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>

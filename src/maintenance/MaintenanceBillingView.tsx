@@ -38,6 +38,7 @@ import {
   type MaintenanceSettings,
   type ProviderRecord,
 } from './types'
+import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -947,7 +948,7 @@ export function MaintenanceBillingView({
               aria-expanded={isSummaryInfoOpen}
               onClick={onToggleSummaryInfo}
             >
-              i
+              <YlIcon name="info.circle" size={14} />
             </button>
           </div>
           <p className="subtitle">
@@ -970,12 +971,7 @@ export function MaintenanceBillingView({
                       setIsFilterOpen(true)
                     }}
                   >
-                    <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="line.3.horizontal.decrease" size={16} />
                     {propertyIds.length + (groupFilter ? 1 : 0) > 0 ? (
                       <span className="filter-badge">
                         {propertyIds.length + (groupFilter ? 1 : 0)}
@@ -997,17 +993,7 @@ export function MaintenanceBillingView({
                     disabled={isExporting}
                     aria-label={t('common.export')}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="square.and.arrow.down" size={16} />
                   </button>
                   {month?.canEdit && !isSelecting ? (
                     <button
@@ -1016,9 +1002,7 @@ export function MaintenanceBillingView({
                       onClick={openCreate}
                       aria-label={t('maintenanceBilling.addManual')}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                        <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                      </svg>
+                      <YlIcon name="plus" size={16} />
                     </button>
                   ) : null}
                   {month?.canEdit && !isSelecting ? (
@@ -1034,12 +1018,7 @@ export function MaintenanceBillingView({
                       aria-label={t('maintenanceBilling.groupLines')}
                       title={t('maintenanceBilling.groupLines')}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                        <path
-                          d="M3 4h8v5H3V4zm0 7h8v5H3v-5zm10-7h4v12h-4V4z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <YlIcon name="list.bullet.rectangle" size={16} />
                     </button>
                   ) : null}
                   {isSelecting ? (
@@ -1074,12 +1053,7 @@ export function MaintenanceBillingView({
                 }
                 aria-label={t('common.refresh')}
               >
-                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -1424,17 +1398,7 @@ export function MaintenanceBillingView({
                                     })
                                   }
                                 >
-                                  <svg
-                                    aria-hidden="true"
-                                    viewBox="0 0 20 20"
-                                    width="16"
-                                    height="16"
-                                  >
-                                    <path
-                                      d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
-                                      fill="currentColor"
-                                    />
-                                  </svg>
+                                  <YlIcon name="checkmark" size={16} />
                                 </button>
                                 {can(ACTION_KEYS.maintenanceBillingEdit) ? (
                                 <button
@@ -1444,7 +1408,7 @@ export function MaintenanceBillingView({
                                   title={t('maintenanceSettings.edit')}
                                   onClick={() => openEdit(line)}
                                 >
-                                  ✎
+                                  <YlIcon name="pencil" size={16} />
                                 </button>
                                 ) : null}
                                 {isGroupLine(line) ? (
@@ -1472,17 +1436,7 @@ export function MaintenanceBillingView({
                                       })()
                                     }}
                                   >
-                                    <svg
-                                      aria-hidden="true"
-                                      viewBox="0 0 20 20"
-                                      width="16"
-                                      height="16"
-                                    >
-                                      <path
-                                        d="M4 5h5v2H4V5zm7 0h5v2h-5V5zM4 9h12v2H4V9zm0 4h5v2H4v-2zm7 0h5v2h-5v-2z"
-                                        fill="currentColor"
-                                      />
-                                    </svg>
+                                    <YlIcon name="list.bullet" size={16} />
                                   </button>
                                 ) : null}
                                 {line.isManual ? (
@@ -1511,17 +1465,7 @@ export function MaintenanceBillingView({
                                       })()
                                     }}
                                   >
-                                    <svg
-                                      aria-hidden="true"
-                                      viewBox="0 0 20 20"
-                                      width="16"
-                                      height="16"
-                                    >
-                                      <path
-                                        d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
-                                        fill="currentColor"
-                                      />
-                                    </svg>
+                                    <YlIcon name="trash" size={16} />
                                   </button>
                                 ) : null}
                                 <button
@@ -1531,7 +1475,7 @@ export function MaintenanceBillingView({
                                   aria-expanded={isExpanded}
                                   aria-label={t('common.toggleDetails')}
                                 >
-                                  {isExpanded ? '▾' : '▸'}
+                                  <YlDisclosureIcon open={isExpanded} />
                                 </button>
                               </div>
                             ) : (
@@ -1543,7 +1487,7 @@ export function MaintenanceBillingView({
                                   aria-expanded={isExpanded}
                                   aria-label={t('common.toggleDetails')}
                                 >
-                                  {isExpanded ? '▾' : '▸'}
+                                  <YlDisclosureIcon open={isExpanded} />
                                 </button>
                               </div>
                             )}
@@ -1729,7 +1673,7 @@ export function MaintenanceBillingView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -1802,7 +1746,7 @@ export function MaintenanceBillingView({
                 onClick={() => setIsFormOpen(false)}
                 aria-label={t('common.closeForm')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -2046,7 +1990,7 @@ export function MaintenanceBillingView({
                 onClick={() => setIsMergeOpen(false)}
                 aria-label={t('common.closeForm')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchUserAttributes, signOut } from 'aws-amplify/auth'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
+import { YlIcon } from './design/icons'
 
 type SettingsPanelProps = {
   compact?: boolean
@@ -164,7 +165,7 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
                   onClick={closeSettings}
                   aria-label={t('common.close')}
                 >
-                  ✕
+                  <YlIcon name="xmark" size={16} />
                 </button>
               </div>
 
@@ -235,18 +236,7 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
           aria-label={t('settings.open')}
           onClick={openSettings}
         >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 20 20"
-            width="18"
-            height="18"
-            className="settings-trigger-icon"
-          >
-            <path
-              fill="currentColor"
-              d="M10 9a3.25 3.25 0 1 0 0-6.5A3.25 3.25 0 0 0 10 9zm-7 8.25a7 7 0 0 1 14 0 .75.75 0 0 1-.75.75H3.75a.75.75 0 0 1-.75-.75z"
-            />
-          </svg>
+          <YlIcon name="person.crop.circle" size={18} className="settings-trigger-icon" />
           {!compact ? (
             <span className="settings-trigger-name">{triggerName}</span>
           ) : null}

@@ -45,6 +45,7 @@ import {
 import { PropertyReportSettingsView } from './PropertyReportSettingsView'
 import { PropertyClosedReportView } from './PropertyClosedReportView'
 import { computePropertyReportMetrics } from './property-report-metrics'
+import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -293,7 +294,7 @@ const TableToggleButton = ({
     aria-label={open ? collapseLabel : expandLabel}
     onClick={onClick}
   >
-    {open ? '▾' : '▸'}
+    <YlDisclosureIcon open={open} />
   </button>
 )
 
@@ -369,23 +370,11 @@ const AllocationChip = ({
 }
 
 const ReportDocumentIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-    <path
-      d="M6 2h6l4 4v12H6V2zm6 1.4V7h3.4L12 3.4zM8 9.2h6v1.4H8V9.2zm0 2.8h6v1.4H8v-1.4zm0 2.8h4v1.4H8v-1.4z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="doc.text" size={18} />
 )
 
 const SettingsGearIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-    <path
-      fill="currentColor"
-      fillRule="evenodd"
-      d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.33 1.64a6.97 6.97 0 0 1 1.24.72l1.55-.83a1 1 0 0 1 1.22.22l1.67 1.67a1 1 0 0 1 .22 1.22l-.83 1.55c.3.38.54.8.72 1.24l1.64.33a1 1 0 0 1 .804.98v2.36a1 1 0 0 1-.804.98l-1.64.33a6.95 6.95 0 0 1-.72 1.24l.83 1.55a1 1 0 0 1-.22 1.22l-1.67 1.67a1 1 0 0 1-1.22.22l-1.55-.83a6.97 6.97 0 0 1-1.24.72l-.33 1.64a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.33-1.64a6.97 6.97 0 0 1-1.24-.72l-1.55.83a1 1 0 0 1-1.22-.22L2.83 14.87a1 1 0 0 1-.22-1.22l.83-1.55a6.95 6.95 0 0 1-.72-1.24l-1.64-.33A1 1 0 0 1 1 9.18V6.82a1 1 0 0 1 .804-.98l1.64-.33c.18-.44.42-.86.72-1.24l-.83-1.55a1 1 0 0 1 .22-1.22L5.22 1.83a1 1 0 0 1 1.22-.22l1.55.83c.38-.3.8-.54 1.24-.72l.33-1.64ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-      clipRule="evenodd"
-    />
-  </svg>
+  <YlIcon name="gearshape" size={18} />
 )
 
 const fallbackMonths = (): ReportMonth[] =>
@@ -1104,7 +1093,7 @@ export function PropertyReportsView({
           aria-label={t('common.toggleDetails')}
           onClick={() => toggleExpandedRow(rowId)}
         >
-          {isExpanded ? '▾' : '▸'}
+          <YlDisclosureIcon open={isExpanded} />
         </button>
       </td>
     )
@@ -1697,7 +1686,7 @@ export function PropertyReportsView({
                                   aria-label={t('common.toggleDetails')}
                                   onClick={() => toggleExpandedRow(rowId)}
                                 >
-                                  {isExpanded ? '▾' : '▸'}
+                                  <YlDisclosureIcon open={isExpanded} />
                                 </button>
                               </td>
                             </tr>
@@ -2239,7 +2228,7 @@ export function PropertyReportsView({
                 onClick={() => setMovementDraft(null)}
                 aria-label={t('common.closeForm')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

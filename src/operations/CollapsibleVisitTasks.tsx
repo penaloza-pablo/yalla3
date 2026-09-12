@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   title: string
@@ -33,7 +34,7 @@ export function CollapsibleVisitTasks({
             className={`visit-tasks-chevron${isOpen ? ' is-open' : ''}`}
             aria-hidden="true"
           >
-            ▾
+            <YlIcon name="chevron.down" size={14} />
           </span>
           <h4>{title}</h4>
           {showBadge ? (

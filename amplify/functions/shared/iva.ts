@@ -55,6 +55,9 @@ export const persistIvaFields = (ivaRate: IvaRate) => ({
   appliesIva: ivaRate > 0,
 });
 
+export const ivaAmountFromNet = (net: number, ivaRate: IvaRate) =>
+  roundMoney(Math.max(0, net) * (ivaRate / 100));
+
 export const occurrencePriceWithIva = (price: number, ivaRate: IvaRate) =>
   roundMoney(Math.max(0, price) * ivaMultiplier(ivaRate));
 

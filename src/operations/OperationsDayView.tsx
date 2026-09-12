@@ -53,6 +53,7 @@ import {
   type DayTimelineVisit,
 } from './visitOverlapLayout'
 import type { VisitRecord } from './types'
+import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
 
@@ -307,12 +308,7 @@ export function OperationsDayView({
               <span aria-hidden="true">&lt;</span>
             </button>
             <label className="btn-ghost operations-day-calendar-btn">
-              <svg aria-hidden="true" viewBox="0 0 20 20" width="22" height="22">
-                <path
-                  d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                  fill="currentColor"
-                />
-              </svg>
+              <YlIcon name="calendar" size={22} />
               <input
                 className="operations-day-date-input"
                 type="date"
@@ -464,7 +460,7 @@ export function OperationsDayView({
                 onClick={() => setSelectedCheckIn(null)}
                 aria-label={t('common.close')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -571,7 +567,7 @@ function DayPropertyRow({
                 : t('operations.expandProperty', { name: row.propertyLabel })
             }
           >
-            {row.isExpanded ? '▾' : '▸'}
+            <YlDisclosureIcon open={row.isExpanded} />
           </button>
         ) : null}
         <span>{row.propertyLabel}</span>
@@ -584,7 +580,7 @@ function DayPropertyRow({
             title={t('operations.collapseOverlappingVisits')}
             onClick={() => setExpandedClusterKeys(new Set())}
           >
-            ▾
+            <YlIcon name="chevron.down" size={14} />
           </button>
         ) : null}
       </th>
@@ -879,7 +875,8 @@ function DayTimelineTrack({
             earliest: formatMinutesAsTime(overflow.earliestBefore),
           })}
         >
-          ‹ {formatMinutesAsTime(overflow.earliestBefore)}
+          <YlIcon name="chevron.left" size={12} />{' '}
+          {formatMinutesAsTime(overflow.earliestBefore)}
         </span>
       ) : null}
       {overflow.hasLate ? (
@@ -890,7 +887,8 @@ function DayTimelineTrack({
             latest: formatMinutesAsTime(overflow.latestAfter),
           })}
         >
-          {formatMinutesAsTime(overflow.latestAfter)} ›
+          {formatMinutesAsTime(overflow.latestAfter)}{' '}
+          <YlIcon name="chevron.right" size={12} />
         </span>
       ) : null}
       <div
@@ -1087,7 +1085,7 @@ function DayVisitBlock({
       )}
       {isTerminalVisit(visit) ? (
         <span className="operations-day-terminal-mark">
-          {visit.status === 'COMPLETED' ? '✓' : '✕'}
+          {visit.status === 'COMPLETED' ? <YlIcon name="checkmark" size={12} /> : <YlIcon name="xmark" size={12} />}
         </span>
       ) : null}
     </div>
@@ -1097,42 +1095,12 @@ function DayVisitBlock({
 function DayBookingIcon({ kind }: { kind: DayBookingEvent['kind'] }) {
   if (kind === 'check-in') {
     return (
-      <svg
-        className="operations-day-booking-icon"
-        viewBox="0 0 16 16"
-        width="14"
-        height="14"
-        aria-hidden="true"
-      >
-        <path
-          d="M7 3.5H4.5A1.5 1.5 0 0 0 3 5v6a1.5 1.5 0 0 0 1.5 1.5H7M8.5 8H14m0 0-2.2-2.2M14 8l-2.2 2.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <YlIcon name="arrow.right.to.bracket" size={14} className="operations-day-booking-icon" />
     )
   }
 
   return (
-    <svg
-      className="operations-day-booking-icon"
-      viewBox="0 0 16 16"
-      width="14"
-      height="14"
-      aria-hidden="true"
-    >
-      <path
-        d="M9 3.5h2.5A1.5 1.5 0 0 1 13 5v6a1.5 1.5 0 0 1-1.5 1.5H9M2 8h5.5M2 8l2.2-2.2M2 8l2.2 2.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <YlIcon name="arrow.left.to.bracket" size={14} className="operations-day-booking-icon" />
   )
 }
 

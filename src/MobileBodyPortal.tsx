@@ -1,24 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-
-const MOBILE_QUERY = '(max-width: 768px)'
+import { useDeviceLayout } from './nav/layout'
 
 export function useIsMobileLayout() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia(MOBILE_QUERY).matches
-      : false,
-  )
-
-  useEffect(() => {
-    const media = window.matchMedia(MOBILE_QUERY)
-    const sync = () => setIsMobile(media.matches)
-    sync()
-    media.addEventListener('change', sync)
-    return () => media.removeEventListener('change', sync)
-  }, [])
-
-  return isMobile
+  return useDeviceLayout() === 'mobile'
 }
 
 export function MobileBodyPortal({ children }: { children: ReactNode }) {

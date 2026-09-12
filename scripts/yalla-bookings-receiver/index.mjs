@@ -9,6 +9,7 @@ import {
   UpdateItemCommand
 } from "@aws-sdk/client-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { reconcileReservation } from "../shared/reconcile-booking-cleanings.mjs";
 
 const ddb = new DynamoDBClient({});
 const lambda = new LambdaClient({});
@@ -311,6 +312,28 @@ function copyExistingAttribute(target, existing, fieldName) {
   if (existing?.[fieldName]) {
     target[fieldName] = existing[fieldName];
   }
+}
+
+function getCanceledAt(reservation) {
+  return reservation?.canceledAt || reservation?.cancelledAt || "";
+}
+
+function getGuestStayStatus(reservation) {
+  return reservation?.guestStay?.status || "";
+}
+
+async function reconcileBookingCleanings(reservationId) {
+  if (!reservationId) return null;
+  return reconcileReservation(
+    {
+      ddb,
+      visitsTable: process.env.VISITS_TABLE || "yalla-visits",
+      bookingsTable: TABLE_NAME,
+      cleaningTeamId: process.env.CLEANING_TEAM_ID || "team_cleaning",
+      cleaningVisitTypeId: process.env.CLEANING_VISIT_TYPE_ID || "visit_type_cleaning",
+    },
+    { reservationId }
+  );
 }
 
 async function enqueuePlannerApply(reservationId) {
@@ -709,6 +732,10 @@ export const handler = async (event) => {
 
       CreatedAt: s(reservation?.createdAt || reservation?.dates?.createdAt || now),
       UpdatedAt: s(now),
+      CanceledAt: s(getCanceledAt(reservation) || getExistingString(existing, "CanceledAt")),
+      GuestStayStatus: s(
+        getGuestStayStatus(reservation) || getExistingString(existing, "GuestStayStatus")
+      ),
       RawPayload: s(JSON.stringify(payload))
     };
 
@@ -725,6 +752,12 @@ export const handler = async (event) => {
       item.EarlyCheckInOn = { BOOL: isEarlyCheckInEnabled(incomingEarly) };
     } else {
       copyExistingAttribute(item, existing, "EarlyCheckInOn");
+    }
+
+    if (reservation?.isMidStay !== undefined && reservation?.isMidStay !== null) {
+      item.IsMidStay = { BOOL: Boolean(reservation.isMidStay) };
+    } else {
+      copyExistingAttribute(item, existing, "IsMidStay");
     }
 
     copyExistingAttribute(item, existing, "PlannerWarnings");
@@ -751,6 +784,13 @@ export const handler = async (event) => {
       await enqueuePlannerApply(reservationId);
     } catch (plannerError) {
       console.error("Failed to enqueue bookings planner", plannerError);
+    }
+
+    let bookingReconcile = null;
+    try {
+      bookingReconcile = await reconcileBookingCleanings(reservationId);
+    } catch (reconcileError) {
+      console.error("Failed to reconcile booking cleanings", reservationId, reconcileError);
     }
 
     if (previousListingId && previousListingId !== listingId) {
@@ -791,7 +831,8 @@ export const handler = async (event) => {
       guestPaidTotal,
       guestPaidTotalWithoutCleaning,
       guestPaidDay,
-      propertyStatsUpdated: Boolean(listingId)
+      propertyStatsUpdated: Boolean(listingId),
+      bookingReconcile
     });
 
   } catch (err) {

@@ -28,6 +28,7 @@ import { DEFAULT_AIRBNB_FEE_PERCENT } from '../../amplify/functions/shared/prope
 import { FormulaBuilder } from './FormulaBuilder'
 import { ReportVisibilityEditor } from './ReportVisibilityEditor'
 import { VatChannelsFeeCard } from './VatChannelsFeeCard'
+import { YlIcon } from '../design/icons'
 
 export type CopyTarget = {
   id: string
@@ -610,7 +611,7 @@ export function PropertyReportSettingsView({
                         }))
                       }
                     >
-                      ✕
+                      <YlIcon name="xmark" size={16} />
                     </button>
                   </div>
                 ))

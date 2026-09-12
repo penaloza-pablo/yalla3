@@ -20,6 +20,7 @@ import {
   getPropertyLabel,
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -306,7 +307,7 @@ export function PropertyGroupsView({
               aria-expanded={isSummaryInfoOpen}
               onClick={onToggleSummaryInfo}
             >
-              i
+              <YlIcon name="info.circle" size={14} />
             </button>
           </div>
           <p className="subtitle">{t('propertyGroups.subtitle')}</p>
@@ -418,7 +419,7 @@ export function PropertyGroupsView({
                 onClick={() => setIsFormOpen(false)}
                 aria-label={t('common.closeForm')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

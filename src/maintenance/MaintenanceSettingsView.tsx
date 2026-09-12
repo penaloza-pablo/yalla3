@@ -10,6 +10,7 @@ import type {
   VisitTypeHours,
   VisitTypeOption,
 } from './types'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -492,12 +493,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
                 onClick={() => void refreshAll()}
                 aria-label={t('common.refresh')}
               >
-                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>

@@ -26,6 +26,7 @@ import type {
   VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -366,17 +367,7 @@ export function TemplateAutoAssignView({
             title={t('common.filters')}
             onClick={openFilters}
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 20 20"
-              width="16"
-              height="16"
-            >
-              <path
-                d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                fill="currentColor"
-              />
-            </svg>
+            <YlIcon name="line.3.horizontal.decrease" size={16} />
             {hasActiveFilters ? (
               <span className="filter-badge">{activeFilterCount}</span>
             ) : null}
@@ -388,9 +379,7 @@ export function TemplateAutoAssignView({
             title={t('templateAutoAssign.add')}
             onClick={openCreate}
           >
-            <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-              <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-            </svg>
+            <YlIcon name="plus" size={16} />
           </button>
         </div>
       </header>
@@ -471,7 +460,7 @@ export function TemplateAutoAssignView({
                             title={t('templateAutoAssign.edit')}
                             onClick={() => openEdit(rule)}
                           >
-                            <span aria-hidden="true">✎</span>
+                            <YlIcon name="pencil" size={16} />
                           </button>
                           <button
                             type="button"
@@ -496,7 +485,7 @@ export function TemplateAutoAssignView({
                               })()
                             }}
                           >
-                            ✕
+                            <YlIcon name="xmark" size={16} />
                           </button>
                         </div>
                       </td>
@@ -525,7 +514,7 @@ export function TemplateAutoAssignView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -629,7 +618,7 @@ export function TemplateAutoAssignView({
                 aria-label={t('common.close')}
                 onClick={() => setIsFormOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body form-grid">

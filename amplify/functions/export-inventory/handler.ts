@@ -46,6 +46,8 @@ const buildXlsxBuffer = (items: Record<string, unknown>[]) => {
     { key: 'Last updated', label: 'Last updated' },
     { key: 'rebuyQty', label: 'rebuyQty' },
     { key: 'unitPrice', label: 'unitPrice' },
+    { key: 'vatRate', label: 'vatRate' },
+    { key: 'grossUnitPrice', label: 'grossUnitPrice' },
     { key: 'Tolerance', label: 'Tolerance' },
     { key: 'consumptionRules', label: 'consumptionRules' },
   ];

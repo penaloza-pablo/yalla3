@@ -62,6 +62,8 @@ Maintenance   → Maintenance Plan | Incidents | Billing | settings  (mismo patr
 Settings      → Logs | Users | Roles | Slack
 Grow          → Grow solution 1 | 2 | 3   → placeholders “coming soon”
 Finance       → Property Reports | Reports Settings | Property Groups | Movements | Services & Subscriptions
+Visual        → Visual Buttons | Messages | Action bars | Cards | Inputs | Tokens | Lab
+                ES: Sistema visual (admin). Catálogo de piezas yl.* para asignar a vistas.
 ```
 
 **Fuera del catálogo de nav**
@@ -223,6 +225,23 @@ Aliases legacy RBAC: `Finance solution 1/2/3` → Property Reports / Movements /
 | Chatbot / Tech solution | i18n/CSS residual; sin pantalla | Fuera del rediseño visual salvo que se decida lo contrario |
 | Teams | Sin CRUD UI; `getTeams` alimenta filtros | Conservar consumo; no inventar CRUD Teams sin decisión |
 | `getInventoryRebuy` | Lambda viva; UI calcula status local | No eliminar endpoint |
+
+### 5.14 Sistema visual (catálogo)
+
+Destino de diseño interno, no un módulo operativo. Visible para **admin** (`allPermissionKeys`). Knock-Knock Supervisor y el resto de seeds no incluyen `page:Visual *`.
+
+| Página (`page:`) | Contenido | Notas |
+|---|---|---|
+| Visual Buttons | Botones reales (`btn-primary`, ghost, danger, icon, filter) | Referencia `yl.button.*` |
+| Visual Messages | Alertas, notices, empty, toast, confirm, textos | `yl.notice.*`, `yl.empty`, `yl.toast`, `yl.confirm` |
+| Visual Action bars | `page-action-bar` escritorio vs pastilla móvil | `yl.actionBar.page` |
+| Visual Cards | `card`, compact, `StatCard`, `ProgressCard` | `yl.card.*` |
+| Visual Inputs | search, select, switch, segmented | `yl.input.*`, `yl.switch`, `yl.segment` |
+| Visual Tokens | Swatches de `tokens.css` | Nombre CSS, no hex suelto |
+| Visual Icons | Set `YlIcon` con nombres al estilo SF Symbols | `yl.icon.*`; regular en chrome, fill en destinos |
+| Visual Lab | Alta de borradores en `localStorage` (`yalla.visualKit.custom.v1`) | Aparecen como pendiente en su categoría |
+
+Contrato: copiar el `yl.*` para asignar la pieza a una vista. Los borradores no son producto hasta que se implementen.
 
 ---
 

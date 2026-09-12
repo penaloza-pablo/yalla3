@@ -32,7 +32,7 @@ Tomados de HIG (iOS/iPadOS/macOS + principios de visionOS adaptados a PWA 2D):
 - **Deferencia:** la UI cede protagonismo a visitas, stock, planes, dinero.
 - **Jerarquía, no decoración:** profundidad y materiales solo para distinguir chrome / contenido / overlay.
 - **La misma capacidad, distinta presentación** en móvil y escritorio.
-- **Nav persistente solo donde ahorra toques.** En campo: 3–5 destinos. En oficina: sidebar de dominios.
+- **Nav persistente solo donde ahorra toques.** Misma IA para todos los roles; el layout cambia con el viewport.
 - **No esconder operación.** Minimalismo ≠ ocultar close-month, reverse, export, Guesty refresh.
 
 ---
@@ -60,24 +60,15 @@ Grow **no** forma parte de la IA de producción hasta que el módulo exista de v
 - Dentro de cada dominio: **tabs o segmented control** (Plan | Incidencias | Facturación | Ajustes).
 - **Hoy** es el destino por defecto (cards del dashboard). El calendario de visitas es un tab/vista de Operaciones, no el mismo objeto que Hoy.
 - Cuenta (idioma, sign out) en el pie del sidebar, como ahora, con patrón de popover en vez de página.
+- Detalle de visita: inspector a la derecha.
 
-### 3.3 Móvil / PWA (≤768)
+### 3.3 Móvil vertical (≤768)
 
-Dos posturas (B2), no un único “móvil genérico”:
+Un solo shell para todos los roles:
 
-**Oficina** — `admin`, `knock-knock-supervisor` (Knock-Knock Manager), `cleaning-supervisor`  
-Uso principal escritorio. En móvil: topbar + drawer con el árbol de dominios (productividad, no tab bar de campo).
-
-**Campo** — `cleaner`, `maintenance-agent`, `maintenance-supervisor`  
-Uso principal PWA instalada. Bottom nav (máx. 5, 44px):
-
-| Rol | Tabs |
-|---|---|
-| `cleaner` | Hoy · Plan limpieza · Incidencias · Más |
-| `maintenance-agent` | Hoy · Plan mantenimiento · Incidencias · Más |
-| `maintenance-supervisor` | Hoy · Plan mantenimiento · Inventario · Más |
-
-**Más** abre el drawer con el resto de destinos permitidos por RBAC.
+- Topbar con título, búsqueda si aplica, **hamburguesa** y tabs de dominio fijos.
+- El menú abre un **drawer de dominios** (Hoy + Inventario, Operaciones, …). El RBAC recorta el árbol, no cambia el patrón.
+- Sin bottom nav de campo.
 
 Los tipos de limpieza que vienen de datos (`Regular`, `Room Refresh`, …) se muestran **tal cual en inglés** (B5).
 
@@ -85,9 +76,9 @@ Los planes diarios **no viven en un modal a pantalla completa de escritorio reco
 
 Touch target mínimo **44×44 CSS px** (HIG iOS). No 40px.
 
-### 3.4 Tablet (768–1023)
+### 3.4 Tablet (769–1023)
 
-Sidebar colapsable a iconos + contenido; no drawer de 35 ítems ni bottom nav incompleta.
+Sidebar colapsada a **iconos** (se puede expandir), tabs de dominio en el contenido, detalle de visita en sheet ancho. No drawer de teléfono ni inspector de escritorio.
 
 ---
 
@@ -106,6 +97,7 @@ Sidebar colapsable a iconos + contenido; no drawer de 35 ítems ni bottom nav in
 | Maintenance * | Mantenimiento → tabs | |
 | Property Reports / Groups / Movements / Services / Reports Settings | Finanzas → tabs | |
 | Logs / Users / Roles / Slack | Administración | |
+| Visual * | **Sistema visual** (admin) | Catálogo `yl.*` + laboratorio de borradores; no es un módulo operativo |
 | SettingsPanel | Cuenta (perfil + idioma) | |
 | Grow 1–3 | Fuera de nav (B1) | RBAC intacto; alta futura vía § Incorporación de módulos |
 | VisitDetailModal | Conservar; en móvil sheet; en desktop panel/inspector preferible a modal gigante | Deep link `?visit=` se mantiene |
@@ -165,11 +157,11 @@ Checklist para una sección nueva:
 
 1. **Contrato** en `FUNCTIONAL_INVENTORY.md`.
 2. **RBAC:** `page:<Name>` y acciones en `rbac-catalog.ts` + seeds. No reutilizar `Grow solution *` sin migrar el nombre.
-3. **IA:** tab de un dominio existente, o dominio nuevo justificado. En campo, bottom nav solo si es trabajo diario del rol; si no, Más.
+3. **IA:** tab de un dominio existente, o dominio nuevo justificado. El layout sigue el viewport (móvil / tablet / escritorio), no el rol.
 4. **Empty real** (siguiente acción), nunca “coming soon” en nav.
 5. **Design system:** primitivas existentes.
 6. **i18n es+en** en el mismo cambio. Hebreo no bloquea (N8).
-7. **QA:** inventario + 390 + 1280 + un rol oficina y un rol campo si aplica.
+7. **QA:** inventario + 390 (móvil) + ~820 (tablet) + 1280 (escritorio), con el mismo shell.
 8. Quitar el id de `HIDDEN_NAV_SECTIONS` en `src/nav/catalog.ts` solo cuando 1–7 estén listos.
 
 ## 9. PWA
@@ -180,4 +172,4 @@ Para este rediseño:
 
 - Tratarla como **PWA instalable** (icono, theme-color, safe-area, standalone).
 - **No** prometer offline hasta que el backend sea idempotente (ver auditoría).
-- Safe-area en topbar y bottom nav.
+- Safe-area en topbar y en la barra de acciones.

@@ -14,6 +14,7 @@ import type {
 } from './types'
 import { AMENITY_RULE_TYPES } from './types'
 import { StarRating } from './StarRating'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -909,17 +910,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                 onClick={() => void refreshAll()}
                 aria-label={t('common.refresh')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -1426,7 +1417,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                               aria-label={t('cleaningSettings.editTypesAction')}
                               title={t('cleaningSettings.editTypesAction')}
                             >
-                              ✎
+                              <YlIcon name="pencil" size={16} />
                             </button>
                             <button
                               className="btn-icon btn-icon-ghost"
@@ -1436,17 +1427,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                               aria-label={t('cleaningSettings.removeProperty')}
                               title={t('cleaningSettings.removeProperty')}
                             >
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 20 20"
-                                width="16"
-                                height="16"
-                              >
-                                <path
-                                  d="M6 2a2 2 0 0 0-2 2v1h12V4a2 2 0 0 0-2-2H6zm11 4H3v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6zM8 8v6m4-6v6"
-                                  fill="currentColor"
-                                />
-                              </svg>
+                              <YlIcon name="trash" size={16} />
                             </button>
                           </div>
                         </td>
@@ -1874,7 +1855,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                 onClick={() => setDefaultConfirmOpen(false)}
                 aria-label={t('common.close')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -1922,7 +1903,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                 onClick={() => setPendingRemove(null)}
                 aria-label={t('common.close')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

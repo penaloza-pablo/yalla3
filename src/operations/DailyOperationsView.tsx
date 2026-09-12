@@ -74,6 +74,7 @@ import type {
   VisitTypeRecord,
 } from './types'
 import { isResolvedTaskStatus } from './types'
+import { YlIcon } from '../design/icons'
 
 type OpsMode = 'dashboard' | 'unassigned' | 'templates'
 type DashboardViewMode = 'dashboard' | 'kanban' | 'agenda' | 'day'
@@ -2180,19 +2181,9 @@ export function DailyOperationsView({
                   onClick={onToggleMobileSearch}
                 >
                   {isMobileSearchOpen ? (
-                    <span aria-hidden="true">✕</span>
+                    <YlIcon name="xmark" size={16} />
                   ) : (
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="magnifyingglass" size={16} />
                   )}
                 </button>
               ) : null}
@@ -2220,14 +2211,7 @@ export function DailyOperationsView({
                       : t('operations.createVisit')
                 }
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                </svg>
+                <YlIcon name="plus" size={16} />
               </button>
               ) : null}
               {mode === 'dashboard' ? (
@@ -2248,17 +2232,7 @@ export function DailyOperationsView({
                     setIsFilterOpen(true)
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {activeFilterCount > 0 ? (
                     <span className="filter-badge">{activeFilterCount}</span>
                   ) : null}
@@ -2273,17 +2247,7 @@ export function DailyOperationsView({
                   aria-label={t('common.filters')}
                   onClick={() => templatesPanelRef.current?.openFilters()}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="line.3.horizontal.decrease" size={16} />
                   {templateFilterCount > 0 ? (
                     <span className="filter-badge">{templateFilterCount}</span>
                   ) : null}
@@ -2309,17 +2273,7 @@ export function DailyOperationsView({
                 }}
                 aria-label={t('operations.refresh')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -2515,17 +2469,7 @@ export function DailyOperationsView({
                             setIsAssignVisitOpen(true)
                           }}
                         >
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            width="16"
-                            height="16"
-                          >
-                            <path
-                              d="M11 4h5v5h-2V7.4l-5.3 5.3-1.4-1.4L12.6 6H11V4zM4 6h5v2H6v8h8v-3h2v5H4V6z"
-                              fill="currentColor"
-                            />
-                          </svg>
+                          <YlIcon name="square.and.arrow.up" size={16} />
                         </button>
                         {can(ACTION_KEYS.unassignedTasksEdit) ? (
                           <button
@@ -2548,7 +2492,7 @@ export function DailyOperationsView({
                               setIsTaskFormOpen(true)
                             }}
                           >
-                            ✎
+                            <YlIcon name="pencil" size={16} />
                           </button>
                         ) : null}
                         <button
@@ -2558,17 +2502,7 @@ export function DailyOperationsView({
                           title={t('operations.completeTask')}
                           onClick={() => void completeTask(task)}
                         >
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            width="16"
-                            height="16"
-                          >
-                            <path
-                              d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
-                              fill="currentColor"
-                            />
-                          </svg>
+                          <YlIcon name="checkmark" size={16} />
                         </button>
                         {task.status !== 'DISMISS' ? (
                           <button
@@ -2578,7 +2512,7 @@ export function DailyOperationsView({
                             title={t('operations.dismissTask')}
                             onClick={() => void dismissTask(task)}
                           >
-                            ✕
+                            <YlIcon name="xmark" size={16} />
                           </button>
                         ) : null}
                         </div>
@@ -2623,7 +2557,7 @@ export function DailyOperationsView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -2854,7 +2788,7 @@ export function DailyOperationsView({
                 onClick={() => setSelectedVisitId(null)}
                 aria-label={t('operations.closeVisitDetail')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body operations-detail-body">
@@ -2893,7 +2827,7 @@ export function DailyOperationsView({
                   title={t('operations.moreInfo')}
                   onClick={() => setIsVisitMoreInfoOpen((current) => !current)}
                 >
-                  i
+                  <YlIcon name="info.circle" size={14} />
                 </button>
                 ) : null}
                 <button
@@ -2903,17 +2837,7 @@ export function DailyOperationsView({
                   title={t('operations.editVisit')}
                   onClick={() => openEditVisit(selectedVisit)}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M4 13.5V16h2.5L14.9 7.6l-2.5-2.5L4 13.5zm11.7-8.2a.7.7 0 0 0 0-1l-1.5-1.5a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.2-1.2z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="pencil" size={16} />
                 </button>
                 {selectedVisit.status !== 'COMPLETED' &&
                 selectedVisit.status !== 'CANCELLED' ? (
@@ -2930,17 +2854,7 @@ export function DailyOperationsView({
                       }
                       onClick={openCompleteVisitModal}
                     >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <YlIcon name="checkmark" size={16} />
                     </button>
                     {canCreateTasks ? (
                     <button
@@ -2960,17 +2874,7 @@ export function DailyOperationsView({
                         setIsTaskFormOpen(true)
                       }}
                     >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <YlIcon name="plus" size={16} />
                     </button>
                     ) : null}
                   </>
@@ -3116,7 +3020,7 @@ export function DailyOperationsView({
                 type="button"
                 onClick={() => setIsVisitFormOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body form-grid">
@@ -3353,7 +3257,7 @@ export function DailyOperationsView({
                 type="button"
                 onClick={() => setIsTaskFormOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body form-grid">
@@ -3493,7 +3397,7 @@ export function DailyOperationsView({
                 type="button"
                 onClick={() => setIsCancelVisitOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -3602,7 +3506,7 @@ export function DailyOperationsView({
                 type="button"
                 onClick={() => setIsCompleteVisitOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body form-grid">
@@ -3672,7 +3576,7 @@ export function DailyOperationsView({
                 type="button"
                 onClick={() => setIsAssignVisitOpen(false)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

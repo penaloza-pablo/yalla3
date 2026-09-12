@@ -18,6 +18,7 @@ import {
   type VisitOverlapUnit,
 } from './visitOverlapLayout'
 import type { PropertyOption, VisitRecord } from './types'
+import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 const DRAG_MIME = 'application/x-yalla-visit'
 const AGENDA_LANE_HEIGHT = 26
@@ -277,7 +278,7 @@ export function OperationsAgendaView({
                             })
                       }
                     >
-                      {row.isExpanded ? '▾' : '▸'}
+                      <YlDisclosureIcon open={row.isExpanded} />
                     </button>
                   ) : null}
                   <span>{row.propertyLabel}</span>
@@ -587,7 +588,7 @@ function AgendaVisitChip({
       </span>
       {isTerminalVisit(visit) ? (
         <span className="operations-agenda-terminal-mark">
-          {visit.status === 'COMPLETED' ? '✓' : '✕'}
+          {visit.status === 'COMPLETED' ? <YlIcon name="checkmark" size={12} /> : <YlIcon name="xmark" size={12} />}
         </span>
       ) : null}
     </button>

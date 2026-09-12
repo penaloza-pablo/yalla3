@@ -7,6 +7,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YlIcon } from './design/icons'
 
 const PRIMARY = '#6D5EF7'
 const LOREM =
@@ -873,12 +874,7 @@ function Step5Deletion({
               setBranch('compensation')
             }}
           >
-            <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden>
-              <path
-                fill="currentColor"
-                d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-              />
-            </svg>
+            <YlIcon name="checkmark" size={32} />
             <span>{t('common.yes')}</span>
           </button>
           <button
@@ -891,12 +887,7 @@ function Step5Deletion({
               setBranch('public_idle')
             }}
           >
-            <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden>
-              <path
-                fill="currentColor"
-                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"
-              />
-            </svg>
+            <YlIcon name="xmark" size={32} />
             <span>{t('common.no')}</span>
           </button>
         </div>

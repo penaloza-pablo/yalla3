@@ -4,6 +4,7 @@ import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { usePermissions } from './PermissionsProvider'
+import { YlIcon } from '../design/icons'
 
 type RoleOption = {
   id: string
@@ -186,19 +187,9 @@ export function UsersPanel({
                 onClick={onToggleMobileSearch}
               >
                 {isMobileSearchOpen ? (
-                  <span aria-hidden="true">✕</span>
+                  <YlIcon name="xmark" size={16} />
                 ) : (
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="magnifyingglass" size={16} />
                 )}
               </button>
               <button
@@ -208,17 +199,7 @@ export function UsersPanel({
                 disabled={isLoading}
                 aria-label={t('common.refresh')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>

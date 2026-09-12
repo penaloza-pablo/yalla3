@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { VisitRecord, VisitStatus } from './types'
+import { YlIcon } from '../design/icons'
 
 type Column = {
   key: VisitStatus | 'DONE'
@@ -90,7 +91,7 @@ export function OperationsKanbanView({
                             title={t('operations.tasksCompleted')}
                           >
                             <span className="tag-task-progress-icon" aria-hidden>
-                              ✓
+                              <YlIcon name="checkmark" size={10} />
                             </span>
                             {taskTotal > 0
                               ? `${taskCompleted}/${taskTotal}`

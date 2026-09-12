@@ -6,6 +6,10 @@ import {
 } from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
+  occurrencePriceWithIva,
+  parseIvaRate,
+} from '../shared/iva';
+import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
@@ -178,6 +182,8 @@ type InventoryPayload = {
   updated?: string;
   rebuyQty?: number;
   unitPrice?: number;
+  vatRate?: number;
+  grossUnitPrice?: number;
   tolerance?: number;
   createdBy?: string;
   consumptionRulesJson?: string;
@@ -343,6 +349,13 @@ export const handler = async (event: {
     'Last updated': formatDateForStorage(updated),
     rebuyQty: rebuyQtyValue,
     unitPrice: Number(payload.unitPrice) || 0,
+    vatRate: parseIvaRate(payload.vatRate) ?? 0,
+    grossUnitPrice:
+      Number(payload.grossUnitPrice) ||
+      occurrencePriceWithIva(
+        Number(payload.unitPrice) || 0,
+        parseIvaRate(payload.vatRate) ?? 0,
+      ),
     Tolerance: Number(tolerance) || 0,
     ...(incomingRules !== undefined
       ? { consumptionRules: incomingRules }

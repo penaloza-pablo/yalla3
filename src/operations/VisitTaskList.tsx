@@ -7,6 +7,7 @@ import {
   editableTaskTitle,
 } from './taskTitleDisplay'
 import type { TaskRecord, VisitDraftTask } from './types'
+import { YlIcon } from '../design/icons'
 
 type WorkProps = {
   mode: 'work'
@@ -33,21 +34,11 @@ type DesignProps = {
 type Props = WorkProps | DesignProps
 
 const EditIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M4 13.5V16h2.5L14.9 7.6l-2.5-2.5L4 13.5zm11.7-8.2a.7.7 0 0 0 0-1l-1.5-1.5a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.2-1.2z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="pencil" size={16} />
 )
 
 const DeleteIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M8 2h4l.6 1H16v2H4V3h3.4L8 2zm1 5h2v8H9V7zm-3 0h2v8H6V7zm6 0h2v8h-2V7zM5 17h10l.7-10H4.3L5 17z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="trash" size={16} />
 )
 
 export function VisitTaskList(props: Props) {
@@ -228,7 +219,7 @@ export function VisitTaskList(props: Props) {
                 disabled={!canToggleTask || isCompleted}
                 onClick={() => props.onComplete(task)}
               >
-                ✓
+                <YlIcon name="checkmark" size={16} />
               </button>
               <button
                 type="button"
@@ -240,7 +231,7 @@ export function VisitTaskList(props: Props) {
                 disabled={!canToggleTask || isSkipped || isSkipping}
                 onClick={() => props.onSkip(task)}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
           </li>

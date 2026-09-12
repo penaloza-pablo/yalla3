@@ -172,10 +172,30 @@
   color: var(--yl-go);
 }
 
+.yl-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.btn-page-info {
+  font-style: normal;
+}
+
+.notice {
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
 .notice.success {
   background: var(--yl-go-soft);
   border: 1px solid #c7d7d5;
   color: var(--yl-go);
+}
+
+.notice.warning {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  color: var(--yl-warning);
 }
 
 .today-card {
@@ -555,6 +575,36 @@
   }
 }
 
+.yl-stat-card .card-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.yl-stat-card.is-success .card-value {
+  color: var(--yl-success);
+}
+
+.yl-stat-card.is-warning .card-value {
+  color: var(--yl-warning);
+}
+
+.yl-stat-card.is-danger .card-value {
+  color: var(--yl-danger);
+}
+
+.yl-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--yl-fill);
+  overflow: hidden;
+}
+
+.yl-progress span {
+  display: block;
+  height: 100%;
+  background: var(--yl-go);
+  border-radius: inherit;
+}
+
 .yl-empty {
   display: flex;
   flex-direction: column;
@@ -605,13 +655,30 @@
   background: var(--yl-danger);
 }
 
-.app[data-workspace='field'] .yl-toast-stack,
-body:has([data-workspace='field']) .yl-toast-stack {
-  inset-block-end: calc(72px + env(safe-area-inset-bottom, 0px));
-}
-
 .table-empty {
   color: var(--yl-text-3);
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+  .yl-domain-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding-block: 4px 8px;
+    background: var(--yl-bg);
+  }
+
+  .yl-visit-sheet {
+    align-items: stretch;
+    padding: 24px;
+  }
+
+  .yl-visit-sheet .operations-detail-modal {
+    width: min(640px, 92vw);
+    max-height: 92dvh;
+    border-radius: 16px;
+    margin-block: auto;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -660,24 +727,7 @@ body:has([data-workspace='field']) .yl-toast-stack {
     inset-block-end: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
-  body:has([data-workspace='field']) .yl-toast-stack {
-    inset-block-end: calc(148px + env(safe-area-inset-bottom, 0px));
-  }
-
   .main {
     background: var(--yl-bg);
-  }
-
-  .app[data-workspace='field'] .mobile-topbar:not(.is-search-open) .mobile-menu-button {
-    display: none;
-  }
-
-  body:has([data-workspace='field']) .page-action-bar {
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-    z-index: 20;
-  }
-
-  .field-tabbar {
-    z-index: 30;
   }
 }

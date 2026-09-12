@@ -21,6 +21,7 @@ import type {
   CleaningPlanStatus,
   PropertyCleaningType,
 } from './types'
+import { YlIcon } from '../design/icons'
 
 const EARLY_CHECK_IN_CUTOFF = '12:30'
 const EARLY_CHECK_IN_SUGGESTED = '11:00'
@@ -672,7 +673,7 @@ export function CleaningPlanView({
               aria-expanded={isSummaryInfoOpen}
               onClick={onToggleSummaryInfo}
             >
-              i
+              <YlIcon name="info.circle" size={14} />
             </button>
           </div>
           <p className="subtitle">{t('cleaningPlan.subtitle')}</p>
@@ -684,17 +685,7 @@ export function CleaningPlanView({
                 className="btn-ghost cleaning-plan-jump-btn"
                 title={t('operations.chooseDate')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M6 2h2v2h4V2h2v2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zm10 6H4v8h12V8z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="calendar" size={16} />
                 <input
                   className="operations-day-date-input"
                   type="date"
@@ -717,17 +708,7 @@ export function CleaningPlanView({
                   setIsFilterOpen(true)
                 }}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="line.3.horizontal.decrease" size={16} />
                 {isCustomRange ? <span className="filter-badge">1</span> : null}
               </button>
               <button
@@ -736,17 +717,7 @@ export function CleaningPlanView({
                 onClick={() => void refreshPage()}
                 aria-label={t('common.refresh')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -812,7 +783,7 @@ export function CleaningPlanView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -967,18 +938,7 @@ export function CleaningPlanView({
                           <span className="cleaning-plan-view-text">
                             {t('cleaningPlan.viewDay')}
                           </span>
-                          <svg
-                            className="cleaning-plan-view-icon"
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            width="18"
-                            height="18"
-                          >
-                            <path
-                              d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                              fill="currentColor"
-                            />
-                          </svg>
+                          <YlIcon name="magnifyingglass" size={18} className="cleaning-plan-view-icon" />
                         </button>
                       </td>
                     </tr>

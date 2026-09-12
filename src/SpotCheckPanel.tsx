@@ -6,6 +6,7 @@ import { useConfirm } from './design/ConfirmDialog'
 import { displayInventoryName, translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
 import { MobileBodyPortal } from './MobileBodyPortal'
+import { YlIcon, YlSortIcon } from './design/icons'
 
 type SpotCheckRow = {
   id: string
@@ -77,45 +78,23 @@ const matchesLocationKey = (location: string, key: LocationQuickFilter) => {
 const clampQuantity = (value: number) => Math.max(0, Math.trunc(value))
 
 const CheckIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 5.4-5.4 1.4 1.4-6.8 6.8z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="checkmark" size={16} />
 )
 
 const ResetIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M10 3.2a6.8 6.8 0 1 0 6.4 8.9l-1.6-.6A5.2 5.2 0 1 1 10 4.8V7l3.2-3.2L10 .6V3.2z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="arrow.uturn.backward" size={16} />
 )
 
 const SkipIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path d="M4 4.5v11l7.5-5.5L4 4.5zm9.5 0h2v11h-2v-11z" fill="currentColor" />
-  </svg>
+  <YlIcon name="forward.end" size={16} />
 )
 
 const BackIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M12.7 4.3 7 10l5.7 5.7 1.4-1.4L9.8 10l4.3-4.3-1.4-1.4z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="chevron.left" size={16} />
 )
 
 const CompleteIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-    <path
-      d="M10 1.8a8.2 8.2 0 1 0 0 16.4 8.2 8.2 0 0 0 0-16.4zm0 1.6a6.6 6.6 0 1 1 0 13.2 6.6 6.6 0 0 1 0-13.2zm3.3 3.7-4.7 4.7-2.2-2.2-1.3 1.3 3.5 3.5 6-6-1.3-1.3z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="checkmark.circle" size={16} />
 )
 
 export function SpotCheckPanel({
@@ -518,7 +497,7 @@ export function SpotCheckPanel({
               aria-expanded={isSummaryInfoOpen}
               onClick={onToggleSummaryInfo}
             >
-              i
+              <YlIcon name="info.circle" size={14} />
             </button>
           </div>
           <p className="subtitle">{t('spotCheck.subtitle')}</p>
@@ -591,19 +570,9 @@ export function SpotCheckPanel({
                     onClick={onToggleMobileSearch}
                   >
                     {isMobileSearchOpen ? (
-                      <span aria-hidden="true">✕</span>
+                      <YlIcon name="xmark" size={16} />
                     ) : (
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <YlIcon name="magnifyingglass" size={16} />
                     )}
                   </button>
                   <button
@@ -620,17 +589,7 @@ export function SpotCheckPanel({
                       setIsListFilterOpen(true)
                     }}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="line.3.horizontal.decrease" size={16} />
                     {activeFilterCount > 0 ? (
                       <span className="filter-badge">{activeFilterCount}</span>
                     ) : null}
@@ -642,17 +601,7 @@ export function SpotCheckPanel({
                     onClick={openWizard}
                     aria-label={t('spotCheck.new')}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="plus" size={16} />
                   </button>
                   ) : null}
                   <button
@@ -662,17 +611,7 @@ export function SpotCheckPanel({
                     disabled={isLoading}
                     aria-label={t('common.refresh')}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="arrow.clockwise" size={16} />
                   </button>
                 </>
               )}
@@ -828,7 +767,7 @@ export function SpotCheckPanel({
                       >
                         {t('common.date')}
                         <span className="sort-indicator">
-                          {sortDirection === 'asc' ? '▲' : '▼'}
+                          <YlSortIcon direction={sortDirection} />
                         </span>
                       </button>
                     </th>
@@ -917,7 +856,7 @@ export function SpotCheckPanel({
                 onClick={() => setIsListFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -1043,7 +982,7 @@ export function SpotCheckPanel({
                 onClick={closeFilterModal}
                 aria-label={t('common.close')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

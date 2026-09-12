@@ -24,6 +24,7 @@ import type {
   VisitTemplateRecord,
   VisitTypeRecord,
 } from './types'
+import { YlIcon, YlSortIcon } from '../design/icons'
 
 type TemplateFilters = {
   propertyIds: string[]
@@ -428,7 +429,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                   >
                     {t('common.name')}
                     <span className="sort-indicator">
-                      {nameSort === 'asc' ? '▲' : nameSort === 'desc' ? '▼' : '↕'}
+                      <YlSortIcon direction={nameSort} />
                     </span>
                   </button>
                 </th>
@@ -465,7 +466,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                           title={t('operations.editTemplate')}
                           onClick={() => openEditTemplate(template)}
                         >
-                          <span aria-hidden="true">✎</span>
+                          <YlIcon name="pencil" size={16} />
                         </button>
                         <button
                           type="button"
@@ -474,17 +475,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                           title={t('operations.duplicateTemplate')}
                           onClick={() => openDuplicateTemplate(template)}
                         >
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            width="16"
-                            height="16"
-                          >
-                            <path
-                              d="M7 3h10v10h-2V5H7V3zm-4 4h10v10H3V7zm2 2v6h6V9H5z"
-                              fill="currentColor"
-                            />
-                          </svg>
+                          <YlIcon name="square.on.square" size={16} />
                         </button>
                         {template.active ? (
                           <button
@@ -494,17 +485,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                             title={t('operations.deactivateTemplate')}
                             onClick={() => void deactivateTemplate(template)}
                           >
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 20 20"
-                              width="16"
-                              height="16"
-                            >
-                              <path
-                                d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm3.5 10.9L8.9 6.5 6.5 8.9l4.6 4.6 2.4-2.4z"
-                                fill="currentColor"
-                              />
-                            </svg>
+                            <YlIcon name="clock" size={16} />
                           </button>
                         ) : (
                           <button
@@ -514,17 +495,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                             title={t('operations.reactivateTemplate')}
                             onClick={() => void reactivateTemplate(template)}
                           >
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 20 20"
-                              width="16"
-                              height="16"
-                            >
-                              <path
-                                d="M10 3a7 7 0 1 0 6.3 4H14a5 5 0 1 1-4 8.5V13l4 3-4 3v-2.2A7 7 0 0 0 10 3z"
-                                fill="currentColor"
-                              />
-                            </svg>
+                            <YlIcon name="arrow.triangle.2.circlepath" size={16} />
                           </button>
                         )}
                       </div>
@@ -551,7 +522,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -686,7 +657,7 @@ export const VisitTemplatesPanel = forwardRef(function VisitTemplatesPanel(
                   setFormError(null)
                 }}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body form-grid">

@@ -48,6 +48,7 @@ import type {
   VisitTypeRecord,
 } from './types'
 import { isResolvedTaskStatus } from './types'
+import { YlIcon } from '../design/icons'
 
 type CleaningTypeBadge = {
   pending: boolean
@@ -1155,7 +1156,7 @@ export function VisitDetailModal({
             onClick={onClose}
             aria-label={t('operations.closeVisitDetail')}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <div className="modal-body operations-detail-body">
@@ -1200,7 +1201,7 @@ export function VisitDetailModal({
                   title={t('operations.moreInfo')}
                   onClick={() => setIsMoreInfoOpen((current) => !current)}
                 >
-                  i
+                  <YlIcon name="info.circle" size={14} />
                 </button>
                 ) : null}
                 <button
@@ -1210,17 +1211,7 @@ export function VisitDetailModal({
                   title={t('operations.editVisit')}
                   onClick={openEdit}
                 >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M4 13.5V16h2.5L14.9 7.6l-2.5-2.5L4 13.5zm11.7-8.2a.7.7 0 0 0 0-1l-1.5-1.5a.7.7 0 0 0-1 0l-1.2 1.2 2.5 2.5 1.2-1.2z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="pencil" size={16} />
                 </button>
                 {canChangeStatus ? (
                   <button
@@ -1235,17 +1226,7 @@ export function VisitDetailModal({
                     }
                     onClick={openComplete}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M7.8 13.4 4.6 10.2l1.4-1.4 1.8 1.8 6-6 1.4 1.4-7.4 7.4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="checkmark" size={16} />
                   </button>
                 ) : null}
                 {canChangeStatus && canCreateTasks ? (
@@ -1260,17 +1241,7 @@ export function VisitDetailModal({
                       setIsAddTaskOpen(true)
                     }}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                    >
-                      <path
-                        d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="plus" size={16} />
                   </button>
                 ) : null}
               </div>
@@ -1419,7 +1390,7 @@ export function VisitDetailModal({
               onClick={() => setIsEditOpen(false)}
               aria-label={t('common.close')}
             >
-              ✕
+              <YlIcon name="xmark" size={16} />
             </button>
           </div>
           <div className="modal-body form-grid">
@@ -1637,7 +1608,7 @@ export function VisitDetailModal({
             onClick={() => setIsCompleteOpen(false)}
             aria-label={t('common.close')}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <div className="modal-body form-grid">
@@ -1715,7 +1686,7 @@ export function VisitDetailModal({
             onClick={() => setIsCancelOpen(false)}
             aria-label={t('common.close')}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <div className="modal-body">
@@ -1823,7 +1794,7 @@ export function VisitDetailModal({
             onClick={() => setIsAddTaskOpen(false)}
             aria-label={t('common.close')}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <div className="modal-body form-grid">

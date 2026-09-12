@@ -6,6 +6,10 @@ import {
 } from '../shared/activity-log';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import {
+  occurrencePriceWithIva,
+  parseIvaRate,
+} from '../shared/iva';
+import {
   DynamoDBDocumentClient,
   DeleteCommand,
   GetCommand,
@@ -29,6 +33,10 @@ type PurchasePayload = {
   location?: string;
   vendor?: string;
   units?: number;
+  unitPrice?: number;
+  vatRate?: number;
+  ivaRate?: number;
+  grossUnitPrice?: number;
   totalPrice?: number;
   deliveryDate?: string;
   purchaseDate?: string;
@@ -364,6 +372,9 @@ const updateInventoryOnConfirm = async (params: {
   itemId: string;
   units: number;
   totalPrice: number;
+  unitPrice?: number;
+  vatRate?: number | null;
+  grossUnitPrice?: number;
 }) => {
   const inventoryResult = await client.send(
     new GetCommand({
@@ -387,15 +398,28 @@ const updateInventoryOnConfirm = async (params: {
   const nextStatus = hasOtherOpenPurchases
     ? INVENTORY_WAITING_DELIVERY
     : computeInventoryStatus(nextQuantity, rebuyQty);
+  const vatRate = parseIvaRate(params.vatRate);
   const unitPriceValue =
-    params.units > 0 ? params.totalPrice / params.units : 0;
+    params.unitPrice && params.unitPrice > 0
+      ? params.unitPrice
+      : params.units > 0
+        ? params.totalPrice / params.units
+        : 0;
+  const grossUnitPriceValue =
+    params.grossUnitPrice && params.grossUnitPrice > 0
+      ? params.grossUnitPrice
+      : vatRate === null
+        ? unitPriceValue
+        : occurrencePriceWithIva(unitPriceValue, vatRate);
 
   await client.send(
     new UpdateCommand({
       TableName: params.inventoryTable,
       Key: { id: params.itemId },
       UpdateExpression:
-        'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated',
+        vatRate === null
+          ? 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated'
+          : 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #vatRate = :vatRate, #grossUnitPrice = :grossUnitPrice, #lastUpdated = :lastUpdated',
       ConditionExpression:
         'attribute_exists(id) AND (attribute_not_exists(#quantity) OR #quantity = :currentQuantity)',
       ExpressionAttributeNames: {
@@ -403,6 +427,12 @@ const updateInventoryOnConfirm = async (params: {
         '#status': 'Status',
         '#unitPrice': 'unitPrice',
         '#lastUpdated': 'Last updated',
+        ...(vatRate === null
+          ? {}
+          : {
+              '#vatRate': 'vatRate',
+              '#grossUnitPrice': 'grossUnitPrice',
+            }),
       },
       ExpressionAttributeValues: {
         ':quantity': nextQuantity,
@@ -410,6 +440,12 @@ const updateInventoryOnConfirm = async (params: {
         ':unitPrice': unitPriceValue,
         ':lastUpdated': formatDateForStorage(),
         ':currentQuantity': currentQuantity,
+        ...(vatRate === null
+          ? {}
+          : {
+              ':vatRate': vatRate,
+              ':grossUnitPrice': grossUnitPriceValue,
+            }),
       },
     }),
   );
@@ -554,6 +590,9 @@ export const handler = async (event: {
   const location = payload.location ?? payload.Location;
   const vendor = payload.vendor ?? payload.Vendor;
   const units = payload.units ?? payload.Units;
+  const unitPrice = payload.unitPrice;
+  const vatRate = parseIvaRate(payload.vatRate ?? payload.ivaRate);
+  const grossUnitPrice = payload.grossUnitPrice;
   const totalPrice = payload.totalPrice ?? payload['Total price'];
   const deliveryDate = payload.deliveryDate ?? payload['Delivery date'];
   const purchaseDate = payload.purchaseDate ?? payload['Purchase date'];
@@ -646,6 +685,21 @@ export const handler = async (event: {
     Vendor: String(vendor).trim(),
     Units: Number(units) || 0,
     'Total price': totalPriceValue,
+    ...(isDirect
+      ? {}
+      : {
+          unitPrice:
+            Number(unitPrice) ||
+            (Number(units) > 0 ? totalPriceValue / Number(units) : 0),
+          vatRate: vatRate ?? 21,
+          grossUnitPrice:
+            Number(grossUnitPrice) ||
+            occurrencePriceWithIva(
+              Number(unitPrice) ||
+                (Number(units) > 0 ? totalPriceValue / Number(units) : 0),
+              vatRate ?? 21,
+            ),
+        }),
     'Delivery date': deliveryDateValue,
     'Purchase date': formatDateForStorage(purchaseDate),
     Status: statusValue,
@@ -708,6 +762,9 @@ export const handler = async (event: {
           itemId: linkedItemId,
           units: Number(units) || 0,
           totalPrice: totalPriceValue,
+          unitPrice: Number(unitPrice) || undefined,
+          vatRate,
+          grossUnitPrice: Number(grossUnitPrice) || undefined,
         });
       } else if (!isReceivedPurchaseStatus(statusValue)) {
         await markInventoryWaitingDelivery({

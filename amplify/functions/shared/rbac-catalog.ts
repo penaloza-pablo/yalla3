@@ -60,6 +60,19 @@ export const NAVIGATION: NavGroup[] = [
       'Services & Subscriptions',
     ],
   },
+  {
+    section: 'Visual',
+    items: [
+      'Visual Buttons',
+      'Visual Messages',
+      'Visual Action bars',
+      'Visual Cards',
+      'Visual Inputs',
+      'Visual Tokens',
+      'Visual Icons',
+      'Visual Lab',
+    ],
+  },
 ]
 
 export const ALL_PAGES: string[] = [
@@ -212,6 +225,7 @@ export const ROLE_SEEDS: {
             page !== 'Roles' &&
             !page.startsWith('Grow solution') &&
             !page.startsWith('Finance solution') &&
+            !page.startsWith('Visual ') &&
             page !== 'Property Reports' &&
             page !== 'Reports Settings' &&
             page !== 'Property Groups' &&

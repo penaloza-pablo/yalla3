@@ -28,6 +28,7 @@ import {
 import { resolveYallaPropertyLabel } from '../../amplify/functions/shared/property-identity'
 import { YallaSwitch } from './YallaSwitch'
 import { LinenBadgeSelect } from './LinenBadgeSelect'
+import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -153,21 +154,11 @@ const warningsForRow = (row: PlanRow): PlannerWarningCode[] => {
 }
 
 const CheckIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-    <path
-      d="M10 1.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17zm3.3 5.7-4.2 5.1-2.2-2.2-1.4 1.4 3 3a1 1 0 0 0 1.5-.1l4.9-6-1.6-1.2z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="checkmark.circle" size={18} variant="fill" />
 )
 
 const WarningIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18">
-    <path
-      d="M10 1.6 18.5 17H1.5L10 1.6zM9 8h2v4H9V8zm1 7.2A1.1 1.1 0 1 0 10 13a1.1 1.1 0 0 0 0 2.2z"
-      fill="currentColor"
-    />
-  </svg>
+  <YlIcon name="exclamationmark.triangle" size={18} variant="fill" />
 )
 
 const PlanStatusIcon = ({
@@ -485,19 +476,9 @@ export function BookingsPlanView({
                 onClick={onToggleMobileSearch}
               >
                 {isMobileSearchOpen ? (
-                  <span aria-hidden="true">✕</span>
+                  <YlIcon name="xmark" size={16} />
                 ) : (
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 20 20"
-                    width="16"
-                    height="16"
-                  >
-                    <path
-                      d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l3.65 3.65-1.41 1.41-3.65-3.65A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <YlIcon name="magnifyingglass" size={16} />
                 )}
               </button>
               <button
@@ -512,17 +493,7 @@ export function BookingsPlanView({
                   setIsFilterOpen(true)
                 }}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="line.3.horizontal.decrease" size={16} />
                 {hasActiveFilters ? (
                   <span className="filter-badge">{activeFilterCount}</span>
                 ) : null}
@@ -534,17 +505,7 @@ export function BookingsPlanView({
                 disabled={isLoading}
                 aria-label={t('common.refresh')}
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -702,7 +663,7 @@ export function BookingsPlanView({
                               aria-expanded={isExpanded}
                               aria-label={t('common.toggleDetails')}
                             >
-                              {isExpanded ? '▾' : '▸'}
+                              <YlDisclosureIcon open={isExpanded} />
                             </button>
                           </div>
                         </td>
@@ -827,7 +788,7 @@ export function BookingsPlanView({
                                               })
                                             }
                                           >
-                                            ×
+                                            <YlIcon name="xmark" size={14} />
                                           </button>
                                         ) : null}
                                       </li>
@@ -862,7 +823,7 @@ export function BookingsPlanView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -950,7 +911,7 @@ export function BookingsPlanView({
                 onClick={() => setDismissConfirm(null)}
                 aria-label={t('common.close')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

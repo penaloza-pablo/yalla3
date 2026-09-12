@@ -16,13 +16,14 @@ Estados: `Not Audited` · `Audited` · `Designed` · `Implementing` · `Implemen
 |---|---|---|
 | Entorno / PWA / tests | Implementing | theme-color Yalla; sin service worker (N2) |
 | Inventario funcional | Audited | `FUNCTIONAL_INVENTORY.md` |
-| IA / UX architecture | Designed | Oficio vs campo; protocolo de módulos |
+| IA / UX architecture | Designed | Layout por viewport (móvil / tablet / escritorio); RBAC filtra páginas |
 | Design system (spec) | Designed | Paleta Yalla + inspiración KK |
 | Decisiones | Audited | `DECISIONS.md` |
 | Auditoría backend | Audited | `BACKEND_ARCHITECTURE_AUDIT.md` |
-| Fundaciones (tokens + primitivas) | Implemented | tokens + chrome + ConfirmDialog + SegmentedControl + Toast |
+| Fundaciones (tokens + primitivas) | Implemented | tokens + chrome + ConfirmDialog + SegmentedControl + Toast + catálogo Visual |
 | Shell nav desktop | Implemented | Dominios en sidebar + tabs internos |
-| Shell nav móvil | Implemented | Oficina drawer de dominios; campo Hoy/Plan/Incidencias/Más verificado |
+| Shell nav desktop | Implemented | Dominios en sidebar + tabs internos |
+| Shell nav móvil | Implemented | Mismo drawer de dominios para todos los roles; sin bottom nav de campo |
 | Auth / login | Implemented | Authenticator + sign out |
 | Hoy / Resumen diario | Implemented | Segmented Hoy/Día/Kanban/Agenda |
 | Cleaning Plan | Implemented | Día como página; skeleton/vacío |
@@ -68,3 +69,5 @@ Estados: `Not Audited` · `Audited` · `Designed` · `Implementing` · `Implemen
 | 2026-09-12 | Controles a tokens Yalla; sidebar de dominios + DomainTabs; inspector visita desktop; skeletons/toasts |
 | 2026-09-12 | Campo iPhone: bottom nav Hoy/Plan/Incidencias/Más; hamburger fuera; tabbar no tapa acciones |
 | 2026-09-12 | Oficina en móvil: tabs de dominio fijos en topbar; Hoy/Día/Kanban/Agenda visibles y sticky |
+| 2026-09-12 | B2 revertido: un solo shell por viewport (móvil / tablet / escritorio); se elimina la nav de campo por rol |
+| 2026-09-12 | Sistema visual: dominio admin con catálogo yl.*, frames móvil/escritorio y laboratorio de borradores |

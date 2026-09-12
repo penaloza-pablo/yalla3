@@ -8,7 +8,11 @@ import {
   type ReactNode,
 } from 'react'
 import { Hub } from 'aws-amplify/utils'
-import { allPermissionKeys, pagePermission } from '../../amplify/functions/shared/rbac-catalog'
+import {
+  ADMIN_ROLE_ID,
+  allPermissionKeys,
+  pagePermission,
+} from '../../amplify/functions/shared/rbac-catalog'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
 
@@ -70,10 +74,18 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           throw new Error(await response.text())
         }
         const payload = (await response.json()) as PermissionsResponse
-        setRoleId(payload.roleId ?? null)
+        const nextRoleId = payload.roleId ?? null
+        const isBootstrap = Boolean(payload.bootstrap)
+        setRoleId(nextRoleId)
         setRoleName(payload.roleName ?? null)
-        setBootstrap(Boolean(payload.bootstrap))
-        setPermissions(new Set(payload.permissions ?? []))
+        setBootstrap(isBootstrap)
+        setPermissions(
+          new Set(
+            nextRoleId === ADMIN_ROLE_ID || isBootstrap
+              ? allPermissionKeys()
+              : (payload.permissions ?? []),
+          ),
+        )
         setLoadError(null)
         setReady(true)
         return

@@ -32,6 +32,7 @@ import {
   type PropertyCleaningDetailsRecord,
   type PropertyCleaningType,
 } from './types'
+import { YlIcon } from '../design/icons'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -582,7 +583,7 @@ export function CleaningBillingView({
               aria-expanded={isSummaryInfoOpen}
               onClick={onToggleSummaryInfo}
             >
-              i
+              <YlIcon name="info.circle" size={14} />
             </button>
           </div>
           <p className="subtitle">
@@ -606,12 +607,7 @@ export function CleaningBillingView({
                       setIsFilterOpen(true)
                     }}
                   >
-                    <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                      <path
-                        d="M3 4h14l-5.5 6.2V16l-3-1.5v-4.3L3 4z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <YlIcon name="line.3.horizontal.decrease" size={16} />
                     {activeFilterCount > 0 ? (
                       <span className="filter-badge">{activeFilterCount}</span>
                     ) : null}
@@ -632,17 +628,7 @@ export function CleaningBillingView({
                       disabled={isExporting}
                       aria-label={t('common.export')}
                     >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        width="16"
-                        height="16"
-                      >
-                        <path
-                          d="M10 3v8.2l2.4-2.4 1.4 1.4-4.8 4.8-4.8-4.8 1.4-1.4L8 11.2V3h2zm-6 12h12v2H4v-2z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <YlIcon name="square.and.arrow.down" size={16} />
                     </button>
                   ) : null}
                   {canSeePrices && month?.canEdit ? (
@@ -652,9 +638,7 @@ export function CleaningBillingView({
                       onClick={openCreate}
                       aria-label={t('cleaningBilling.addManual')}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                        <path d="M9 4h2v5h5v2h-5v5H9v-5H4V9h5V4z" fill="currentColor" />
-                      </svg>
+                      <YlIcon name="plus" size={16} />
                     </button>
                   ) : null}
                 </>
@@ -667,12 +651,7 @@ export function CleaningBillingView({
                 }
                 aria-label={t('common.refresh')}
               >
-                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16">
-                  <path
-                    d="M16 4v5h-5l1.8-1.8a4.5 4.5 0 1 0 1.3 4.3h1.9a6.5 6.5 0 1 1-1.9-4.6L16 4z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <YlIcon name="arrow.clockwise" size={16} />
               </button>
             </div>
           </div>
@@ -860,7 +839,7 @@ export function CleaningBillingView({
                                     title={t('cleaningSettings.edit')}
                                     onClick={() => openEdit(line)}
                                   >
-                                    ✎
+                                    <YlIcon name="pencil" size={16} />
                                   </button>
                                 ) : null}
                                 {line.isManual ? (
@@ -994,7 +973,7 @@ export function CleaningBillingView({
                 onClick={() => setIsFilterOpen(false)}
                 aria-label={t('common.closeFilters')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">
@@ -1093,7 +1072,7 @@ export function CleaningBillingView({
                 onClick={() => setIsFormOpen(false)}
                 aria-label={t('common.closeForm')}
               >
-                ✕
+                <YlIcon name="xmark" size={16} />
               </button>
             </div>
             <div className="modal-body">

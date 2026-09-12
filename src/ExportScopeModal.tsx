@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { YlIcon } from './design/icons'
 
 type ExportScope = 'filtered' | 'all'
 
@@ -36,7 +37,7 @@ export function ExportScopeModal({
             disabled={isExporting}
             aria-label={t('common.close')}
           >
-            ✕
+            <YlIcon name="xmark" size={16} />
           </button>
         </div>
         <div className="modal-body">

@@ -18,7 +18,7 @@ Registro vivo. Si no está aquí, no existe para el siguiente agente.
 | ID | Decisión |
 |---|---|
 | B1 | **Ocultar Grow** de la navegación de producción. Las claves RBAC `page:Grow solution *` se conservan. Toda **nueva sección** entra por el protocolo de admisión en `UX_ARCHITECTURE.md` (no se añade un item “coming soon” a la nav). |
-| B2 | Nav móvil **según rol**, no un único “primario”. Oficina: `admin`, `knock-knock-supervisor` (Knock-Knock Manager), `cleaning-supervisor`. Campo: `cleaner`, `maintenance-agent`, `maintenance-supervisor`. |
+| B2 | El chrome **no se ramifica por rol**. Solo por tamaño de dispositivo: **móvil vertical** (≤768), **tablet** (769–1023), **escritorio** (≥1024). El RBAC filtra *qué* páginas ve cada usuario, no *cómo* se navega. (Sustituye la nav campo/oficina por rol.) |
 | B3 | Logo y colores de marca **modificables**. Lo único intocable es el nombre **Yalla!**. |
 | B4 | Knock-Knock **no es mandatorio** en UI. Cualquier asociación es positiva. Referencia: `KnockKnock-BrandBasics.pdf` (rosa `#E3B9B3`, verde `#3D5B58`, azul claro `#A1B1C8`, azul oscuro `#415364`, violeta `#5E3653`). Yalla no se convierte en un clon de la marca KK. |
 | B5 | Tipos de limpieza y valores de negocio que vienen de datos (`Regular`, `Room Refresh`, etc.) **se quedan en inglés**. El chrome de la app sigue i18n. |
@@ -73,7 +73,7 @@ Ninguno abierto tras el checkpoint del 2026-09-12.
 
 ## Protocolo de nuevas secciones (B1)
 
-Ver `UX_ARCHITECTURE.md` § Incorporación de módulos. Resumen: spec funcional → permisos RBAC → empty real (no “coming soon” en nav) → tokens/primitivas → oficina y/o campo → i18n es/en (he aparte) → QA del inventario.
+Ver `UX_ARCHITECTURE.md` § Incorporación de módulos. Resumen: spec funcional → permisos RBAC → empty real (no “coming soon” en nav) → tokens/primitivas → layout móvil/tablet/escritorio → i18n es/en (he aparte) → QA del inventario.
 
 ---
 
