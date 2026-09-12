@@ -32,13 +32,12 @@ import {
 } from '../amplify/functions/shared/bookings-planner'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
-import { readRememberedPage, rememberActivePage, rememberPageInSection, readLastPageInSection } from './lib/lastActivePage'
+import { readRememberedPage, rememberActivePage, rememberPageInSection } from './lib/lastActivePage'
 import { readPageFromLocation, writePageToUrl } from './lib/page-route'
 import { visibleNavGroups } from './nav/catalog'
-import { DomainTabs } from './nav/DomainTabs'
-import { DomainGlyph } from './nav/DomainGlyph'
+import { SidebarNav } from './nav/SidebarNav'
 import { BrandMark } from './design/Brand'
-import { readDeviceLayout, useDeviceLayout } from './nav/layout'
+import { useDeviceLayout } from './nav/layout'
 import { EmptyState, TableSkeleton } from './design/Feedback'
 import { useToast } from './design/Toast'
 import {
@@ -1624,7 +1623,6 @@ function App() {
   const firstAllowedPage =
     visibleCoreItems[0] ?? visibleNavigation[0]?.items[0] ?? null
   const deviceLayout = useDeviceLayout()
-  const isMobileLayout = deviceLayout === 'mobile'
   const statusLabel = (status: string) => translateStatus(t, status)
   const itemDisplayName = (row: Pick<InventoryRow, 'name' | 'nameEs'>) =>
     displayInventoryName(i18n.language, row.name, row.nameEs)
@@ -1848,9 +1846,13 @@ function App() {
     () => readPageFromLocation(validPages) ?? readRememberedPage(validPages),
   )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
-    () => readDeviceLayout() === 'tablet',
-  )
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('yalla.sidebar.hidden.v1') === '1'
+    } catch {
+      return false
+    }
+  })
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSummaryInfoOpen, setIsSummaryInfoOpen] = useState(false)
   const [deepLinkVisitId, setDeepLinkVisitId] = useState('')
@@ -1860,18 +1862,6 @@ function App() {
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [titleProgress, setTitleProgress] = useState(0)
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null)
-  const activeDomain = visibleNavigation.find((group) =>
-    group.items.includes(activePage),
-  )
-  const domainPages = activeDomain?.items ?? []
-  const showDomainTabs = domainPages.length > 1
-  const showMobileDomainTabs =
-    isMobileLayout &&
-    showDomainTabs &&
-    permissionsReady &&
-    canPage(activePage) &&
-    !isMobileSearchOpen
-  const domainTabsOffset = showMobileDomainTabs ? '52px' : '0px'
   const [sortConfig, setSortConfig] = useState<{
     key: 'name' | 'status' | null
     direction: 'asc' | 'desc'
@@ -4672,7 +4662,15 @@ function App() {
   }
 
   const handleSidebarToggle = () => {
-    setIsSidebarCollapsed((current) => !current)
+    setIsSidebarCollapsed((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem('yalla.sidebar.hidden.v1', next ? '1' : '0')
+      } catch {
+        // Ignore storage failures (private mode, quota, etc.).
+      }
+      return next
+    })
   }
 
   const persistPage = (page: string) => {
@@ -4785,25 +4783,11 @@ function App() {
   }, [])
 
   const openMobileNav = () => {
-    setIsSidebarCollapsed(false)
     setIsMobileNavOpen(true)
   }
 
   const closeMobileNav = () => {
     setIsMobileNavOpen(false)
-  }
-
-  useEffect(() => {
-    if (deviceLayout === 'tablet') {
-      setIsSidebarCollapsed(true)
-    }
-  }, [deviceLayout])
-
-  const navigateToSection = (section: string, items: string[]) => {
-    const target = readLastPageInSection(section, items)
-    if (target) {
-      navigateToPage(target)
-    }
   }
 
   useEffect(() => {
@@ -4907,12 +4891,11 @@ function App() {
     <div
       className={`app ${isSidebarCollapsed ? 'app-collapsed' : ''} ${
         isMobileNavOpen ? 'mobile-nav-is-open' : ''
-      } ${showMobileDomainTabs ? 'has-mobile-domain-tabs' : ''}`}
+      }`}
       data-layout={deviceLayout}
       style={
         {
           '--title-progress': String(titleProgress),
-          '--domain-tabs-h': domainTabsOffset,
         } as CSSProperties
       }
     >
@@ -4920,13 +4903,10 @@ function App() {
       <header
         className={`mobile-topbar ${titleProgress >= 0.25 ? 'is-frosted' : ''} ${
           titleProgress >= 0.99 ? 'is-collapsed' : ''
-        } ${isMobileSearchOpen ? 'is-search-open' : ''} ${
-          showMobileDomainTabs ? 'has-domain-tabs' : ''
-        }`}
+        } ${isMobileSearchOpen ? 'is-search-open' : ''}`}
         style={
           {
             '--title-progress': String(titleProgress),
-          '--domain-tabs-h': domainTabsOffset,
           } as CSSProperties
         }
       >
@@ -4988,17 +4968,6 @@ function App() {
             <YlIcon name="line.3.horizontal" size={18} />
           )}
         </button>
-        {showMobileDomainTabs ? (
-          <DomainTabs
-            pages={domainPages}
-            activePage={activePage}
-            onNavigate={navigateToPage}
-            ariaLabel={t('common.domainPages', {
-              section: sectionLabel(activeDomain?.section ?? ''),
-            })}
-            labelFor={navItemLabel}
-          />
-        ) : null}
       </header>
       </MobileBodyPortal>
 
@@ -5015,8 +4984,16 @@ function App() {
       >
         <div className="brand">
           <div className="brand-lockup">
-            <BrandMark compact={isSidebarCollapsed && !isMobileNavOpen} />
+            <BrandMark />
           </div>
+          <button
+            className="btn-icon btn-icon-ghost sidebar-toggle"
+            type="button"
+            aria-label={t('common.collapseSidebar')}
+            onClick={handleSidebarToggle}
+          >
+            <YlIcon name="sidebar.left" size={18} />
+          </button>
           <button
             className="btn-icon btn-icon-ghost mobile-nav-close"
             type="button"
@@ -5026,123 +5003,28 @@ function App() {
             <YlIcon name="xmark" size={16} />
           </button>
         </div>
-        <nav className="nav">
-          {!isSidebarCollapsed ? (
-            <ul className="nav-items nav-items-primary">
-              {visibleCoreItems.map((item) => {
-                const isActive = activePage === item
-                return (
-                  <li key={item}>
-                    <button
-                      className={`nav-button ${isActive ? 'active' : ''}`}
-                      aria-current={isActive ? 'page' : undefined}
-                      type="button"
-                      onClick={() => navigateToPage(item)}
-                    >
-                      <span className="nav-button-label">
-                        <DomainGlyph name={item} />
-                        <span>{navItemLabel(item)}</span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : null}
-          {isSidebarCollapsed ? (
-            <>
-              <ul className="nav-items nav-items-primary nav-items-collapsed">
-                {visibleCoreItems.map((item) => {
-                  const isActive = activePage === item
-                  return (
-                    <li key={item}>
-                      <button
-                        className={`nav-button nav-icon-button ${
-                          isActive ? 'active' : ''
-                        }`}
-                        aria-current={isActive ? 'page' : undefined}
-                        type="button"
-                        onClick={() => navigateToPage(item)}
-                        aria-label={navItemLabel(item)}
-                      >
-                        <DomainGlyph name={item} />
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-              <ul className="nav-items nav-section-shortcuts">
-                {visibleNavigation.map((group) => {
-                  const isActive = group.items.includes(activePage)
-                  return (
-                    <li key={group.section}>
-                      <button
-                        className={`nav-button nav-section-shortcut ${
-                          isActive ? 'active' : ''
-                        }`}
-                        type="button"
-                        aria-current={isActive ? 'page' : undefined}
-                        aria-label={sectionLabel(group.section)}
-                        onClick={() =>
-                          navigateToSection(group.section, group.items)
-                        }
-                      >
-                        <DomainGlyph name={group.section} />
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </>
-          ) : (
-            <ul className="nav-items nav-domains">
-              {visibleNavigation.map((group) => {
-                const isActive = group.items.includes(activePage)
-                return (
-                  <li key={group.section}>
-                    <button
-                      className={`nav-button nav-domain ${
-                        isActive ? 'active' : ''
-                      }`}
-                      type="button"
-                      aria-current={isActive ? 'page' : undefined}
-                      onClick={() =>
-                          navigateToSection(group.section, group.items)
-                      }
-                    >
-                      <span className="nav-button-label">
-                        <DomainGlyph name={group.section} />
-                        <span>{sectionLabel(group.section)}</span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+        <nav className="nav" aria-label={t('common.sidebar')}>
+          <SidebarNav
+            coreItems={visibleCoreItems}
+            groups={visibleNavigation}
+            activePage={activePage}
+            onNavigate={navigateToPage}
+            labelForPage={navItemLabel}
+            labelForSection={sectionLabel}
+          />
         </nav>
-        <SettingsPanel
-          compact={isSidebarCollapsed}
-          onOpen={closeMobileNav}
-        />
+        <SettingsPanel onOpen={closeMobileNav} />
       </aside>
-      <button
-        className={`btn-icon btn-icon-ghost sidebar-toggle ${
-          isSidebarCollapsed ? 'is-collapsed' : ''
-        }`}
-        type="button"
-        aria-label={
-          isSidebarCollapsed
-            ? t('common.expandSidebar')
-            : t('common.collapseSidebar')
-        }
-        onClick={handleSidebarToggle}
-      >
-        <YlIcon
-          name={isSidebarCollapsed ? 'chevron.right' : 'chevron.left'}
-          size={16}
-        />
-      </button>
+      {isSidebarCollapsed ? (
+        <button
+          className="btn-icon btn-icon-ghost sidebar-reveal"
+          type="button"
+          aria-label={t('common.expandSidebar')}
+          onClick={handleSidebarToggle}
+        >
+          <YlIcon name="sidebar.left" size={18} />
+        </button>
+      ) : null}
 
       <main className="main">
         {guestyNameMismatchMessage ? (
@@ -5159,20 +5041,6 @@ function App() {
               <YlIcon name="xmark" size={14} />
             </button>
           </div>
-        ) : null}
-        {!isMobileLayout &&
-        permissionsReady &&
-        canPage(activePage) &&
-        showDomainTabs ? (
-          <DomainTabs
-            pages={domainPages}
-            activePage={activePage}
-            onNavigate={navigateToPage}
-            ariaLabel={t('common.domainPages', {
-              section: sectionLabel(activeDomain?.section ?? ''),
-            })}
-            labelFor={navItemLabel}
-          />
         ) : null}
         {!permissionsReady ? (
           <div

@@ -25,6 +25,7 @@ Registro vivo. Si no está aquí, no existe para el siguiente agente.
 | B6 | **Routing en el slice de shell**, no después de rediseñar todos los módulos. Persistimos `?page=` (History API, Back funciona). `?visit=` y `?planDate=` siguen como deep links. Pathnames `/cleaning/plan` se pueden mapear más tarde sobre el mismo catálogo. |
 | B7 | **Login** (Authenticator de Amplify) entra en el rediseño. Hoy solo personaliza el logo. |
 | B8 | **Hebreo:** no traducir ni activar `he` en el switcher durante este rediseño. Sí preparar `dir` + propiedades lógicas en tokens nuevos. Un catálogo hebreo + QA RTL de 35 pantallas desviaría esta tarea. Cuando existan traducciones, será un slice propio. |
+| B9 | **Sidebar HIG de dos niveles** (secciones + funcionalidades). Las funcionalidades de una sección se eligen en el sidebar, no en tabs de barra superior. Iconos **regular**. La sidebar está visible por defecto; ocultarla es opt-in. Tablet no auto-colapsa a un rail de secciones. |
 
 ---
 

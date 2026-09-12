@@ -169,7 +169,7 @@ No construir un kit de 80 piezas. Construir **estas**:
 | `PageHeader` | título, breadcrumb de dominio, acciones | Sustituye h1 duplicados sidebar/main |
 | `SearchField` | | |
 | `FilterChips` + `FilterSheet` | | |
-| `SegmentedControl` | vistas día/agenda/kanban; tabs de dominio | |
+| `SegmentedControl` | vistas día/agenda/kanban | No para navegar funcionalidades de una sección |
 | `Switch` | ya existe `YallaSwitch` — alinear a tokens | |
 | `Select` / `TextField` / `TextArea` / `Checkbox` | | |
 | `DateField` | | El plan de limpieza ya depende de fecha |
@@ -185,7 +185,7 @@ No construir un kit de 80 piezas. Construir **estas**:
 | `Modal` / `Sheet` | | Sheet en <768; modal centrado en desktop. **No** meter el plan del día entero en modal de escritorio a largo plazo |
 | `ConfirmDialog` | destructivo vs neutro | Adiós `window.confirm` |
 | `Toast` | éxito corto | |
-| `NavSidebar` / `BottomNav` / `MoreSheet` | | |
+| `NavSidebar` | 2 niveles: sección + funcionalidad | Cabecera de sección no es destino; iconos regular |
 | `UserMenu` | perfil, idioma, salir | |
 
 Componentes HIG que **no** necesitamos ahora: breadcrumbs profundos (máx. Dominio / Vista), pagination clásica (casi todo es scan/cursor), tab bar de 8 ítems, glass toolbar.
@@ -194,11 +194,11 @@ Componentes HIG que **no** necesitamos ahora: breadcrumbs profundos (máx. Domin
 
 ## 6. Navegación visual
 
-- Sidebar desktop: wordmark **Yalla!**; ítem activo con `--yl-go-soft`.
-- Colapsado: **iconos**, no la inicial de la sección.
-- Móvil (≤768): topbar + drawer de dominios, para todos los roles.
-- Tablet (769–1023): sidebar de iconos + tabs en el contenido.
-- Escritorio (≥1024): sidebar de dominios con texto.
+- Sidebar desktop: wordmark **Yalla!**; tarjeta flotante (`--yl-radius-card`) sobre `--yl-bg`; ítem activo con `--yl-go-soft`; iconos **regular**.
+- Oculta: el menú desaparece por completo; un botón flotante `sidebar.left` lo vuelve a mostrar.
+- Móvil (≤768): topbar + drawer con el mismo árbol de dos niveles, para todos los roles.
+- Tablet (769–1023): misma sidebar de dos niveles, visible por defecto.
+- Escritorio (≥1024): sidebar de secciones y funcionalidades con texto. El control de repliegue (icono `sidebar.left`) va en la esquina superior derecha del menú.
 - Login: misma paleta, wordmark, caption opcional Knock Knock; Authenticator tematizado (B7).
 - Safe-area: `env(safe-area-inset-*)`.
 

@@ -4,6 +4,7 @@ export const YL_ICON_NAMES = [
   'magnifyingglass',
   'xmark',
   'line.3.horizontal',
+  'sidebar.left',
   'plus',
   'minus',
   'line.3.horizontal.decrease',
@@ -25,6 +26,8 @@ export const YL_ICON_NAMES = [
   'pencil',
   'info.circle',
   'person.crop.circle',
+  'person.2',
+  'bubble.left',
   'house',
   'rectangle.3.group',
   'shippingbox',
@@ -89,6 +92,13 @@ function regularGlyph(name: YlIconName): ReactNode {
           <path d="M3.5 5.5h13" />
           <path d="M3.5 10h13" />
           <path d="M3.5 14.5h13" />
+        </Outline>
+      )
+    case 'sidebar.left':
+      return (
+        <Outline>
+          <rect x="3.4" y="4.2" width="13.2" height="11.6" rx="2.2" />
+          <path d="M8.1 4.2v11.6" />
         </Outline>
       )
     case 'plus':
@@ -245,6 +255,21 @@ function regularGlyph(name: YlIconName): ReactNode {
           <circle cx="10" cy="10" r="7.2" />
           <circle cx="10" cy="8.2" r="2.2" />
           <path d="M5.6 15.1a4.6 4.6 0 0 1 8.8 0" />
+        </Outline>
+      )
+    case 'person.2':
+      return (
+        <Outline>
+          <circle cx="7.2" cy="7" r="2.15" />
+          <circle cx="13.1" cy="7.4" r="1.9" />
+          <path d="M3.5 15.2c.35-2.5 2-3.9 3.7-3.9s3.35 1.4 3.7 3.9" />
+          <path d="M10.6 14.9c.4-1.8 1.65-2.9 2.7-2.9 1.15 0 2.3 1 2.6 2.9" />
+        </Outline>
+      )
+    case 'bubble.left':
+      return (
+        <Outline>
+          <path d="M4.2 4.6h11.2A1.8 1.8 0 0 1 17.2 6.4v6.1a1.8 1.8 0 0 1-1.8 1.8H8.2L4.2 16.6V4.6z" />
         </Outline>
       )
     case 'house':
@@ -511,6 +536,7 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
       'magnifyingglass',
       'xmark',
       'line.3.horizontal',
+      'sidebar.left',
       'plus',
       'minus',
       'line.3.horizontal.decrease',
@@ -519,6 +545,8 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
       'arrow.clockwise',
       'info.circle',
       'person.crop.circle',
+      'person.2',
+      'bubble.left',
     ],
   },
   {
@@ -565,6 +593,8 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
       'chart.bar',
       'gearshape',
       'square.grid.2x2',
+      'person.2',
+      'bubble.left',
     ],
   },
 ]
@@ -579,6 +609,47 @@ export const DOMAIN_ICON: Record<string, YlIconName> = {
   Finance: 'chart.bar',
   Settings: 'gearshape',
   Visual: 'square.grid.2x2',
+}
+
+export const PAGE_ICON: Record<string, YlIconName> = {
+  'Daily Operations': 'house',
+  Inventory: 'shippingbox',
+  'Spot Check': 'checkmark.circle',
+  Purchases: 'cart',
+  Subtractions: 'minus',
+  Properties: 'list.bullet.rectangle',
+  Reviews: 'star',
+  'Unassigned tasks': 'list.bullet',
+  'Visit templates': 'doc.text',
+  'Template Auto Assign': 'arrow.triangle.2.circlepath',
+  Bookings: 'calendar',
+  'Bookings Plan': 'list.bullet.rectangle',
+  'Bookings settings': 'gearshape',
+  'Cleaning Plan': 'drop',
+  'Cleaning Incidents': 'exclamationmark.triangle',
+  'Cleaning Billing': 'chart.bar',
+  'Cleaning settings': 'gearshape',
+  'Maintenance Plan': 'wrench.and.screwdriver',
+  'Maintenance Incidents': 'exclamationmark.triangle',
+  'Maintenance Billing': 'chart.bar',
+  'Maintenance settings': 'gearshape',
+  Logs: 'clock',
+  Users: 'person.crop.circle',
+  Roles: 'person.2',
+  Slack: 'bubble.left',
+  'Property Reports': 'chart.bar',
+  'Reports Settings': 'gearshape',
+  'Property Groups': 'rectangle.3.group',
+  Movements: 'list.bullet',
+  'Services & Subscriptions': 'doc.text',
+  'Visual Buttons': 'square.grid.2x2',
+  'Visual Messages': 'bubble.left',
+  'Visual Action bars': 'line.3.horizontal',
+  'Visual Cards': 'rectangle.3.group',
+  'Visual Inputs': 'pencil',
+  'Visual Tokens': 'star',
+  'Visual Icons': 'square.grid.2x2',
+  'Visual Lab': 'plus',
 }
 
 export const ICON_HAS_FILL = new Set<YlIconName>(

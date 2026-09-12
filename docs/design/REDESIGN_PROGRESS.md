@@ -21,9 +21,8 @@ Estados: `Not Audited` · `Audited` · `Designed` · `Implementing` · `Implemen
 | Decisiones | Audited | `DECISIONS.md` |
 | Auditoría backend | Audited | `BACKEND_ARCHITECTURE_AUDIT.md` |
 | Fundaciones (tokens + primitivas) | Implemented | tokens + chrome + ConfirmDialog + SegmentedControl + Toast + catálogo Visual |
-| Shell nav desktop | Implemented | Dominios en sidebar + tabs internos |
-| Shell nav desktop | Implemented | Dominios en sidebar + tabs internos |
-| Shell nav móvil | Implemented | Mismo drawer de dominios para todos los roles; sin bottom nav de campo |
+| Shell nav desktop | Implemented | Sidebar HIG de 2 niveles; sin DomainTabs |
+| Shell nav móvil | Implemented | Drawer con el mismo árbol; topbar sin tabs de dominio |
 | Auth / login | Implemented | Authenticator + sign out |
 | Hoy / Resumen diario | Implemented | Segmented Hoy/Día/Kanban/Agenda |
 | Cleaning Plan | Implemented | Día como página; skeleton/vacío |
@@ -71,3 +70,6 @@ Estados: `Not Audited` · `Audited` · `Designed` · `Implementing` · `Implemen
 | 2026-09-12 | Oficina en móvil: tabs de dominio fijos en topbar; Hoy/Día/Kanban/Agenda visibles y sticky |
 | 2026-09-12 | B2 revertido: un solo shell por viewport (móvil / tablet / escritorio); se elimina la nav de campo por rol |
 | 2026-09-12 | Sistema visual: dominio admin con catálogo yl.*, frames móvil/escritorio y laboratorio de borradores |
+| 2026-09-12 | Sidebar HIG de 2 niveles (secciones + funcionalidades, iconos regular); se eliminan DomainTabs y el auto-colapso tablet |
+| 2026-09-12 | Sidebar: secciones con más peso tipográfico; control Apple `sidebar.left` arriba a la derecha; repliegue total a botón flotante |
+| 2026-09-12 | Sidebar como tarjeta flotante: inset 12px sobre el fondo gris y radio `--yl-radius-card` |

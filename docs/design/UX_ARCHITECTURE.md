@@ -56,19 +56,21 @@ Grow **no** forma parte de la IA de producción hasta que el módulo exista de v
 
 ### 3.2 Escritorio (≥1024)
 
-- **Sidebar de dominios** (no 35 links planos).
-- Dentro de cada dominio: **tabs o segmented control** (Plan | Incidencias | Facturación | Ajustes).
-- **Hoy** es el destino por defecto (cards del dashboard). El calendario de visitas es un tab/vista de Operaciones, no el mismo objeto que Hoy.
-- Cuenta (idioma, sign out) en el pie del sidebar, como ahora, con patrón de popover en vez de página.
+- **Sidebar HIG de dos niveles:** ítem raíz **Hoy**, después secciones con funcionalidades. Las cabeceras de sección no son destinos: agrupan y se revelan con disclosure.
+- Las funcionalidades de una sección se eligen **en el sidebar**, no en tabs de una barra superior. Un mismo destino no se duplica en sidebar y tab bar.
+- Iconos **regular** (contorno), color de acento `--yl-go` en el ítem seleccionado.
+- La barra lateral está **visible por defecto**. El usuario puede ocultarla para ganar espacio de contenido; no se oculta sola.
+- **Hoy** es el destino por defecto (cards del dashboard). El calendario de visitas vive en Operaciones.
+- Cuenta (idioma, sign out) en el pie del sidebar, con patrón de popover.
 - Detalle de visita: inspector a la derecha.
 
 ### 3.3 Móvil vertical (≤768)
 
 Un solo shell para todos los roles:
 
-- Topbar con título, búsqueda si aplica, **hamburguesa** y tabs de dominio fijos.
-- El menú abre un **drawer de dominios** (Hoy + Inventario, Operaciones, …). El RBAC recorta el árbol, no cambia el patrón.
-- Sin bottom nav de campo.
+- Topbar con título, búsqueda si aplica y **hamburguesa**.
+- El menú abre un **drawer con el mismo árbol de dos niveles** (Hoy + secciones y funcionalidades). El RBAC recorta el árbol, no cambia el patrón.
+- Sin bottom nav de campo. Sin tabs de dominio en la topbar.
 
 Los tipos de limpieza que vienen de datos (`Regular`, `Room Refresh`, …) se muestran **tal cual en inglés** (B5).
 
@@ -78,7 +80,7 @@ Touch target mínimo **44×44 CSS px** (HIG iOS). No 40px.
 
 ### 3.4 Tablet (769–1023)
 
-Sidebar colapsada a **iconos** (se puede expandir), tabs de dominio en el contenido, detalle de visita en sheet ancho. No drawer de teléfono ni inspector de escritorio.
+Misma sidebar de dos niveles que en escritorio, **visible por defecto**. Ocultarla es una acción del usuario, no un rail de iconos de sección. Detalle de visita en sheet ancho. No drawer de teléfono ni inspector de escritorio.
 
 ---
 
@@ -87,15 +89,15 @@ Sidebar colapsada a **iconos** (se puede expandir), tabs de dominio en el conten
 | Actual (`activePage`) | Propuesto | Notas |
 |---|---|---|
 | Daily Operations + Today embebido | **Hoy** (dashboard) + **Operaciones** (día/agenda/kanban) | Misma capacidad, dos superficies |
-| Unassigned tasks | Operaciones → tab/filtro “Sin asignar” | Sigue siendo alcanzable |
+| Unassigned tasks | Operaciones → funcionalidad “Sin asignar” | Sigue siendo alcanzable |
 | Visit templates | Operaciones → Ajustes de visitas → Templates | |
 | Template Auto Assign | Operaciones → Ajustes de visitas → Auto-asignación | |
-| Inventory / Spot Check / Purchases / Subtractions | Inventario → tabs | |
+| Inventory / Spot Check / Purchases / Subtractions | Inventario → funcionalidades en sidebar | |
 | Properties / Reviews | Operaciones → Propiedades / Reviews **o** grupo “Calidad” | Reviews es workflow largo: puede merecer entrada propia bajo Operaciones |
-| Bookings * | Reservas → tabs Lista / Plan / Reglas | |
-| Cleaning * | Limpieza → tabs | Relabel “Historial” → **Facturación** |
-| Maintenance * | Mantenimiento → tabs | |
-| Property Reports / Groups / Movements / Services / Reports Settings | Finanzas → tabs | |
+| Bookings * | Reservas → funcionalidades Lista / Plan / Reglas | |
+| Cleaning * | Limpieza → Plan, Incidencias, Facturación, Ajustes | Relabel “Historial” → **Facturación** |
+| Maintenance * | Mantenimiento → espejo de Limpieza | |
+| Property Reports / Groups / Movements / Services / Reports Settings | Finanzas → funcionalidades en sidebar | |
 | Logs / Users / Roles / Slack | Administración | |
 | Visual * | **Sistema visual** (admin) | Catálogo `yl.*` + laboratorio de borradores; no es un módulo operativo |
 | SettingsPanel | Cuenta (perfil + idioma) | |
@@ -134,7 +136,7 @@ No rediseñar las 35 pantallas a la vez.
 
 **Slice 3 — Inventario.** Tabla + cards + acciones de fila.
 
-Luego el resto de dominios reutilizando el patrón Plan | Incidencias | Facturación | Ajustes.
+Luego el resto de secciones reutilizando el patrón de funcionalidades en sidebar (Plan, Incidencias, Facturación, Ajustes cuando aplique).
 
 ---
 
@@ -157,7 +159,7 @@ Checklist para una sección nueva:
 
 1. **Contrato** en `FUNCTIONAL_INVENTORY.md`.
 2. **RBAC:** `page:<Name>` y acciones en `rbac-catalog.ts` + seeds. No reutilizar `Grow solution *` sin migrar el nombre.
-3. **IA:** tab de un dominio existente, o dominio nuevo justificado. El layout sigue el viewport (móvil / tablet / escritorio), no el rol.
+3. **IA:** funcionalidad de una sección existente, o sección nueva justificada. El layout sigue el viewport (móvil / tablet / escritorio), no el rol.
 4. **Empty real** (siguiente acción), nunca “coming soon” en nav.
 5. **Design system:** primitivas existentes.
 6. **i18n es+en** en el mismo cambio. Hebreo no bloquea (N8).

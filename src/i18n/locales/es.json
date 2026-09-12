@@ -181,7 +181,7 @@
     "close": "Cerrar",
     "closeForm": "Cerrar formulario",
     "closeMenu": "Cerrar menú",
-    "collapseSidebar": "Contraer barra lateral",
+    "collapseSidebar": "Ocultar barra lateral",
     "comingSoon": "Esta sección estará disponible pronto.",
     "consumptionRules": "Reglas de consumo",
     "createPurchase": "Crear compra",
@@ -190,7 +190,7 @@
     "customLocation": "Ubicación personalizada",
     "delete": "Eliminar ítem",
     "edit": "Editar ítem",
-    "expandSidebar": "Expandir barra lateral",
+    "expandSidebar": "Mostrar barra lateral",
     "export": "Exportar",
     "exportScopeTitle": "Descargar Excel",
     "exportScopeSubtitle": "Elige si quieres incluir solo los filtros actuales o la tabla entera.",
@@ -210,6 +210,7 @@
     "location": "Ubicación",
     "next": "Siguiente",
     "openMenu": "Abrir menú",
+    "sidebar": "Barra lateral",
     "openSection": "Abrir {{section}}",
     "domainPages": "Páginas de {{section}}",
     "other": "Otro",
@@ -610,6 +611,10 @@
     "Unassigned tasks": "Sin asignar",
     "Visit templates": "Plantillas",
     "Template Auto Assign": "Auto-asignación",
+    "Logs": "Registros",
+    "Users": "Usuarios",
+    "Roles": "Roles",
+    "Slack": "Slack",
     "Property Reports": "Informes",
     "Reports Settings": "Ajustes de informes",
     "Property Groups": "Grupos",
@@ -754,19 +759,19 @@
     "invalidRef": "La referencia debe seguir yl.categoria.nombre (solo minúsculas, números y puntos).",
     "nameRequired": "El nombre visible es obligatorio.",
     "refTaken": "Esa referencia ya existe.",
-    "iconsIntro": "Iconos de interfaz al lenguaje HIG: contorno (regular) en toolbars; relleno (fill) en destinos seleccionados y estados. Nombres al estilo SF Symbols. Referencia: yl.icon.<nombre>.",
+    "iconsIntro": "Iconos de interfaz al lenguaje HIG: contorno (regular) en toolbars y barra lateral; relleno (fill) en estados y destinos de tab bar. Nombres al estilo SF Symbols. Referencia: yl.icon.<nombre>.",
     "iconVariants": "regular + fill",
     "iconGroup": {
       "chrome": "Chrome",
       "actions": "Acciones",
       "nav": "Navegación y estado",
-      "domains": "Dominios"
+      "domains": "Barra lateral"
     },
     "iconGroupUsage": {
       "chrome": "Búsqueda, menú, alta, filtros, actualizar, usuario. Variante regular en barras de acción.",
       "actions": "Editar, borrar, confirmar, duplicar, rehacer. checkmark.circle.fill para listo.",
       "nav": "Chevrons, estrellas, check-in/out, calendario, documentos y aviso.",
-      "domains": "Sidebar de destinos. Usa variant fill, como un tab bar iOS."
+      "domains": "Destinos de la barra lateral. Usa variant regular."
     },
     "category": {
       "buttons": "Botones",

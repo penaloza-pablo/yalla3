@@ -181,7 +181,7 @@
     "close": "Close",
     "closeForm": "Close form",
     "closeMenu": "Close menu",
-    "collapseSidebar": "Collapse sidebar",
+    "collapseSidebar": "Hide Sidebar",
     "comingSoon": "This section will be available soon.",
     "consumptionRules": "Consumption rules",
     "createPurchase": "Create purchase",
@@ -190,7 +190,7 @@
     "customLocation": "Custom location",
     "delete": "Delete item",
     "edit": "Edit item",
-    "expandSidebar": "Expand sidebar",
+    "expandSidebar": "Show Sidebar",
     "export": "Export",
     "exportScopeTitle": "Download Excel",
     "exportScopeSubtitle": "Choose whether to include only the current filters or the full table.",
@@ -210,6 +210,7 @@
     "location": "Location",
     "next": "Next",
     "openMenu": "Open menu",
+    "sidebar": "Sidebar",
     "openSection": "Open {{section}}",
     "domainPages": "{{section}} pages",
     "other": "Other",
@@ -610,6 +611,10 @@
     "Unassigned tasks": "Unassigned",
     "Visit templates": "Templates",
     "Template Auto Assign": "Auto Assign",
+    "Logs": "Logs",
+    "Users": "Users",
+    "Roles": "Roles",
+    "Slack": "Slack",
     "Property Reports": "Reports",
     "Reports Settings": "Reports Settings",
     "Property Groups": "Groups",
@@ -754,19 +759,19 @@
     "invalidRef": "The reference must follow yl.category.name (lowercase, numbers and dots only).",
     "nameRequired": "Visible name is required.",
     "refTaken": "That reference already exists.",
-    "iconsIntro": "Interface icons in the HIG language: outline (regular) in toolbars; fill on selected destinations and status. Names follow SF Symbols. Reference: yl.icon.<name>.",
+    "iconsIntro": "Interface icons in the HIG language: outline (regular) in toolbars and the sidebar; fill for status and tab-bar destinations. Names follow SF Symbols. Reference: yl.icon.<name>.",
     "iconVariants": "regular + fill",
     "iconGroup": {
       "chrome": "Chrome",
       "actions": "Actions",
       "nav": "Navigation and status",
-      "domains": "Domains"
+      "domains": "Sidebar"
     },
     "iconGroupUsage": {
       "chrome": "Search, menu, add, filters, refresh, account. Regular variant in action bars.",
       "actions": "Edit, delete, confirm, duplicate, redo. checkmark.circle.fill for ready.",
       "nav": "Chevrons, stars, check-in/out, calendar, documents and warning.",
-      "domains": "Destination sidebar. Use the fill variant, like an iOS tab bar."
+      "domains": "Sidebar destinations. Use the regular variant."
     },
     "category": {
       "buttons": "Buttons",
