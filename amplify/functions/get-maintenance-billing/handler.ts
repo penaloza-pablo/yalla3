@@ -9,8 +9,9 @@ import {
   buildMonthDetail,
   currentMonthId,
   deriveMonthStatus,
+  ensureSettings,
   isMonthId,
-  listVisibleMonthIds,
+  listMonthSummaries,
 } from '../shared/maintenance-billing';
 
 type HttpEvent = {
@@ -85,32 +86,26 @@ export const handler = async (event: HttpEvent) => {
       });
     }
 
-    const months = [];
-    let remainingHours = 0;
-    let hoursPool = 0;
-    let validatedHours = 0;
-    for (const id of listVisibleMonthIds()) {
-      const detail = await buildMonthDetail({
-        monthId: id,
-        persistSummary: true,
-        ...context,
-      });
-      months.push({
-        ...detail.month,
-        status: deriveMonthStatus(id, detail.month.status),
-      });
-      if (id === currentMonthId()) {
-        hoursPool = detail.settings.monthlyHoursPool;
-        validatedHours = detail.month.validatedHours;
-        remainingHours = hoursPool - validatedHours;
-      }
-    }
+    const [months, settings] = await Promise.all([
+      listMonthSummaries(context),
+      ensureSettings({
+        settingsTable: context.settingsTable,
+        providersTable: context.providersTable,
+        visitTypesTable: context.visitTypesTable,
+      }),
+    ]);
+    const current = months.find((item) => item.id === currentMonthId());
+    const hoursPool = settings.monthlyHoursPool;
+    const validatedHours = current?.validatedHours ?? 0;
     return buildHttpResponse(200, {
-      months,
+      months: months.map((item) => ({
+        ...item,
+        status: deriveMonthStatus(item.id, item.status),
+      })),
       count: months.length,
       hoursPool,
       validatedHours,
-      remainingHours,
+      remainingHours: hoursPool - validatedHours,
     });
   } catch (error) {
     return buildHttpResponse(500, {

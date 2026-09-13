@@ -7,9 +7,8 @@ import {
 import { isHiddenBillingMonth } from '../shared/billing-months';
 import {
   buildMonthDetail,
-  deriveMonthStatus,
   isMonthId,
-  listVisibleMonthIds,
+  listMonthSummaries,
 } from '../shared/cleaning-billing';
 
 type HttpEvent = {
@@ -25,7 +24,9 @@ export const handler = async (event: HttpEvent) => {
 
   if (isHttp) {
     const denied = await rejectIfUnauthenticated(event);
-    if (denied) return denied;
+    if (denied) {
+      return denied;
+    }
   }
 
   const billingTable = process.env.TABLE_NAME;
@@ -55,6 +56,7 @@ export const handler = async (event: HttpEvent) => {
         plansTable,
         detailsTable: detailsTable || '',
         persistSummary: true,
+        includeKits: false,
       });
       return buildHttpResponse(200, {
         month: detail.month,
@@ -63,21 +65,12 @@ export const handler = async (event: HttpEvent) => {
       });
     }
 
-    const months = [];
-    for (const id of listVisibleMonthIds()) {
-      const detail = await buildMonthDetail({
-        monthId: id,
-        billingTable,
-        visitsTable,
-        plansTable,
-        detailsTable: detailsTable || '',
-        persistSummary: true,
-      });
-      months.push({
-        ...detail.month,
-        status: deriveMonthStatus(id, detail.month.status),
-      });
-    }
+    const months = await listMonthSummaries({
+      billingTable,
+      visitsTable,
+      plansTable,
+      detailsTable: detailsTable || '',
+    });
     return buildHttpResponse(200, {
       months,
       count: months.length,

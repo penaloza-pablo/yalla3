@@ -269,6 +269,7 @@ export const handler = async (event: {
       plansTable,
       detailsTable,
       persistSummary: true,
+      includeKits: false,
     });
     return buildHttpResponse(200, {
       month: detail.month,

@@ -336,6 +336,51 @@ const summarizeLines = (lines: BillingLine[]) => {
   };
 };
 
+const emptyLineSummary = () => ({
+  lineCount: 0,
+  completedCount: 0,
+  warningCount: 0,
+  total: 0,
+});
+
+const snapshotLinesOf = (stored?: Record<string, unknown>) => {
+  if (!Array.isArray(stored?.snapshotLines)) {
+    return [] as BillingLine[];
+  }
+  return (stored.snapshotLines as BillingLine[]).map((line) => ({
+    ...line,
+    kit: kitFromUnknown(line.kit),
+  }));
+};
+
+const summaryFromStored = (stored?: Record<string, unknown>) => {
+  const snapshot = snapshotLinesOf(stored);
+  if (snapshot.length > 0 || Array.isArray(stored?.snapshotLines)) {
+    return summarizeLines(snapshot);
+  }
+  const summary = stored?.summary;
+  if (summary && typeof summary === 'object' && !Array.isArray(summary)) {
+    const item = summary as Record<string, unknown>;
+    return {
+      lineCount: Number(item.lineCount) || 0,
+      completedCount: Number(item.completedCount) || 0,
+      warningCount: Number(item.warningCount) || 0,
+      total: Number(item.total) || 0,
+    };
+  }
+  return emptyLineSummary();
+};
+
+const closedMonthView = (monthId: string, stored?: Record<string, unknown>) => ({
+  id: monthId,
+  status: 'CLOSED' as const,
+  closedAt: asString(stored?.closedAt) || undefined,
+  canClose: false,
+  canReopen: true,
+  canEdit: false,
+  ...summaryFromStored(stored),
+});
+
 const loadVisitsForMonth = async (
   visitsTable: string,
   monthId: string,
@@ -365,6 +410,8 @@ export const buildMonthDetail = async (params: {
   plansTable: string;
   detailsTable: string;
   persistSummary?: boolean;
+  includeKits?: boolean;
+  detailItems?: Record<string, unknown>[];
 }) => {
   const {
     monthId,
@@ -373,28 +420,16 @@ export const buildMonthDetail = async (params: {
     plansTable,
     detailsTable,
     persistSummary = false,
+    includeKits = true,
   } = params;
   const stored = await getMonthRecord(billingTable, monthId);
   const status = deriveMonthStatus(monthId, asString(stored?.status));
   const today = getTodayInMadrid();
 
-  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-    const lines = (stored.snapshotLines as BillingLine[]).map((line) => ({
-      ...line,
-      kit: kitFromUnknown(line.kit),
-    }));
-    const summary = summarizeLines(lines);
+  if (status === 'CLOSED') {
     return {
-      month: {
-        id: monthId,
-        status,
-        closedAt: asString(stored?.closedAt) || undefined,
-        canClose: false,
-        canReopen: true,
-        canEdit: false,
-        ...summary,
-      },
-      lines,
+      month: closedMonthView(monthId, stored),
+      lines: snapshotLinesOf(stored),
       stored,
     };
   }
@@ -403,7 +438,11 @@ export const buildMonthDetail = async (params: {
     loadVisitsForMonth(visitsTable, monthId, {
       excludeScheduled: status === 'CURRENT',
     }),
-    detailsTable ? scanAllItems(detailsTable) : Promise.resolve([]),
+    params.detailItems
+      ? Promise.resolve(params.detailItems)
+      : detailsTable
+        ? scanAllItems(detailsTable)
+        : Promise.resolve([]),
   ]);
   const detailsByPropertyId = detailsByPropertyIdFrom(detailItems);
   const dates = [
@@ -424,11 +463,10 @@ export const buildMonthDetail = async (params: {
     stored,
     today,
   );
-  const linesWithKit = await attachAmenitiesKitsToLines(
-    unsortedLines,
-    detailItems,
-  );
-  const lines = linesWithKit.sort((a, b) => {
+  const preparedLines = includeKits
+    ? await attachAmenitiesKitsToLines(unsortedLines, detailItems)
+    : unsortedLines;
+  const lines = preparedLines.sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
     }
@@ -471,6 +509,51 @@ export const buildMonthDetail = async (params: {
   return { month, lines, stored };
 };
 
+export const listMonthSummaries = async (params: {
+  billingTable: string;
+  visitsTable: string;
+  plansTable: string;
+  detailsTable: string;
+}) => {
+  const monthIds = listVisibleMonthIds();
+  const storedPairs = await Promise.all(
+    monthIds.map(async (monthId) => {
+      const stored = await getMonthRecord(params.billingTable, monthId);
+      return {
+        monthId,
+        stored,
+        status: deriveMonthStatus(monthId, asString(stored?.status)),
+      };
+    }),
+  );
+  const open = storedPairs.filter((item) => item.status !== 'CLOSED');
+  const detailItems =
+    open.length > 0 && params.detailsTable
+      ? await scanAllItems(params.detailsTable)
+      : [];
+  const openMonths = new Map<string, ReturnType<typeof closedMonthView>>();
+  await Promise.all(
+    open.map(async (item) => {
+      const detail = await buildMonthDetail({
+        monthId: item.monthId,
+        billingTable: params.billingTable,
+        visitsTable: params.visitsTable,
+        plansTable: params.plansTable,
+        detailsTable: params.detailsTable,
+        persistSummary: false,
+        includeKits: false,
+        detailItems,
+      });
+      openMonths.set(item.monthId, detail.month);
+    }),
+  );
+  return storedPairs.map((item) =>
+    item.status === 'CLOSED'
+      ? closedMonthView(item.monthId, item.stored)
+      : openMonths.get(item.monthId)!,
+  );
+};
+
 export const countVisibleBillingWarnings = (
   visits: Record<string, unknown>[],
   detailItems: Record<string, unknown>[],
@@ -487,10 +570,8 @@ export const countVisibleBillingWarnings = (
   return monthIds.reduce((sum, monthId) => {
     const stored = storedByMonth.get(monthId);
     const monthStatus = deriveMonthStatus(monthId, asString(stored?.status));
-    if (monthStatus === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-      return (
-        sum + summarizeLines(stored.snapshotLines as BillingLine[]).warningCount
-      );
+    if (monthStatus === 'CLOSED') {
+      return sum + summaryFromStored(stored).warningCount;
     }
     const monthVisits = visits.filter((visit) => {
       const typeId = asString(

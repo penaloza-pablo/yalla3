@@ -12,4 +12,5 @@ export const getCleaningBilling = defineFunction({
     INVENTORY_TABLE: 'yalla-inventory',
   },
   timeoutSeconds: 60,
+  memoryMB: 1024,
 });

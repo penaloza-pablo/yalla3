@@ -710,6 +710,42 @@ const summarizeLines = (lines: MaintenanceBillingLine[]) => {
   };
 };
 
+const emptyMaintenanceSummary = () => ({
+  lineCount: 0,
+  completedCount: 0,
+  warningCount: 0,
+  total: 0,
+  validatedHours: 0,
+});
+
+const summaryFromStored = (stored?: Record<string, unknown>) => {
+  if (Array.isArray(stored?.snapshotLines)) {
+    return summarizeLines(stored.snapshotLines as MaintenanceBillingLine[]);
+  }
+  const summary = stored?.summary;
+  if (summary && typeof summary === 'object' && !Array.isArray(summary)) {
+    const item = summary as Record<string, unknown>;
+    return {
+      lineCount: Number(item.lineCount) || 0,
+      completedCount: Number(item.completedCount) || 0,
+      warningCount: Number(item.warningCount) || 0,
+      total: Number(item.total) || 0,
+      validatedHours: Number(item.validatedHours) || 0,
+    };
+  }
+  return emptyMaintenanceSummary();
+};
+
+const closedMonthView = (monthId: string, stored?: Record<string, unknown>) => ({
+  id: monthId,
+  status: 'CLOSED' as const,
+  closedAt: asString(stored?.closedAt) || undefined,
+  canClose: false,
+  canReopen: true,
+  canEdit: false,
+  ...summaryFromStored(stored),
+});
+
 export const assembleMaintenanceLines = (
   visits: Record<string, unknown>[],
   stored: Record<string, unknown> | undefined,
@@ -822,24 +858,17 @@ export const buildMonthDetail = async (params: {
   const stored = await getMonthRecord(params.billingTable, params.monthId);
   const status = deriveMonthStatus(params.monthId, asString(stored?.status));
 
-  if (status === 'CLOSED' && Array.isArray(stored?.snapshotLines)) {
-    const lines = stored.snapshotLines as MaintenanceBillingLine[];
-    const summary = summarizeLines(lines);
+  if (status === 'CLOSED') {
+    const lines = Array.isArray(stored?.snapshotLines)
+      ? (stored.snapshotLines as MaintenanceBillingLine[])
+      : [];
     const settings = await ensureSettings({
       settingsTable: params.settingsTable,
       providersTable: params.providersTable,
       visitTypesTable: params.visitTypesTable,
     });
     return {
-      month: {
-        id: params.monthId,
-        status,
-        closedAt: asString(stored?.closedAt) || undefined,
-        canClose: false,
-        canReopen: true,
-        canEdit: false,
-        ...summary,
-      },
+      month: closedMonthView(params.monthId, stored),
       lines,
       stored,
       settings,
@@ -906,4 +935,45 @@ export const buildMonthDetail = async (params: {
   }
 
   return { month, lines, stored, settings };
+};
+
+export const listMonthSummaries = async (params: {
+  billingTable: string;
+  visitsTable: string;
+  settingsTable: string;
+  providersTable: string;
+  visitTypesTable: string;
+  propertiesTable: string;
+}) => {
+  const monthIds = listVisibleMonthIds();
+  const storedPairs = await Promise.all(
+    monthIds.map(async (monthId) => {
+      const stored = await getMonthRecord(params.billingTable, monthId);
+      return {
+        monthId,
+        stored,
+        status: deriveMonthStatus(monthId, asString(stored?.status)),
+      };
+    }),
+  );
+  const open = storedPairs.filter((item) => item.status !== 'CLOSED');
+  const openMonths = new Map<
+    string,
+    Awaited<ReturnType<typeof buildMonthDetail>>['month']
+  >();
+  await Promise.all(
+    open.map(async (item) => {
+      const detail = await buildMonthDetail({
+        monthId: item.monthId,
+        persistSummary: false,
+        ...params,
+      });
+      openMonths.set(item.monthId, detail.month);
+    }),
+  );
+  return storedPairs.map((item) =>
+    item.status === 'CLOSED'
+      ? closedMonthView(item.monthId, item.stored)
+      : openMonths.get(item.monthId)!,
+  );
 };
