@@ -845,6 +845,9 @@ export const summaryForStoredMaintenanceMonth = (params: {
   );
 };
 
+const matchesPropertyScope = (propertyId: string, propertyIds?: string[]) =>
+  !propertyIds || propertyIds.includes(propertyId);
+
 export const buildMonthDetail = async (params: {
   monthId: string;
   billingTable: string;
@@ -854,14 +857,18 @@ export const buildMonthDetail = async (params: {
   visitTypesTable: string;
   propertiesTable: string;
   persistSummary?: boolean;
+  propertyIds?: string[];
 }) => {
   const stored = await getMonthRecord(params.billingTable, params.monthId);
   const status = deriveMonthStatus(params.monthId, asString(stored?.status));
 
   if (status === 'CLOSED') {
-    const lines = Array.isArray(stored?.snapshotLines)
+    const snapshot = Array.isArray(stored?.snapshotLines)
       ? (stored.snapshotLines as MaintenanceBillingLine[])
       : [];
+    const lines = snapshot.filter((line) =>
+      matchesPropertyScope(line.propertyId, params.propertyIds),
+    );
     const settings = await ensureSettings({
       settingsTable: params.settingsTable,
       providersTable: params.providersTable,
@@ -894,7 +901,7 @@ export const buildMonthDetail = async (params: {
     settings,
     propertyById,
     visitTypeById,
-  );
+  ).filter((line) => matchesPropertyScope(line.propertyId, params.propertyIds));
   const summary = summarizeLines(lines);
   const countable = lines.filter((line) => !line.dismissed);
   const canClose =
@@ -911,7 +918,7 @@ export const buildMonthDetail = async (params: {
     ...summary,
   };
 
-  if (params.persistSummary) {
+  if (params.persistSummary && !params.propertyIds) {
     const timestamp = new Date().toISOString();
     const next: Record<string, unknown> = {
       ...(stored ?? {}),

@@ -19,5 +19,5 @@ export const getPropertyReport = defineFunction({
     INVENTORY_TABLE: 'yalla-inventory',
   },
   timeoutSeconds: 60,
-  memoryMB: 512,
+  memoryMB: 1024,
 });

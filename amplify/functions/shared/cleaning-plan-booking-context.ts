@@ -27,6 +27,22 @@ import { docClient } from './visit-task-utils';
 
 export const NEXT_BOOKING_LOOKAHEAD_DAYS = 90;
 const QUERY_CHUNK_SIZE = 10;
+const BOOKING_CONTEXT_PROJECTION = [
+  'ReservationID',
+  'ListingID',
+  'Status',
+  'CheckInDate',
+  'CheckOutDate',
+  'Guests',
+  'ConfirmationCode',
+  'Linen',
+  'EarlyCheckIn',
+  'EarlyCheckInOn',
+  'GiftCard',
+  'ListingNickname',
+].join(', ');
+const reservationIdsByDate = new Map<string, string[]>();
+const projectedBookingById = new Map<string, Record<string, unknown>>();
 
 export type CleaningVisitBookingContext = {
   confirmationCode: string;
@@ -214,6 +230,11 @@ const queryReservationIdsForCheckInDate = async (
   tableName: string,
   checkInDate: string,
 ) => {
+  const cacheKey = `${tableName}#${checkInDate}`;
+  const cached = reservationIdsByDate.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   let exclusiveStartKey: Record<string, unknown> | undefined;
   const ids: string[] = [];
   do {
@@ -237,12 +258,14 @@ const queryReservationIdsForCheckInDate = async (
       | Record<string, unknown>
       | undefined;
   } while (exclusiveStartKey);
+  reservationIdsByDate.set(cacheKey, ids);
   return ids;
 };
 
 const hydrateByKeys = async (
   tableName: string,
   keys: Record<string, unknown>[],
+  projectionExpression?: string,
 ) => {
   const items = new Map<string, Record<string, unknown>>();
   let pending = keys.slice();
@@ -253,7 +276,12 @@ const hydrateByKeys = async (
       const result = await docClient.send(
         new BatchGetCommand({
           RequestItems: {
-            [tableName]: { Keys: chunk },
+            [tableName]: {
+              Keys: chunk,
+              ...(projectionExpression
+                ? { ProjectionExpression: projectionExpression }
+                : {}),
+            },
           },
         }),
       );
@@ -306,12 +334,19 @@ const findNextConfirmedBookings = async (
     if (ids.length === 0) {
       continue;
     }
-    const bookings = await hydrateByKeys(
-      bookingsTable,
-      ids.map((id) => ({ ReservationID: id })),
-    );
+    const missingIds = ids.filter((id) => !projectedBookingById.has(id));
+    if (missingIds.length > 0) {
+      const loaded = await hydrateByKeys(
+        bookingsTable,
+        missingIds.map((id) => ({ ReservationID: id })),
+        BOOKING_CONTEXT_PROJECTION,
+      );
+      loaded.forEach((item, id) => {
+        projectedBookingById.set(id, item);
+      });
+    }
     const ordered = ids
-      .map((id) => bookings.get(id))
+      .map((id) => projectedBookingById.get(id))
       .filter((item): item is Record<string, unknown> => Boolean(item));
     for (const item of ordered) {
       const listingId = asString(item.ListingID);

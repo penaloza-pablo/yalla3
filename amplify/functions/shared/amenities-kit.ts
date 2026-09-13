@@ -333,33 +333,37 @@ export const attachAmenitiesKitsToLines = async <
     Map<string, CleaningVisitBookingContext>
   >();
   if (bookingsTable) {
-    await Promise.all(
-      dates.map(async (date) => {
-        const propertyIds = lines
-          .filter((line) => line.date === date && !line.isManual)
-          .map((line) => line.propertyId);
-        if (propertyIds.length === 0) {
-          contextsByDate.set(date, new Map());
-          return;
-        }
-        try {
-          const loaded = await loadCleaningVisitBookingContexts({
-            plannedDate: date,
-            propertyIds,
-            detailItems,
-            bookingsTable,
-            propertiesTable,
-          });
-          contextsByDate.set(date, loaded.contexts);
-        } catch (error) {
-          console.error('Failed to load booking context for amenities kit', {
-            date,
-            error,
-          });
-          contextsByDate.set(date, new Map());
-        }
-      }),
-    );
+    const KIT_DATE_CONCURRENCY = 3;
+    for (let offset = 0; offset < dates.length; offset += KIT_DATE_CONCURRENCY) {
+      const chunk = dates.slice(offset, offset + KIT_DATE_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (date) => {
+          const propertyIds = lines
+            .filter((line) => line.date === date && !line.isManual)
+            .map((line) => line.propertyId);
+          if (propertyIds.length === 0) {
+            contextsByDate.set(date, new Map());
+            return;
+          }
+          try {
+            const loaded = await loadCleaningVisitBookingContexts({
+              plannedDate: date,
+              propertyIds,
+              detailItems,
+              bookingsTable,
+              propertiesTable,
+            });
+            contextsByDate.set(date, loaded.contexts);
+          } catch (error) {
+            console.error('Failed to load booking context for amenities kit', {
+              date,
+              error,
+            });
+            contextsByDate.set(date, new Map());
+          }
+        }),
+      );
+    }
   }
 
   return lines.map((line) => {

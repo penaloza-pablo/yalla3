@@ -353,6 +353,9 @@ const snapshotLinesOf = (stored?: Record<string, unknown>) => {
   }));
 };
 
+const matchesPropertyScope = (propertyId: string, propertyIds?: string[]) =>
+  !propertyIds || propertyIds.includes(propertyId);
+
 const summaryFromStored = (stored?: Record<string, unknown>) => {
   const snapshot = snapshotLinesOf(stored);
   if (snapshot.length > 0 || Array.isArray(stored?.snapshotLines)) {
@@ -412,6 +415,7 @@ export const buildMonthDetail = async (params: {
   persistSummary?: boolean;
   includeKits?: boolean;
   detailItems?: Record<string, unknown>[];
+  propertyIds?: string[];
 }) => {
   const {
     monthId,
@@ -421,6 +425,7 @@ export const buildMonthDetail = async (params: {
     detailsTable,
     persistSummary = false,
     includeKits = true,
+    propertyIds,
   } = params;
   const stored = await getMonthRecord(billingTable, monthId);
   const status = deriveMonthStatus(monthId, asString(stored?.status));
@@ -429,12 +434,14 @@ export const buildMonthDetail = async (params: {
   if (status === 'CLOSED') {
     return {
       month: closedMonthView(monthId, stored),
-      lines: snapshotLinesOf(stored),
+      lines: snapshotLinesOf(stored).filter((line) =>
+        matchesPropertyScope(line.propertyId, propertyIds),
+      ),
       stored,
     };
   }
 
-  const [visits, detailItems] = await Promise.all([
+  const [loadedVisits, detailItems] = await Promise.all([
     loadVisitsForMonth(visitsTable, monthId, {
       excludeScheduled: status === 'CURRENT',
     }),
@@ -444,6 +451,9 @@ export const buildMonthDetail = async (params: {
         ? scanAllItems(detailsTable)
         : Promise.resolve([]),
   ]);
+  const visits = loadedVisits.filter((visit) =>
+    matchesPropertyScope(asString(visit.propertyId), propertyIds),
+  );
   const detailsByPropertyId = detailsByPropertyIdFrom(detailItems);
   const dates = [
     ...new Set(
@@ -462,7 +472,7 @@ export const buildMonthDetail = async (params: {
     planByDate,
     stored,
     today,
-  );
+  ).filter((line) => matchesPropertyScope(line.propertyId, propertyIds));
   const preparedLines = includeKits
     ? await attachAmenitiesKitsToLines(unsortedLines, detailItems)
     : unsortedLines;
@@ -484,7 +494,7 @@ export const buildMonthDetail = async (params: {
     ...summary,
   };
 
-  if (persistSummary && billingTable) {
+  if (persistSummary && billingTable && !propertyIds) {
     const timestamp = new Date().toISOString();
     const next: Record<string, unknown> = {
       ...(stored ?? {}),

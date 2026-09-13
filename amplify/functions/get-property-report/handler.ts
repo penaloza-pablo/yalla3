@@ -235,6 +235,7 @@ export const handler = async (event: HttpEvent) => {
         plansTable: cleaningPlansTable,
         detailsTable: cleaningDetailsTable || '',
         persistSummary: false,
+        propertyIds: scope.memberIds,
       }),
       buildMaintenanceMonthDetail({
         monthId,
@@ -245,6 +246,7 @@ export const handler = async (event: HttpEvent) => {
         providersTable,
         visitTypesTable,
         propertiesTable,
+        propertyIds: scope.memberIds,
       }),
       loadPendingBillingExpenses(subtractionsTable, property, monthId),
       loadFinanceMovements(movementsTable, property, monthId),
