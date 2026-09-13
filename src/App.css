@@ -4829,7 +4829,8 @@ th {
     background-color: #ffffff;
   }
 
-  .mobile-topbar {
+  .mobile-topbar,
+  .mobile-topbar.yl-frost-progressive {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -4851,21 +4852,11 @@ th {
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: max(8px, env(safe-area-inset-left));
     padding-right: max(14px, env(safe-area-inset-right));
-    background: rgba(255, 255, 255, 0.7);
-    background-color: rgba(255, 255, 255, 0.7);
+    background: transparent;
+    background-color: transparent;
     border: 0;
     box-shadow: none;
     overflow: visible;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-  }
-
-  .mobile-topbar.is-frosted,
-  .mobile-topbar.is-collapsed {
-    background: rgba(255, 255, 255, 0.7);
-    background-color: rgba(255, 255, 255, 0.7);
-    border: 0;
-    box-shadow: none;
   }
 
   .mobile-topbar-title-group {
@@ -5023,7 +5014,8 @@ th {
     box-shadow: 12px 0 32px rgba(16, 24, 40, 0.18);
   }
 
-  .sidebar .brand {
+  .sidebar .brand,
+  .sidebar .brand.yl-frost-progressive {
     position: -webkit-sticky;
     position: sticky;
     top: 0;
@@ -5049,18 +5041,18 @@ th {
     padding: 4px 8px 12px;
   }
 
-  .sidebar .settings-trigger {
+  .sidebar .settings-trigger,
+  .sidebar .settings-trigger.yl-frost-progressive {
     position: -webkit-sticky;
     position: sticky;
+    top: auto;
     bottom: 0;
     z-index: 3;
     margin-top: auto;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: rgba(255, 255, 255, 0.7);
-    background-color: rgba(255, 255, 255, 0.7);
+    background: transparent;
+    background-color: transparent;
     border-top: 0;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
   }
 
   .sidebar .brand-lockup {

@@ -229,7 +229,11 @@ export function SettingsPanel({ compact = false, onOpen }: SettingsPanelProps) {
 
   return (
     <>
-      <div className={`settings-trigger ${compact ? 'is-compact' : ''}`}>
+      <div
+        className={`settings-trigger yl-frost-progressive yl-frost-progressive--from-top ${
+          compact ? 'is-compact' : ''
+        }`}
+      >
         <button
           type="button"
           className={`settings-trigger-button ${compact ? 'is-compact' : ''}`}

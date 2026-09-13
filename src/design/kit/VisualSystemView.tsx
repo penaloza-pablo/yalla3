@@ -840,11 +840,19 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
                   'Cleaning Plan',
                   'Maintenance Plan',
                   'Roles',
+                  'Users',
+                  'Logs',
                 ] as const
               ).map((pageName) => (
                 <li key={pageName}>{t(`pages.${pageName}`, { defaultValue: pageName })}</li>
               ))}
             </ul>
+            <footer className="yl-frost-progressive yl-frost-progressive--from-top yl-kit-frost-demo-foot">
+              <YlIcon name="person.crop.circle" size={18} />
+              <span className="yl-kit-frost-demo-foot-label">
+                {t('kit.frostProgressiveUser')}
+              </span>
+            </footer>
           </div>
         }
       />

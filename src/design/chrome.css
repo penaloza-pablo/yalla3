@@ -806,15 +806,21 @@
   }
 }
 
-/* yl.chrome.frost.progressive — sticky frost over scrolling content.
-   25% at the edge where text enters, 50% at 1/4 of the bar, 100% from the midpoint.
-   The class itself is position: sticky so overlays do not override a consumer sticky. */
+/* yl.chrome.frost.progressive — frost over scrolling content.
+   Entry 25% → 50% at 1/4 → 100% at the logo/title → 50% → exit 25%.
+   Default gradient is to top (text enters from below). Use
+   yl-frost-progressive--from-top when text enters from above.
+   Hosts keep their own position (sticky/fixed); this class stays relative
+   so it does not override them. */
 .yl-frost-progressive {
-  position: -webkit-sticky;
-  position: sticky;
-  top: 0;
+  --yl-frost-dir: to top;
+  position: relative;
   isolation: isolate;
   background: transparent;
+}
+
+.yl-frost-progressive--from-top {
+  --yl-frost-dir: to bottom;
 }
 
 .yl-frost-progressive::before,
@@ -831,18 +837,20 @@
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   -webkit-mask-image: linear-gradient(
-    to top,
+    var(--yl-frost-dir),
     rgba(0, 0, 0, 0.25) 0%,
     rgba(0, 0, 0, 0.5) 25%,
     #000 50%,
-    #000 100%
+    rgba(0, 0, 0, 0.5) 75%,
+    rgba(0, 0, 0, 0.25) 100%
   );
   mask-image: linear-gradient(
-    to top,
+    var(--yl-frost-dir),
     rgba(0, 0, 0, 0.25) 0%,
     rgba(0, 0, 0, 0.5) 25%,
     #000 50%,
-    #000 100%
+    rgba(0, 0, 0, 0.5) 75%,
+    rgba(0, 0, 0, 0.25) 100%
   );
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
@@ -852,15 +860,25 @@
 
 .yl-frost-progressive::after {
   background: linear-gradient(
-    to top,
+    var(--yl-frost-dir),
     rgba(255, 255, 255, 0.175) 0%,
     rgba(255, 255, 255, 0.35) 25%,
     rgba(255, 255, 255, 0.7) 50%,
-    rgba(255, 255, 255, 0.7) 100%
+    rgba(255, 255, 255, 0.35) 75%,
+    rgba(255, 255, 255, 0.175) 100%
   );
 }
 
 .yl-frost-progressive > * {
   position: relative;
   z-index: 1;
+}
+
+@media (min-width: 769px) {
+  .sidebar .brand.yl-frost-progressive::before,
+  .sidebar .brand.yl-frost-progressive::after,
+  .sidebar .settings-trigger.yl-frost-progressive::before,
+  .sidebar .settings-trigger.yl-frost-progressive::after {
+    content: none;
+  }
 }

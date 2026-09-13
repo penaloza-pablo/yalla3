@@ -4959,7 +4959,7 @@ function App() {
     >
       <MobileBodyPortal>
       <header
-        className={`mobile-topbar ${titleProgress >= 0.25 ? 'is-frosted' : ''} ${
+        className={`mobile-topbar yl-frost-progressive ${
           titleProgress >= 0.99 ? 'is-collapsed' : ''
         } ${isMobileSearchOpen ? 'is-search-open' : ''}`}
         style={
