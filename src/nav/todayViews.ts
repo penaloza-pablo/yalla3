@@ -1,23 +1,16 @@
-export const TODAY_VIEW_MODES = [
-  'dashboard',
-  'board',
-  'day',
-  'kanban',
-  'agenda',
-] as const
+import {
+  isTodayViewMode,
+  TODAY_VIEW_MODES,
+  type TodayViewMode,
+} from '../../amplify/functions/shared/today-views'
 
-export type TodayViewMode = (typeof TODAY_VIEW_MODES)[number]
+export { TODAY_VIEW_MODES, type TodayViewMode }
 
 export const TODAY_VIEW_QUERY_KEY = 'view'
 export const TODAY_SECTION_ID = 'today-views'
 
 export const parseTodayView = (value: string | null | undefined): TodayViewMode =>
-  value === 'board' ||
-  value === 'day' ||
-  value === 'kanban' ||
-  value === 'agenda'
-    ? value
-    : 'dashboard'
+  isTodayViewMode(value) ? value : 'dashboard'
 
 export const isTodayVisitView = (view: TodayViewMode) =>
   view === 'day' || view === 'kanban' || view === 'agenda'

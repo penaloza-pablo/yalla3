@@ -14,6 +14,17 @@ import {
   pagePermission,
 } from '../../amplify/functions/shared/rbac-catalog'
 import { DEFAULT_DASHBOARD_LAYOUT_ID } from '../../amplify/functions/shared/dashboard-layout'
+import {
+  DEFAULT_NAV_MODE,
+  parseNavMode,
+  type NavMode,
+} from '../../amplify/functions/shared/nav-mode'
+import {
+  DEFAULT_TODAY_VIEWS,
+  isTodayViewMode,
+  resolveTodayViews,
+  type TodayViewMode,
+} from '../../amplify/functions/shared/today-views'
 import { resolveRoleLayoutId } from '../dashboard/layout-store'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
@@ -24,6 +35,8 @@ type PermissionsResponse = {
   permissions?: string[]
   bootstrap?: boolean
   dashboardLayoutId?: string | null
+  navMode?: NavMode | null
+  todayViews?: TodayViewMode[] | null
 }
 
 type PermissionsContextValue = {
@@ -31,10 +44,13 @@ type PermissionsContextValue = {
   roleId: string | null
   roleName: string | null
   dashboardLayoutId: string
+  navMode: NavMode
+  todayViews: TodayViewMode[]
   bootstrap: boolean
   loadError: string | null
   can: (key: string) => boolean
   canPage: (page: string) => boolean
+  canTodayView: (view: TodayViewMode) => boolean
   refresh: () => Promise<void>
 }
 
@@ -48,6 +64,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [roleName, setRoleName] = useState<string | null>(null)
   const [dashboardLayoutId, setDashboardLayoutId] = useState(
     DEFAULT_DASHBOARD_LAYOUT_ID,
+  )
+  const [navMode, setNavMode] = useState<NavMode>(DEFAULT_NAV_MODE)
+  const [todayViews, setTodayViews] = useState<TodayViewMode[]>(
+    () => [...DEFAULT_TODAY_VIEWS],
   )
   const [bootstrap, setBootstrap] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -63,6 +83,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       setRoleId('admin')
       setRoleName('admin')
       setDashboardLayoutId(resolveRoleLayoutId('admin'))
+      setNavMode(DEFAULT_NAV_MODE)
+      setTodayViews([...DEFAULT_TODAY_VIEWS])
       setBootstrap(true)
       setLoadError(null)
       setPermissions(new Set(allPermissionKeys()))
@@ -89,6 +111,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         setDashboardLayoutId(
           resolveRoleLayoutId(nextRoleId, payload.dashboardLayoutId),
         )
+        setNavMode(parseNavMode(payload.navMode))
+        setTodayViews(
+          nextRoleId === ADMIN_ROLE_ID || isBootstrap
+            ? [...DEFAULT_TODAY_VIEWS]
+            : resolveTodayViews(payload.todayViews),
+        )
         setBootstrap(isBootstrap)
         setPermissions(
           new Set(
@@ -110,6 +138,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       setRoleId(null)
       setRoleName(null)
       setDashboardLayoutId(DEFAULT_DASHBOARD_LAYOUT_ID)
+      setNavMode(DEFAULT_NAV_MODE)
+      setTodayViews([...DEFAULT_TODAY_VIEWS])
       setBootstrap(false)
       setPermissions(new Set())
       setLoadError(
@@ -143,6 +173,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       roleId,
       roleName,
       dashboardLayoutId,
+      navMode,
+      todayViews,
       bootstrap,
       loadError,
       can: (key: string) => permissions.has(key),
@@ -160,9 +192,22 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           permissions.has(pagePermission('Finance solution 2'))) ||
         (page === 'Services & Subscriptions' &&
           permissions.has(pagePermission('Finance solution 3'))),
+      canTodayView: (view: TodayViewMode) =>
+        isTodayViewMode(view) && todayViews.includes(view),
       refresh: () => load(),
     }),
-    [bootstrap, dashboardLayoutId, load, loadError, permissions, ready, roleId, roleName],
+    [
+      bootstrap,
+      dashboardLayoutId,
+      load,
+      loadError,
+      navMode,
+      permissions,
+      ready,
+      roleId,
+      roleName,
+      todayViews,
+    ],
   )
 
   return (

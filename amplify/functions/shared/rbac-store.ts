@@ -1,11 +1,21 @@
 import { GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { isDashboardLayoutId } from './dashboard-layout';
 import {
+  DEFAULT_NAV_MODE,
+  parseNavMode,
+  type NavMode,
+} from './nav-mode';
+import {
   ADMIN_ROLE_ID,
   ROLE_SEEDS,
   allPermissionKeys,
   isKnownRoleId,
 } from './rbac-catalog';
+import {
+  DEFAULT_TODAY_VIEWS,
+  resolveTodayViews,
+  type TodayViewMode,
+} from './today-views';
 import { nowIso } from './dynamo-http';
 import { docClient, putItem } from './visit-task-utils';
 
@@ -19,7 +29,33 @@ export type RoleRecord = {
   name: string;
   permissions: string[];
   dashboardLayoutId?: string;
+  navMode: NavMode;
+  todayViews: TodayViewMode[];
 };
+
+const chromeOf = (item?: {
+  id?: unknown;
+  navMode?: unknown;
+  todayViews?: unknown;
+}) => {
+  const id = typeof item?.id === 'string' ? item.id : '';
+  return {
+    navMode: parseNavMode(item?.navMode),
+    todayViews:
+      id === ADMIN_ROLE_ID
+        ? [...DEFAULT_TODAY_VIEWS]
+        : resolveTodayViews(item?.todayViews),
+  };
+};
+
+const roleFromSeed = (seed: (typeof ROLE_SEEDS)[number]): RoleRecord => ({
+  id: seed.id,
+  name: seed.name,
+  permissions:
+    seed.id === ADMIN_ROLE_ID ? allPermissionKeys() : seed.permissions,
+  navMode: DEFAULT_NAV_MODE,
+  todayViews: [...DEFAULT_TODAY_VIEWS],
+});
 
 export type UserRoleRecord = {
   email: string;
@@ -98,6 +134,7 @@ export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
     dashboardLayoutId: isDashboardLayoutId(item.dashboardLayoutId)
       ? item.dashboardLayoutId
       : undefined,
+    ...chromeOf({ id, navMode: item.navMode, todayViews: item.todayViews }),
   };
 };
 
@@ -107,14 +144,7 @@ export const listRoles = async (tableName: string): Promise<RoleRecord[]> => {
   const byId = new Map(items.map((item) => [String(item.id ?? ''), item]));
   return ROLE_SEEDS.map((seed) => {
     const stored = byId.get(seed.id);
-    return stored
-      ? toRoleRecord(stored)
-      : {
-          id: seed.id,
-          name: seed.name,
-          permissions:
-            seed.id === ADMIN_ROLE_ID ? allPermissionKeys() : seed.permissions,
-        };
+    return stored ? toRoleRecord(stored) : roleFromSeed(seed);
   });
 };
 
@@ -148,6 +178,8 @@ export const resolvePermissions = async (
       permissions: string[];
       bootstrap: boolean;
       dashboardLayoutId?: string;
+      navMode: NavMode;
+      todayViews: TodayViewMode[];
     }> => {
   await ensureRolesSeeded(tableName);
   const normalized = normalizeEmail(email);
@@ -161,14 +193,7 @@ export const resolvePermissions = async (
     const record: RoleRecord | undefined = role
       ? toRoleRecord(role)
       : seed
-        ? {
-            id: seed.id,
-            name: seed.name,
-            permissions:
-              assignedRoleId === ADMIN_ROLE_ID
-                ? allPermissionKeys()
-                : seed.permissions,
-          }
+        ? roleFromSeed(seed)
         : undefined;
     return {
       roleId: assignedRoleId,
@@ -179,6 +204,8 @@ export const resolvePermissions = async (
           : (record?.permissions ?? []),
       bootstrap: false,
       dashboardLayoutId: record?.dashboardLayoutId,
+      navMode: record?.navMode ?? DEFAULT_NAV_MODE,
+      todayViews: record?.todayViews ?? [...DEFAULT_TODAY_VIEWS],
     };
   }
 
@@ -189,6 +216,8 @@ export const resolvePermissions = async (
       roleName: admin.name,
       permissions: allPermissionKeys(),
       bootstrap: true,
+      navMode: DEFAULT_NAV_MODE,
+      todayViews: [...DEFAULT_TODAY_VIEWS],
     };
   }
 
@@ -197,5 +226,7 @@ export const resolvePermissions = async (
     roleName: null,
     permissions: [],
     bootstrap: false,
+    navMode: DEFAULT_NAV_MODE,
+    todayViews: [...DEFAULT_TODAY_VIEWS],
   };
 };

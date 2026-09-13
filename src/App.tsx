@@ -1611,8 +1611,16 @@ const emptySubtractionFormState: SubtractionFormState = {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const { ready: permissionsReady, can, canPage, loadError, refresh: refreshPermissions } =
-    usePermissions()
+  const {
+    ready: permissionsReady,
+    can,
+    canPage,
+    canTodayView,
+    navMode,
+    todayViews,
+    loadError,
+    refresh: refreshPermissions,
+  } = usePermissions()
   const confirmAction = useConfirm()
   const toast = useToast()
   const canEditInventoryItems = can(ACTION_KEYS.inventoryEditItems)
@@ -4766,6 +4774,21 @@ function App() {
     }
   }, [activePage, canPage, firstAllowedPage, permissionsReady])
 
+  useEffect(() => {
+    if (!permissionsReady || activePage !== 'Daily Operations') {
+      return
+    }
+    if (canTodayView(todayView)) {
+      return
+    }
+    const fallback = todayViews[0]
+    if (!fallback) {
+      return
+    }
+    setTodayView(fallback)
+    writePageToUrl('Daily Operations', 'replace', { view: fallback })
+  }, [activePage, canTodayView, permissionsReady, todayView, todayViews])
+
   const clearDeepLinkPlanDate = useCallback(() => {
     setDeepLinkPlanDate('')
   }, [])
@@ -5022,7 +5045,7 @@ function App() {
           isMobileNavOpen ? 'is-mobile-open' : ''
         }`}
       >
-        <div className="brand">
+        <div className="brand yl-frost-progressive">
           <div className="brand-lockup">
             <BrandMark />
           </div>
@@ -5049,6 +5072,8 @@ function App() {
             groups={visibleNavigation}
             activePage={activePage}
             todayView={todayView}
+            navMode={navMode}
+            visibleTodayViews={todayViews}
             onNavigate={navigateToPage}
             onTodayViewChange={navigateToTodayView}
             labelForPage={navItemLabel}

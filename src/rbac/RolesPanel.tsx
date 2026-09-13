@@ -14,6 +14,17 @@ import {
   dashboardLayoutNumber,
   isDashboardLayoutId,
 } from '../../amplify/functions/shared/dashboard-layout'
+import {
+  DEFAULT_NAV_MODE,
+  parseNavMode,
+  type NavMode,
+} from '../../amplify/functions/shared/nav-mode'
+import {
+  DEFAULT_TODAY_VIEWS,
+  resolveTodayViews,
+  TODAY_VIEW_MODES,
+  type TodayViewMode,
+} from '../../amplify/functions/shared/today-views'
 import { translatePage, translateSection } from '../i18n/display'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
@@ -24,6 +35,7 @@ import {
   useDashboardLayouts,
   writeRoleLayoutAssignment,
 } from '../dashboard/layout-store'
+import { TODAY_NAV_ITEMS } from '../nav/todayViews'
 import { usePermissions } from './PermissionsProvider'
 
 type RoleRow = {
@@ -31,6 +43,8 @@ type RoleRow = {
   name: string
   permissions: string[]
   dashboardLayoutId?: string
+  navMode?: NavMode
+  todayViews?: TodayViewMode[]
 }
 
 type RolesPanelProps = {
@@ -60,6 +74,10 @@ export function RolesPanel({
   const [error, setError] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
   const [layoutDraft, setLayoutDraft] = useState(DEFAULT_DASHBOARD_LAYOUT_ID)
+  const [navModeDraft, setNavModeDraft] = useState<NavMode>(DEFAULT_NAV_MODE)
+  const [todayViewsDraft, setTodayViewsDraft] = useState<TodayViewMode[]>(
+    () => [...DEFAULT_TODAY_VIEWS],
+  )
   const [roleNameDrafts, setRoleNameDrafts] = useState<Record<string, string>>(
     {},
   )
@@ -84,6 +102,8 @@ export function RolesPanel({
       const items = (payload.items ?? []).map((item) => ({
         ...item,
         dashboardLayoutId: resolveRoleLayoutId(item.id, item.dashboardLayoutId),
+        navMode: parseNavMode(item.navMode),
+        todayViews: resolveTodayViews(item.todayViews),
       }))
       setRoles(items)
       setRoleNameDrafts(
@@ -114,6 +134,8 @@ export function RolesPanel({
     name: string,
     permissions: string[],
     dashboardLayoutId: string,
+    navMode: NavMode,
+    todayViews: TodayViewMode[],
   ) => {
     const nextName = name.trim()
     if (!nextName) {
@@ -147,6 +169,8 @@ export function RolesPanel({
           name: nextName,
           permissions,
           dashboardLayoutId: nextLayoutId,
+          navMode,
+          todayViews,
         }),
       })
       if (!response.ok) {
@@ -156,6 +180,8 @@ export function RolesPanel({
       if (selectedId === role.id) {
         setNameDraft(nextName)
         setLayoutDraft(nextLayoutId)
+        setNavModeDraft(navMode)
+        setTodayViewsDraft(todayViews)
       }
       if (currentRoleId === role.id) {
         await refresh()
@@ -174,6 +200,8 @@ export function RolesPanel({
     setLayoutDraft(
       resolveRoleLayoutId(role.id, role.dashboardLayoutId),
     )
+    setNavModeDraft(parseNavMode(role.navMode))
+    setTodayViewsDraft(resolveTodayViews(role.todayViews))
     setError(null)
   }
 
@@ -186,6 +214,8 @@ export function RolesPanel({
       name,
       role.permissions,
       role.dashboardLayoutId ?? DEFAULT_DASHBOARD_LAYOUT_ID,
+      parseNavMode(role.navMode),
+      resolveTodayViews(role.todayViews),
     )
   }
 
@@ -193,7 +223,26 @@ export function RolesPanel({
     if (!selected) {
       return
     }
-    await persistRole(selected, nameDraft, draft, layoutDraft)
+    await persistRole(
+      selected,
+      nameDraft,
+      draft,
+      layoutDraft,
+      navModeDraft,
+      todayViewsDraft,
+    )
+  }
+
+  const toggleTodayView = (view: TodayViewMode) => {
+    setTodayViewsDraft((current) => {
+      const next = current.includes(view)
+        ? current.filter((entry) => entry !== view)
+        : [...current, view]
+      if (next.length === 0) {
+        return current
+      }
+      return TODAY_VIEW_MODES.filter((item) => next.includes(item))
+    })
   }
 
   const renderPageRows = (sectionLabel: string, items: readonly string[]) =>
@@ -328,6 +377,7 @@ export function RolesPanel({
                 <thead>
                   <tr>
                     <th>{t('common.name')}</th>
+                    <th>{t('rbac.navMode')}</th>
                     <th>{t('dashboard.layout')}</th>
                     <th>{t('rbac.permissionsCount')}</th>
                     <th>{t('common.actions')}</th>
@@ -358,6 +408,13 @@ export function RolesPanel({
                             }
                           }}
                         />
+                      </td>
+                      <td>
+                        {t(
+                          parseNavMode(role.navMode) === 'flat'
+                            ? 'rbac.navModeFlat'
+                            : 'rbac.navModeSections',
+                        )}
                       </td>
                       <td>
                         {t('dashboard.layoutName', {
@@ -395,6 +452,39 @@ export function RolesPanel({
               onChange={(event) => setNameDraft(event.target.value)}
             />
           </label>
+          <fieldset className="role-choice-list">
+            <legend>{t('rbac.navMode')}</legend>
+            <p className="form-field-hint">{t('rbac.navModeHint')}</p>
+            {(
+              [
+                {
+                  value: 'sections' as const,
+                  label: t('rbac.navModeSections'),
+                  hint: t('rbac.navModeSectionsHint'),
+                },
+                {
+                  value: 'flat' as const,
+                  label: t('rbac.navModeFlat'),
+                  hint: t('rbac.navModeFlatHint'),
+                },
+              ] as const
+            ).map((option) => (
+              <label className="filter-option role-choice" key={option.value}>
+                <input
+                  type="radio"
+                  name="role-nav-mode"
+                  value={option.value}
+                  checked={navModeDraft === option.value}
+                  disabled={isSaving}
+                  onChange={() => setNavModeDraft(option.value)}
+                />
+                <span className="role-choice-copy">
+                  <strong>{option.label}</strong>
+                  <span className="form-field-hint">{option.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <label className="form-field" style={{ marginBottom: 16, maxWidth: '22rem' }}>
             {t('dashboard.layout')}
             <select
@@ -428,6 +518,44 @@ export function RolesPanel({
                 {NAVIGATION.map((group) =>
                   renderPageRows(translateSection(t, group.section), group.items),
                 )}
+              </tbody>
+            </table>
+          </div>
+          <h2 className="card-title" style={{ marginTop: 24 }}>
+            {t('rbac.todayViews')}
+          </h2>
+          <p className="form-field-hint" style={{ marginBottom: 12 }}>
+            {t('rbac.todayViewsHint')}
+          </p>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('rbac.feature')}</th>
+                  <th>{t('rbac.visible')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TODAY_NAV_ITEMS.map((item) => {
+                  const checked =
+                    isAdmin || todayViewsDraft.includes(item.view)
+                  return (
+                    <tr key={item.view}>
+                      <td>{t(item.labelKey)}</td>
+                      <td>
+                        <label className="filter-option">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={isAdmin || isSaving}
+                            onChange={() => toggleTodayView(item.view)}
+                          />
+                          <span>{t('rbac.visible')}</span>
+                        </label>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

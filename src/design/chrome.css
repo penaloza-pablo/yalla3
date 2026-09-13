@@ -238,6 +238,13 @@
   border-radius: var(--yl-radius-card);
 }
 
+@media (max-width: 768px) {
+  .sidebar {
+    border: 0;
+    border-radius: 0;
+  }
+}
+
 .main {
   background: var(--yl-bg);
 }
@@ -797,4 +804,63 @@
   .main {
     background: var(--yl-bg);
   }
+}
+
+/* yl.chrome.frost.progressive — sticky frost over scrolling content.
+   25% at the edge where text enters, 50% at 1/4 of the bar, 100% from the midpoint.
+   The class itself is position: sticky so overlays do not override a consumer sticky. */
+.yl-frost-progressive {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  isolation: isolate;
+  background: transparent;
+}
+
+.yl-frost-progressive::before,
+.yl-frost-progressive::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.yl-frost-progressive::before {
+  background: transparent;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  -webkit-mask-image: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.25) 0%,
+    rgba(0, 0, 0, 0.5) 25%,
+    #000 50%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.25) 0%,
+    rgba(0, 0, 0, 0.5) 25%,
+    #000 50%,
+    #000 100%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.yl-frost-progressive::after {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.175) 0%,
+    rgba(255, 255, 255, 0.35) 25%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
+}
+
+.yl-frost-progressive > * {
+  position: relative;
+  z-index: 1;
 }

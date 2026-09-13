@@ -819,6 +819,36 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
         }
       />
       <Specimen
+        refName="yl.chrome.frost.progressive"
+        title={t('kit.frostProgressive')}
+        usage={t('kit.frostProgressiveUsage')}
+        desktop={
+          <div className="yl-kit-frost-demo">
+            <header className="yl-frost-progressive yl-kit-frost-demo-bar">
+              <BrandMark />
+            </header>
+            <ul className="yl-kit-frost-demo-list">
+              {(
+                [
+                  'Daily Operations',
+                  'Inventory',
+                  'Spot Check',
+                  'Purchases',
+                  'Properties',
+                  'Reviews',
+                  'Bookings',
+                  'Cleaning Plan',
+                  'Maintenance Plan',
+                  'Roles',
+                ] as const
+              ).map((pageName) => (
+                <li key={pageName}>{t(`pages.${pageName}`, { defaultValue: pageName })}</li>
+              ))}
+            </ul>
+          </div>
+        }
+      />
+      <Specimen
         refName="yl.token.color"
         title={t('kit.tokens')}
         usage={t('kit.tokensUsage')}

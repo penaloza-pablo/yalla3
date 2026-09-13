@@ -5,6 +5,11 @@ import {
   isKnownRoleId,
 } from '../shared/rbac-catalog';
 import { isDashboardLayoutId } from '../shared/dashboard-layout';
+import { parseNavMode } from '../shared/nav-mode';
+import {
+  DEFAULT_TODAY_VIEWS,
+  resolveTodayViews,
+} from '../shared/today-views';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -21,6 +26,8 @@ type Payload = {
   name?: string;
   permissions?: unknown;
   dashboardLayoutId?: unknown;
+  navMode?: unknown;
+  todayViews?: unknown;
 };
 
 export const handler = async (event: {
@@ -85,6 +92,18 @@ export const handler = async (event: {
       ? existing.dashboardLayoutId
       : undefined;
 
+  const navMode = parseNavMode(
+    payload && 'navMode' in payload ? payload.navMode : existing.navMode,
+  );
+  const todayViews =
+    roleId === ADMIN_ROLE_ID
+      ? [...DEFAULT_TODAY_VIEWS]
+      : resolveTodayViews(
+          payload && 'todayViews' in payload
+            ? payload.todayViews
+            : existing.todayViews,
+        );
+
   const item = {
     ...existing,
     pk: rolePk(roleId),
@@ -92,6 +111,8 @@ export const handler = async (event: {
     id: roleId,
     name: nextName,
     permissions,
+    navMode,
+    todayViews,
     updatedAt: nowIso(),
     ...(dashboardLayoutId ? { dashboardLayoutId } : {}),
   };

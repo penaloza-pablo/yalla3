@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NavGroup } from '../../amplify/functions/shared/rbac-catalog'
+import {
+  DEFAULT_NAV_MODE,
+  type NavMode,
+} from '../../amplify/functions/shared/nav-mode'
 import { PAGE_ICON, YlIcon, type YlIconName } from '../design/icons'
 import {
   TODAY_NAV_ITEMS,
@@ -15,6 +19,8 @@ type SidebarNavProps = {
   groups: NavGroup[]
   activePage: string
   todayView: TodayViewMode
+  navMode?: NavMode
+  visibleTodayViews?: TodayViewMode[]
   onNavigate: (page: string) => void
   onTodayViewChange: (view: TodayViewMode) => void
   labelForPage: (page: string) => string
@@ -81,6 +87,8 @@ export function SidebarNav({
   groups,
   activePage,
   todayView,
+  navMode = DEFAULT_NAV_MODE,
+  visibleTodayViews,
   onNavigate,
   onTodayViewChange,
   labelForPage,
@@ -92,13 +100,17 @@ export function SidebarNav({
   )
   const showTodayViews = coreItems.includes('Daily Operations')
   const otherCoreItems = coreItems.filter((item) => item !== 'Daily Operations')
+  const todayItems = TODAY_NAV_ITEMS.filter((item) =>
+    visibleTodayViews ? visibleTodayViews.includes(item.view) : true,
+  )
   const activeSection = groups.find((group) =>
     group.items.includes(activePage),
   )?.section
   const todaySectionActive = activePage === 'Daily Operations'
+  const isFlat = navMode === 'flat'
 
   useEffect(() => {
-    if (!activeSection && !todaySectionActive) {
+    if (isFlat || (!activeSection && !todaySectionActive)) {
       return
     }
     const sectionToOpen = todaySectionActive ? TODAY_SECTION_ID : activeSection
@@ -114,7 +126,7 @@ export function SidebarNav({
       writeCollapsedSections(next)
       return next
     })
-  }, [activePage, activeSection, todaySectionActive])
+  }, [activePage, activeSection, isFlat, todaySectionActive])
 
   const toggleSection = (section: string) => {
     setCollapsedSections((current) => {
@@ -130,10 +142,43 @@ export function SidebarNav({
   }
 
   const todayOpen = !collapsedSections.has(TODAY_SECTION_ID)
+  const todayRows = showTodayViews
+    ? todayItems.map((item) => (
+        <FeatureRow
+          key={item.view}
+          label={t(item.labelKey)}
+          icon={item.icon}
+          isActive={todaySectionActive && todayView === item.view}
+          onClick={() => onTodayViewChange(item.view)}
+        />
+      ))
+    : []
+  const pageRows = [...otherCoreItems, ...groups.flatMap((group) => group.items)].map(
+    (item) => (
+      <FeatureRow
+        key={item}
+        label={labelForPage(item)}
+        icon={PAGE_ICON[item] ?? 'list.bullet'}
+        isActive={activePage === item}
+        onClick={() => onNavigate(item)}
+      />
+    ),
+  )
+
+  if (isFlat) {
+    return (
+      <div className="sidebar-nav">
+        <ul className="sidebar-nav-list sidebar-nav-root">
+          {todayRows}
+          {pageRows}
+        </ul>
+      </div>
+    )
+  }
 
   return (
     <div className="sidebar-nav">
-      {showTodayViews ? (
+      {todayRows.length > 0 ? (
         <div className="sidebar-nav-group sidebar-nav-root">
           <button
             type="button"
@@ -151,15 +196,7 @@ export function SidebarNav({
           </button>
           {todayOpen ? (
             <ul className="sidebar-nav-list" id="sidebar-section-today">
-              {TODAY_NAV_ITEMS.map((item) => (
-                <FeatureRow
-                  key={item.view}
-                  label={t(item.labelKey)}
-                  icon={item.icon}
-                  isActive={todaySectionActive && todayView === item.view}
-                  onClick={() => onTodayViewChange(item.view)}
-                />
-              ))}
+              {todayRows}
             </ul>
           ) : null}
         </div>
