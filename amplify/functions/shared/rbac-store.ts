@@ -8,8 +8,11 @@ import {
 import {
   ADMIN_ROLE_ID,
   ROLE_SEEDS,
+  PERMISSIONS_CATALOG_VERSION,
   allPermissionKeys,
+  applyPermissionCatalog,
   isKnownRoleId,
+  withAdminLockedPages,
 } from './rbac-catalog';
 import {
   DEFAULT_TODAY_VIEWS,
@@ -34,19 +37,12 @@ export type RoleRecord = {
 };
 
 const chromeOf = (item?: {
-  id?: unknown;
   navMode?: unknown;
   todayViews?: unknown;
-}) => {
-  const id = typeof item?.id === 'string' ? item.id : '';
-  return {
-    navMode: parseNavMode(item?.navMode),
-    todayViews:
-      id === ADMIN_ROLE_ID
-        ? [...DEFAULT_TODAY_VIEWS]
-        : resolveTodayViews(item?.todayViews),
-  };
-};
+}) => ({
+  navMode: parseNavMode(item?.navMode),
+  todayViews: resolveTodayViews(item?.todayViews),
+});
 
 const roleFromSeed = (seed: (typeof ROLE_SEEDS)[number]): RoleRecord => ({
   id: seed.id,
@@ -125,8 +121,13 @@ export const ensureRolesSeeded = async (tableName: string) => {
 
 export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
   const id = typeof item.id === 'string' ? item.id : '';
-  const permissions =
-    id === ADMIN_ROLE_ID ? allPermissionKeys() : asStringArray(item.permissions);
+  const permissions = withAdminLockedPages(
+    id,
+    applyPermissionCatalog(
+      asStringArray(item.permissions),
+      item.permissionsCatalogVersion,
+    ),
+  );
   return {
     id,
     name: typeof item.name === 'string' ? item.name : id,
@@ -134,7 +135,7 @@ export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
     dashboardLayoutId: isDashboardLayoutId(item.dashboardLayoutId)
       ? item.dashboardLayoutId
       : undefined,
-    ...chromeOf({ id, navMode: item.navMode, todayViews: item.todayViews }),
+    ...chromeOf({ navMode: item.navMode, todayViews: item.todayViews }),
   };
 };
 
@@ -198,10 +199,7 @@ export const resolvePermissions = async (
     return {
       roleId: assignedRoleId,
       roleName: record?.name ?? assignedRoleId,
-      permissions:
-        assignedRoleId === ADMIN_ROLE_ID
-          ? allPermissionKeys()
-          : (record?.permissions ?? []),
+      permissions: record?.permissions ?? [],
       bootstrap: false,
       dashboardLayoutId: record?.dashboardLayoutId,
       navMode: record?.navMode ?? DEFAULT_NAV_MODE,

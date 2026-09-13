@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useConfirm } from '../design/ConfirmDialog'
 import { YlIcon } from '../design/icons'
 import {
-  dashboardLayoutNumber,
   isProtectedDashboardLayoutId,
 } from '../../amplify/functions/shared/dashboard-layout'
+import { layoutLabel } from './labels'
 import { DashboardGrid } from './DashboardGrid'
+import { DashboardWidgetConfig } from './DashboardWidgetConfig'
 import {
   createDashboardLayout,
   deleteDashboardLayout,
@@ -49,17 +50,22 @@ export function DashboardLayoutEditor() {
   const widgetById = new Map(catalog.map((widget) => [widget.id, widget]))
   const [selectedId, setSelectedId] = useState(layouts[0]?.id ?? 'layout-1')
   const [widgetToAdd, setWidgetToAdd] = useState(catalog[0]?.id ?? '')
-  const nameFor = (id: string) =>
-    t('dashboard.layoutName', { n: dashboardLayoutNumber(id) })
+  const [configId, setConfigId] = useState<string | null>(null)
+  const [nameDraft, setNameDraft] = useState('')
 
   const selected =
     layouts.find((layout) => layout.id === selectedId) ?? layouts[0] ?? null
+  const configWidget = catalog.find((widget) => widget.id === configId) ?? null
 
   useEffect(() => {
     if (selected && selected.id !== selectedId) {
       setSelectedId(selected.id)
     }
   }, [selected, selectedId])
+
+  useEffect(() => {
+    setNameDraft(selected?.name ?? '')
+  }, [selected?.id, selected?.name])
 
   const updateLayout = (next: DashboardLayout) => {
     saveDashboardLayout(next)
@@ -127,7 +133,7 @@ export function DashboardLayoutEditor() {
     const accepted = await confirm({
       title: t('dashboard.deleteLayoutTitle'),
       message: t('dashboard.deleteLayoutBody', {
-        name: nameFor(selected.id),
+        name: layoutLabel(selected, t),
       }),
       confirmLabel: t('dashboard.deleteLayout'),
       destructive: true,
@@ -141,8 +147,19 @@ export function DashboardLayoutEditor() {
 
   const layoutOptions = layouts.map((layout) => ({
     id: layout.id,
-    label: nameFor(layout.id),
+    label: layoutLabel(layout, t),
   }))
+
+  const commitName = () => {
+    if (!selected) {
+      return
+    }
+    const nextName = nameDraft.trim()
+    if (nextName === (selected.name ?? '').trim()) {
+      return
+    }
+    updateLayout({ ...selected, name: nextName || undefined })
+  }
 
   if (!selected) {
     return null
@@ -165,6 +182,21 @@ export function DashboardLayoutEditor() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="form-field yl-dashboard-editor-select">
+          {t('dashboard.layoutNameField')}
+          <input
+            className="search-input"
+            value={nameDraft}
+            aria-label={t('dashboard.layoutNameField')}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onBlur={commitName}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur()
+              }
+            }}
+          />
         </label>
         <div className="yl-dashboard-editor-actions">
           <button className="btn-secondary" type="button" onClick={addLayout}>
@@ -267,13 +299,25 @@ export function DashboardLayoutEditor() {
                         </select>
                       </td>
                       <td>
-                        <button
-                          className="btn-secondary"
-                          type="button"
-                          onClick={() => removePlacement(placement.id)}
-                        >
-                          {t('dashboard.removeWidget')}
-                        </button>
+                        <div className="yl-dashboard-editor-actions">
+                          {definition ? (
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              onClick={() => setConfigId(definition.id)}
+                            >
+                              <YlIcon name="gearshape" size={16} />
+                              {t('dashboard.configureWidgetShort')}
+                            </button>
+                          ) : null}
+                          <button
+                            className="btn-secondary"
+                            type="button"
+                            onClick={() => removePlacement(placement.id)}
+                          >
+                            {t('dashboard.removeWidget')}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -283,6 +327,56 @@ export function DashboardLayoutEditor() {
           </div>
         )}
       </div>
+
+      <div className="yl-dashboard-editor-placements">
+        <h3 className="card-title">{t('dashboard.widgetCatalog')}</h3>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('dashboard.widget')}</th>
+                <th>{t('dashboard.scaleSize')}</th>
+                <th>{t('common.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {catalog.map((widget) => (
+                <tr key={widget.id}>
+                  <td>{t(widget.titleKey)}</td>
+                  <td>
+                    {widget.scales
+                      .map((scale) =>
+                        t('dashboard.spanLabel', {
+                          cols: scale.colSpan,
+                          rows: scale.rowSpan,
+                        }),
+                      )
+                      .join(', ')}
+                  </td>
+                  <td>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => setConfigId(widget.id)}
+                    >
+                      <YlIcon name="gearshape" size={16} />
+                      {t('dashboard.configureWidgetShort')}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {configWidget ? (
+        <DashboardWidgetConfig
+          key={configWidget.id}
+          widget={configWidget}
+          onClose={() => setConfigId(null)}
+        />
+      ) : null}
     </div>
   )
 }

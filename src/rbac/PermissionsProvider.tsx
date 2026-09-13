@@ -9,7 +9,6 @@ import {
 } from 'react'
 import { Hub } from 'aws-amplify/utils'
 import {
-  ADMIN_ROLE_ID,
   allPermissionKeys,
   pagePermission,
 } from '../../amplify/functions/shared/rbac-catalog'
@@ -113,14 +112,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         )
         setNavMode(parseNavMode(payload.navMode))
         setTodayViews(
-          nextRoleId === ADMIN_ROLE_ID || isBootstrap
+          isBootstrap
             ? [...DEFAULT_TODAY_VIEWS]
             : resolveTodayViews(payload.todayViews),
         )
         setBootstrap(isBootstrap)
         setPermissions(
           new Set(
-            nextRoleId === ADMIN_ROLE_ID || isBootstrap
+            isBootstrap
               ? allPermissionKeys()
               : (payload.permissions ?? []),
           ),

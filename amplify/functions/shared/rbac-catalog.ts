@@ -14,7 +14,6 @@ export const NAVIGATION: NavGroup[] = [
     section: 'Ops',
     items: [
       'Properties',
-      'Reviews',
       'Unassigned tasks',
       'Visit templates',
       'Template Auto Assign',
@@ -22,7 +21,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Bookings',
-    items: ['Bookings', 'Bookings Plan', 'Bookings settings'],
+    items: ['Bookings', 'Bookings Plan', 'Reviews', 'Bookings settings'],
   },
   {
     section: 'Cleaning',
@@ -44,7 +43,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Settings',
-    items: ['Logs', 'Users', 'Roles', 'Slack'],
+    items: ['Logs', 'Users', 'Roles', 'Slack', 'Global Variables'],
   },
   {
     section: 'Grow',
@@ -105,6 +104,7 @@ export const ACTION_KEYS = {
   cleaningBillingEdit: 'action:cleaningBilling.edit',
   cleaningBillingPrices: 'action:cleaningBilling.prices',
   createTasks: 'action:createTasks',
+  dashboardConfigureWidgets: 'action:dashboard.configureWidgets',
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -158,6 +158,10 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
     i18nKey: 'rbac.actions.cleaningBillingPrices',
   },
   { key: ACTION_KEYS.createTasks, i18nKey: 'rbac.actions.createTasks' },
+  {
+    key: ACTION_KEYS.dashboardConfigureWidgets,
+    i18nKey: 'rbac.actions.dashboardConfigureWidgets',
+  },
 ]
 
 export const DASHBOARD_CARD_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -200,10 +204,69 @@ export const allPermissionKeys = () => [
   ...ALL_ACTION_KEYS,
 ]
 
-const pages = (...names: string[]) => names.map(pagePermission)
+export const isKnownPermission = (key: string) =>
+  allPermissionKeys().includes(key)
 
 export const ADMIN_ROLE_ID = 'admin'
 export const KNOCK_KNOCK_SUPERVISOR_ROLE_ID = 'knock-knock-supervisor'
+
+export const ADMIN_LOCKED_PAGES = ['Roles'] as const
+
+export const isAdminLockedPage = (page: string) =>
+  (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
+
+export const PERMISSIONS_CATALOG_VERSION = 2
+
+export const applyPermissionCatalog = (
+  permissions: string[],
+  storedVersion?: unknown,
+) => {
+  let next = permissions.filter(isKnownPermission)
+  const from =
+    typeof storedVersion === 'number' && Number.isFinite(storedVersion)
+      ? Math.floor(storedVersion)
+      : 1
+  if (from < 2) {
+    const hasSettingsPage = next.some(
+      (key) =>
+        key === pagePermission('Logs') ||
+        key === pagePermission('Users') ||
+        key === pagePermission('Roles') ||
+        key === pagePermission('Slack'),
+    )
+    if (hasSettingsPage && !next.includes(pagePermission('Global Variables'))) {
+      next.push(pagePermission('Global Variables'))
+    }
+    const canConfigureWidgets =
+      next.includes(pagePermission('Daily Operations')) &&
+      (next.includes(ACTION_KEYS.dailyOpsCreate) ||
+        next.includes(pagePermission('Roles')) ||
+        next.includes(pagePermission('Visual Widgets')))
+    if (
+      canConfigureWidgets &&
+      !next.includes(ACTION_KEYS.dashboardConfigureWidgets)
+    ) {
+      next.push(ACTION_KEYS.dashboardConfigureWidgets)
+    }
+  }
+  return next
+}
+
+export const withAdminLockedPages = (roleId: string, permissions: string[]) => {
+  if (roleId !== ADMIN_ROLE_ID) {
+    return permissions
+  }
+  const next = [...permissions]
+  for (const page of ADMIN_LOCKED_PAGES) {
+    const key = pagePermission(page)
+    if (!next.includes(key)) {
+      next.push(key)
+    }
+  }
+  return next
+}
+
+const pages = (...names: string[]) => names.map(pagePermission)
 
 export const ROLE_SEEDS: {
   id: string
@@ -273,6 +336,7 @@ export const ROLE_SEEDS: {
       ACTION_KEYS.dashboardCardCleaning,
       ACTION_KEYS.dashboardCardOps,
       ACTION_KEYS.dashboardCardInventory,
+      ACTION_KEYS.dashboardConfigureWidgets,
     ],
   },
   {
@@ -310,6 +374,7 @@ export const ROLE_SEEDS: {
       ACTION_KEYS.dashboardCardMaintenance,
       ACTION_KEYS.dashboardCardOps,
       ACTION_KEYS.dashboardCardInventory,
+      ACTION_KEYS.dashboardConfigureWidgets,
     ],
   },
   {
@@ -326,6 +391,3 @@ export const ROLE_SEEDS: {
 export const ROLE_IDS = ROLE_SEEDS.map((role) => role.id)
 
 export const isKnownRoleId = (roleId: string) => ROLE_IDS.includes(roleId)
-
-export const isKnownPermission = (key: string) =>
-  allPermissionKeys().includes(key)

@@ -119,39 +119,47 @@ export const resolveVisitStatus = (visit: {
   return 'SCHEDULED';
 };
 
+const sequentialIdCache = new Map<string, number>();
+
 export const getNextSequentialId = async (
   tableName: string,
   prefix: string,
 ) => {
-  let lastEvaluatedKey: Record<string, unknown> | undefined;
-  let maxValue = 0;
-  const pattern = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+  const cacheKey = `${tableName}#${prefix}`;
+  let maxValue = sequentialIdCache.get(cacheKey);
+  if (maxValue == null) {
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    maxValue = 0;
+    const pattern = new RegExp(`^${prefix}-(\\d+)$`, 'i');
 
-  do {
-    const result = await docClient.send(
-      new ScanCommand({
-        TableName: tableName,
-        ProjectionExpression: 'id',
-        ExclusiveStartKey: lastEvaluatedKey,
-      }),
-    );
-    (result.Items ?? []).forEach((entry) => {
-      const id = typeof entry.id === 'string' ? entry.id : '';
-      const match = id.match(pattern);
-      if (!match) {
-        return;
-      }
-      const value = Number(match[1]);
-      if (Number.isFinite(value)) {
-        maxValue = Math.max(maxValue, value);
-      }
-    });
-    lastEvaluatedKey = result.LastEvaluatedKey as
-      | Record<string, unknown>
-      | undefined;
-  } while (lastEvaluatedKey);
+    do {
+      const result = await docClient.send(
+        new ScanCommand({
+          TableName: tableName,
+          ProjectionExpression: 'id',
+          ExclusiveStartKey: lastEvaluatedKey,
+        }),
+      );
+      (result.Items ?? []).forEach((entry) => {
+        const id = typeof entry.id === 'string' ? entry.id : '';
+        const match = id.match(pattern);
+        if (!match) {
+          return;
+        }
+        const value = Number(match[1]);
+        if (Number.isFinite(value)) {
+          maxValue = Math.max(maxValue ?? 0, value);
+        }
+      });
+      lastEvaluatedKey = result.LastEvaluatedKey as
+        | Record<string, unknown>
+        | undefined;
+    } while (lastEvaluatedKey);
+  }
 
-  return `${prefix}-${String(maxValue + 1).padStart(3, '0')}`;
+  const nextValue = (maxValue ?? 0) + 1;
+  sequentialIdCache.set(cacheKey, nextValue);
+  return `${prefix}-${String(nextValue).padStart(3, '0')}`;
 };
 
 export const persistVisitStatusIfNeeded = async (

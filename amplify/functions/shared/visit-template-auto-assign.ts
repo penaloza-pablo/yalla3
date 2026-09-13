@@ -155,6 +155,14 @@ export type AutoAssignResult = {
   reason: string;
   item: Record<string, unknown>;
   createdTasks: Record<string, unknown>[];
+  ruleId?: string;
+  templateId?: string;
+};
+
+export type AutoAssignOptions = {
+  /** Assign even if autoAssignedTemplateId is already set. Still skips visits that already have tasks. */
+  ignoreExistingTemplateId?: boolean;
+  dryRun?: boolean;
 };
 
 const skipped = (
@@ -169,6 +177,7 @@ const skipped = (
 
 export const applyVisitTemplateAutoAssign = async (
   visit: Record<string, unknown>,
+  options: AutoAssignOptions = {},
 ): Promise<AutoAssignResult> => {
   const visitsTable = process.env.TABLE_NAME || process.env.VISITS_TABLE;
   const tasksTable = process.env.TASKS_TABLE;
@@ -191,7 +200,11 @@ export const applyVisitTemplateAutoAssign = async (
     return skipped(visit, 'missing-fields');
   }
 
-  if (typeof visit.autoAssignedTemplateId === 'string' && visit.autoAssignedTemplateId) {
+  if (
+    !options.ignoreExistingTemplateId &&
+    typeof visit.autoAssignedTemplateId === 'string' &&
+    visit.autoAssignedTemplateId
+  ) {
     return skipped(visit, 'already-assigned');
   }
 
@@ -224,6 +237,17 @@ export const applyVisitTemplateAutoAssign = async (
   const template = templateResult.Item as Record<string, unknown> | undefined;
   if (!template || template.active === false) {
     return skipped(visit, 'template-inactive');
+  }
+
+  if (options.dryRun) {
+    return {
+      applied: false,
+      reason: 'would-apply',
+      item: visit,
+      createdTasks: [],
+      ruleId: rule.id,
+      templateId: rule.templateId,
+    };
   }
 
   const visitTypeId =
@@ -269,12 +293,16 @@ export const applyVisitTemplateAutoAssign = async (
       new UpdateCommand({
         TableName: visitsTable,
         Key: { id: visitId },
-        ConditionExpression:
-          'attribute_not_exists(autoAssignedTemplateId) OR autoAssignedTemplateId = :empty',
+        ...(options.ignoreExistingTemplateId
+          ? {}
+          : {
+              ConditionExpression:
+                'attribute_not_exists(autoAssignedTemplateId) OR autoAssignedTemplateId = :empty',
+            }),
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: {
           ...expressionValues,
-          ':empty': '',
+          ...(options.ignoreExistingTemplateId ? {} : { ':empty': '' }),
         },
         ReturnValues: 'ALL_NEW',
       }),
@@ -311,5 +339,7 @@ export const applyVisitTemplateAutoAssign = async (
     reason: 'applied',
     item: updatedVisit,
     createdTasks,
+    ruleId: rule.id,
+    templateId: rule.templateId,
   };
 };

@@ -511,7 +511,7 @@ export function TodayView({
         <div className="page-header-leading">
           <p className="eyebrow">{t('today.eyebrow')}</p>
           <div className="page-title-row">
-            <h1 className="page-title">{t('operations.dashboard')}</h1>
+            <h1 className="page-title">{t('pages.Today')}</h1>
           </div>
           <p className="subtitle">{t('today.subtitle')}</p>
         </div>

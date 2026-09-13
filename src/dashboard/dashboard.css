@@ -164,8 +164,61 @@
   min-width: 4.5rem;
 }
 
-.yl-dashboard-config {
-  width: min(560px, 100%);
+.yl-dashboard-config-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--yl-bg);
+  overflow: auto;
+}
+
+.yl-dashboard-config-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.yl-dashboard-config-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 880px;
+}
+
+.yl-dashboard-config-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: var(--yl-radius-card);
+  background: var(--yl-surface);
+}
+
+.yl-dashboard-markup-field {
+  width: 100%;
+}
+
+.yl-dashboard-markup {
+  width: 100%;
+  min-height: 220px;
+  padding: 12px 14px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 12px;
+  background: var(--yl-surface-2);
+  color: var(--yl-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 .yl-dashboard-scale-size {

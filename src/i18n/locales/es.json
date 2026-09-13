@@ -49,13 +49,14 @@
     "ratio": "{{done}} de {{total}}",
     "goodJob": "Yalla! Todas las tareas completadas",
     "openDailyOps": "Abrir resumen diario",
-    "dashboard": "Dashboard"
+    "dashboard": "Panel"
   },
   "dashboard": {
     "spanLabel": "{{cols}} × {{rows}}",
     "swatchAria": "{{name}}, {{cols}} por {{rows}}",
     "layout": "Layout",
     "layoutName": "Layout {{n}}",
+    "layoutNameField": "Nombre del layout",
     "newLayout": "Nuevo layout",
     "deleteLayout": "Eliminar layout",
     "deleteLayoutTitle": "Eliminar layout",
@@ -68,9 +69,14 @@
     "emptyLayout": "Este layout no tiene widgets. Añade uno para verlo en la cuadrícula.",
     "configureWidget": "Configurar {{name}}",
     "configureWidgetTitle": "Configurar {{name}}",
+    "configureWidgetShort": "Configurar",
+    "widgetCatalog": "Widgets",
     "scaleHint": "Define cómo se ve el widget en cada tamaño. Si no cabe el más grande, se usa el siguiente (por ejemplo 2×3 → 2×2 → 2×1). Si no hay otra escala, se oculta.",
     "scaleSize": "Tamaño",
     "scaleFill": "Fondo",
+    "scaleMarkup": "Plantilla HTML",
+    "scaleMarkupPlaceholder": "<p>{{example}}</p>",
+    "scaleMarkupHint": "HTML con variables Handlebars, por ejemplo {{example}} o {{example2}}. El valor se copiará aquí más adelante desde las bases de datos y el diseño que programes.",
     "addScale": "Añadir escala",
     "emptyScales": "Este widget no tiene escalas. Añade al menos una para que pueda mostrarse.",
     "widgets": {
@@ -446,6 +452,25 @@
     "unknownUser": "Usuario conectado",
     "signOut": "Cerrar sesión"
   },
+  "globalVariables": {
+    "eyebrow": "Administración / Variables globales",
+    "subtitle": "Catálogo de variables que pueden usar los widgets y otras funcionalidades, como los informes de finanzas.",
+    "cardTitle": "Variables",
+    "cardSubtitle": "Despliega cada variable para ver dónde se está usando.",
+    "variable": "Variable",
+    "description": "Descripción",
+    "usages": "Usos",
+    "usageCount": "{{count}} usos",
+    "usageCount_one": "{{count}} uso",
+    "usageCount_other": "{{count}} usos",
+    "usageFinance": "Informes de finanzas",
+    "usageWidget": "Widget \"{{name}}\"",
+    "noUsages": "Ninguna funcionalidad está usando esta variable todavía.",
+    "empty": "No hay variables definidas.",
+    "formulaFromSettings": "la fórmula de la propiedad",
+    "catalogDescription": "Variable del catálogo de finanzas: {{name}}.",
+    "unknownDescription": "Variable disponible para widgets y otras funcionalidades."
+  },
   "pages": {
     "Alerts": "Alertas",
     "Today": "Hoy",
@@ -487,6 +512,7 @@
     "Users": "Usuarios",
     "Roles": "Roles",
     "Slack": "Slack",
+    "Global Variables": "Variables globales",
     "Tech solution 2": "Solución Tech 2",
     "Tech solution 3": "Solución Tech 3",
     "Visual Buttons": "Botones",
@@ -581,7 +607,7 @@
     "quickFilterWarnings": "Avisos"
   },
   "reviews": {
-    "eyebrow": "Ops / Reseñas",
+    "eyebrow": "Reservas / Reseñas",
     "subtitle": "Actualizar dispara una sincronización y luego recarga los datos y el estado de sync.",
     "cardTitle": "Reseñas",
     "cardSubtitle": "Pulsa detalles para ver el contenido privado y público de la reseña.",
@@ -650,6 +676,7 @@
     "Users": "Usuarios",
     "Roles": "Roles",
     "Slack": "Slack",
+    "Global Variables": "Variables",
     "Property Reports": "Informes",
     "Reports Settings": "Ajustes de informes",
     "Property Groups": "Grupos",
@@ -965,9 +992,9 @@
     "priorityHigh": "Alta",
     "priorityUrgent": "Urgente",
     "subtitle": "Planifica visitas, tareas y operaciones del día a día.",
-    "kanban": "Kanban",
-    "agenda": "Agenda",
-    "day": "Día",
+    "kanban": "Lista",
+    "agenda": "Calendario",
+    "day": "Agenda",
     "openDashboard": "Abrir Dashboard",
     "openDayView": "Abrir vista de día",
     "searchTemplates": "Buscar plantillas",
@@ -1752,6 +1779,7 @@
     "navModeFlatHint": "Muestra todas las funcionalidades permitidas en una sola lista, sin secciones. Útil si el rol tiene pocas.",
     "todayViews": "Vistas de Hoy",
     "todayViewsHint": "Qué vistas puede abrir dentro de Hoy. Solo aplica si Hoy está visible.",
+    "adminLockedHint": "Puedes ocultar cualquier funcionalidad de este rol. Administración > Roles permanece visible para que el admin no se bloquee a sí mismo.",
     "noAccess": "Tu cuenta aún no tiene rol. Pide a un admin que te asigne uno.",
     "permissionsLoadError": "No se pudieron cargar tus permisos. Suele ser una sesión caducada, no que te falte el rol.",
     "retryPermissions": "Reintentar",
@@ -1776,7 +1804,8 @@
       "maintenanceBillingEdit": "Editar en Mantenimiento / Facturación (tablas del mes)",
       "cleaningBillingEdit": "Editar en Limpiezas / Facturación (tablas del mes)",
       "cleaningBillingPrices": "Visibilidad de precios de limpieza",
-      "createTasks": "Crear tareas"
+      "createTasks": "Crear tareas",
+      "dashboardConfigureWidgets": "Configurar widgets del panel"
     }
   },
   "spotCheck": {

@@ -637,6 +637,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   Users: 'person.crop.circle',
   Roles: 'person.2',
   Slack: 'bubble.left',
+  'Global Variables': 'doc.text',
   'Property Reports': 'chart.bar',
   'Reports Settings': 'gearshape',
   'Property Groups': 'rectangle.3.group',

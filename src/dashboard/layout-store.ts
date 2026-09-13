@@ -25,6 +25,7 @@ const listeners = new Set<() => void>()
 
 const cloneLayout = (layout: DashboardLayout): DashboardLayout => ({
   id: layout.id,
+  name: layout.name,
   widgets: layout.widgets.map((widget) => ({ ...widget })),
 })
 
@@ -78,6 +79,7 @@ const parseLayout = (value: unknown): DashboardLayout | null => {
   }
   return {
     id: item.id,
+    name: typeof item.name === 'string' ? item.name : undefined,
     widgets: item.widgets
       .map((widget, index) => parsePlacement(widget, index))
       .filter((widget): widget is DashboardWidgetPlacement => Boolean(widget)),

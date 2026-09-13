@@ -16,6 +16,7 @@ import './dashboard.css'
 type Props = {
   layout: DashboardLayout
   variant?: 'board' | 'embedded'
+  showConfig?: boolean
 }
 
 const viewportBox = (variant: 'board' | 'embedded') => {
@@ -34,7 +35,11 @@ const viewportBox = (variant: 'board' | 'embedded') => {
   }
 }
 
-export function DashboardGrid({ layout, variant = 'embedded' }: Props) {
+export function DashboardGrid({
+  layout,
+  variant = 'embedded',
+  showConfig = false,
+}: Props) {
   const { t } = useTranslation()
   const widgets = useDashboardWidgets()
   const hostRef = useRef<HTMLDivElement>(null)
@@ -112,7 +117,9 @@ export function DashboardGrid({ layout, variant = 'embedded' }: Props) {
                 key={placement.id}
                 name={t(definition.titleKey)}
                 scale={scale}
-                onConfigure={() => setConfigId(definition.id)}
+                onConfigure={
+                  showConfig ? () => setConfigId(definition.id) : undefined
+                }
               />
             )
           })}

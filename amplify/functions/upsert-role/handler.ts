@@ -1,15 +1,13 @@
 import {
-  ADMIN_ROLE_ID,
-  allPermissionKeys,
+  PERMISSIONS_CATALOG_VERSION,
+  applyPermissionCatalog,
   isKnownPermission,
   isKnownRoleId,
+  withAdminLockedPages,
 } from '../shared/rbac-catalog';
 import { isDashboardLayoutId } from '../shared/dashboard-layout';
 import { parseNavMode } from '../shared/nav-mode';
-import {
-  DEFAULT_TODAY_VIEWS,
-  resolveTodayViews,
-} from '../shared/today-views';
+import { resolveTodayViews } from '../shared/today-views';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -71,20 +69,21 @@ export const handler = async (event: {
     return buildHttpResponse(400, { message: 'name is required.' });
   }
 
-  const permissions =
-    roleId === ADMIN_ROLE_ID
-      ? allPermissionKeys()
-      : Array.isArray(payload?.permissions)
-        ? payload.permissions.filter(
-            (entry): entry is string =>
-              typeof entry === 'string' && isKnownPermission(entry),
-          )
-        : Array.isArray(existing.permissions)
+  const incomingPermissions = Array.isArray(payload?.permissions)
+    ? payload.permissions.filter(
+        (entry): entry is string =>
+          typeof entry === 'string' && isKnownPermission(entry),
+      )
+    : applyPermissionCatalog(
+        Array.isArray(existing.permissions)
           ? existing.permissions.filter(
               (entry): entry is string =>
                 typeof entry === 'string' && isKnownPermission(entry),
             )
-          : [];
+          : [],
+        existing.permissionsCatalogVersion,
+      );
+  const permissions = withAdminLockedPages(roleId, incomingPermissions);
 
   const dashboardLayoutId = isDashboardLayoutId(payload?.dashboardLayoutId)
     ? payload.dashboardLayoutId
@@ -95,14 +94,11 @@ export const handler = async (event: {
   const navMode = parseNavMode(
     payload && 'navMode' in payload ? payload.navMode : existing.navMode,
   );
-  const todayViews =
-    roleId === ADMIN_ROLE_ID
-      ? [...DEFAULT_TODAY_VIEWS]
-      : resolveTodayViews(
-          payload && 'todayViews' in payload
-            ? payload.todayViews
-            : existing.todayViews,
-        );
+  const todayViews = resolveTodayViews(
+    payload && 'todayViews' in payload
+      ? payload.todayViews
+      : existing.todayViews,
+  );
 
   const item = {
     ...existing,
@@ -113,6 +109,7 @@ export const handler = async (event: {
     permissions,
     navMode,
     todayViews,
+    permissionsCatalogVersion: PERMISSIONS_CATALOG_VERSION,
     updatedAt: nowIso(),
     ...(dashboardLayoutId ? { dashboardLayoutId } : {}),
   };

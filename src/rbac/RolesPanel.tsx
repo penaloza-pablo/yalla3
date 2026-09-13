@@ -6,12 +6,12 @@ import {
   CORE_PAGES,
   DASHBOARD_CARD_DEFINITIONS,
   NAVIGATION,
+  isAdminLockedPage,
   pagePermission,
   withDefaultDashboardCardPermissions,
 } from '../../amplify/functions/shared/rbac-catalog'
 import {
   DEFAULT_DASHBOARD_LAYOUT_ID,
-  dashboardLayoutNumber,
   isDashboardLayoutId,
 } from '../../amplify/functions/shared/dashboard-layout'
 import {
@@ -35,6 +35,7 @@ import {
   useDashboardLayouts,
   writeRoleLayoutAssignment,
 } from '../dashboard/layout-store'
+import { layoutLabel } from '../dashboard/labels'
 import { TODAY_NAV_ITEMS } from '../nav/todayViews'
 import { usePermissions } from './PermissionsProvider'
 
@@ -248,7 +249,8 @@ export function RolesPanel({
   const renderPageRows = (sectionLabel: string, items: readonly string[]) =>
     items.map((page) => {
       const key = pagePermission(page)
-      const checked = isAdmin || draft.includes(key)
+      const locked = isAdmin && isAdminLockedPage(page)
+      const checked = locked || draft.includes(key)
       return (
         <tr key={key}>
           <td>{sectionLabel}</td>
@@ -258,7 +260,7 @@ export function RolesPanel({
               <input
                 type="checkbox"
                 checked={checked}
-                disabled={isAdmin}
+                disabled={locked}
                 onChange={() =>
                   setDraft((current) => toggleValue(current, key))
                 }
@@ -417,12 +419,19 @@ export function RolesPanel({
                         )}
                       </td>
                       <td>
-                        {t('dashboard.layoutName', {
-                          n: dashboardLayoutNumber(
-                            role.dashboardLayoutId ??
+                        {layoutLabel(
+                          dashboardLayouts.find(
+                            (layout) =>
+                              layout.id ===
+                              (role.dashboardLayoutId ??
+                                DEFAULT_DASHBOARD_LAYOUT_ID),
+                          ) ?? {
+                            id:
+                              role.dashboardLayoutId ??
                               DEFAULT_DASHBOARD_LAYOUT_ID,
-                          ),
-                        })}
+                          },
+                          t,
+                        )}
                       </td>
                       <td>{role.permissions.length}</td>
                       <td>
@@ -496,14 +505,17 @@ export function RolesPanel({
             >
               {dashboardLayouts.map((layout) => (
                 <option key={layout.id} value={layout.id}>
-                  {t('dashboard.layoutName', {
-                    n: dashboardLayoutNumber(layout.id),
-                  })}
+                  {layoutLabel(layout, t)}
                 </option>
               ))}
             </select>
             <span className="form-field-hint">{t('rbac.dashboardLayoutHint')}</span>
           </label>
+          {isAdmin ? (
+            <p className="form-field-hint" style={{ marginBottom: 12 }}>
+              {t('rbac.adminLockedHint')}
+            </p>
+          ) : null}
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -537,8 +549,7 @@ export function RolesPanel({
               </thead>
               <tbody>
                 {TODAY_NAV_ITEMS.map((item) => {
-                  const checked =
-                    isAdmin || todayViewsDraft.includes(item.view)
+                  const checked = todayViewsDraft.includes(item.view)
                   return (
                     <tr key={item.view}>
                       <td>{t(item.labelKey)}</td>
@@ -547,7 +558,7 @@ export function RolesPanel({
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={isAdmin || isSaving}
+                            disabled={isSaving}
                             onChange={() => toggleTodayView(item.view)}
                           />
                           <span>{t('rbac.visible')}</span>
@@ -572,7 +583,7 @@ export function RolesPanel({
               </thead>
               <tbody>
                 {DASHBOARD_CARD_DEFINITIONS.map((card) => {
-                  const checked = isAdmin || draft.includes(card.key)
+                  const checked = draft.includes(card.key)
                   return (
                     <tr key={card.key}>
                       <td>{t(card.i18nKey)}</td>
@@ -581,7 +592,7 @@ export function RolesPanel({
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={isAdmin}
+                            disabled={isSaving}
                             onChange={() =>
                               setDraft((current) =>
                                 toggleValue(current, card.key),
@@ -610,7 +621,7 @@ export function RolesPanel({
               </thead>
               <tbody>
                 {ACTION_DEFINITIONS.map((action) => {
-                  const checked = isAdmin || draft.includes(action.key)
+                  const checked = draft.includes(action.key)
                   return (
                     <tr key={action.key}>
                       <td>{t(action.i18nKey)}</td>
@@ -619,7 +630,7 @@ export function RolesPanel({
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={isAdmin}
+                            disabled={isSaving}
                             onChange={() =>
                               setDraft((current) =>
                                 toggleValue(current, action.key),

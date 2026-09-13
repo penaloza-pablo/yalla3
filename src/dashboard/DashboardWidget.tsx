@@ -7,7 +7,7 @@ import './dashboard.css'
 type Props = {
   name: string
   scale: DashboardWidgetScale
-  onConfigure: () => void
+  onConfigure?: () => void
 }
 
 export function DashboardWidget({ name, scale, onConfigure }: Props) {
@@ -33,14 +33,16 @@ export function DashboardWidget({ name, scale, onConfigure }: Props) {
         rows: scale.rowSpan,
       })}
     >
-      <button
-        className="yl-dashboard-widget-config"
-        type="button"
-        aria-label={t('dashboard.configureWidget', { name })}
-        onClick={onConfigure}
-      >
-        <YlIcon name="gearshape" size={14} />
-      </button>
+      {onConfigure ? (
+        <button
+          className="yl-dashboard-widget-config"
+          type="button"
+          aria-label={t('dashboard.configureWidget', { name })}
+          onClick={onConfigure}
+        >
+          <YlIcon name="gearshape" size={14} />
+        </button>
+      ) : null}
       <p className="yl-dashboard-widget-name">{name}</p>
       <p className="yl-dashboard-widget-span">{spanLabel}</p>
     </article>

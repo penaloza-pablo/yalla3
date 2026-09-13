@@ -69,6 +69,7 @@ import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
+import { GlobalVariablesView } from './settings/GlobalVariablesView'
 import { usePermissions } from './rbac/PermissionsProvider'
 import { useConfirm } from './design/ConfirmDialog'
 import { ACTION_KEYS, CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
@@ -8613,6 +8614,8 @@ function App() {
           />
         ) : activePage === 'Slack' ? (
           <SlackPanel getEndpoint={getEndpoint} />
+        ) : activePage === 'Global Variables' ? (
+          <GlobalVariablesView />
         ) : activePage === 'Property Reports' ? (
           <PropertyReportsView
             getEndpoint={getEndpoint}

@@ -8,7 +8,7 @@ import { DASHBOARD_LAYOUT_1 } from '../../dashboard/layouts'
 import { useDashboardLayouts } from '../../dashboard/layout-store'
 import { largestScale } from '../../dashboard/scale'
 import { useDashboardWidgets } from '../../dashboard/widget-store'
-import { dashboardLayoutNumber } from '../../../amplify/functions/shared/dashboard-layout'
+import { layoutLabel } from '../../dashboard/labels'
 import type { DashboardLayout } from '../../dashboard/types'
 
 export function WidgetsSpecimens() {
@@ -82,9 +82,7 @@ export function WidgetsSpecimens() {
                 >
                   {layouts.map((layout) => (
                     <option key={layout.id} value={layout.id}>
-                      {t('dashboard.layoutName', {
-                        n: dashboardLayoutNumber(layout.id),
-                      })}
+                      {layoutLabel(layout, t)}
                     </option>
                   ))}
                 </select>
@@ -97,9 +95,7 @@ export function WidgetsSpecimens() {
                   onChange={setPreviewId}
                   options={layouts.map((layout) => ({
                     id: layout.id,
-                    label: t('dashboard.layoutName', {
-                      n: dashboardLayoutNumber(layout.id),
-                    }),
+                    label: layoutLabel(layout, t),
                   }))}
                 />
               </div>

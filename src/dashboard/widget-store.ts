@@ -26,7 +26,8 @@ const parseScale = (value: unknown): DashboardWidgetScale | null => {
   if (!swatch || Number(item.colSpan) !== colSpan || Number(item.rowSpan) !== rowSpan) {
     return null
   }
-  return { colSpan, rowSpan, swatch }
+  const markup = typeof item.markup === 'string' ? item.markup : undefined
+  return { colSpan, rowSpan, swatch, ...(markup ? { markup } : {}) }
 }
 
 const parseOverrides = () => {

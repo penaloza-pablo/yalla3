@@ -14,6 +14,8 @@ export type DashboardWidgetScale = {
   colSpan: DashboardColSpan
   rowSpan: DashboardRowSpan
   swatch: string
+  /** Handlebars-style HTML for this scale: {{income}}, {{nights}}, … */
+  markup?: string
 }
 
 export type DashboardWidgetDefinition = {
@@ -34,6 +36,7 @@ export type DashboardWidgetPlacement = {
 
 export type DashboardLayout = {
   id: string
+  name?: string
   widgets: DashboardWidgetPlacement[]
 }
 

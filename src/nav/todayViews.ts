@@ -23,11 +23,12 @@ export const TODAY_NAV_ITEMS: Array<{
     | 'square.grid.2x2'
     | 'calendar'
     | 'rectangle.3.group'
+    | 'list.bullet'
     | 'list.bullet.rectangle'
 }> = [
   { view: 'dashboard', labelKey: 'pages.Today', icon: 'house' },
   { view: 'board', labelKey: 'today.dashboard', icon: 'square.grid.2x2' },
-  { view: 'day', labelKey: 'operations.day', icon: 'calendar' },
-  { view: 'kanban', labelKey: 'operations.kanban', icon: 'rectangle.3.group' },
-  { view: 'agenda', labelKey: 'operations.agenda', icon: 'list.bullet.rectangle' },
+  { view: 'day', labelKey: 'operations.day', icon: 'list.bullet.rectangle' },
+  { view: 'kanban', labelKey: 'operations.kanban', icon: 'list.bullet' },
+  { view: 'agenda', labelKey: 'operations.agenda', icon: 'calendar' },
 ]
