@@ -39,11 +39,18 @@ import {
   type LineAllocation,
 } from '../../amplify/functions/shared/property-report-allocations'
 import {
+  deriveReportStatus,
+  isReportFrozen,
+  isReportPreliminary,
+  type PropertyReportStatus,
+} from '../../amplify/functions/shared/property-reports'
+import { PropertyReportSettingsView } from './PropertyReportSettingsView'
+import { PropertyClosedReportView } from './PropertyClosedReportView'
+import { ReportMonthSteps } from './ReportMonthSteps'
+import {
   computePayoutBreakdown,
   sumPayoutField,
 } from '../../amplify/functions/shared/property-report-payouts'
-import { PropertyReportSettingsView } from './PropertyReportSettingsView'
-import { PropertyClosedReportView } from './PropertyClosedReportView'
 import { computePropertyReportMetrics } from './property-report-metrics'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
@@ -53,17 +60,14 @@ type Props = {
   onNavigate: (page: string, options?: { billingMonth?: string }) => void
 }
 
-type ReportStatus =
-  | 'CURRENT'
-  | 'PENDING_TO_CLOSE'
-  | 'READY_TO_CLOSE'
-  | 'CLOSED'
+type ReportStatus = PropertyReportStatus
 
 type ReportMonth = {
   id: string
   status: ReportStatus
   canMarkReady: boolean
   canClose: boolean
+  canPublish: boolean
   canReopen: boolean
 }
 
@@ -326,7 +330,7 @@ const AllocationChip = ({
         : ''
   return (
     <select
-      className="report-cost-chip"
+      className={`report-cost-chip${selected ? '' : ' is-missing'}`}
       value={selected}
       disabled={disabled}
       aria-label={t('propertyReports.allocation')}
@@ -380,19 +384,39 @@ const SettingsGearIcon = () => (
 const fallbackMonths = (): ReportMonth[] =>
   listPropertyReportMonthIds(getTodayMadrid()).map((id) => ({
     id,
-    status: id >= getTodayMadrid().slice(0, 7) ? 'CURRENT' : 'PENDING_TO_CLOSE',
-    canMarkReady: id < getTodayMadrid().slice(0, 7),
+    status: 'IN_PROGRESS',
+    canMarkReady: true,
     canClose: false,
+    canPublish: false,
     canReopen: false,
   }))
 
-const mapMonth = (item: Record<string, unknown>): ReportMonth => ({
-  id: String(item.id ?? ''),
-  status: String(item.status ?? 'PENDING_TO_CLOSE') as ReportStatus,
-  canMarkReady: Boolean(item.canMarkReady),
-  canClose: Boolean(item.canClose),
-  canReopen: Boolean(item.canReopen),
-})
+const mapMonth = (item: Record<string, unknown>): ReportMonth => {
+  const status = deriveReportStatus(
+    String(item.id ?? ''),
+    String(item.status ?? ''),
+  )
+  return {
+    id: String(item.id ?? ''),
+    status,
+    canMarkReady:
+      item.canMarkReady === undefined
+        ? status === 'IN_PROGRESS'
+        : Boolean(item.canMarkReady),
+    canClose:
+      item.canClose === undefined
+        ? status === 'READY_TO_CLOSE'
+        : Boolean(item.canClose),
+    canPublish:
+      item.canPublish === undefined
+        ? status === 'READY_TO_PUBLISH'
+        : Boolean(item.canPublish),
+    canReopen:
+      item.canReopen === undefined
+        ? status !== 'IN_PROGRESS'
+        : Boolean(item.canReopen),
+  }
+}
 
 export function PropertyReportsView({
   getEndpoint,
@@ -633,10 +657,12 @@ export function PropertyReportsView({
   }
 
   const statusLabel = (status: ReportStatus) => {
-    if (status === 'CURRENT') return t('propertyReports.statusCurrent')
-    if (status === 'PENDING_TO_CLOSE') return t('propertyReports.statusPending')
+    if (status === 'IN_PROGRESS') return t('propertyReports.statusInProgress')
     if (status === 'READY_TO_CLOSE') return t('propertyReports.statusReady')
-    return t('propertyReports.statusClosed')
+    if (status === 'READY_TO_PUBLISH') {
+      return t('propertyReports.statusReadyToPublish')
+    }
+    return t('propertyReports.statusPublished')
   }
 
   const loadMonths = useCallback(
@@ -843,7 +869,9 @@ export function PropertyReportsView({
       .finally(() => setIsLoading(false))
   }, [loadDetail, selectedMonthId, selectedPropertyId, t])
 
-  const saveStatus = async (action: 'ready' | 'close' | 'reopen') => {
+  const saveStatus = async (
+    action: 'ready' | 'close' | 'publish' | 'reopen',
+  ) => {
     if (!endpoints.upsert || !selectedPropertyId || !selectedMonthId) {
       setError(t('propertyReports.missingWrite'))
       return
@@ -977,17 +1005,62 @@ export function PropertyReportsView({
     }
   }
 
+  const isCharged = (rowId: string, kind: 'cost' | 'income' = 'cost') => {
+    const raw = lineAllocations[rowId]
+    if (kind === 'income') {
+      return Boolean(toIncomeAllocation(raw))
+    }
+    return isCostAllocation(raw)
+  }
+
+  const missingMaintenanceCharges = maintenanceLines.filter(
+    (line) => !isCharged(`maintenance:${line.id}`),
+  ).length
+  const missingServiceCharges = serviceLines.filter(
+    (line) => !isCharged(`service:${line.id}`),
+  ).length
+  const missingExpenseCharges = expenses.filter(
+    (line) => !isCharged(`expense:${line.id}`),
+  ).length
+  const missingIncomeCharges = incomes.filter(
+    (line) => !isCharged(`income:${line.id}`, 'income'),
+  ).length
+  const missingChargeCount =
+    missingMaintenanceCharges +
+    missingServiceCharges +
+    missingExpenseCharges +
+    missingIncomeCharges
+  const chargesComplete = missingChargeCount === 0
+
   const sectionsClosed = cleaningClosed && maintenanceClosed
   const pendingSectionLabels = [
     cleaningClosed ? null : t('propertyReports.cleaningTitle'),
     maintenanceClosed ? null : t('propertyReports.maintenanceTitle'),
   ].filter((value): value is string => Boolean(value))
-  const usesAllocations =
-    report?.status === 'READY_TO_CLOSE' || report?.status === 'CLOSED'
-  const canOpenReport = report?.status === 'CLOSED'
-  const allocationsLocked = report?.status === 'CLOSED' || isSaving
+  const monthStillOpen =
+    Boolean(selectedMonthId) && selectedMonthId >= getTodayMadrid().slice(0, 7)
+  const allocationsLocked = !report || isReportFrozen(report.status) || isSaving
+  const reportIsPreliminary = Boolean(
+    report && isReportPreliminary(report.status),
+  )
   const canAddMovement =
-    Boolean(endpoints.upsertMovement) && report?.status !== 'CLOSED'
+    Boolean(endpoints.upsertMovement) &&
+    Boolean(report && !isReportFrozen(report.status))
+  const readyBlockers = [
+    monthStillOpen ? t('propertyReports.monthStillOpen') : null,
+    sectionsClosed
+      ? null
+      : t('propertyReports.sectionsMustClose', {
+          sections: pendingSectionLabels.join(', '),
+        }),
+    chargesComplete ? null : t('propertyReports.chargesMustClassify'),
+  ].filter((value): value is string => Boolean(value))
+  const canMarkReady =
+    Boolean(report?.canMarkReady) && readyBlockers.length === 0
+  const canMarkReadyToPublish =
+    Boolean(report?.canClose) && chargesComplete
+  const advanceTitle = (blockers: string[]) =>
+    blockers.length > 0 ? blockers.join(' ') : undefined
 
   const closedReportMetrics = useMemo(
     () =>
@@ -1069,11 +1142,34 @@ export function PropertyReportsView({
   const renderLineAction = (
     rowId: string,
     isExpanded: boolean,
-    kind: 'cost' | 'income' = 'cost',
+    kind?: 'cost' | 'income',
   ) => {
-    if (usesAllocations) {
-      return (
-        <td>
+    const expandButton = (
+      <button
+        className="btn-icon btn-icon-ghost"
+        type="button"
+        aria-expanded={isExpanded}
+        aria-label={t('common.toggleDetails')}
+        onClick={() => toggleExpandedRow(rowId)}
+      >
+        <YlDisclosureIcon open={isExpanded} />
+      </button>
+    )
+    if (!kind) {
+      return <td>{expandButton}</td>
+    }
+    const missing = !isCharged(rowId, kind)
+    return (
+      <td>
+        <div className="report-charge-cell">
+          {missing ? (
+            <span
+              className="report-billing-warning"
+              title={t('propertyReports.chargeMissing')}
+            >
+              ⚠️
+            </span>
+          ) : null}
           <AllocationChip
             value={lineAllocations[rowId] ?? ''}
             kind={kind}
@@ -1081,20 +1177,8 @@ export function PropertyReportsView({
             markupPercent={markupPercent}
             onChange={(allocation) => void saveAllocation(rowId, allocation)}
           />
-        </td>
-      )
-    }
-    return (
-      <td>
-        <button
-          className="btn-icon btn-icon-ghost"
-          type="button"
-          aria-expanded={isExpanded}
-          aria-label={t('common.toggleDetails')}
-          onClick={() => toggleExpandedRow(rowId)}
-        >
-          <YlDisclosureIcon open={isExpanded} />
-        </button>
+          {expandButton}
+        </div>
       </td>
     )
   }
@@ -1132,9 +1216,23 @@ export function PropertyReportsView({
       <section className="card">
         <div className="card-header">
           <div>
-            <h2 className="card-title">
-              {t(`propertyReports.${tableKey}Title`)}
-            </h2>
+            <div className="card-title-row">
+              <h2 className="card-title">
+                {t(`propertyReports.${tableKey}Title`)}
+              </h2>
+              {(tableKey === 'expenses'
+                ? missingExpenseCharges
+                : missingIncomeCharges) > 0 ? (
+                <span className="report-billing-warning" role="status">
+                  {t('propertyReports.chargePendingWarning', {
+                    count:
+                      tableKey === 'expenses'
+                        ? missingExpenseCharges
+                        : missingIncomeCharges,
+                  })}
+                </span>
+              ) : null}
+            </div>
             <div className="report-metrics">
               <div className="report-metric">
                 <p className="card-label">
@@ -1192,11 +1290,7 @@ export function PropertyReportsView({
                   <th>{t('propertyReports.origin')}</th>
                   <th>{t('propertyReports.net')}</th>
                   <th>{t('propertyReports.gross')}</th>
-                  <th>
-                    {usesAllocations
-                      ? t('propertyReports.allocation')
-                      : t('common.actions')}
-                  </th>
+                  <th>{t('propertyReports.allocation')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1216,7 +1310,16 @@ export function PropertyReportsView({
                     const isExpanded = expandedRowIds.has(rowId)
                     return (
                       <Fragment key={`${tableKey}-${line.id}`}>
-                        <tr>
+                        <tr
+                          className={
+                            isCharged(
+                              rowId,
+                              tableKey === 'incomes' ? 'income' : 'cost',
+                            )
+                              ? undefined
+                              : 'is-charge-missing'
+                          }
+                        >
                           <td>{dateLabel(line.date)}</td>
                           <td className="report-col-clamp">
                             <TruncatedText value={line.itemName || ''} />
@@ -1230,7 +1333,7 @@ export function PropertyReportsView({
                             tableKey === 'incomes' ? 'income' : 'cost',
                           )}
                         </tr>
-                        {!usesAllocations && isExpanded ? (
+                        {isExpanded ? (
                           <tr className="detail-row">
                             <td colSpan={6}>
                               <ReportIvaDetails
@@ -1362,32 +1465,21 @@ export function PropertyReportsView({
             ) : null}
             {selectedMonthId && report && !isClosedReportOpen ? (
               <button
-                className={`btn-icon${canOpenReport ? '' : ' is-disabled'}`}
+                className="btn-icon"
                 type="button"
-                disabled={!canOpenReport}
                 aria-label={t('propertyReports.openReport')}
-                title={
-                  canOpenReport
-                    ? t('propertyReports.openReport')
-                    : t('propertyReports.reportLocked')
-                }
+                title={t('propertyReports.openReport')}
                 onClick={() => setIsClosedReportOpen(true)}
               >
                 <ReportDocumentIcon />
               </button>
             ) : null}
-            {selectedMonthId && report && canChangeStatus && report.status === 'PENDING_TO_CLOSE' ? (
+            {selectedMonthId && report && canChangeStatus && report.canMarkReady ? (
               <button
                 className="btn-secondary"
                 type="button"
-                disabled={isSaving || !sectionsClosed}
-                title={
-                  sectionsClosed
-                    ? undefined
-                    : t('propertyReports.sectionsMustClose', {
-                        sections: pendingSectionLabels.join(', '),
-                      })
-                }
+                disabled={isSaving || !canMarkReady}
+                title={advanceTitle(readyBlockers)}
                 onClick={() => void saveStatus('ready')}
               >
                 {t('propertyReports.markReady')}
@@ -1397,10 +1489,25 @@ export function PropertyReportsView({
               <button
                 className="btn-primary"
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || !canMarkReadyToPublish}
+                title={
+                  chargesComplete
+                    ? undefined
+                    : t('propertyReports.chargesMustClassify')
+                }
                 onClick={() => void saveStatus('close')}
               >
                 {t('propertyReports.closeMonth')}
+              </button>
+            ) : null}
+            {selectedMonthId && report && canChangeStatus && report.canPublish ? (
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={isSaving}
+                onClick={() => void saveStatus('publish')}
+              >
+                {t('propertyReports.publishMonth')}
               </button>
             ) : null}
             {selectedMonthId && report && canChangeStatus && report.canReopen ? (
@@ -1419,16 +1526,12 @@ export function PropertyReportsView({
 
       {error ? <p className="notice error">{error}</p> : null}
       {message ? <p className="notice success">{message}</p> : null}
-      {selectedMonthId &&
-      report?.status === 'PENDING_TO_CLOSE' &&
-      !sectionsClosed ? (
-        <p className="report-billing-warning" role="status">
-          {t('propertyReports.sectionsMustClose', {
-            sections: pendingSectionLabels.join(', '),
-          })}
-        </p>
+      {selectedPropertyId && !selectedMonthId && isLoading ? (
+        <div className="report-month-loader" role="status">
+          <span className="page-loader-spinner" aria-hidden="true" />
+          <p>{t('common.loading')}</p>
+        </div>
       ) : null}
-      {isLoading ? <p>{t('common.loading')}</p> : null}
 
       {!selectedPropertyId ? (
         <section className="card">
@@ -1485,7 +1588,7 @@ export function PropertyReportsView({
         </section>
       ) : null}
 
-      {selectedPropertyId && !selectedMonthId ? (
+      {selectedPropertyId && !selectedMonthId && !isLoading ? (
         <section className="card">
           <div className="table-wrap">
             <table className="data-table">
@@ -1524,7 +1627,27 @@ export function PropertyReportsView({
         </section>
       ) : null}
 
-      {selectedMonthId && isClosedReportOpen ? (
+      {selectedMonthId && isLoading ? (
+        <div className="report-month-loader" role="status">
+          <span className="page-loader-spinner" aria-hidden="true" />
+          <p>{t('common.loading')}</p>
+        </div>
+      ) : null}
+
+      {selectedMonthId && !isLoading && report ? (
+        <>
+          <div className="report-month-progress">
+            <ReportMonthSteps status={report.status} />
+          </div>
+          {reportIsPreliminary ? (
+            <p className="report-preliminary-banner" role="status">
+              {t('propertyReports.preliminaryWarning')}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+      {selectedMonthId && isClosedReportOpen && !isLoading ? (
         <PropertyClosedReportView
           metrics={closedReportMetrics}
           visibility={reportSettings.visibility}
@@ -1595,13 +1718,8 @@ export function PropertyReportsView({
         />
       ) : null}
 
-      {selectedMonthId && !isClosedReportOpen ? (
+      {selectedMonthId && !isClosedReportOpen && !isLoading ? (
         <>
-          {report ? (
-            <p className="subtitle">
-              {t('propertyReports.status')}: {statusLabel(report.status)}
-            </p>
-          ) : null}
 
           <section className="card">
             <div className="card-header">
@@ -1868,11 +1986,7 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.netColumn')}</th>
                       <th>{t('propertyReports.grossColumn')}</th>
                       <th>{t('propertyReports.kit')}</th>
-                      <th>
-                        {usesAllocations
-                          ? t('propertyReports.allocation')
-                          : t('common.actions')}
-                      </th>
+                      <th>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1908,7 +2022,7 @@ export function PropertyReportsView({
                               </td>
                               {renderLineAction(rowId, isExpanded)}
                             </tr>
-                            {!usesAllocations && isExpanded ? (
+                            {isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={6}>
                                   <ReportIvaDetails
@@ -1948,6 +2062,13 @@ export function PropertyReportsView({
                   {!maintenanceClosed ? (
                     <span className="report-billing-warning" role="status">
                       {t('propertyReports.billingPendingWarning')}
+                    </span>
+                  ) : null}
+                  {missingMaintenanceCharges > 0 ? (
+                    <span className="report-billing-warning" role="status">
+                      {t('propertyReports.chargePendingWarning', {
+                        count: missingMaintenanceCharges,
+                      })}
                     </span>
                   ) : null}
                 </div>
@@ -2009,11 +2130,7 @@ export function PropertyReportsView({
                       </th>
                       <th>{t('propertyReports.netColumn')}</th>
                       <th>{t('propertyReports.grossColumn')}</th>
-                      <th>
-                        {usesAllocations
-                          ? t('propertyReports.allocation')
-                          : t('common.actions')}
-                      </th>
+                      <th>{t('propertyReports.allocation')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2029,7 +2146,7 @@ export function PropertyReportsView({
                         const isExpanded = expandedRowIds.has(rowId)
                         return (
                           <Fragment key={line.id}>
-                            <tr>
+                            <tr className={isCharged(`maintenance:${line.id}`) ? undefined : 'is-charge-missing'}>
                               <td>{dateLabel(line.date)}</td>
                               <td className="report-col-clamp">
                                 <TruncatedText value={line.title || ''} />
@@ -2046,9 +2163,9 @@ export function PropertyReportsView({
                                       grossFromNet(line.price, line.ivaRate),
                                     )}
                               </td>
-                              {renderLineAction(rowId, isExpanded)}
+                              {renderLineAction(rowId, isExpanded, 'cost')}
                             </tr>
-                            {!usesAllocations && isExpanded ? (
+                            {isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={5}>
                                   <ReportIvaDetails
@@ -2087,7 +2204,16 @@ export function PropertyReportsView({
           <section className="card">
             <div className="card-header">
               <div>
-                <h2 className="card-title">{t('propertyReports.servicesTitle')}</h2>
+                <div className="card-title-row">
+                  <h2 className="card-title">{t('propertyReports.servicesTitle')}</h2>
+                  {missingServiceCharges > 0 ? (
+                    <span className="report-billing-warning" role="status">
+                      {t('propertyReports.chargePendingWarning', {
+                        count: missingServiceCharges,
+                      })}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="report-metrics">
                   <div className="report-metric">
                     <p className="card-label">
@@ -2132,11 +2258,7 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.recurrence')}</th>
                       <th>{t('propertyReports.net')}</th>
                       <th>{t('propertyReports.gross')}</th>
-                      <th>
-                        {usesAllocations
-                          ? t('propertyReports.allocation')
-                          : t('common.actions')}
-                      </th>
+                      <th>{t('propertyReports.allocation')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2150,15 +2272,15 @@ export function PropertyReportsView({
                         const isExpanded = expandedRowIds.has(rowId)
                         return (
                           <Fragment key={line.id}>
-                            <tr>
+                            <tr className={isCharged(`service:${line.id}`) ? undefined : 'is-charge-missing'}>
                               <td>{dateLabel(line.date)}</td>
                               <td>{line.title || '—'}</td>
                               <td>{recurrenceLabel(line.recurrence)}</td>
                               <td>{money.format(line.price)}</td>
                               <td>{money.format(line.priceWithIva)}</td>
-                              {renderLineAction(rowId, isExpanded)}
+                              {renderLineAction(rowId, isExpanded, 'cost')}
                             </tr>
-                            {!usesAllocations && isExpanded ? (
+                            {isExpanded ? (
                               <tr className="detail-row">
                                 <td colSpan={6}>
                                   <ReportIvaDetails

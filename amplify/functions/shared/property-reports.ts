@@ -52,11 +52,37 @@ export {
 
 export { PROPERTY_REPORTS_START_MONTH };
 
-export type PropertyReportStatus =
-  | 'CURRENT'
-  | 'PENDING_TO_CLOSE'
-  | 'READY_TO_CLOSE'
-  | 'CLOSED';
+export const REPORT_WORKFLOW_STATUSES = [
+  'IN_PROGRESS',
+  'READY_TO_CLOSE',
+  'READY_TO_PUBLISH',
+  'PUBLISHED',
+] as const;
+
+export type PropertyReportStatus = (typeof REPORT_WORKFLOW_STATUSES)[number];
+
+export const isPropertyReportStatus = (
+  value: string,
+): value is PropertyReportStatus =>
+  (REPORT_WORKFLOW_STATUSES as readonly string[]).includes(value);
+
+export const isReportFrozen = (status: PropertyReportStatus) =>
+  status === 'READY_TO_PUBLISH' || status === 'PUBLISHED';
+
+export const isReportPreliminary = (status: PropertyReportStatus) =>
+  status === 'IN_PROGRESS' || status === 'READY_TO_CLOSE';
+
+export const previousReportStatus = (
+  status: PropertyReportStatus,
+): PropertyReportStatus => {
+  if (status === 'PUBLISHED') {
+    return 'READY_TO_PUBLISH';
+  }
+  if (status === 'READY_TO_PUBLISH') {
+    return 'READY_TO_CLOSE';
+  }
+  return 'IN_PROGRESS';
+};
 
 export const IVA_MULTIPLIER = 1.21;
 
@@ -242,17 +268,18 @@ export const deriveReportStatus = (
   monthId: string,
   storedStatus?: string,
 ): PropertyReportStatus => {
+  void monthId;
   const stored = asString(storedStatus).toUpperCase();
-  if (stored === 'CLOSED') {
-    return 'CLOSED';
+  if (stored === 'PUBLISHED' || stored === 'CLOSED') {
+    return 'PUBLISHED';
+  }
+  if (stored === 'READY_TO_PUBLISH') {
+    return 'READY_TO_PUBLISH';
   }
   if (stored === 'READY_TO_CLOSE') {
     return 'READY_TO_CLOSE';
   }
-  if (monthId >= currentReportMonthId()) {
-    return 'CURRENT';
-  }
-  return 'PENDING_TO_CLOSE';
+  return 'IN_PROGRESS';
 };
 
 export const reservationFromPayload = (raw: unknown) => {
@@ -863,9 +890,10 @@ export const reportMonthSummary = (
   return {
     id: monthId,
     status,
-    canMarkReady: status === 'PENDING_TO_CLOSE',
+    canMarkReady: status === 'IN_PROGRESS',
     canClose: status === 'READY_TO_CLOSE',
-    canReopen: status === 'CLOSED' || status === 'READY_TO_CLOSE',
+    canPublish: status === 'READY_TO_PUBLISH',
+    canReopen: status !== 'IN_PROGRESS',
     closedAt: asString(stored?.closedAt) || undefined,
     updatedAt: asString(stored?.updatedAt) || undefined,
   };

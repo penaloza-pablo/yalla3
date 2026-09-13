@@ -1567,6 +1567,126 @@ button.today-card {
   line-height: 1.2;
 }
 
+.report-month-progress {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 20px;
+}
+
+.report-step-indicator {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  margin: 0;
+  padding: 8px 12px;
+  max-width: 720px;
+  width: 100%;
+}
+
+.report-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.report-step-line {
+  position: absolute;
+  top: 15px;
+  right: calc(50% + 18px);
+  left: calc(-50% + 18px);
+  height: 3px;
+  border-radius: 99px;
+  background: var(--yl-stroke);
+}
+
+.report-step.is-done .report-step-line,
+.report-step.is-current .report-step-line {
+  background: var(--yl-go);
+}
+
+.report-step-index {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 2px solid var(--yl-stroke);
+  background: var(--yl-surface);
+  color: var(--yl-text-2);
+  z-index: 1;
+}
+
+.report-step.is-done .report-step-index {
+  background: var(--yl-go);
+  border-color: var(--yl-go);
+  color: #fff;
+}
+
+.report-step.is-current .report-step-index {
+  background: var(--yl-go);
+  border-color: var(--yl-go);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--yl-go-soft);
+}
+
+.report-step-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--yl-text-2);
+  line-height: 1.25;
+}
+
+.report-step.is-current .report-step-label {
+  color: var(--yl-go);
+}
+
+.report-preliminary-banner {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  color: #93370d;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.report-month-loader {
+  min-height: 36vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.report-cost-chip.is-missing {
+  border-color: #f79009;
+  background: #fffaeb;
+}
+
+.report-charge-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-table tr.is-charge-missing td {
+  background: #fffcf5;
+}
+
 .card-subtitle {
   margin: 6px 0 0;
   color: #667085;

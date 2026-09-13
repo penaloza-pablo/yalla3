@@ -23,13 +23,16 @@ import {
 import { docClient, putItem } from '../shared/visit-task-utils';
 import {
   asString,
+  currentReportMonthId,
   deriveReportStatus,
   emptyReportRecord,
   isMonthIdValue,
   isPropertyReportEligible,
+  isReportFrozen,
   isReportableMonth,
   listProperties,
   parseLineAllocations,
+  previousReportStatus,
   reportScopeForProperty,
   resolveReportProperty,
   type LineAllocation,
@@ -265,9 +268,14 @@ export const handler = async (event: {
   let nextStatus: PropertyReportStatus = currentStatus;
   let nextAllocations = parseLineAllocations(existing?.lineAllocations);
   if (action === 'ready') {
-    if (currentStatus !== 'PENDING_TO_CLOSE') {
+    if (currentStatus !== 'IN_PROGRESS') {
       return buildHttpResponse(400, {
-        message: 'Only a pending month can be marked ready to close.',
+        message: 'Only an in-progress month can be marked ready to close.',
+      });
+    }
+    if (monthId >= currentReportMonthId()) {
+      return buildHttpResponse(400, {
+        message: 'The current month cannot be marked ready to close yet.',
       });
     }
     const [cleaningClosed, maintenanceClosed] = await Promise.all([
@@ -294,27 +302,35 @@ export const handler = async (event: {
   } else if (action === 'close') {
     if (currentStatus !== 'READY_TO_CLOSE') {
       return buildHttpResponse(400, {
-        message: 'Only a month marked ready to close can be closed.',
+        message: 'Only a month marked ready to close can be marked ready to publish.',
       });
     }
-    nextStatus = 'CLOSED';
+    nextStatus = 'READY_TO_PUBLISH';
+  } else if (action === 'publish') {
+    if (currentStatus !== 'READY_TO_PUBLISH') {
+      return buildHttpResponse(400, {
+        message: 'Only a month marked ready to publish can be published.',
+      });
+    }
+    nextStatus = 'PUBLISHED';
   } else if (action === 'reopen') {
-    if (currentStatus !== 'CLOSED' && currentStatus !== 'READY_TO_CLOSE') {
+    if (currentStatus === 'IN_PROGRESS') {
       return buildHttpResponse(400, {
-        message: 'Only a closed or ready month can be reopened.',
+        message: 'An in-progress month cannot be reopened.',
       });
     }
-    nextStatus = 'PENDING_TO_CLOSE';
+    nextStatus = previousReportStatus(currentStatus);
   } else if (action === 'allocate') {
-    if (currentStatus !== 'READY_TO_CLOSE') {
+    if (isReportFrozen(currentStatus)) {
       return buildHttpResponse(400, {
-        message: 'Allocations can only be edited while the month is ready to close.',
+        message: 'Allocations can only be edited before the month is ready to publish.',
       });
     }
     nextAllocations = parseLineAllocations(payload.lineAllocations);
   } else {
     return buildHttpResponse(400, {
-      message: 'action must be ready, close, reopen, allocate, or settings.',
+      message:
+        'action must be ready, close, publish, reopen, allocate, or settings.',
     });
   }
 
@@ -327,10 +343,15 @@ export const handler = async (event: {
     lineAllocations: nextAllocations,
     updatedAt: timestamp,
   };
-  if (nextStatus === 'CLOSED') {
-    item.closedAt = timestamp;
+  if (nextStatus === 'READY_TO_PUBLISH' || nextStatus === 'PUBLISHED') {
+    item.closedAt = asString(existing?.closedAt) || timestamp;
   } else {
     delete item.closedAt;
+  }
+  if (nextStatus === 'PUBLISHED') {
+    item.publishedAt = asString(existing?.publishedAt) || timestamp;
+  } else {
+    delete item.publishedAt;
   }
 
   try {
@@ -338,17 +359,24 @@ export const handler = async (event: {
     const name = `${reportScopeForProperty(property).name} ${monthId}`;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PROPERTY_REPORTS,
-      action: nextStatus === 'CLOSED' ? 'close' : action,
+      action:
+        nextStatus === 'PUBLISHED'
+          ? 'publish'
+          : nextStatus === 'READY_TO_PUBLISH'
+            ? 'close'
+            : action,
       entityId: `${propertyId}#${monthId}`,
       entityName: name,
       summary:
-        nextStatus === 'CLOSED'
-          ? `closed property report ${quoted(name)}`
+        nextStatus === 'PUBLISHED'
+          ? `published property report ${quoted(name)}`
           : action === 'allocate'
             ? `updated property report allocations ${quoted(name)}`
-            : nextStatus === 'READY_TO_CLOSE'
-              ? `marked property report ready ${quoted(name)}`
-              : `reopened property report ${quoted(name)}`,
+            : nextStatus === 'READY_TO_PUBLISH'
+              ? `marked property report ready to publish ${quoted(name)}`
+              : nextStatus === 'READY_TO_CLOSE'
+                ? `marked property report ready ${quoted(name)}`
+                : `reopened property report ${quoted(name)}`,
     });
     return buildHttpResponse(200, { item });
   } catch (error) {
