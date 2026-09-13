@@ -480,7 +480,7 @@ export const buildMonthDetail = async (params: {
     closedAt: undefined as string | undefined,
     canClose,
     canReopen: false,
-    canEdit: status !== 'CLOSED',
+    canEdit: true,
     ...summary,
   };
 
@@ -531,7 +531,10 @@ export const listMonthSummaries = async (params: {
     open.length > 0 && params.detailsTable
       ? await scanAllItems(params.detailsTable)
       : [];
-  const openMonths = new Map<string, ReturnType<typeof closedMonthView>>();
+  const openMonths = new Map<
+    string,
+    Awaited<ReturnType<typeof buildMonthDetail>>['month']
+  >();
   await Promise.all(
     open.map(async (item) => {
       const detail = await buildMonthDetail({

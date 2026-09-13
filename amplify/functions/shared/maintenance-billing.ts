@@ -907,7 +907,7 @@ export const buildMonthDetail = async (params: {
     closedAt: undefined as string | undefined,
     canClose,
     canReopen: false,
-    canEdit: status !== 'CLOSED',
+    canEdit: true,
     ...summary,
   };
 

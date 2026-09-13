@@ -157,9 +157,19 @@ export const resolvePermissions = async (
 
   if (assignedRoleId && isKnownRoleId(assignedRoleId)) {
     const role = await getItemByPk(tableName, rolePk(assignedRoleId));
-    const record = role
+    const seed = ROLE_SEEDS.find((entry) => entry.id === assignedRoleId);
+    const record: RoleRecord | undefined = role
       ? toRoleRecord(role)
-      : ROLE_SEEDS.find((seed) => seed.id === assignedRoleId);
+      : seed
+        ? {
+            id: seed.id,
+            name: seed.name,
+            permissions:
+              assignedRoleId === ADMIN_ROLE_ID
+                ? allPermissionKeys()
+                : seed.permissions,
+          }
+        : undefined;
     return {
       roleId: assignedRoleId,
       roleName: record?.name ?? assignedRoleId,
