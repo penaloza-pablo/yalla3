@@ -12,6 +12,7 @@ export const YL_ICON_NAMES = [
   'square.and.arrow.up',
   'arrow.clockwise',
   'arrow.uturn.backward',
+  'arrow.uturn.left',
   'arrow.triangle.2.circlepath',
   'arrow.right.to.bracket',
   'arrow.left.to.bracket',
@@ -29,6 +30,8 @@ export const YL_ICON_NAMES = [
   'person.2',
   'bubble.left',
   'house',
+  'building.2',
+  'briefcase',
   'rectangle.3.group',
   'shippingbox',
   'calendar',
@@ -154,6 +157,15 @@ function regularGlyph(name: YlIconName): ReactNode {
           <path d="M12.2 8.3 15.5 5 12.2 1.7" />
         </Outline>
       )
+    case 'arrow.uturn.left':
+      return (
+        <g transform="translate(20 0) scale(-1 1)">
+          <Outline>
+            <path d="M8 15.2H6.2A3.2 3.2 0 0 1 3 12V8.2A3.2 3.2 0 0 1 6.2 5h9.3" />
+            <path d="M12.2 8.3 15.5 5 12.2 1.7" />
+          </Outline>
+        </g>
+      )
     case 'arrow.triangle.2.circlepath':
       return (
         <Outline>
@@ -277,6 +289,23 @@ function regularGlyph(name: YlIconName): ReactNode {
         <Outline>
           <path d="M3.8 9.3 10 3.6l6.2 5.7V16a1.4 1.4 0 0 1-1.4 1.4H5.2A1.4 1.4 0 0 1 3.8 16V9.3z" />
           <path d="M8.2 17.2v-4.4h3.6v4.4" />
+        </Outline>
+      )
+    case 'building.2':
+      return (
+        <Outline>
+          <path d="M3.2 7.2h7.2V16.8H3.2z" />
+          <path d="M10.4 4.2h6.4V16.8h-6.4z" />
+          <path d="M5.2 9.2h1.6M5.2 11.6h1.6M5.2 14h1.6" />
+          <path d="M12.4 6.4h1.6M12.4 8.8h1.6M12.4 11.2h1.6M12.4 13.6h1.6" />
+        </Outline>
+      )
+    case 'briefcase':
+      return (
+        <Outline>
+          <rect x="3.2" y="7.2" width="13.6" height="9.2" rx="1.6" />
+          <path d="M7.2 7.2V5.8A1.6 1.6 0 0 1 8.8 4.2h2.4A1.6 1.6 0 0 1 12.8 5.8v1.4" />
+          <path d="M3.2 10.6h13.6" />
         </Outline>
       )
     case 'rectangle.3.group':
@@ -428,6 +457,20 @@ function fillGlyph(name: YlIconName): ReactNode | null {
           d="M10 3.2 3.2 9.4V16a1.7 1.7 0 0 0 1.7 1.7h3.1v-5.1h4V17.7h3.1A1.7 1.7 0 0 0 16.8 16V9.4z"
         />
       )
+    case 'building.2':
+      return (
+        <path
+          fill="currentColor"
+          d="M3 6.8h7.4V17H3V6.8zm8.2-3h6.8V17h-6.8V3.8z"
+        />
+      )
+    case 'briefcase':
+      return (
+        <path
+          fill="currentColor"
+          d="M8.6 3.8h2.8A1.8 1.8 0 0 1 13.2 5.6v1.2h3.2A1.8 1.8 0 0 1 18.2 8.6v7.2a1.8 1.8 0 0 1-1.8 1.8H3.6A1.8 1.8 0 0 1 1.8 15.8V8.6A1.8 1.8 0 0 1 3.6 6.8h3.2V5.6A1.8 1.8 0 0 1 8.6 3.8zm.4 1.8v1.2h2V5.6h-2z"
+        />
+      )
     case 'rectangle.3.group':
       return (
         <path
@@ -560,6 +603,7 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
       'forward.end',
       'square.on.square',
       'arrow.uturn.backward',
+      'arrow.uturn.left',
       'arrow.triangle.2.circlepath',
     ],
   },
@@ -586,6 +630,8 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
     id: 'domains',
     names: [
       'house',
+      'building.2',
+      'briefcase',
       'rectangle.3.group',
       'shippingbox',
       'drop',

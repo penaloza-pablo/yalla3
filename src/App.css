@@ -339,6 +339,50 @@
   flex-wrap: wrap;
 }
 
+.page-header.is-month-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  position: relative;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-height: 48px;
+}
+
+.page-header.is-month-title .page-header-leading {
+  flex: 0 0 auto;
+  z-index: 1;
+  justify-self: start;
+  min-width: 0;
+}
+
+.page-header.is-month-title .page-title-row {
+  flex-wrap: nowrap;
+}
+
+.page-header.is-month-title .page-title-row .page-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  max-width: min(52vw, 640px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.page-header.is-month-title .header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-left: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  justify-self: end;
+}
+
 .page-header--no-title {
   justify-content: flex-end;
 }
@@ -1080,10 +1124,36 @@ button.today-card {
   gap: 20px;
 }
 
+.closed-report-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+}
+
+.closed-report-rail {
+  flex: 0 0 auto;
+  width: calc(var(--yl-touch) + 6px);
+  pointer-events: none;
+}
+
 .closed-report-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.closed-report-tabs.btn-group.is-vertical {
+  position: fixed;
+  top: 50dvh;
+  transform: translateY(-50%);
+  z-index: 6;
+  height: auto;
+  max-height: none;
+  align-self: auto;
+  flex-wrap: nowrap;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: auto;
 }
 
 .closed-report-tab {
@@ -1108,6 +1178,8 @@ button.today-card {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   overflow: visible;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .closed-report-kpi {
@@ -1279,6 +1351,11 @@ button.today-card {
   width: 25%;
   max-width: 25%;
   overflow: hidden;
+}
+
+.report-col-item-narrow {
+  width: 15%;
+  max-width: 15%;
 }
 
 .report-truncated-text {
@@ -4922,6 +4999,10 @@ th {
     flex: 1 1 100%;
   }
 
+  .page-header.is-month-title .page-header-leading {
+    flex: 0 0 auto;
+  }
+
   .page-action-bar {
     flex: 1 1 100%;
     justify-content: center;
@@ -5279,6 +5360,21 @@ th {
     display: none;
   }
 
+  .closed-report-layout {
+    min-height: 0;
+    gap: 12px;
+  }
+
+  .closed-report-rail {
+    width: calc(var(--yl-touch) + 6px);
+  }
+
+  .closed-report-tabs.btn-group.is-vertical {
+    position: fixed;
+    top: 50dvh;
+    transform: translateY(-50%);
+  }
+
   .page-header--no-title {
     display: none;
   }
@@ -5536,7 +5632,8 @@ th {
     table-layout: auto;
   }
 
-  .report-col-clamp {
+  .report-col-clamp,
+  .report-col-item-narrow {
     width: auto;
     max-width: none;
     overflow: visible;

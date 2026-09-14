@@ -193,6 +193,25 @@
   opacity: 0.45;
 }
 
+.btn-group > .btn-primary {
+  background: #1d2939;
+  color: #ffffff;
+}
+
+.btn-group > .btn-primary:hover,
+.btn-group > .btn-primary:focus-visible {
+  background: #101828;
+  color: #ffffff;
+}
+
+.btn-group.is-vertical {
+  flex-direction: column;
+}
+
+.btn-group.is-vertical > button + button {
+  border-inline-start: 0;
+}
+
 .btn-primary:has(> .yl-icon):not(:has(> span:not(.filter-badge))),
 .btn-secondary:has(> .yl-icon):not(:has(> span:not(.filter-badge))),
 .btn-ghost:has(> .yl-icon):not(:has(> span:not(.filter-badge))),

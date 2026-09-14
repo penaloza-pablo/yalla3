@@ -9,6 +9,7 @@ import {
   type IvaRate,
 } from '../../amplify/functions/shared/finance-services'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { useConfirm } from '../design/ConfirmDialog'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { fetchJson } from '../operations/api'
 import {
@@ -43,7 +44,7 @@ import {
   isReportFrozen,
   isReportPreliminary,
   type PropertyReportStatus,
-} from '../../amplify/functions/shared/property-reports'
+} from '../../amplify/functions/shared/property-report-status'
 import { PropertyReportSettingsView } from './PropertyReportSettingsView'
 import { PropertyClosedReportView } from './PropertyClosedReportView'
 import { ReportMonthSteps } from './ReportMonthSteps'
@@ -424,6 +425,7 @@ export function PropertyReportsView({
   onNavigate,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
   const { can } = usePermissions()
   const canChangeStatus = can(ACTION_KEYS.propertyReportsCloseMonth)
   const endpoints = useMemo(
@@ -650,10 +652,14 @@ export function PropertyReportsView({
   const dateLabel = (value: string) => formatDateOnlyLabel(value, i18n.language)
   const formatMonthLabel = (monthId: string) => {
     const [year, month] = monthId.split('-').map(Number)
-    return new Intl.DateTimeFormat(
-      i18n.language.startsWith('es') ? 'es-ES' : 'en-GB',
-      { month: 'long', year: 'numeric', timeZone: 'UTC' },
-    ).format(new Date(Date.UTC(year, month - 1, 1)))
+    if (!year || !month) return monthId
+    const locale = i18n.language.startsWith('es') ? 'es-ES' : 'en-GB'
+    const rawMonth = new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, 1)))
+    const monthName = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1)
+    return `${monthName} ${year}`
   }
 
   const statusLabel = (status: ReportStatus) => {
@@ -855,7 +861,6 @@ export function PropertyReportsView({
     setMovementDraft(null)
     setExpandedRowIds(new Set())
     setLineAllocations({})
-    setIsClosedReportOpen(false)
     setIsLoading(true)
     setError(null)
     void loadDetail(selectedPropertyId, selectedMonthId)
@@ -889,9 +894,11 @@ export function PropertyReportsView({
           action,
         }),
       })
-      setMessage(t('propertyReports.updated'))
       if (action === 'reopen') {
         setIsClosedReportOpen(false)
+      }
+      if (action === 'close') {
+        setIsClosedReportOpen(true)
       }
       await loadDetail(selectedPropertyId, selectedMonthId)
     } catch (saveError) {
@@ -1059,8 +1066,71 @@ export function PropertyReportsView({
     Boolean(report?.canMarkReady) && readyBlockers.length === 0
   const canMarkReadyToPublish =
     Boolean(report?.canClose) && chargesComplete
-  const advanceTitle = (blockers: string[]) =>
-    blockers.length > 0 ? blockers.join(' ') : undefined
+  const canAdvance = report?.canMarkReady
+    ? canMarkReady
+    : report?.canClose
+      ? canMarkReadyToPublish
+      : Boolean(report?.canPublish)
+  const advanceLabel = report?.canPublish
+    ? t('propertyReports.publishMonth')
+    : report?.canClose
+      ? t('propertyReports.closeMonth')
+      : t('propertyReports.markReady')
+  const showAdvance = Boolean(
+    selectedMonthId &&
+      report &&
+      canChangeStatus &&
+      (report.canMarkReady || report.canClose || report.canPublish),
+  )
+  const showReopen = Boolean(
+    selectedMonthId && report && canChangeStatus && report.canReopen,
+  )
+
+  const handleAdvanceClick = async () => {
+    if (!report || isSaving) return
+    if (report.canMarkReady && !canMarkReady) {
+      await confirm({
+        title: t('propertyReports.markReady'),
+        message: t('propertyReports.markReadyBlocked'),
+        info: true,
+        cancelLabel: t('common.close'),
+      })
+      return
+    }
+    if (report.canClose && !canMarkReadyToPublish) {
+      await confirm({
+        title: t('propertyReports.closeMonth'),
+        message: t('propertyReports.markReadyBlocked'),
+        info: true,
+        cancelLabel: t('common.close'),
+      })
+      return
+    }
+    if (report.canMarkReady) {
+      await saveStatus('ready')
+      return
+    }
+    if (report.canClose) {
+      await saveStatus('close')
+      return
+    }
+    if (report.canPublish) {
+      await saveStatus('publish')
+    }
+  }
+
+  const handleReopenClick = async () => {
+    if (isSaving) return
+    const accepted = await confirm({
+      title: t('propertyReports.reopenMonth'),
+      message: t('propertyReports.reopenConfirm'),
+      confirmLabel: t('common.accept'),
+      cancelLabel: t('common.close'),
+    })
+    if (accepted) {
+      await saveStatus('reopen')
+    }
+  }
 
   const closedReportMetrics = useMemo(
     () =>
@@ -1284,7 +1354,13 @@ export function PropertyReportsView({
               <thead>
                 <tr>
                   <th>{t('propertyReports.date')}</th>
-                  <th className="report-col-clamp">
+                  <th
+                    className={
+                      tableKey === 'expenses'
+                        ? 'report-col-clamp report-col-item-narrow'
+                        : 'report-col-clamp'
+                    }
+                  >
                     {t('propertyReports.item')}
                   </th>
                   <th>{t('propertyReports.origin')}</th>
@@ -1321,7 +1397,13 @@ export function PropertyReportsView({
                           }
                         >
                           <td>{dateLabel(line.date)}</td>
-                          <td className="report-col-clamp">
+                          <td
+                            className={
+                              tableKey === 'expenses'
+                                ? 'report-col-clamp report-col-item-narrow'
+                                : 'report-col-clamp'
+                            }
+                          >
                             <TruncatedText value={line.itemName || ''} />
                           </td>
                           <td>{originLabel(line.origin)}</td>
@@ -1398,16 +1480,70 @@ export function PropertyReportsView({
     )
   }
 
+  const showOpenReport = Boolean(
+    selectedMonthId && report && !isClosedReportOpen,
+  )
+  const openReportButton = showOpenReport ? (
+    <button
+      className="btn-icon btn-icon-ghost"
+      type="button"
+      aria-label={t('propertyReports.openReport')}
+      title={t('propertyReports.openReport')}
+      onClick={() => setIsClosedReportOpen(true)}
+    >
+      <ReportDocumentIcon />
+    </button>
+  ) : null
+  const reopenButton = showReopen ? (
+    <button
+      type="button"
+      className="btn-icon btn-icon-ghost"
+      aria-label={t('propertyReports.reopenMonth')}
+      title={t('propertyReports.reopenMonth')}
+      disabled={isSaving}
+      onClick={() => void handleReopenClick()}
+    >
+      <YlIcon name="arrow.uturn.left" size={18} />
+    </button>
+  ) : null
+  const advanceButton = showAdvance ? (
+    <button
+      type="button"
+      className={canAdvance ? 'btn-primary' : 'btn-icon'}
+      aria-label={advanceLabel}
+      title={advanceLabel}
+      aria-disabled={!canAdvance}
+      disabled={isSaving}
+      onClick={() => void handleAdvanceClick()}
+    >
+      <YlIcon name="checkmark" size={18} />
+    </button>
+  ) : null
+  const monthStatusActions =
+    showOpenReport || showReopen || showAdvance ? (
+      <div
+        className="btn-group"
+        role="group"
+        aria-label={t('propertyReports.month')}
+      >
+        {openReportButton}
+        {reopenButton}
+        {advanceButton}
+      </div>
+    ) : null
+
   return (
     <>
-      <header className="page-header">
+      <header className={`page-header${selectedMonthId ? ' is-month-title' : ''}`}>
         <div className="page-header-leading">
           <p className="eyebrow">{t('propertyReports.eyebrow')}</p>
           <div className="page-title-row">
             {selectedPropertyId ? (
               <button
                 type="button"
-                className="btn-ghost"
+                className="btn-icon btn-icon-ghost"
+                aria-label={t('common.back')}
+                title={t('common.back')}
                 onClick={() => {
                   setError(null)
                   setMessage(null)
@@ -1430,20 +1566,18 @@ export function PropertyReportsView({
                   setSelectedPropertyId('')
                 }}
               >
-                {t('common.back')}
+                <YlIcon name="chevron.left" size={18} />
               </button>
             ) : null}
             <h1 className="page-title">{title}</h1>
           </div>
-          <p className="subtitle">
-            {selectedMonthId
-              ? isClosedReportOpen
-                ? t('propertyReports.closedReportSubtitle')
-                : t('propertyReports.monthSubtitle')
-              : selectedPropertyId
+          {!selectedMonthId ? (
+            <p className="subtitle">
+              {selectedPropertyId
                 ? t('propertyReports.monthsSubtitle')
                 : t('propertyReports.subtitle')}
-          </p>
+            </p>
+          ) : null}
         </div>
         {(selectedPropertyId || (selectedMonthId && report)) ? (
           <div className="header-actions">
@@ -1463,63 +1597,7 @@ export function PropertyReportsView({
                 <SettingsGearIcon />
               </button>
             ) : null}
-            {selectedMonthId && report && !isClosedReportOpen ? (
-              <button
-                className="btn-icon"
-                type="button"
-                aria-label={t('propertyReports.openReport')}
-                title={t('propertyReports.openReport')}
-                onClick={() => setIsClosedReportOpen(true)}
-              >
-                <ReportDocumentIcon />
-              </button>
-            ) : null}
-            {selectedMonthId && report && canChangeStatus && report.canMarkReady ? (
-              <button
-                className="btn-secondary"
-                type="button"
-                disabled={isSaving || !canMarkReady}
-                title={advanceTitle(readyBlockers)}
-                onClick={() => void saveStatus('ready')}
-              >
-                {t('propertyReports.markReady')}
-              </button>
-            ) : null}
-            {selectedMonthId && report && canChangeStatus && report.canClose ? (
-              <button
-                className="btn-primary"
-                type="button"
-                disabled={isSaving || !canMarkReadyToPublish}
-                title={
-                  chargesComplete
-                    ? undefined
-                    : t('propertyReports.chargesMustClassify')
-                }
-                onClick={() => void saveStatus('close')}
-              >
-                {t('propertyReports.closeMonth')}
-              </button>
-            ) : null}
-            {selectedMonthId && report && canChangeStatus && report.canPublish ? (
-              <button
-                className="btn-primary"
-                type="button"
-                disabled={isSaving}
-                onClick={() => void saveStatus('publish')}
-              >
-                {t('propertyReports.publishMonth')}
-              </button>
-            ) : null}
-            {selectedMonthId && report && canChangeStatus && report.canReopen ? (
-              <button
-                className="btn-secondary"
-                type="button"
-                disabled={isSaving}
-                onClick={() => void saveStatus('reopen')}
-              >
-                {t('propertyReports.reopenMonth')}
-              </button>
-            ) : null}
+            {monthStatusActions}
           </div>
         ) : null}
       </header>
@@ -1613,7 +1691,14 @@ export function PropertyReportsView({
                         <button
                           type="button"
                           className="btn-secondary"
-                          onClick={() => setSelectedMonthId(month.id)}
+                          onClick={() => {
+                            setSelectedMonthId(month.id)
+                            setIsClosedReportOpen(
+                              month.status === 'READY_TO_PUBLISH' ||
+                                month.status === 'PUBLISHED',
+                            )
+                            setIsLoading(true)
+                          }}
                         >
                           {t('propertyReports.open')}
                         </button>
@@ -1639,16 +1724,17 @@ export function PropertyReportsView({
           <div className="report-month-progress">
             <ReportMonthSteps status={report.status} />
           </div>
+        </>
+      ) : null}
+
+      {selectedMonthId && isClosedReportOpen && !isLoading && report ? (
+        <>
           {reportIsPreliminary ? (
             <p className="report-preliminary-banner" role="status">
               {t('propertyReports.preliminaryWarning')}
             </p>
           ) : null}
-        </>
-      ) : null}
-
-      {selectedMonthId && isClosedReportOpen && !isLoading ? (
-        <PropertyClosedReportView
+          <PropertyClosedReportView
           metrics={closedReportMetrics}
           visibility={reportSettings.visibility}
           hideManagementFee={reportSettings.businessModel === 'fixedRent'}
@@ -1716,6 +1802,7 @@ export function PropertyReportsView({
             settings: reportSettings,
           }}
         />
+        </>
       ) : null}
 
       {selectedMonthId && !isClosedReportOpen && !isLoading ? (

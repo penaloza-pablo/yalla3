@@ -35,6 +35,7 @@ import {
   resolveIvaRate,
 } from './iva';
 import { docClient } from './visit-task-utils';
+import type { PropertyReportStatus } from './property-report-status';
 
 export {
   COST_ALLOCATIONS,
@@ -52,37 +53,15 @@ export {
 
 export { PROPERTY_REPORTS_START_MONTH };
 
-export const REPORT_WORKFLOW_STATUSES = [
-  'IN_PROGRESS',
-  'READY_TO_CLOSE',
-  'READY_TO_PUBLISH',
-  'PUBLISHED',
-] as const;
-
-export type PropertyReportStatus = (typeof REPORT_WORKFLOW_STATUSES)[number];
-
-export const isPropertyReportStatus = (
-  value: string,
-): value is PropertyReportStatus =>
-  (REPORT_WORKFLOW_STATUSES as readonly string[]).includes(value);
-
-export const isReportFrozen = (status: PropertyReportStatus) =>
-  status === 'READY_TO_PUBLISH' || status === 'PUBLISHED';
-
-export const isReportPreliminary = (status: PropertyReportStatus) =>
-  status === 'IN_PROGRESS' || status === 'READY_TO_CLOSE';
-
-export const previousReportStatus = (
-  status: PropertyReportStatus,
-): PropertyReportStatus => {
-  if (status === 'PUBLISHED') {
-    return 'READY_TO_PUBLISH';
-  }
-  if (status === 'READY_TO_PUBLISH') {
-    return 'READY_TO_CLOSE';
-  }
-  return 'IN_PROGRESS';
-};
+export {
+  REPORT_WORKFLOW_STATUSES,
+  deriveReportStatus,
+  isPropertyReportStatus,
+  isReportFrozen,
+  isReportPreliminary,
+  previousReportStatus,
+  type PropertyReportStatus,
+} from './property-report-status';
 
 export const IVA_MULTIPLIER = 1.21;
 
@@ -263,24 +242,6 @@ export const syntheticPlanta2Property = (): Record<string, unknown> => ({
   type: 'MTL_PRINCIPAL',
   active: true,
 });
-
-export const deriveReportStatus = (
-  monthId: string,
-  storedStatus?: string,
-): PropertyReportStatus => {
-  void monthId;
-  const stored = asString(storedStatus).toUpperCase();
-  if (stored === 'PUBLISHED' || stored === 'CLOSED') {
-    return 'PUBLISHED';
-  }
-  if (stored === 'READY_TO_PUBLISH') {
-    return 'READY_TO_PUBLISH';
-  }
-  if (stored === 'READY_TO_CLOSE') {
-    return 'READY_TO_CLOSE';
-  }
-  return 'IN_PROGRESS';
-};
 
 export const reservationFromPayload = (raw: unknown) => {
   let payload: unknown = raw;

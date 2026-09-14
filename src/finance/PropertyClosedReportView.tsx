@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   REPORT_TABS,
@@ -6,6 +6,7 @@ import {
   type ReportTabId,
   type ReportVisibility,
 } from '../../amplify/functions/shared/property-report-settings'
+import { YlIcon, type YlIconName } from '../design/icons'
 import type { PropertyReportMetricValues } from './property-report-metrics'
 import {
   buildMetricDetailSections,
@@ -22,6 +23,12 @@ type Props = {
   contributionFormula?: string
   ourProfitFormula?: string
   netEarningsFormula?: string
+}
+
+const TAB_ICONS: Record<ReportTabId, YlIconName> = {
+  property: 'building.2',
+  management: 'briefcase',
+  owner: 'person.crop.circle',
 }
 
 const COUNT_IDS = new Set(['bookingCount', 'nights'])
@@ -63,6 +70,8 @@ export function PropertyClosedReportView({
   const tabs = REPORT_TABS.filter((item) => resolved[item].visible)
   const [tab, setTab] = useState<ReportTabId>(tabs[0] ?? 'property')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   const money = useMemo(
     () =>
       new Intl.NumberFormat(i18n.language.startsWith('es') ? 'es-ES' : 'en-GB', {
@@ -71,6 +80,33 @@ export function PropertyClosedReportView({
       }),
     [i18n.language],
   )
+
+  useLayoutEffect(() => {
+    const rail = railRef.current
+    const tabsEl = tabsRef.current
+    if (!rail || !tabsEl) {
+      return undefined
+    }
+
+    const syncLeft = () => {
+      tabsEl.style.left = `${rail.getBoundingClientRect().left}px`
+    }
+
+    syncLeft()
+    const observer = new ResizeObserver(syncLeft)
+    observer.observe(rail)
+    const main = rail.closest('.main')
+    if (main) {
+      observer.observe(main)
+    }
+    window.addEventListener('resize', syncLeft)
+    window.visualViewport?.addEventListener('resize', syncLeft)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', syncLeft)
+      window.visualViewport?.removeEventListener('resize', syncLeft)
+    }
+  }, [])
 
   useEffect(() => {
     if (tabs.length > 0 && !tabs.includes(tab)) {
@@ -151,19 +187,37 @@ export function PropertyClosedReportView({
 
   return (
     <section className="closed-report">
-      <div className="closed-report-tabs" role="tablist">
-        {tabs.map((item) => (
-          <button
-            key={item}
-            type="button"
-            role="tab"
-            aria-selected={tab === item}
-            className={`closed-report-tab${tab === item ? ' is-active' : ''}`}
-            onClick={() => setTab(item)}
+      <div className="closed-report-layout">
+        <div className="closed-report-rail" ref={railRef}>
+          <div
+            ref={tabsRef}
+            className="closed-report-tabs btn-group is-vertical"
+            role="tablist"
+            aria-label={t('propertyReports.reportDraftTitle')}
           >
-            {t(`propertyReports.reportTab.${item}`)}
-          </button>
-        ))}
+        {tabs.map((item) => {
+          const label = t(`propertyReports.reportTab.${item}`)
+          const isActive = tab === item
+          return (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-label={label}
+              title={label}
+              className={isActive ? 'btn-primary' : 'btn-icon btn-icon-ghost'}
+              onClick={() => setTab(item)}
+            >
+              <YlIcon
+                name={TAB_ICONS[item]}
+                size={18}
+                variant={isActive ? 'fill' : 'regular'}
+              />
+            </button>
+          )
+        })}
+      </div>
       </div>
 
       <div className="closed-report-grid">
@@ -200,6 +254,7 @@ export function PropertyClosedReportView({
             </article>
           )
         })}
+      </div>
       </div>
 
       {detailId ? (

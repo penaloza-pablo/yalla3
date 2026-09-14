@@ -1194,6 +1194,8 @@
     "closeMonth": "Marcar listo para publicar",
     "publishMonth": "Publicar",
     "reopenMonth": "Reabrir mes",
+    "reopenConfirm": "El informe volverá un paso atrás. ¿Quieres reabrir este mes?",
+    "markReadyBlocked": "No se han cumplido todas las condiciones para marcar como listo para cerrar.",
     "bookingsTitle": "Payouts",
     "bookingId": "Booking ID",
     "guestName": "Huésped",

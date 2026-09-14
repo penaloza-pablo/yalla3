@@ -1194,6 +1194,8 @@
     "closeMonth": "Mark ready to publish",
     "publishMonth": "Publish",
     "reopenMonth": "Reopen month",
+    "reopenConfirm": "The report will go back one step. Do you want to reopen this month?",
+    "markReadyBlocked": "Not all conditions are met to mark this month as ready to close.",
     "bookingsTitle": "Payouts",
     "bookingId": "Booking ID",
     "guestName": "Guest name",

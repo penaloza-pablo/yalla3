@@ -14,6 +14,7 @@ export type ConfirmOptions = {
   confirmLabel?: string
   cancelLabel?: string
   destructive?: boolean
+  info?: boolean
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>
@@ -64,20 +65,32 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               <p className="yl-confirm-message">{pending.message}</p>
             </div>
             <div className="modal-footer">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => close(false)}
-              >
-                {pending.cancelLabel || t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                className={pending.destructive ? 'btn-danger' : 'btn-primary'}
-                onClick={() => close(true)}
-              >
-                {pending.confirmLabel || t('common.confirm')}
-              </button>
+              {pending.info ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => close(true)}
+                >
+                  {pending.cancelLabel || t('common.close')}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => close(false)}
+                  >
+                    {pending.cancelLabel || t('common.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    className={pending.destructive ? 'btn-danger' : 'btn-primary'}
+                    onClick={() => close(true)}
+                  >
+                    {pending.confirmLabel || t('common.confirm')}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

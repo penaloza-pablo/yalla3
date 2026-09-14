@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import {
   REPORT_WORKFLOW_STATUSES,
   type PropertyReportStatus,
-} from '../../amplify/functions/shared/property-reports'
+} from '../../amplify/functions/shared/property-report-status'
 
 const STEP_I18N: Record<PropertyReportStatus, string> = {
   IN_PROGRESS: 'propertyReports.statusInProgress',
