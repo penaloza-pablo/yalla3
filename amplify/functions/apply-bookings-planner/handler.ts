@@ -3,6 +3,7 @@ import {
   applyPlannerWindow,
   getPlannerSettings,
 } from '../shared/bookings-planner-apply';
+import type { BookingPlannerItem } from '../shared/bookings-planner';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -15,18 +16,7 @@ type ApplyPayload = {
   reservationId?: string;
   syncGuesty?: boolean;
   notifyCleaningPlan?: boolean;
-  previous?: {
-    Guests?: unknown;
-    CheckInDate?: unknown;
-    CheckOutDate?: unknown;
-    GiftCard?: unknown;
-    Linen?: unknown;
-    Nights?: unknown;
-    ListingID?: unknown;
-    ListingNickname?: unknown;
-    GuestName?: unknown;
-    ConfirmationCode?: unknown;
-  };
+  previous?: BookingPlannerItem;
 };
 
 export const handler = async (event: {
