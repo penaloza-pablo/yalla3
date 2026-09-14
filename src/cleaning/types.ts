@@ -2,6 +2,8 @@ export type CleanerRecord = {
   id: string
   name: string
   active: boolean
+  cognitoEmail?: string
+  cognitoName?: string
   cleaningsCount?: number
   incidentsCount?: number
   uniqueIncidentVisitCount?: number

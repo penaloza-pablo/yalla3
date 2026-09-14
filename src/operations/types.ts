@@ -25,6 +25,8 @@ export type VisitRecord = {
   visitTypeId: string
   teamId: string
   assignedUserId: string
+  planAssigneeEmail?: string
+  planAssigneeName?: string
   scheduledDate: string
   scheduledStartTime: string
   scheduledEndTime: string

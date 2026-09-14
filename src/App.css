@@ -3222,6 +3222,13 @@ th {
   color: #5b6b78;
 }
 
+.operations-kanban-visit-plan-assignee {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #415364;
+}
+
 .operations-kanban-complete {
   align-self: end;
   margin: 0 8px 8px 0;

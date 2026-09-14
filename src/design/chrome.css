@@ -651,6 +651,10 @@
   color: var(--yl-text-2);
 }
 
+.operations-kanban-visit-plan-assignee {
+  color: var(--yl-ink);
+}
+
 .operations-kanban-complete {
   color: var(--yl-text-3);
 }

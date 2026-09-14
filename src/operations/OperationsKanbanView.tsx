@@ -27,6 +27,7 @@ type Props = {
   onOpenFilters?: () => void
   activeFilterCount?: number
   filtersActive?: boolean
+  emptyMessage?: string
 }
 
 const teamBadgeLabel = (
@@ -66,6 +67,7 @@ export function OperationsKanbanView({
   onOpenFilters,
   activeFilterCount = 0,
   filtersActive = false,
+  emptyMessage,
 }: Props) {
   const { t } = useTranslation()
   const sortedVisits = useMemo(
@@ -92,9 +94,10 @@ export function OperationsKanbanView({
       />
       {sortedVisits.length === 0 ? (
         <p className="subtitle operations-day-empty">
-          {t('operations.emptyDayVisits', {
-            date: formatAgendaDayLabel(dayViewDate),
-          })}
+          {emptyMessage ??
+            t('operations.emptyDayVisits', {
+              date: formatAgendaDayLabel(dayViewDate),
+            })}
         </p>
       ) : (
         <ul className="operations-kanban-list">
@@ -139,6 +142,11 @@ export function OperationsKanbanView({
                         {nickname}
                       </span>
                     </p>
+                    {visit.planAssigneeName ? (
+                      <p className="operations-kanban-visit-plan-assignee">
+                        {visit.planAssigneeName}
+                      </p>
+                    ) : null}
                     <p className="operations-kanban-visit-assignee">{assignee}</p>
                   </button>
                   <button

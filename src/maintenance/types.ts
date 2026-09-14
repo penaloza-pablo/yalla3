@@ -116,6 +116,8 @@ export type MaintenanceAgentRecord = {
   userId: string
   name: string
   active: boolean
+  cognitoEmail?: string
+  cognitoName?: string
 }
 
 export type MaintenancePlanRow = {

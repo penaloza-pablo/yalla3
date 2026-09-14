@@ -5,6 +5,12 @@ import {
   recordActivityLog,
 } from '../shared/activity-log';
 import { reconcileCleanerStatsFromPlans } from '../shared/cleaner-stats';
+import { scanAllItems } from '../shared/cleaning-plan';
+import {
+  applyCognitoLinkFields,
+  findDuplicateCognitoEmail,
+  normalizeCognitoEmail,
+} from '../shared/cognito-link';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -24,6 +30,8 @@ type CleanerPayload = {
   name?: string;
   active?: boolean;
   action?: string;
+  cognitoEmail?: string;
+  cognitoName?: string;
 };
 
 export const handler = async (event: {
@@ -109,6 +117,27 @@ export const handler = async (event: {
     item.historicalRating = 5;
     item.trendRating = 5;
     item.recentCompletions = [];
+  }
+
+  const cognitoError = applyCognitoLinkFields(item, payload);
+  if (cognitoError) {
+    return buildHttpResponse(400, { message: cognitoError });
+  }
+  if (payload.cognitoEmail !== undefined) {
+    const email = normalizeCognitoEmail(payload.cognitoEmail);
+    if (email) {
+      const current = await scanAllItems(tableName);
+      const duplicate = findDuplicateCognitoEmail(
+        current,
+        email,
+        typeof item.id === 'string' ? item.id : undefined,
+      );
+      if (duplicate) {
+        return buildHttpResponse(400, {
+          message: 'That Yalla user is already linked to another cleaner.',
+        });
+      }
+    }
   }
 
   try {

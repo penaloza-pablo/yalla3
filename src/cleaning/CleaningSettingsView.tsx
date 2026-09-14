@@ -15,6 +15,12 @@ import type {
 import { AMENITY_RULE_TYPES } from './types'
 import { StarRating } from './StarRating'
 import { YlIcon } from '../design/icons'
+import {
+  cognitoUserLabel,
+  loadCognitoUserOptions,
+  withSelectedCognitoUser,
+  type CognitoUserOption,
+} from '../lib/cognito-users'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -35,6 +41,7 @@ const emptyCleanerForm = () => ({
   id: '',
   name: '',
   active: true,
+  cognitoEmail: '',
 })
 
 type AmenityDraft = {
@@ -161,6 +168,8 @@ const mapCleaner = (item: Record<string, unknown>): CleanerRecord => ({
   id: String(item.id ?? ''),
   name: String(item.name ?? item.id ?? ''),
   active: item.active !== false,
+  cognitoEmail: String(item.cognitoEmail ?? '').trim().toLowerCase() || undefined,
+  cognitoName: String(item.cognitoName ?? '').trim() || undefined,
   cleaningsCount: toNumber(item.cleaningsCount),
   incidentsCount: toNumber(item.incidentsCount),
   uniqueIncidentVisitCount: toNumber(item.uniqueIncidentVisitCount),
@@ -264,6 +273,10 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
         'getPropertiesUrl',
         import.meta.env.VITE_GET_PROPERTIES_URL,
       ),
+      getCognitoUsers: getEndpoint(
+        'getCognitoUsersUrl',
+        import.meta.env.VITE_GET_COGNITO_USERS_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -294,6 +307,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     emptyAmenityDraft(),
   ])
   const [duplicateTargetId, setDuplicateTargetId] = useState('')
+  const [cognitoUsers, setCognitoUsers] = useState<CognitoUserOption[]>([])
 
   const propertyById = useMemo(
     () =>
@@ -359,6 +373,15 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     [editingAmenitiesPropertyId, sortedProperties],
   )
   const activeCleanersCount = cleaners.filter((cleaner) => cleaner.active).length
+  const cleanerCognitoOptions = useMemo(
+    () =>
+      withSelectedCognitoUser(
+        cognitoUsers,
+        cleanerForm.cognitoEmail,
+        cleaners.find((item) => item.id === cleanerForm.id)?.cognitoName,
+      ),
+    [cleanerForm.cognitoEmail, cleanerForm.id, cleaners, cognitoUsers],
+  )
 
   const loadCleaners = useCallback(async () => {
     if (!endpoints.getCleaners) {
@@ -465,6 +488,17 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     setInventoryOptions(options)
   }, [endpoints.getInventory])
 
+  const loadCognitoUsers = useCallback(async () => {
+    if (!endpoints.getCognitoUsers) {
+      return
+    }
+    try {
+      setCognitoUsers(await loadCognitoUserOptions(endpoints.getCognitoUsers))
+    } catch {
+      setCognitoUsers([])
+    }
+  }, [endpoints.getCognitoUsers])
+
   const refreshAll = useCallback(async () => {
     setIsLoading(true)
     setError('')
@@ -474,6 +508,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
         loadDetails(),
         loadProperties(),
         loadInventory(),
+        loadCognitoUsers(),
       ])
     } catch (requestError) {
       setError(
@@ -484,7 +519,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
     } finally {
       setIsLoading(false)
     }
-  }, [loadCleaners, loadDetails, loadInventory, loadProperties, t])
+  }, [loadCleaners, loadCognitoUsers, loadDetails, loadInventory, loadProperties, t])
 
   useEffect(() => {
     setProperties(propertyOptions)
@@ -506,6 +541,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
       id: cleaner.id,
       name: cleaner.name,
       active: cleaner.active,
+      cognitoEmail: cleaner.cognitoEmail ?? '',
     })
     setIsCleanerFormOpen(true)
     setMessage('')
@@ -531,6 +567,10 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
           id: cleanerForm.id || undefined,
           name: cleanerForm.name.trim(),
           active: cleanerForm.active,
+          cognitoEmail: cleanerForm.cognitoEmail,
+          cognitoName:
+            cognitoUsers.find((user) => user.email === cleanerForm.cognitoEmail)
+              ?.name ?? '',
         }),
       })
       setIsCleanerFormOpen(false)
@@ -1019,6 +1059,33 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                     }
                   />
                 </label>
+                <label>
+                  {t('cleaningSettings.yallaUser')}
+                  <select
+                    value={cleanerForm.cognitoEmail}
+                    onChange={(event) => {
+                      const cognitoEmail = event.target.value
+                      const user = cognitoUsers.find(
+                        (item) => item.email === cognitoEmail,
+                      )
+                      setCleanerForm((current) => ({
+                        ...current,
+                        cognitoEmail,
+                        name:
+                          current.name.trim() || user?.name || current.name,
+                      }))
+                    }}
+                  >
+                    <option value="">
+                      {t('cleaningSettings.unlinkedUser')}
+                    </option>
+                    {cleanerCognitoOptions.map((user) => (
+                      <option key={user.email} value={user.email}>
+                        {cognitoUserLabel(user)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -1069,6 +1136,7 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                 <thead>
                   <tr>
                     <th>{t('cleaningSettings.name')}</th>
+                    <th>{t('cleaningSettings.yallaUser')}</th>
                     <th>{t('cleaningSettings.status')}</th>
                     <th>{t('cleaningSettings.cleanings')}</th>
                     <th>{t('cleaningSettings.incidents')}</th>
@@ -1080,16 +1148,21 @@ export function CleaningSettingsView({ getEndpoint, propertyOptions }: Props) {
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7}>{t('common.loading')}</td>
+                      <td colSpan={8}>{t('common.loading')}</td>
                     </tr>
                   ) : cleaners.length === 0 ? (
                     <tr>
-                      <td colSpan={7}>{t('cleaningSettings.empty')}</td>
+                      <td colSpan={8}>{t('cleaningSettings.empty')}</td>
                     </tr>
                   ) : (
                     cleaners.map((cleaner) => (
                       <tr key={cleaner.id}>
                         <td>{cleaner.name}</td>
+                        <td>
+                          {cleaner.cognitoName ||
+                            cleaner.cognitoEmail ||
+                            t('cleaningSettings.unlinkedUser')}
+                        </td>
                         <td>
                           <span className={`tag ${cleaner.active ? '' : 'muted'}`}>
                             {cleaner.active

@@ -11,6 +11,12 @@ import type {
   VisitTypeOption,
 } from './types'
 import { YlIcon } from '../design/icons'
+import {
+  cognitoUserLabel,
+  loadCognitoUserOptions,
+  withSelectedCognitoUser,
+  type CognitoUserOption,
+} from '../lib/cognito-users'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -28,6 +34,7 @@ const emptyAgentForm = () => ({
   userId: '',
   name: '',
   active: true,
+  cognitoEmail: '',
 })
 
 const emptyProviderForm = () => ({
@@ -41,6 +48,8 @@ const mapAgent = (item: Record<string, unknown>): MaintenanceAgentRecord => ({
   userId: String(item.userId ?? item.id ?? ''),
   name: String(item.name ?? item.id ?? ''),
   active: item.active !== false,
+  cognitoEmail: String(item.cognitoEmail ?? '').trim().toLowerCase() || undefined,
+  cognitoName: String(item.cognitoName ?? '').trim() || undefined,
 })
 
 const mapUser = (item: Record<string, unknown>): UserRecord => ({
@@ -109,6 +118,10 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
         import.meta.env.VITE_UPSERT_MAINTENANCE_AGENT_URL,
       ),
       getUsers: getEndpoint('getUsersUrl', import.meta.env.VITE_GET_USERS_URL),
+      getCognitoUsers: getEndpoint(
+        'getCognitoUsersUrl',
+        import.meta.env.VITE_GET_COGNITO_USERS_URL,
+      ),
     }),
     [getEndpoint],
   )
@@ -131,9 +144,19 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
   const [agentForm, setAgentForm] = useState(emptyAgentForm())
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [cognitoUsers, setCognitoUsers] = useState<CognitoUserOption[]>([])
 
   const activeProviders = providers.filter((provider) => provider.active)
   const activeAgents = agents.filter((agent) => agent.active)
+  const agentCognitoOptions = useMemo(
+    () =>
+      withSelectedCognitoUser(
+        cognitoUsers,
+        agentForm.cognitoEmail,
+        agents.find((item) => item.id === agentForm.id)?.cognitoName,
+      ),
+    [agentForm.cognitoEmail, agentForm.id, agents, cognitoUsers],
+  )
   const visitTypeById = useMemo(
     () => new Map(visitTypes.map((item) => [item.id, item.name])),
     [visitTypes],
@@ -170,6 +193,17 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     setUsers((payload.items ?? []).map(mapUser).filter((user) => user.id))
   }, [endpoints.getUsers])
 
+  const loadCognitoUsers = useCallback(async () => {
+    if (!endpoints.getCognitoUsers) {
+      return
+    }
+    try {
+      setCognitoUsers(await loadCognitoUserOptions(endpoints.getCognitoUsers))
+    } catch {
+      setCognitoUsers([])
+    }
+  }, [endpoints.getCognitoUsers])
+
   const applySettings = (item: MaintenanceSettings) => {
     setSettings(item)
     setPoolDraft(String(item.monthlyHoursPool))
@@ -204,7 +238,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     setError('')
     try {
       await loadDetails()
-      await Promise.all([loadProviders(), loadAgents(), loadUsers()])
+      await Promise.all([loadProviders(), loadAgents(), loadUsers(), loadCognitoUsers()])
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -214,7 +248,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
     } finally {
       setIsLoading(false)
     }
-  }, [loadAgents, loadDetails, loadProviders, loadUsers, t])
+  }, [loadAgents, loadCognitoUsers, loadDetails, loadProviders, loadUsers, t])
 
   useEffect(() => {
     void refreshAll()
@@ -233,6 +267,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
       userId: agent.userId,
       name: agent.name,
       active: agent.active,
+      cognitoEmail: agent.cognitoEmail ?? '',
     })
     setIsAgentFormOpen(true)
     setMessage('')
@@ -260,6 +295,10 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
           userId: agentForm.userId || undefined,
           name: agentForm.name.trim() || selectedUser?.name,
           active: agentForm.active,
+          cognitoEmail: agentForm.cognitoEmail,
+          cognitoName:
+            cognitoUsers.find((user) => user.email === agentForm.cognitoEmail)
+              ?.name ?? '',
         }),
       })
       setIsAgentFormOpen(false)
@@ -604,6 +643,27 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
                     </select>
                   </label>
                 )}
+                <label>
+                  {t('maintenanceSettings.yallaUser')}
+                  <select
+                    value={agentForm.cognitoEmail}
+                    onChange={(event) =>
+                      setAgentForm((current) => ({
+                        ...current,
+                        cognitoEmail: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      {t('maintenanceSettings.unlinkedUser')}
+                    </option>
+                    {agentCognitoOptions.map((user) => (
+                      <option key={user.email} value={user.email}>
+                        {cognitoUserLabel(user)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -654,6 +714,7 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
                 <thead>
                   <tr>
                     <th>{t('maintenanceSettings.name')}</th>
+                    <th>{t('maintenanceSettings.yallaUser')}</th>
                     <th>{t('maintenanceSettings.status')}</th>
                     <th>{t('common.actions')}</th>
                   </tr>
@@ -661,16 +722,21 @@ export function MaintenanceSettingsView({ getEndpoint }: Props) {
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={3}>{t('common.loading')}</td>
+                      <td colSpan={4}>{t('common.loading')}</td>
                     </tr>
                   ) : agents.length === 0 ? (
                     <tr>
-                      <td colSpan={3}>{t('maintenanceSettings.emptyAgents')}</td>
+                      <td colSpan={4}>{t('maintenanceSettings.emptyAgents')}</td>
                     </tr>
                   ) : (
                     agents.map((agent) => (
                       <tr key={agent.id}>
                         <td>{agent.name}</td>
+                        <td>
+                          {agent.cognitoName ||
+                            agent.cognitoEmail ||
+                            t('maintenanceSettings.unlinkedUser')}
+                        </td>
                         <td>
                           {agent.active
                             ? t('maintenanceSettings.active')

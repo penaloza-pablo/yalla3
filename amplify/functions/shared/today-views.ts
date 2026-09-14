@@ -4,6 +4,7 @@ export const TODAY_VIEW_MODES = [
   'day',
   'kanban',
   'agenda',
+  'myJobs',
 ] as const;
 
 export type TodayViewMode = (typeof TODAY_VIEW_MODES)[number];

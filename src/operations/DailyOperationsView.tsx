@@ -50,6 +50,11 @@ import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
 import { isTodayVisitView, type TodayViewMode } from '../nav/todayViews'
 import {
+  linkedPersonById,
+  yallaUserLabel,
+  type LinkedOpsPerson,
+} from './planAssignee'
+import {
   buildApplyTemplateVisitPayload,
   emptyDraftTask,
   taskRecordToDraft,
@@ -428,12 +433,13 @@ export function DailyOperationsView({
   const [maintenancePlansByDate, setMaintenancePlansByDate] = useState<
     Record<string, MaintenancePlanDayLookup>
   >({})
-  const [cleanerNameById, setCleanerNameById] = useState<Map<string, string>>(
+  const [cleanerById, setCleanerById] = useState<Map<string, LinkedOpsPerson>>(
     () => new Map(),
   )
-  const [agentNameById, setAgentNameById] = useState<Map<string, string>>(
+  const [agentById, setAgentById] = useState<Map<string, LinkedOpsPerson>>(
     () => new Map(),
   )
+  const [sessionEmail, setSessionEmail] = useState('')
   const [internalDashboardViewMode, setInternalDashboardViewMode] =
     useState<TodayViewMode>('dashboard')
   const dashboardViewMode = dashboardViewModeProp ?? internalDashboardViewMode
@@ -662,9 +668,38 @@ export function DailyOperationsView({
     [cleaningPlansByDate],
   )
 
+  const overlayVisitWithPlanAssignee = useCallback(
+    (visit: VisitRecord): VisitRecord => {
+      const date = visit.scheduledDate
+      const cleanerId =
+        cleaningPlansByDate[date]?.cleanerIdByVisitId?.[visit.id]?.trim() ?? ''
+      const cleaner = cleanerId ? cleanerById.get(cleanerId) : undefined
+      if (cleaner?.cognitoEmail) {
+        return {
+          ...visit,
+          planAssigneeEmail: cleaner.cognitoEmail,
+          planAssigneeName: yallaUserLabel(cleaner),
+        }
+      }
+      const agentId =
+        maintenancePlansByDate[date]?.agentIdByVisitId?.[visit.id]?.trim() ?? ''
+      const agent = agentId ? agentById.get(agentId) : undefined
+      if (agent?.cognitoEmail) {
+        return {
+          ...visit,
+          planAssigneeEmail: agent.cognitoEmail,
+          planAssigneeName: yallaUserLabel(agent),
+        }
+      }
+      return visit
+    },
+    [agentById, cleanerById, cleaningPlansByDate, maintenancePlansByDate],
+  )
+
   const filteredVisits = useMemo(() => {
     return visits
       .map(overlayVisitWithCleaningPlan)
+      .map(overlayVisitWithPlanAssignee)
       .filter((visit) => {
       if (filters.teamIds.length === 0) {
         if (isManagementTeam(visit.teamId, teamById)) {
@@ -686,14 +721,37 @@ export function DailyOperationsView({
         return false
       }
       if (
+        dashboardViewMode !== 'myJobs' &&
         filters.userIds.length > 0 &&
         !filters.userIds.includes(visit.assignedUserId ?? '')
       ) {
         return false
       }
+      if (dashboardViewMode === 'myJobs') {
+        if (!sessionEmail || visit.planAssigneeEmail !== sessionEmail) {
+          return false
+        }
+      }
       return true
     })
-  }, [visits, filters, teamById, overlayVisitWithCleaningPlan])
+  }, [
+    visits,
+    filters,
+    teamById,
+    overlayVisitWithCleaningPlan,
+    overlayVisitWithPlanAssignee,
+    dashboardViewMode,
+    sessionEmail,
+  ])
+
+  const sessionIsLinked = useMemo(() => {
+    if (!sessionEmail || sessionEmail === 'unknown') {
+      return false
+    }
+    return [...cleanerById.values(), ...agentById.values()].some(
+      (person) => person.cognitoEmail === sessionEmail,
+    )
+  }, [agentById, cleanerById, sessionEmail])
 
   const activeFilterCount = useMemo(() => {
     const statusCount = listsMatch(filters.statuses, DEFAULT_STATUS_FILTER)
@@ -705,16 +763,23 @@ export function DailyOperationsView({
     return (
       filters.teamIds.length +
       filters.propertyIds.length +
-      filters.userIds.length +
+      (dashboardViewMode === 'myJobs' ? 0 : filters.userIds.length) +
       statusCount +
       bookingCount
     )
-  }, [filters])
+  }, [dashboardViewMode, filters])
 
   const selectedVisit = useMemo(() => {
     const match = visits.find((visit) => visit.id === selectedVisitId)
-    return match ? overlayVisitWithCleaningPlan(match) : null
-  }, [visits, selectedVisitId, overlayVisitWithCleaningPlan])
+    return match
+      ? overlayVisitWithPlanAssignee(overlayVisitWithCleaningPlan(match))
+      : null
+  }, [
+    visits,
+    selectedVisitId,
+    overlayVisitWithCleaningPlan,
+    overlayVisitWithPlanAssignee,
+  ])
 
   const cleaningTypeBadge = useMemo(() => {
     if (
@@ -753,8 +818,8 @@ export function DailyOperationsView({
     if (!cleanerId) {
       return null
     }
-    return cleanerNameById.get(cleanerId)?.trim() || null
-  }, [cleanerNameById, cleaningPlansByDate, selectedVisit])
+    return cleanerById.get(cleanerId)?.name?.trim() || null
+  }, [cleanerById, cleaningPlansByDate, selectedVisit])
 
   const maintenanceAssigneeBadge = useMemo(() => {
     if (
@@ -770,7 +835,7 @@ export function DailyOperationsView({
       return null
     }
     if (plan?.status === 'READY' && agentId) {
-      const name = agentNameById.get(agentId)?.trim()
+      const name = agentById.get(agentId)?.name?.trim()
       if (name) {
         return { pending: false, label: name }
       }
@@ -782,7 +847,7 @@ export function DailyOperationsView({
       }
     }
     return null
-  }, [agentNameById, maintenancePlansByDate, selectedVisit, t])
+  }, [agentById, maintenancePlansByDate, selectedVisit, t])
 
   const loadReferenceData = useCallback(async () => {
     if (!endpoints.teams || !endpoints.users || !endpoints.visitTypes) {
@@ -1055,21 +1120,11 @@ export function DailyOperationsView({
         if (cancelled) {
           return
         }
-        setCleanerNameById(
-          new Map(
-            (payload.items ?? [])
-              .map((item) => {
-                const id = String(item.id ?? '').trim()
-                const name = String(item.name ?? '').trim()
-                return [id, name] as const
-              })
-              .filter((entry) => entry[0] && entry[1]),
-          ),
-        )
+        setCleanerById(linkedPersonById(payload.items ?? []))
       })
       .catch(() => {
         if (!cancelled) {
-          setCleanerNameById(new Map())
+          setCleanerById(new Map())
         }
       })
     return () => {
@@ -1090,27 +1145,29 @@ export function DailyOperationsView({
         if (cancelled) {
           return
         }
-        setAgentNameById(
-          new Map(
-            (payload.items ?? [])
-              .map((item) => {
-                const id = String(item.id ?? item.userId ?? '').trim()
-                const name = String(item.name ?? '').trim()
-                return [id, name] as const
-              })
-              .filter((entry) => entry[0] && entry[1]),
-          ),
-        )
+        setAgentById(linkedPersonById(payload.items ?? []))
       })
       .catch(() => {
         if (!cancelled) {
-          setAgentNameById(new Map())
+          setAgentById(new Map())
         }
       })
     return () => {
       cancelled = true
     }
   }, [endpoints.maintenanceAgents])
+
+  useEffect(() => {
+    let cancelled = false
+    void getCurrentUserEmail().then((email) => {
+      if (!cancelled) {
+        setSessionEmail(email.trim().toLowerCase())
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [getCurrentUserEmail])
 
   useEffect(() => {
     if (mode !== 'dashboard') {
@@ -1205,72 +1262,81 @@ export function DailyOperationsView({
   ])
 
   useEffect(() => {
-    if (mode !== 'dashboard' || !selectedVisit) {
+    if (mode !== 'dashboard') {
       return
     }
-    if (isCleaningVisitType(selectedVisit.visitTypeId)) {
-      return
-    }
-    const date = selectedVisit.scheduledDate.trim()
     const endpoint = endpoints.maintenancePlan
-    if (!date || !endpoint) {
+    if (!endpoint) {
       return
     }
-    if (
-      maintenancePlansByDate[date] ||
-      maintenancePlanInflight.current.has(date)
-    ) {
-      return
+    const dates = [
+      ...new Set(
+        [
+          ...visitQueryRange.dates,
+          selectedVisit && !isCleaningVisitType(selectedVisit.visitTypeId)
+            ? selectedVisit.scheduledDate.trim()
+            : '',
+        ].filter(Boolean),
+      ),
+    ]
+    for (const date of dates) {
+      if (
+        maintenancePlansByDate[date] ||
+        maintenancePlanInflight.current.has(date)
+      ) {
+        continue
+      }
+      maintenancePlanInflight.current.add(date)
+      void fetchJson<{
+        status?: string
+        rows?: Record<string, unknown>[]
+      }>(`${endpoint}?date=${encodeURIComponent(date)}`)
+        .then((payload) => {
+          const agentIdByVisitId: Record<string, string> = {}
+          const visitIds: string[] = []
+          for (const row of payload.rows ?? []) {
+            const visitId = String(row.visitId ?? '').trim()
+            if (!visitId) {
+              continue
+            }
+            visitIds.push(visitId)
+            const agentId = String(row.agentId ?? '').trim()
+            if (agentId) {
+              agentIdByVisitId[visitId] = agentId
+            }
+          }
+          setMaintenancePlansByDate((current) => ({
+            ...current,
+            [date]: {
+              status:
+                String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
+                  ? 'READY'
+                  : 'DRAFT',
+              agentIdByVisitId,
+              visitIds,
+            },
+          }))
+        })
+        .catch(() => {
+          setMaintenancePlansByDate((current) => ({
+            ...current,
+            [date]: {
+              status: 'DRAFT',
+              agentIdByVisitId: {},
+              visitIds: [],
+            },
+          }))
+        })
+        .finally(() => {
+          maintenancePlanInflight.current.delete(date)
+        })
     }
-    maintenancePlanInflight.current.add(date)
-    void fetchJson<{
-      status?: string
-      rows?: Record<string, unknown>[]
-    }>(`${endpoint}?date=${encodeURIComponent(date)}`)
-      .then((payload) => {
-        const agentIdByVisitId: Record<string, string> = {}
-        const visitIds: string[] = []
-        for (const row of payload.rows ?? []) {
-          const visitId = String(row.visitId ?? '').trim()
-          if (!visitId) {
-            continue
-          }
-          visitIds.push(visitId)
-          const agentId = String(row.agentId ?? '').trim()
-          if (agentId) {
-            agentIdByVisitId[visitId] = agentId
-          }
-        }
-        setMaintenancePlansByDate((current) => ({
-          ...current,
-          [date]: {
-            status:
-              String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
-                ? 'READY'
-                : 'DRAFT',
-            agentIdByVisitId,
-            visitIds,
-          },
-        }))
-      })
-      .catch(() => {
-        setMaintenancePlansByDate((current) => ({
-          ...current,
-          [date]: {
-            status: 'DRAFT',
-            agentIdByVisitId: {},
-            visitIds: [],
-          },
-        }))
-      })
-      .finally(() => {
-        maintenancePlanInflight.current.delete(date)
-      })
   }, [
     endpoints.maintenancePlan,
     maintenancePlansByDate,
     mode,
     selectedVisit,
+    visitQueryRange.dates,
   ])
 
   const openCreateVisit = () => {
@@ -2147,6 +2213,7 @@ export function DailyOperationsView({
     mode === 'dashboard' &&
     (dashboardViewMode === 'day' ||
       dashboardViewMode === 'kanban' ||
+      dashboardViewMode === 'myJobs' ||
       dashboardViewMode === 'board')
 
   return (
@@ -2318,7 +2385,8 @@ export function DailyOperationsView({
             />
           ) : dashboardViewMode === 'board' ? (
             <TodayDashboardView />
-          ) : dashboardViewMode === 'kanban' ? (
+          ) : dashboardViewMode === 'kanban' ||
+            dashboardViewMode === 'myJobs' ? (
             <OperationsKanbanView
               dayViewDate={dayViewDate}
               visits={filteredVisits.filter(
@@ -2337,6 +2405,15 @@ export function DailyOperationsView({
               onOpenFilters={openFilters}
               activeFilterCount={activeFilterCount}
               filtersActive={isFilterOpen}
+              emptyMessage={
+                dashboardViewMode === 'myJobs'
+                  ? sessionIsLinked
+                    ? t('operations.emptyMyJobs', {
+                        date: formatAgendaDayLabel(dayViewDate),
+                      })
+                    : t('operations.emptyMyJobsUnlinked')
+                  : undefined
+              }
             />
           ) : dashboardViewMode === 'agenda' ? (
             <OperationsAgendaView
@@ -2591,6 +2668,7 @@ export function DailyOperationsView({
                     })}
                   </div>
                 </div>
+                {dashboardViewMode === 'myJobs' ? null : (
                 <div className="filter-group">
                   <p className="filter-title">{t('operations.assignedUser')}</p>
                   <div className="filter-options filter-options-scroll">
@@ -2614,6 +2692,7 @@ export function DailyOperationsView({
                     })}
                   </div>
                 </div>
+                )}
                 {dashboardViewMode === 'day' ? (
                   <div className="filter-group">
                     <p className="filter-title">{t('operations.bookings')}</p>
@@ -2853,6 +2932,16 @@ export function DailyOperationsView({
                           '—'}
                       </span>
                     </div>
+                    {selectedVisit.planAssigneeName ? (
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.yallaUser')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {selectedVisit.planAssigneeName}
+                      </span>
+                    </div>
+                    ) : null}
                     <div className="operations-detail-field">
                       <span className="operations-detail-label">
                         {t('operations.team')}

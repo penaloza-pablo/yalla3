@@ -13,7 +13,7 @@ export const parseTodayView = (value: string | null | undefined): TodayViewMode 
   isTodayViewMode(value) ? value : 'dashboard'
 
 export const isTodayVisitView = (view: TodayViewMode) =>
-  view === 'day' || view === 'kanban' || view === 'agenda'
+  view === 'day' || view === 'kanban' || view === 'agenda' || view === 'myJobs'
 
 export const TODAY_NAV_ITEMS: Array<{
   view: TodayViewMode
@@ -25,10 +25,12 @@ export const TODAY_NAV_ITEMS: Array<{
     | 'rectangle.3.group'
     | 'list.bullet'
     | 'list.bullet.rectangle'
+    | 'briefcase'
 }> = [
   { view: 'dashboard', labelKey: 'pages.Today', icon: 'house' },
   { view: 'board', labelKey: 'today.dashboard', icon: 'square.grid.2x2' },
   { view: 'day', labelKey: 'operations.day', icon: 'list.bullet.rectangle' },
   { view: 'kanban', labelKey: 'operations.kanban', icon: 'list.bullet' },
   { view: 'agenda', labelKey: 'operations.agenda', icon: 'calendar' },
+  { view: 'myJobs', labelKey: 'operations.myJobs', icon: 'briefcase' },
 ]

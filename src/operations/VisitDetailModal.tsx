@@ -53,6 +53,7 @@ import {
   appendIncompleteTasksComment,
   skipOpenVisitTasks,
 } from './incompleteVisitTasks'
+import { linkedPersonById, yallaUserLabel } from './planAssignee'
 import { YlIcon } from '../design/icons'
 
 type CleaningTypeBadge = {
@@ -247,6 +248,7 @@ export function VisitDetailModal({
   const [cleanerBadge, setCleanerBadge] = useState<string | null>(null)
   const [maintenanceAssigneeBadge, setMaintenanceAssigneeBadge] =
     useState<CleaningTypeBadge | null>(null)
+  const [planYallaUser, setPlanYallaUser] = useState('')
   const [visitForm, setVisitForm] = useState<VisitForm | null>(null)
   const [completeForm, setCompleteForm] = useState({
     hours: '1',
@@ -522,7 +524,13 @@ export function VisitDetailModal({
   ])
 
   useEffect(() => {
-    if (!visit || !isCleaningVisitType(visit.visitTypeId)) {
+    if (!visit) {
+      setCleaningTypeBadge(null)
+      setCleanerBadge(null)
+      setPlanYallaUser('')
+      return
+    }
+    if (!isCleaningVisitType(visit.visitTypeId)) {
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
       return
@@ -533,6 +541,7 @@ export function VisitDetailModal({
     if (!date || !endpoint) {
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
+      setPlanYallaUser('')
       return
     }
     let cancelled = false
@@ -581,6 +590,11 @@ export function VisitDetailModal({
         )
         const assignedCleaner = cleanerNameFromPlanRow(row, nameById)
         setCleanerBadge(assignedCleaner || null)
+        const cleanerId = String(row?.cleanerId ?? '').trim()
+        const person = linkedPersonById(cleanersPayload.items ?? []).get(
+          cleanerId,
+        )
+        setPlanYallaUser(yallaUserLabel(person))
       })
       .catch(() => {
         if (!cancelled) {
@@ -589,6 +603,7 @@ export function VisitDetailModal({
             label: t('operations.cleaningTypePending'),
           })
           setCleanerBadge(null)
+          setPlanYallaUser('')
         }
       })
     return () => {
@@ -641,6 +656,7 @@ export function VisitDetailModal({
         const isOnPlan = Boolean(row)
         if (!isMaintenanceVisitType(visit.visitTypeId) && !isOnPlan) {
           setMaintenanceAssigneeBadge(null)
+          setPlanYallaUser('')
           return
         }
         const isReady =
@@ -656,6 +672,8 @@ export function VisitDetailModal({
             .filter((entry) => entry[0] && entry[1]),
         )
         const assignedName = agentId ? nameById.get(agentId)?.trim() ?? '' : ''
+        const person = linkedPersonById(agentsPayload.items ?? []).get(agentId)
+        setPlanYallaUser(yallaUserLabel(person))
         if (isReady && assignedName) {
           setMaintenanceAssigneeBadge({ pending: false, label: assignedName })
           return
@@ -1279,6 +1297,16 @@ export function VisitDetailModal({
                           '—'}
                       </span>
                     </div>
+                    {planYallaUser ? (
+                    <div className="operations-detail-field">
+                      <span className="operations-detail-label">
+                        {t('operations.yallaUser')}
+                      </span>
+                      <span className="operations-detail-value">
+                        {planYallaUser}
+                      </span>
+                    </div>
+                    ) : null}
                     <div className="operations-detail-field">
                       <span className="operations-detail-label">
                         {t('operations.team')}
