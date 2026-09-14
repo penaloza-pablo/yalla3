@@ -96,8 +96,7 @@ const TODAY_INVENTORY_STATUSES = [
 ]
 
 const TODAY_PURCHASE_WARNING_STATUSES = [
-  'To be confirmed',
-  'Waiting Delivery',
+  'Overdue',
   'Waiting invoice',
 ]
 

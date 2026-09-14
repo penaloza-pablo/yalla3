@@ -22,11 +22,14 @@ import {
   getTodayInMadrid,
   TERMINAL_VISIT_STATUSES,
 } from './visit-task-utils';
+import {
+  PURCHASE_OVERDUE,
+  purchaseDeliveryIso,
+  resolvePurchaseLifecycle,
+} from './purchase-status';
 
 export const PLAN_EOD_NOTIFY_TIME = '17:30';
 export const INVENTORY_LATE_NOTIFY_TIME = '10:00';
-
-const PURCHASE_WAITING_DELIVERY = 'Waiting Delivery';
 
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
@@ -37,23 +40,6 @@ const formatDayMonth = (isoDate: string) => {
     return isoDate;
   }
   return `${match[3]}/${match[2]}`;
-};
-
-const parsePurchaseDateOnly = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (slashMatch) {
-    const [, day, month, year] = slashMatch;
-    return `${year}-${month}-${day}`;
-  }
-  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-  return '';
 };
 
 const isOpenVisit = (visit: Record<string, unknown>) => {
@@ -242,11 +228,6 @@ const purchaseName = (item: Record<string, unknown>) =>
   asString(item.id) ||
   'Compra';
 
-const purchaseDeliveryRaw = (item: Record<string, unknown>) =>
-  asString(item['Delivery date']) ||
-  asString(item.deliveryDate) ||
-  asString(item.DeliveryDate);
-
 const sendInventoryLate = async (options: {
   force: boolean;
   today: string;
@@ -275,25 +256,18 @@ const sendInventoryLate = async (options: {
     daysLate: number;
   }> = [];
   for (const item of await scanAllItems(purchasesTable)) {
-    const status = asString(item.Status) || asString(item.status);
-    if (status !== PURCHASE_WAITING_DELIVERY) {
+    const resolved = resolvePurchaseLifecycle(item, options.today);
+    if (resolved.status !== PURCHASE_OVERDUE) {
       continue;
     }
-    if (item.Excluded === true) {
-      continue;
-    }
-    const deliveryDate = parsePurchaseDateOnly(purchaseDeliveryRaw(item));
-    if (!deliveryDate) {
-      continue;
-    }
-    const daysLate = calendarDaysBetween(deliveryDate, options.today);
-    if (daysLate < 1) {
-      continue;
-    }
+    const deliveryDate = purchaseDeliveryIso(resolved.deliveryDate);
+    const daysLate = deliveryDate
+      ? calendarDaysBetween(deliveryDate, options.today)
+      : 1;
     latePurchases.push({
       name: purchaseName(item),
-      deliveryDate,
-      daysLate,
+      deliveryDate: deliveryDate || resolved.deliveryDate,
+      daysLate: Math.max(1, daysLate),
     });
   }
 
@@ -311,7 +285,7 @@ const sendInventoryLate = async (options: {
 
   const purchasesUrl = appPageUrl('Purchases');
   const lines = [
-    `Compras en Waiting Delivery con al menos 1 día de atraso:`,
+    `Compras en estado Overdue:`,
     ...latePurchases.map((item) => {
       const delay =
         item.daysLate === 1 ? '1 día' : `${item.daysLate} días`;

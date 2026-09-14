@@ -10,6 +10,17 @@ import {
   parseIvaRate,
 } from '../shared/iva';
 import {
+  PURCHASE_COMPLETED,
+  PURCHASE_CONFIRMED_LEGACY,
+  PURCHASE_EXCLUDED,
+  PURCHASE_WAITING_INVOICE,
+  computePurchaseLifecycleStatus,
+  isReceivedPurchaseStatus,
+  purchaseBusinessToday,
+  resolveInvoiceFromPayload,
+  resolveReceivedFromPayload,
+} from '../shared/purchase-status';
+import {
   DynamoDBDocumentClient,
   DeleteCommand,
   GetCommand,
@@ -54,6 +65,10 @@ type PurchasePayload = {
   Note?: string;
   excluded?: boolean;
   Excluded?: boolean;
+  invoice?: boolean;
+  Invoice?: boolean;
+  received?: boolean;
+  Received?: boolean;
   ['Item id']?: string;
   ['Item ID']?: string;
   ['Item name']?: string;
@@ -128,28 +143,7 @@ const formatDateForStorage = (value?: string) => {
   return `${day}/${month}/${parsed.getFullYear()}`;
 };
 
-const parseDateOnly = (value?: string) => {
-  if (!value) {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (slashMatch) {
-    const [, day, month, year] = slashMatch;
-    const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
 const INVENTORY_WAITING_DELIVERY = 'Waiting Delivery';
-const PURCHASE_CONFIRMED = 'Confirmed';
-const PURCHASE_WAITING_INVOICE = 'Waiting invoice';
-const PURCHASE_EXCLUDED = 'Excluded';
 
 const normalizePurchaseStatus = (value?: string) => value?.trim() ?? '';
 
@@ -175,11 +169,6 @@ const parseExcluded = (
   );
 };
 
-const isReceivedPurchaseStatus = (value?: string) => {
-  const status = normalizePurchaseStatus(value);
-  return status === PURCHASE_CONFIRMED || status === PURCHASE_WAITING_INVOICE;
-};
-
 const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   if (quantity <= rebuyQty) {
     return 'Reorder';
@@ -202,20 +191,23 @@ const hasOpenPurchasesForItem = async (params: {
       new ScanCommand({
         TableName: params.purchasesTable,
         FilterExpression:
-          '#itemId = :itemId AND #status <> :confirmed AND #status <> :waitingInvoice AND #status <> :excluded AND (attribute_not_exists(#excludedFlag) OR #excludedFlag = :notExcluded) AND (attribute_not_exists(#direct) OR #direct = :notDirect)',
+          '#itemId = :itemId AND #status <> :completed AND #status <> :confirmed AND #status <> :waitingInvoice AND #status <> :excluded AND (attribute_not_exists(#excludedFlag) OR #excludedFlag = :notExcluded) AND (attribute_not_exists(#direct) OR #direct = :notDirect) AND (attribute_not_exists(#received) OR #received = :notReceived)',
         ExpressionAttributeNames: {
           '#itemId': 'Item id',
           '#status': 'Status',
           '#direct': 'Direct',
           '#excludedFlag': 'Excluded',
+          '#received': 'Received',
         },
         ExpressionAttributeValues: {
           ':itemId': params.itemId,
-          ':confirmed': PURCHASE_CONFIRMED,
+          ':completed': PURCHASE_COMPLETED,
+          ':confirmed': PURCHASE_CONFIRMED_LEGACY,
           ':waitingInvoice': PURCHASE_WAITING_INVOICE,
           ':excluded': PURCHASE_EXCLUDED,
           ':notExcluded': false,
           ':notDirect': false,
+          ':notReceived': false,
         },
         ProjectionExpression: 'id',
         ExclusiveStartKey: lastEvaluatedKey,
@@ -365,36 +357,81 @@ const computeDirectPurchasePricing = (
   return { markup, ivaMarkup, priceExclIva, iva, totalPrice };
 };
 
-const computePurchaseStatus = (deliveryDateValue: string, currentStatus?: string) => {
-  const status = normalizePurchaseStatus(currentStatus);
-  if (status.toLowerCase() === PURCHASE_CONFIRMED.toLowerCase()) {
-    return PURCHASE_CONFIRMED;
-  }
-  if (status.toLowerCase() === PURCHASE_WAITING_INVOICE.toLowerCase()) {
-    return PURCHASE_WAITING_INVOICE;
-  }
-  const deliveryDate = parseDateOnly(deliveryDateValue);
-  if (!deliveryDate) {
-    return 'To be confirmed';
-  }
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (deliveryDate.getTime() > today.getTime()) {
-    return 'Waiting Delivery';
-  }
-  return 'To be confirmed';
-};
-
-const updateInventoryOnConfirm = async (params: {
+const applyInventoryPricing = async (params: {
   inventoryTable: string;
-  purchasesTable: string;
-  purchaseId: string;
   itemId: string;
   units: number;
   totalPrice: number;
   unitPrice?: number;
   vatRate?: number | null;
   grossUnitPrice?: number;
+}) => {
+  const inventoryResult = await client.send(
+    new GetCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+    }),
+  );
+  if (!inventoryResult.Item) {
+    throw new Error('Inventory item not found.');
+  }
+
+  const vatRate = parseIvaRate(params.vatRate);
+  const unitPriceValue =
+    params.unitPrice && params.unitPrice > 0
+      ? params.unitPrice
+      : params.units > 0
+        ? params.totalPrice / params.units
+        : 0;
+  if (!(unitPriceValue > 0) && vatRate === null) {
+    return;
+  }
+  const grossUnitPriceValue =
+    params.grossUnitPrice && params.grossUnitPrice > 0
+      ? params.grossUnitPrice
+      : vatRate === null
+        ? unitPriceValue
+        : occurrencePriceWithIva(unitPriceValue, vatRate);
+
+  await client.send(
+    new UpdateCommand({
+      TableName: params.inventoryTable,
+      Key: { id: params.itemId },
+      UpdateExpression:
+        vatRate === null
+          ? 'SET #unitPrice = :unitPrice, #lastUpdated = :lastUpdated'
+          : 'SET #unitPrice = :unitPrice, #vatRate = :vatRate, #grossUnitPrice = :grossUnitPrice, #lastUpdated = :lastUpdated',
+      ConditionExpression: 'attribute_exists(id)',
+      ExpressionAttributeNames: {
+        '#unitPrice': 'unitPrice',
+        '#lastUpdated': 'Last updated',
+        ...(vatRate === null
+          ? {}
+          : {
+              '#vatRate': 'vatRate',
+              '#grossUnitPrice': 'grossUnitPrice',
+            }),
+      },
+      ExpressionAttributeValues: {
+        ':unitPrice': unitPriceValue,
+        ':lastUpdated': formatDateForStorage(),
+        ...(vatRate === null
+          ? {}
+          : {
+              ':vatRate': vatRate,
+              ':grossUnitPrice': grossUnitPriceValue,
+            }),
+      },
+    }),
+  );
+};
+
+const updateInventoryOnReceive = async (params: {
+  inventoryTable: string;
+  purchasesTable: string;
+  purchaseId: string;
+  itemId: string;
+  units: number;
 }) => {
   const inventoryResult = await client.send(
     new GetCommand({
@@ -418,52 +455,23 @@ const updateInventoryOnConfirm = async (params: {
   const nextStatus = hasOtherOpenPurchases
     ? INVENTORY_WAITING_DELIVERY
     : computeInventoryStatus(nextQuantity, rebuyQty);
-  const vatRate = parseIvaRate(params.vatRate);
-  const unitPriceValue =
-    params.unitPrice && params.unitPrice > 0
-      ? params.unitPrice
-      : params.units > 0
-        ? params.totalPrice / params.units
-        : 0;
-  const grossUnitPriceValue =
-    params.grossUnitPrice && params.grossUnitPrice > 0
-      ? params.grossUnitPrice
-      : vatRate === null
-        ? unitPriceValue
-        : occurrencePriceWithIva(unitPriceValue, vatRate);
 
   await client.send(
     new UpdateCommand({
       TableName: params.inventoryTable,
       Key: { id: params.itemId },
       UpdateExpression:
-        vatRate === null
-          ? 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #lastUpdated = :lastUpdated'
-          : 'SET #quantity = :quantity, #status = :status, #unitPrice = :unitPrice, #vatRate = :vatRate, #grossUnitPrice = :grossUnitPrice, #lastUpdated = :lastUpdated',
+        'SET #quantity = :quantity, #status = :status, #lastUpdated = :lastUpdated',
       ConditionExpression: 'attribute_exists(id)',
       ExpressionAttributeNames: {
         '#quantity': 'Quantity',
         '#status': 'Status',
-        '#unitPrice': 'unitPrice',
         '#lastUpdated': 'Last updated',
-        ...(vatRate === null
-          ? {}
-          : {
-              '#vatRate': 'vatRate',
-              '#grossUnitPrice': 'grossUnitPrice',
-            }),
       },
       ExpressionAttributeValues: {
         ':quantity': nextQuantity,
         ':status': nextStatus,
-        ':unitPrice': unitPriceValue,
         ':lastUpdated': formatDateForStorage(),
-        ...(vatRate === null
-          ? {}
-          : {
-              ':vatRate': vatRate,
-              ':grossUnitPrice': grossUnitPriceValue,
-            }),
       },
     }),
   );
@@ -618,7 +626,6 @@ export const handler = async (event: {
   const totalPrice = payload.totalPrice ?? payload['Total price'];
   const deliveryDate = payload.deliveryDate ?? payload['Delivery date'];
   const purchaseDate = payload.purchaseDate ?? payload['Purchase date'];
-  const status = payload.status ?? payload.Status;
   const propertyId =
     payload.propertyId ?? payload['Property id'] ?? payload['Property ID'];
   const cost = payload.cost ?? payload.Cost;
@@ -668,10 +675,7 @@ export const handler = async (event: {
   }
 
   const deliveryDateValue = formatDateForStorage(String(deliveryDate));
-  const payloadStatus =
-    typeof status === 'string' && !isExcludedPurchaseStatus(status)
-      ? status
-      : undefined;
+  const payloadRecord = payload as Record<string, unknown>;
   const storedPreviousStatus =
     typeof existingItem?.['Previous status'] === 'string' &&
     existingItem['Previous status'] &&
@@ -683,12 +687,23 @@ export const handler = async (event: {
     (previousStatus && !isExcludedPurchaseStatus(previousStatus)
       ? previousStatus
       : '');
-  const statusValue = isExcluded
-    ? PURCHASE_EXCLUDED
-    : computePurchaseStatus(
-        deliveryDateValue,
-        payloadStatus ?? (previousStatusValue || undefined),
-      );
+  const isReceived = isExcluded
+    ? false
+    : resolveReceivedFromPayload(payloadRecord, existingItem);
+  const invoiceReceived = resolveInvoiceFromPayload(payloadRecord, existingItem);
+  const statusValue = computePurchaseLifecycleStatus({
+    excluded: isExcluded,
+    received: isReceived,
+    invoice: invoiceReceived,
+    deliveryDate: deliveryDateValue,
+    today: purchaseBusinessToday(),
+  });
+  const hasPricingPayload =
+    !isDirect &&
+    (payload.unitPrice !== undefined ||
+      payload.vatRate !== undefined ||
+      payload.ivaRate !== undefined ||
+      payload.grossUnitPrice !== undefined);
   const markupApplied = isDirect
     ? parseMarkupApplied(payload)
     : Boolean(existingItem?.['Markup applied']);
@@ -725,6 +740,8 @@ export const handler = async (event: {
     'Delivery date': deliveryDateValue,
     'Purchase date': formatDateForStorage(purchaseDate),
     Status: statusValue,
+    Invoice: invoiceReceived,
+    Received: isReceived,
     Excluded: isExcluded,
     'Previous status': isExcluded ? previousStatusValue : '',
   };
@@ -750,10 +767,10 @@ export const handler = async (event: {
     );
 
     const inventoryTable = process.env.INVENTORY_TABLE;
-    const becameReceived =
-      !isExcluded &&
-      isReceivedPurchaseStatus(statusValue) &&
-      !isReceivedPurchaseStatus(previousStatus);
+    const previousReceived = existingItem
+      ? resolveReceivedFromPayload({}, existingItem)
+      : isReceivedPurchaseStatus(previousStatus);
+    const becameReceived = !isExcluded && isReceived && !previousReceived;
     const linkedItemId = String(itemId ?? '').trim();
     if (!isDirect && linkedItemId) {
       if (!inventoryTable) {
@@ -776,30 +793,41 @@ export const handler = async (event: {
             itemId: linkedItemId,
           });
         }
-      } else if (becameReceived) {
-        await updateInventoryOnConfirm({
-          inventoryTable,
-          purchasesTable: tableName,
-          purchaseId: id,
-          itemId: linkedItemId,
-          units: Number(units) || 0,
-          totalPrice: totalPriceValue,
-          unitPrice: Number(unitPrice) || undefined,
-          vatRate,
-          grossUnitPrice: Number(grossUnitPrice) || undefined,
-        });
-      } else if (!isReceivedPurchaseStatus(statusValue)) {
-        await markInventoryWaitingDelivery({
-          inventoryTable,
-          itemId: linkedItemId,
-        });
+      } else {
+        if (hasPricingPayload) {
+          await applyInventoryPricing({
+            inventoryTable,
+            itemId: linkedItemId,
+            units: Number(units) || 0,
+            totalPrice: totalPriceValue,
+            unitPrice: Number(unitPrice) || undefined,
+            vatRate,
+            grossUnitPrice: Number(grossUnitPrice) || undefined,
+          });
+        }
+        if (becameReceived) {
+          await updateInventoryOnReceive({
+            inventoryTable,
+            purchasesTable: tableName,
+            purchaseId: id,
+            itemId: linkedItemId,
+            units: Number(units) || 0,
+          });
+        } else if (!isReceived) {
+          await markInventoryWaitingDelivery({
+            inventoryTable,
+            itemId: linkedItemId,
+          });
+        }
       }
     }
 
     const isUpdate = Boolean(payload.id?.trim());
     const purchaseName = String(itemName).trim();
     const becameConfirmed =
-      statusValue === PURCHASE_CONFIRMED && previousStatus !== PURCHASE_CONFIRMED;
+      statusValue === PURCHASE_COMPLETED &&
+      previousStatus !== PURCHASE_COMPLETED &&
+      previousStatus !== PURCHASE_CONFIRMED_LEGACY;
     const becameExcluded = isExcluded && !wasExcluded;
     const becameIncluded = !isExcluded && wasExcluded;
     await recordActivityLog(event, {
@@ -824,7 +852,9 @@ export const handler = async (event: {
           : becameConfirmed
             ? `confirmed invoice for ${quoted(purchaseName)}`
             : becameReceived
-              ? `received ${quoted(purchaseName)} (${Number(units) || 0} units), waiting invoice`
+              ? invoiceReceived
+                ? `received ${quoted(purchaseName)} (${Number(units) || 0} units) and marked invoice received`
+                : `received ${quoted(purchaseName)} (${Number(units) || 0} units), waiting invoice`
               : isUpdate
                 ? `updated purchase of ${quoted(purchaseName)}`
                 : isDirect

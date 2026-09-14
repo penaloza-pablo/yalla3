@@ -90,6 +90,19 @@ import {
   resolveIvaRate,
   type IvaRate,
 } from '../amplify/functions/shared/finance-services'
+import {
+  DEFAULT_PURCHASE_FILTER_STATUSES,
+  PURCHASE_COMPLETED,
+  PURCHASE_EXCLUDED,
+  PURCHASE_OVERDUE,
+  PURCHASE_WAITING_DELIVERY,
+  PURCHASE_WAITING_INVOICE,
+  PURCHASE_WARNING_STATUSES,
+  computePurchaseLifecycleStatus,
+  isPendingPurchaseStatus as isSharedPendingPurchaseStatus,
+  purchaseBusinessToday,
+  resolvePurchaseLifecycle,
+} from '../amplify/functions/shared/purchase-status'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
@@ -163,6 +176,8 @@ type PurchaseRow = {
   iva: number
   note: string
   excluded: boolean
+  invoice: boolean
+  received: boolean
 }
 
 type SubtractionRow = {
@@ -221,6 +236,7 @@ type PurchaseFormState = {
   markup: boolean
   note: string
   excluded: boolean
+  invoice: boolean
 }
 
 type SubtractionFormState = {
@@ -428,6 +444,8 @@ const purchaseFieldMap = {
   iva: ['IVA', 'iva'],
   note: ['Note', 'note'],
   excluded: ['Excluded', 'excluded'],
+  invoice: ['Invoice', 'invoice'],
+  received: ['Received', 'received'],
 }
 
 const subtractionFieldMap = {
@@ -924,29 +942,68 @@ const computeInventoryStatus = (quantity: number, rebuyQty: number) => {
   return 'Low Stock'
 }
 
-const PURCHASE_WAITING_INVOICE = 'Waiting invoice'
-const PURCHASE_EXCLUDED = 'Excluded'
 const PURCHASE_STORAGE_LOCATIONS = ['P2 Storage', 'JCL Storage'] as const
 const DIRECT_PURCHASE_FILTER = '__direct_purchase__'
-const PURCHASE_WARNING_STATUSES = [
-  'To be confirmed',
-  'Waiting Delivery',
-  'Waiting invoice',
-] as const
-const isReceivedPurchaseStatus = (status: string) =>
-  status === 'Confirmed' || status === PURCHASE_WAITING_INVOICE
 const isExcludedPurchase = (row: { excluded?: boolean; status: string }) =>
   row.excluded === true || row.status === PURCHASE_EXCLUDED
 const isOpenPurchase = (row: PurchaseRow) =>
-  !row.direct && !isExcludedPurchase(row) && !isReceivedPurchaseStatus(row.status)
+  !row.direct && !isExcludedPurchase(row) && !row.received
 const isPendingPurchaseStatus = (status: string) =>
-  status === 'Waiting Delivery' || status === PURCHASE_WAITING_INVOICE
+  isSharedPendingPurchaseStatus(status)
 const isPurchasePending = (row: PurchaseRow) =>
   isPendingPurchaseStatus(row.status) && !isExcludedPurchase(row)
 
 const blankPurchaseText = (value?: string | null) => {
   const trimmed = (value ?? '').trim()
   return !trimmed || trimmed === '—' ? '' : trimmed
+}
+
+const purchaseMutationPayload = (
+  row: PurchaseRow,
+  overrides: {
+    received?: boolean
+    invoice?: boolean
+    excluded?: boolean
+  } = {},
+) => {
+  const itemId = blankPurchaseText(row.itemId)
+  const propertyId = blankPurchaseText(row.propertyId)
+  const isDirect = row.direct || (!itemId && Boolean(propertyId))
+  const received = overrides.received ?? row.received
+  const invoice = overrides.invoice ?? row.invoice
+  const excluded = overrides.excluded ?? isExcludedPurchase(row)
+  const status = computePurchaseLifecycleStatus({
+    excluded,
+    received,
+    invoice,
+    deliveryDate: row.deliveryDateRaw,
+    today: purchaseBusinessToday(),
+  })
+  return {
+    id: row.id,
+    Direct: isDirect,
+    'Item id': isDirect ? '' : itemId,
+    'Item name': blankPurchaseText(row.itemName),
+    'Property id': propertyId,
+    Location: blankPurchaseText(row.location),
+    Vendor: blankPurchaseText(row.vendor),
+    Units: row.units,
+    Cost: row.cost,
+    Billable: row.billable,
+    'Markup applied': row.markupApplied,
+    Markup: row.markup,
+    'IVA Markup': row.ivaMarkup,
+    'Price excl. IVA': row.priceExclIva,
+    IVA: row.iva,
+    'Total price': row.totalPrice,
+    Note: row.note,
+    'Delivery date': formatDateForStorage(row.deliveryDateRaw),
+    'Purchase date': formatDateForStorage(row.purchaseDateRaw),
+    Status: status,
+    Invoice: invoice,
+    Received: received,
+    Excluded: excluded,
+  }
 }
 
 const nextPurchasesSummary = (
@@ -964,13 +1021,10 @@ const nextPurchasesSummary = (
   }
 }
 
-const applyConfirmedPurchaseToInventory = (
+const applyPurchasePricingToInventory = (
   rows: InventoryRow[],
   itemId: string,
-  units: number,
-  totalPrice: number,
-  statusOverride?: string,
-  pricing?: {
+  pricing: {
     unitPrice?: number
     vatRate?: IvaRate | null
     grossUnitPrice?: number
@@ -980,26 +1034,43 @@ const applyConfirmedPurchaseToInventory = (
     if (entry.id !== itemId) {
       return entry
     }
-    const nextQuantity = entry.quantity + units
     const nextNet =
-      pricing?.unitPrice && pricing.unitPrice > 0
+      pricing.unitPrice && pricing.unitPrice > 0
         ? pricing.unitPrice
-        : units > 0
-          ? totalPrice / units
-          : entry.unitPrice
+        : entry.unitPrice
     const nextVatRate =
-      pricing?.vatRate === undefined ? entry.vatRate : pricing.vatRate
+      pricing.vatRate === undefined ? entry.vatRate : pricing.vatRate
+    const nextGross =
+      pricing.grossUnitPrice && pricing.grossUnitPrice > 0
+        ? pricing.grossUnitPrice
+        : nextVatRate === null
+          ? nextNet
+          : occurrencePriceWithIva(nextNet, nextVatRate)
+    const updatedRaw = formatDateForStorage('')
+    return {
+      ...entry,
+      unitPrice: nextNet,
+      vatRate: nextVatRate,
+      grossUnitPrice: nextGross,
+      updatedRaw,
+      updated: formatUpdatedDate(updatedRaw),
+    }
+  })
+
+const applyReceivedPurchaseToInventory = (
+  rows: InventoryRow[],
+  itemId: string,
+  units: number,
+  statusOverride?: string,
+) =>
+  rows.map((entry) => {
+    if (entry.id !== itemId) {
+      return entry
+    }
+    const nextQuantity = entry.quantity + units
     return {
       ...entry,
       quantity: nextQuantity,
-      unitPrice: nextNet,
-      vatRate: nextVatRate,
-      grossUnitPrice:
-        pricing?.grossUnitPrice && pricing.grossUnitPrice > 0
-          ? pricing.grossUnitPrice
-          : nextVatRate === null
-            ? entry.grossUnitPrice
-            : occurrencePriceWithIva(nextNet, nextVatRate),
       status:
         statusOverride ?? computeInventoryStatus(nextQuantity, entry.rebuyQty),
     }
@@ -1087,6 +1158,17 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
   const storedPriceExclIva = getItemValue(item, purchaseFieldMap.priceExclIva)
   const storedIva = getItemValue(item, purchaseFieldMap.iva)
   const computed = computeSubtractionPricing(cost, markupApplied)
+  const lifecycle = resolvePurchaseLifecycle(
+    {
+      ...item,
+      Status: getStringValue(getItemValue(item, purchaseFieldMap.status)),
+      Excluded: getBooleanValue(getItemValue(item, purchaseFieldMap.excluded)),
+      Invoice: getItemValue(item, purchaseFieldMap.invoice),
+      Received: getItemValue(item, purchaseFieldMap.received),
+      'Delivery date': deliveryDateRaw,
+    },
+    purchaseBusinessToday(),
+  )
   return {
     id: getStringValue(getItemValue(item, purchaseFieldMap.id)) || '—',
     itemId: getStringValue(getItemValue(item, purchaseFieldMap.itemId)) || '—',
@@ -1106,9 +1188,7 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
     deliveryDate: formatUpdatedDate(deliveryDateRaw),
     purchaseDateRaw,
     purchaseDate: formatUpdatedDate(purchaseDateRaw),
-    status:
-      getStringValue(getItemValue(item, purchaseFieldMap.status)) ||
-      'To be confirmed',
+    status: lifecycle.status,
     direct: getBooleanValue(getItemValue(item, purchaseFieldMap.direct)),
     propertyId:
       getStringValue(getItemValue(item, purchaseFieldMap.propertyId)) || '',
@@ -1132,10 +1212,9 @@ const mapPurchaseRow = (item: Record<string, unknown>): PurchaseRow => {
         ? computed.iva
         : getNumberValue(storedIva),
     note: getStringValue(getItemValue(item, purchaseFieldMap.note)),
-    excluded:
-      getBooleanValue(getItemValue(item, purchaseFieldMap.excluded)) ||
-      getStringValue(getItemValue(item, purchaseFieldMap.status)) ===
-        PURCHASE_EXCLUDED,
+    excluded: lifecycle.excluded,
+    invoice: lifecycle.invoice,
+    received: lifecycle.received,
   }
 }
 
@@ -1520,19 +1599,19 @@ const getStatusClassName = (status: string) => {
   if (status === 'In Stock') {
     return 'status status-success'
   }
-  if (status === 'Waiting Delivery') {
+  if (status === PURCHASE_WAITING_DELIVERY) {
     return 'status status-info'
   }
-  if (status === 'Waiting invoice') {
+  if (status === PURCHASE_WAITING_INVOICE) {
     return 'status status-warning'
   }
   if (status === 'Skipped') {
     return 'status status-warning'
   }
-  if (status === 'To be confirmed') {
+  if (status === 'To be confirmed' || status === PURCHASE_OVERDUE) {
     return 'status status-warning'
   }
-  if (status === 'Confirmed') {
+  if (status === 'Confirmed' || status === PURCHASE_COMPLETED) {
     return 'status status-success'
   }
   if (status === 'Excluded') {
@@ -1595,6 +1674,7 @@ const emptyPurchaseFormState: PurchaseFormState = {
   markup: false,
   note: '',
   excluded: false,
+  invoice: false,
 }
 
 const emptySubtractionFormState: SubtractionFormState = {
@@ -1659,7 +1739,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed', 'Waiting Delivery', 'Waiting invoice'],
+    statuses: [...DEFAULT_PURCHASE_FILTER_STATUSES],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1670,7 +1750,7 @@ function App() {
     deliveryDateTo: string
   }>({
     locations: [],
-    statuses: ['To be confirmed', 'Waiting Delivery', 'Waiting invoice'],
+    statuses: [...DEFAULT_PURCHASE_FILTER_STATUSES],
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
@@ -1913,11 +1993,11 @@ function App() {
     categories: [],
   })
   const purchaseStatusOptions = [
-    'To be confirmed',
-    'Waiting Delivery',
-    'Waiting invoice',
-    'Confirmed',
-    'Excluded',
+    PURCHASE_WAITING_DELIVERY,
+    PURCHASE_OVERDUE,
+    PURCHASE_WAITING_INVOICE,
+    PURCHASE_COMPLETED,
+    PURCHASE_EXCLUDED,
   ]
 
   const purchaseLocationOptions = useMemo(() => {
@@ -2019,7 +2099,7 @@ function App() {
   const isWaitingQuickFilterActive = useMemo(
     () =>
       purchasesFilters.statuses.length === 1 &&
-      purchasesFilters.statuses[0] === 'Waiting Delivery',
+      purchasesFilters.statuses[0] === PURCHASE_WAITING_DELIVERY,
     [purchasesFilters.statuses],
   )
 
@@ -2039,11 +2119,11 @@ function App() {
     }
     setPurchasesFilters((current) => ({
       ...current,
-      statuses: ['Waiting Delivery'],
+      statuses: [PURCHASE_WAITING_DELIVERY],
     }))
     setPurchasesFilterDraft((current) => ({
       ...current,
-      statuses: ['Waiting Delivery'],
+      statuses: [PURCHASE_WAITING_DELIVERY],
     }))
   }
 
@@ -3293,6 +3373,7 @@ function App() {
       markup: row.markupApplied,
       note: row.note,
       excluded: isExcludedPurchase(row),
+      invoice: row.invoice,
     })
     setPurchaseFormError(null)
     setIsPurchaseFormOpen(true)
@@ -4056,9 +4137,9 @@ function App() {
     setIsPurchaseSaving(true)
     setPurchaseFormError(null)
 
-    const statusValue = isReceivedPurchaseStatus(purchaseFormValues.status)
-      ? purchaseFormValues.status
-      : undefined
+    const existingRow = purchaseRows.find(
+      (entry) => entry.id === purchaseFormValues.id.trim(),
+    )
     const costValue = Number(purchaseFormValues.cost) || 0
     const pricing = computeSubtractionPricing(
       costValue,
@@ -4097,7 +4178,8 @@ function App() {
             purchaseFormValues.purchaseDate?.trim() || '',
           ),
           Excluded: purchaseFormValues.excluded,
-          ...(statusValue ? { Status: statusValue } : {}),
+          Invoice: purchaseFormValues.invoice,
+          Received: Boolean(existingRow?.received),
         }
       : {
           id: purchaseFormValues.id.trim() || undefined,
@@ -4116,7 +4198,8 @@ function App() {
             purchaseFormValues.purchaseDate?.trim() || '',
           ),
           Excluded: purchaseFormValues.excluded,
-          ...(statusValue ? { Status: statusValue } : {}),
+          Invoice: purchaseFormValues.invoice,
+          Received: Boolean(existingRow?.received),
         }
 
     try {
@@ -4144,12 +4227,7 @@ function App() {
           id: payload.id ?? '',
         })
 
-      const existingRow = purchaseRows.find(
-        (entry) => entry.id === updatedRow.id,
-      )
-      const wasAlreadyReceived = Boolean(
-        existingRow && isReceivedPurchaseStatus(existingRow.status),
-      )
+      const wasAlreadyReceived = Boolean(existingRow?.received)
       const hasOtherOpenPurchases = purchaseRows.some(
         (entry) =>
           entry.id !== updatedRow.id &&
@@ -4181,25 +4259,25 @@ function App() {
               ? markInventoryWaitingDelivery(current, updatedRow.itemId)
               : restoreInventoryQuantityStatus(current, updatedRow.itemId),
           )
-        } else if (isReceivedPurchaseStatus(updatedRow.status) && !wasAlreadyReceived) {
-          setInventoryRows((current) =>
-            applyConfirmedPurchaseToInventory(
-              current,
-              updatedRow.itemId,
-              updatedRow.units,
-              updatedRow.totalPrice,
-              hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
-              {
-                unitPrice: updatedRow.unitPrice,
-                vatRate: updatedRow.vatRate,
-                grossUnitPrice: updatedRow.grossUnitPrice,
-              },
-            ),
-          )
-        } else if (!isReceivedPurchaseStatus(updatedRow.status)) {
-          setInventoryRows((current) =>
-            markInventoryWaitingDelivery(current, updatedRow.itemId),
-          )
+        } else {
+          setInventoryRows((current) => {
+            let next = applyPurchasePricingToInventory(current, updatedRow.itemId, {
+              unitPrice: updatedRow.unitPrice,
+              vatRate: updatedRow.vatRate,
+              grossUnitPrice: updatedRow.grossUnitPrice,
+            })
+            if (updatedRow.received && !wasAlreadyReceived) {
+              next = applyReceivedPurchaseToInventory(
+                next,
+                updatedRow.itemId,
+                updatedRow.units,
+                hasOtherOpenPurchases ? PURCHASE_WAITING_DELIVERY : undefined,
+              )
+            } else if (!updatedRow.received) {
+              next = markInventoryWaitingDelivery(next, updatedRow.itemId)
+            }
+            return next
+          })
         }
       }
 
@@ -4216,21 +4294,14 @@ function App() {
   }
 
   const confirmPurchaseDelivery = async (row: PurchaseRow) => {
-    if (row.status === 'Confirmed' || isExcludedPurchase(row)) {
+    if (row.received || isExcludedPurchase(row)) {
       return
     }
-    const nextStatus =
-      row.status === PURCHASE_WAITING_INVOICE
-        ? 'Confirmed'
-        : PURCHASE_WAITING_INVOICE
     const shouldConfirm = await confirmAction({
       title: t('common.confirm'),
-      message:
-        nextStatus === 'Confirmed'
-          ? t('purchases.confirmInvoicePrompt')
-          : row.direct
-            ? t('purchases.confirmDirectDeliveryPrompt')
-            : t('purchases.confirmDeliveryPrompt'),
+      message: row.direct
+        ? t('purchases.confirmDirectDeliveryPrompt')
+        : t('purchases.confirmDeliveryPrompt'),
     })
     if (!shouldConfirm) {
       return
@@ -4246,33 +4317,14 @@ function App() {
       return
     }
 
+    const payload = purchaseMutationPayload(row, {
+      received: true,
+      excluded: false,
+    })
+    const nextStatus = String(payload.Status ?? PURCHASE_WAITING_INVOICE)
+    const isDirect = Boolean(payload.Direct)
+
     try {
-    const itemId = blankPurchaseText(row.itemId)
-    const propertyId = blankPurchaseText(row.propertyId)
-    const isDirect = row.direct || (!itemId && Boolean(propertyId))
-    const payload = {
-        id: row.id,
-        Direct: isDirect,
-        'Item id': isDirect ? '' : itemId,
-        'Item name': blankPurchaseText(row.itemName),
-        'Property id': propertyId,
-        Location: blankPurchaseText(row.location),
-        Vendor: blankPurchaseText(row.vendor),
-        Units: row.units,
-        Cost: row.cost,
-        Billable: row.billable,
-        'Markup applied': row.markupApplied,
-        Markup: row.markup,
-        'IVA Markup': row.ivaMarkup,
-        'Price excl. IVA': row.priceExclIva,
-        IVA: row.iva,
-        'Total price': row.totalPrice,
-        Note: row.note,
-        'Delivery date': formatDateForStorage(row.deliveryDateRaw),
-        'Purchase date': formatDateForStorage(row.purchaseDateRaw),
-        Status: nextStatus,
-        Excluded: false,
-      }
       const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
@@ -4291,40 +4343,101 @@ function App() {
         throw new Error(details || 'Failed to update purchase.')
       }
       const hasOtherOpenPurchases = purchaseRows.some(
-        (entry) => entry.id !== row.id && isOpenPurchase(entry) && entry.itemId === row.itemId,
+        (entry) =>
+          entry.id !== row.id &&
+          isOpenPurchase(entry) &&
+          entry.itemId === row.itemId,
       )
-      const shouldUpdateInventory =
-        !isDirect && !isReceivedPurchaseStatus(row.status)
+      const after: PurchaseRow = {
+        ...row,
+        status: nextStatus,
+        received: true,
+        excluded: false,
+        direct: isDirect,
+      }
       setPurchaseRows((current) =>
-        current.map((entry) =>
-          entry.id === row.id
-            ? { ...entry, status: nextStatus, direct: isDirect }
-            : entry,
-        ),
+        current.map((entry) => (entry.id === row.id ? after : entry)),
       )
       setPurchasesSummary((current) =>
         nextPurchasesSummary(current, {
           before: row,
-          after: { ...row, status: nextStatus, excluded: false },
+          after,
         }),
       )
-      if (shouldUpdateInventory) {
+      if (!isDirect && row.itemId && row.itemId !== '—') {
         setInventoryRows((current) =>
-          applyConfirmedPurchaseToInventory(
+          applyReceivedPurchaseToInventory(
             current,
             row.itemId,
             row.units,
-            row.totalPrice,
-            hasOtherOpenPurchases ? 'Waiting Delivery' : undefined,
-            {
-              unitPrice: row.unitPrice,
-              vatRate: row.vatRate,
-              grossUnitPrice: row.grossUnitPrice,
-            },
+            hasOtherOpenPurchases ? PURCHASE_WAITING_DELIVERY : undefined,
           ),
         )
       }
     } catch (updateError) {
+      setPurchasesError(t('purchases.updateStatusError'))
+    }
+  }
+
+  const togglePurchaseInvoice = async (row: PurchaseRow) => {
+    if (isExcludedPurchase(row)) {
+      return
+    }
+    const endpoint = getEndpoint(
+      'upsertPurchaseUrl',
+      import.meta.env.VITE_UPSERT_PURCHASE_URL,
+    )
+    if (!endpoint) {
+      setPurchasesError(
+        'Missing purchase endpoint. Set VITE_UPSERT_PURCHASE_URL in the environment.',
+      )
+      return
+    }
+
+    const nextInvoice = !row.invoice
+    const payload = purchaseMutationPayload(row, { invoice: nextInvoice })
+    const after: PurchaseRow = {
+      ...row,
+      invoice: nextInvoice,
+      status: String(payload.Status ?? row.status),
+    }
+    setPurchaseRows((current) =>
+      current.map((entry) => (entry.id === row.id ? after : entry)),
+    )
+    setPurchasesSummary((current) =>
+      nextPurchasesSummary(current, { before: row, after }),
+    )
+
+    try {
+      const response = await authFetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update purchase.')
+      }
+      const responseBody = (await response.json()) as {
+        item?: Record<string, unknown>
+      }
+      if (responseBody.item) {
+        const mapped = mapPurchaseRow(responseBody.item)
+        setPurchaseRows((current) =>
+          current.map((entry) => (entry.id === row.id ? mapped : entry)),
+        )
+        setPurchasesSummary((current) =>
+          nextPurchasesSummary(current, { before: row, after: mapped }),
+        )
+      }
+    } catch {
+      setPurchaseRows((current) =>
+        current.map((entry) => (entry.id === row.id ? row : entry)),
+      )
+      setPurchasesSummary((current) =>
+        nextPurchasesSummary(current, { before: after, after: row }),
+      )
       setPurchasesError(t('purchases.updateStatusError'))
     }
   }
@@ -5714,6 +5827,8 @@ function App() {
                                               <th>{t('inventory.purchaseDate')}</th>
                                               <th>{t('inventory.purchaseUnits')}</th>
                                               <th>{t('inventory.purchaseUnitPrice')}</th>
+                                              <th>{t('common.ivaPercent')}</th>
+                                              <th>{t('common.grossUnitPrice')}</th>
                                               <th>{t('common.status')}</th>
                                             </tr>
                                           </thead>
@@ -5731,7 +5846,18 @@ function App() {
                                                     getPurchaseUnitPrice(purchase),
                                                   )}
                                                 </td>
-                                                <td>{purchase.status || '—'}</td>
+                                                <td>
+                                                  {purchase.vatRate === null
+                                                    ? '—'
+                                                    : `${purchase.vatRate}%`}
+                                                </td>
+                                                <td>
+                                                  {formatUnitPrice(
+                                                    purchase.grossUnitPrice ||
+                                                      getPurchaseUnitPrice(purchase),
+                                                  )}
+                                                </td>
+                                                <td>{statusLabel(purchase.status)}</td>
                                               </tr>
                                             ))}
                                           </tbody>
@@ -6101,6 +6227,7 @@ function App() {
                       <th scope="col">{t('common.itemName')}</th>
                       <th scope="col">{t('common.location')}</th>
                       <th scope="col">{t('common.status')}</th>
+                      <th scope="col">{t('purchases.invoice')}</th>
                       <th scope="col">
                         <button
                           className={`btn-sort ${
@@ -6155,13 +6282,13 @@ function App() {
                   <tbody>
                     {isPurchasesLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={7}>
+                        <td className="table-empty" colSpan={8}>
                           {t('purchases.loading')}
                         </td>
                       </tr>
                     ) : purchasesFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={7}>
+                        <td className="table-empty" colSpan={8}>
                           {purchaseRows.length > 0
                             ? t('purchases.emptyFiltered')
                             : t('purchases.empty')}
@@ -6194,6 +6321,14 @@ function App() {
                                   {statusLabel(row.status)}
                                 </span>
                               </td>
+                              <td data-label={t('purchases.invoice')}>
+                                <YallaSwitch
+                                  on={row.invoice}
+                                  disabled={isExcludedPurchase(row)}
+                                  label={t('purchases.invoice')}
+                                  onToggle={() => void togglePurchaseInvoice(row)}
+                                />
+                              </td>
                               <td data-label={t('common.deliveryDate')}>{row.deliveryDate}</td>
                               <td data-label={t('common.actions')}>
                                 <div className="action-buttons">
@@ -6201,15 +6336,10 @@ function App() {
                                   <button
                                     className="btn-icon btn-icon-ghost"
                                     type="button"
-                                    aria-label={
-                                      row.status === PURCHASE_WAITING_INVOICE
-                                        ? t('common.confirmInvoice')
-                                        : t('common.confirmDelivery')
-                                    }
+                                    aria-label={t('common.confirmDelivery')}
                                     onClick={() => confirmPurchaseDelivery(row)}
                                     disabled={
-                                      row.status === 'Confirmed' ||
-                                      isExcludedPurchase(row)
+                                      row.received || isExcludedPurchase(row)
                                     }
                                   >
                                     <YlIcon name="checkmark" size={16} />
@@ -6237,7 +6367,7 @@ function App() {
                             </tr>
                             {isExpanded ? (
                               <tr className="detail-row">
-                                <td colSpan={5}>
+                                <td colSpan={6}>
                                   <div className="detail-grid">
                                     <div>
                                       <p className="detail-label">{t('common.purchaseId')}</p>
@@ -8930,21 +9060,6 @@ function App() {
                         }))
                       }
                     />
-                    <label className="form-field">
-                      <span>{t('common.tolerance')}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formValues.tolerance}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            tolerance: event.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                    </label>
                   </div>
                 )}
                 {formError ? (
@@ -9311,6 +9426,21 @@ function App() {
                     </label>
                   </div>
                 )}
+                <label className="form-field">
+                  <span>{t('purchases.invoiceReceived')}</span>
+                  <div className="planner-switch compact">
+                    <YallaSwitch
+                      on={purchaseFormValues.invoice}
+                      label={t('purchases.invoiceReceived')}
+                      onToggle={() =>
+                        setPurchaseFormValues((current) => ({
+                          ...current,
+                          invoice: !current.invoice,
+                        }))
+                      }
+                    />
+                  </div>
+                </label>
                 {purchaseFormValues.id ? (
                   <label className="form-field-checkbox">
                     <input

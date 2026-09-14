@@ -1,6 +1,17 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  ACTIVE_PURCHASE_STATUSES,
+  PURCHASE_COMPLETED,
+  PURCHASE_OVERDUE,
+  PURCHASE_WAITING_DELIVERY,
+  PURCHASE_WAITING_INVOICE,
+  decoratePurchaseRecord,
+  isExcludedPurchaseRecord,
+  isPendingPurchaseStatus,
+  purchaseBusinessToday,
+} from '../shared/purchase-status';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const corsHeaders = {
@@ -10,15 +21,6 @@ const corsHeaders = {
 };
 
 const NEWEST_LIST_MIN = 100;
-const PURCHASE_CONFIRMED = 'Confirmed';
-const PURCHASE_WAITING_INVOICE = 'Waiting invoice';
-const PURCHASE_WAITING_DELIVERY = 'Waiting Delivery';
-const PURCHASE_EXCLUDED = 'Excluded';
-const ACTIVE_STATUSES = new Set([
-  'To be confirmed',
-  PURCHASE_WAITING_DELIVERY,
-  PURCHASE_WAITING_INVOICE,
-]);
 
 const isHttpRequest = (event: {
   requestContext?: { http?: { method?: string } };
@@ -62,21 +64,8 @@ const parseDateOnly = (value?: string) => {
 
 const itemStatus = (item: Record<string, unknown>) => asString(item.Status);
 
-const isExcludedItem = (item: Record<string, unknown>) =>
-  item.Excluded === true || itemStatus(item) === PURCHASE_EXCLUDED;
-
-const isPendingItem = (item: Record<string, unknown>) => {
-  if (isExcludedItem(item)) {
-    return false;
-  }
-  const status = itemStatus(item);
-  return (
-    status === PURCHASE_WAITING_DELIVERY || status === PURCHASE_WAITING_INVOICE
-  );
-};
-
 const isActiveItem = (item: Record<string, unknown>) =>
-  !isExcludedItem(item) && ACTIVE_STATUSES.has(itemStatus(item));
+  !isExcludedPurchaseRecord(item) && ACTIVE_PURCHASE_STATUSES.has(itemStatus(item));
 
 const purchaseIdNumber = (id: string) => {
   const match = id.match(/(\d+)$/);
@@ -131,27 +120,28 @@ const selectPurchasesForList = (items: Record<string, unknown>[]) => {
 const buildSummary = (items: Record<string, unknown>[]) => {
   let pending = 0;
   let waitingDelivery = 0;
+  let overdue = 0;
   let waitingInvoice = 0;
-  let toBeConfirmed = 0;
-  let confirmed = 0;
+  let completed = 0;
   let excluded = 0;
 
   for (const item of items) {
-    if (isExcludedItem(item)) {
+    if (isExcludedPurchaseRecord(item)) {
       excluded += 1;
       continue;
     }
     const status = itemStatus(item);
+    if (isPendingPurchaseStatus(status)) {
+      pending += 1;
+    }
     if (status === PURCHASE_WAITING_DELIVERY) {
       waitingDelivery += 1;
-      pending += 1;
+    } else if (status === PURCHASE_OVERDUE) {
+      overdue += 1;
     } else if (status === PURCHASE_WAITING_INVOICE) {
       waitingInvoice += 1;
-      pending += 1;
-    } else if (status === PURCHASE_CONFIRMED) {
-      confirmed += 1;
-    } else if (status === 'To be confirmed') {
-      toBeConfirmed += 1;
+    } else if (status === PURCHASE_COMPLETED) {
+      completed += 1;
     }
   }
 
@@ -159,9 +149,9 @@ const buildSummary = (items: Record<string, unknown>[]) => {
     total: items.length,
     pending,
     waitingDelivery,
+    overdue,
     waitingInvoice,
-    toBeConfirmed,
-    confirmed,
+    completed,
     excluded,
   };
 };
@@ -210,8 +200,10 @@ export const handler = async (event: {
         | undefined;
     } while (lastEvaluatedKey);
 
-    const summary = buildSummary(items);
-    const listedItems = selectPurchasesForList(items);
+    const today = purchaseBusinessToday();
+    const decorated = items.map((item) => decoratePurchaseRecord(item, today));
+    const summary = buildSummary(decorated);
+    const listedItems = selectPurchasesForList(decorated);
     const payload = {
       items: listedItems,
       count: listedItems.length,

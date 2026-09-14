@@ -30,6 +30,13 @@ import {
   getPlannerSettings,
   sumPlannerWarnings,
 } from '../shared/bookings-planner-apply';
+import {
+  PURCHASE_OVERDUE,
+  PURCHASE_WAITING_INVOICE,
+  decoratePurchaseRecord,
+  isExcludedPurchaseRecord,
+  purchaseBusinessToday,
+} from '../shared/purchase-status';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -403,9 +410,13 @@ export const handler = async (event: HttpEvent) => {
     }
 
     let purchaseWarnings = 0;
+    const purchaseToday = purchaseBusinessToday();
     for (const item of purchases) {
-      const status = asString(itemField(item, ['Status', 'status']));
-      if (status === 'Waiting invoice' || status === 'To be confirmed') {
+      if (isExcludedPurchaseRecord(item)) {
+        continue;
+      }
+      const status = decoratePurchaseRecord(item, purchaseToday).Status;
+      if (status === PURCHASE_WAITING_INVOICE || status === PURCHASE_OVERDUE) {
         purchaseWarnings += 1;
       }
     }
