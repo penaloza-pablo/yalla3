@@ -35,7 +35,15 @@ import {
   resolveIvaRate,
 } from './iva';
 import { docClient } from './visit-task-utils';
-import type { PropertyReportStatus } from './property-report-status';
+import {
+  REPORT_WORKFLOW_STATUSES,
+  deriveReportStatus,
+  isPropertyReportStatus,
+  isReportFrozen,
+  isReportPreliminary,
+  previousReportStatus,
+  type PropertyReportStatus,
+} from './property-report-status';
 
 export {
   COST_ALLOCATIONS,
@@ -61,7 +69,7 @@ export {
   isReportPreliminary,
   previousReportStatus,
   type PropertyReportStatus,
-} from './property-report-status';
+};
 
 export const IVA_MULTIPLIER = 1.21;
 
