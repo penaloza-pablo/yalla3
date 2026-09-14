@@ -3,6 +3,7 @@ import { addDaysToDateString, calendarDaysBetween } from './date-range';
 export const PLANNER_SETTINGS_ID = 'GLOBAL';
 export const PLANNER_WINDOW_DAYS = 7;
 export const ACCESS_FIELD_ID = '6945126331a9580014e33f73';
+export const GIFT_CARD_FREEZE_TIME = '08:00';
 
 export const RULE_IDS = [
   'linen',
@@ -185,6 +186,95 @@ export const toGuestCount = (value: unknown) => {
     return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
   }
   return 0;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const firstPresentCount = (
+  sources: Array<Record<string, unknown> | null | undefined>,
+  keys: string[],
+) => {
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const key of keys) {
+      if (source[key] == null || source[key] === '') {
+        continue;
+      }
+      return { present: true, value: Math.max(0, toGuestCount(source[key])) };
+    }
+  }
+  return { present: false, value: 0 };
+};
+
+/** Adults + children + infants from a Guesty reservation payload. */
+export const getReservationGuestCount = (reservation: unknown) => {
+  const root = asRecord(reservation);
+  if (!root) {
+    return 0;
+  }
+  const nested =
+    asRecord(root.numberOfGuests) ??
+    asRecord(root.guests) ??
+    asRecord(root.occupancy);
+  const sources = [root, nested];
+  const adults = firstPresentCount(sources, [
+    'numberOfAdults',
+    'adults',
+    'adultCount',
+  ]);
+  const children = firstPresentCount(sources, [
+    'numberOfChildren',
+    'children',
+    'childCount',
+    'numberOfKids',
+    'kids',
+  ]);
+  const infants = firstPresentCount(sources, [
+    'numberOfInfants',
+    'infants',
+    'infantCount',
+    'numberOfBabies',
+    'babies',
+  ]);
+  if (adults.present || children.present || infants.present) {
+    return adults.value + children.value + infants.value;
+  }
+  if (typeof root.numberOfGuests === 'number') {
+    return Math.max(0, toGuestCount(root.numberOfGuests));
+  }
+  return Math.max(
+    0,
+    firstPresentCount(sources, [
+      'guestsCount',
+      'guestCount',
+      'numberOfGuests',
+      'total',
+      'count',
+    ]).value,
+  );
+};
+
+export const isGiftCardFrozen = (
+  checkInDate: string,
+  today: string,
+  nowTime = '00:00',
+) => {
+  const checkIn = toDateOnly(checkInDate);
+  if (!checkIn || !today) {
+    return false;
+  }
+  if (checkIn < today) {
+    return true;
+  }
+  if (checkIn > today) {
+    return false;
+  }
+  return nowTime >= GIFT_CARD_FREEZE_TIME;
 };
 
 export const toNightsCount = (item: BookingPlannerItem) => {
@@ -439,11 +529,13 @@ export const computePlannerFields = ({
   item,
   settings,
   today,
+  nowTime,
   overrides,
 }: {
   item: BookingPlannerItem;
   settings: PlannerSettings;
   today: string;
+  nowTime?: string;
   overrides?: PlannerOverrides;
 }): PlannerFieldPatch => {
   const listingId = asString(item.ListingID);
@@ -489,6 +581,9 @@ export const computePlannerFields = ({
   const inWindow = isInPlannerWindow(asString(item.CheckInDate), today);
   const active = isActivePlannerStatus(item.Status);
   const hasOverrides = Boolean(overrides);
+  const notesFrozen =
+    !hasOverrides &&
+    isGiftCardFrozen(asString(item.CheckInDate), today, nowTime ?? '00:00');
   const shouldApplyRules =
     settings.plannerEnabled && active && (inWindow || hasOverrides);
 
@@ -518,7 +613,7 @@ export const computePlannerFields = ({
     !isPropertyExcluded(doubleRule, listingId);
 
   if (appliesDoubleOrTwoSingles) {
-    if (!linenManual && !isVerdejoLinenValue(linen) && !linen) {
+    if (!notesFrozen && !linenManual && !isVerdejoLinenValue(linen) && !linen) {
       if (guests === 1) {
         linen = LINEN_VALUES.DOUBLE;
       }
@@ -529,7 +624,7 @@ export const computePlannerFields = ({
   } else if (linenRule.enabled) {
     if (isPropertyExcluded(linenRule, listingId) && !isSofaLinenValue(linen)) {
       linen = LINEN_VALUES.NA;
-    } else if (!linenManual && !linen) {
+    } else if (!notesFrozen && !linenManual && linen !== LINEN_VALUES.YES) {
       if (guests === 1) {
         linen = LINEN_VALUES.NO;
       } else if (guests >= 3) {
@@ -541,7 +636,7 @@ export const computePlannerFields = ({
     }
   }
 
-  if (giftRule.enabled) {
+  if (giftRule.enabled && !notesFrozen) {
     if (isPropertyExcluded(giftRule, listingId)) {
       giftCard = GIFT_CARD_OFF;
       giftCardOn = false;
@@ -597,3 +692,38 @@ export const plannerFieldsChanged = (
   asString(current.EarlyCheckIn) !== next.earlyCheckIn ||
   asString(current.Access) !== next.access ||
   asBoolean(current.GiftCardOn) !== next.giftCardOn;
+
+export const describePlannerBookingChanges = (
+  before: BookingPlannerItem,
+  after: BookingPlannerItem,
+  patch: PlannerFieldPatch,
+) => {
+  const lines: string[] = [];
+  const guestsBefore = toGuestCount(before.Guests);
+  const guestsAfter = toGuestCount(after.Guests);
+  if (guestsBefore !== guestsAfter) {
+    lines.push(`Huéspedes: ${guestsBefore} -> ${guestsAfter}`);
+  }
+  const checkInBefore = toDateOnly(before.CheckInDate);
+  const checkInAfter = toDateOnly(after.CheckInDate);
+  if (checkInBefore !== checkInAfter) {
+    lines.push(`Check-in: ${checkInBefore || '-'} -> ${checkInAfter || '-'}`);
+  }
+  const checkOutBefore = toDateOnly(before.CheckOutDate);
+  const checkOutAfter = toDateOnly(after.CheckOutDate);
+  if (checkOutBefore !== checkOutAfter) {
+    lines.push(
+      `Check-out: ${checkOutBefore || '-'} -> ${checkOutAfter || '-'}`,
+    );
+  }
+  const giftBefore = asString(before.GiftCard);
+  if (giftBefore !== patch.giftCard) {
+    lines.push(`Tarjeta: ${giftBefore || '-'} -> ${patch.giftCard || '-'}`);
+  }
+  const listingId = asString(after.ListingID) || asString(before.ListingID);
+  const linenBefore = canonicalizeLinenValue(before.Linen, listingId);
+  if (linenBefore !== patch.linen) {
+    lines.push(`Sofá: ${linenBefore || '-'} -> ${patch.linen || '-'}`);
+  }
+  return lines;
+};

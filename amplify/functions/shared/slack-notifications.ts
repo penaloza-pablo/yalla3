@@ -13,6 +13,7 @@ export const SLACK_NOTIFICATION_IDS = {
   maintenancePlanEod: 'notify_maintenance_plan_eod',
   inventoryLateDelivery: 'notify_inventory_late_delivery',
   planReadyLateVisit: 'notify_plan_ready_late_visit',
+  cleaningPlanBooking: 'notify_cleaning_plan_booking',
 } as const;
 
 export type SlackNotificationId =
@@ -31,6 +32,7 @@ export const SLACK_NOTIFICATION_DEFINITIONS: {
   { id: SLACK_NOTIFICATION_IDS.maintenancePlanEod },
   { id: SLACK_NOTIFICATION_IDS.inventoryLateDelivery },
   { id: SLACK_NOTIFICATION_IDS.planReadyLateVisit },
+  { id: SLACK_NOTIFICATION_IDS.cleaningPlanBooking },
 ];
 
 export const isKnownSlackNotificationId = (

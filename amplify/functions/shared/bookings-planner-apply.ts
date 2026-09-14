@@ -12,15 +12,19 @@ import {
   type PlannerSettings,
   PLANNER_SETTINGS_ID,
   computePlannerFields,
+  describePlannerBookingChanges,
   isActivePlannerStatus,
+  isGiftCardFrozen,
   isInPlannerWindow,
   normalizePlannerSettings,
+  plannerFieldsChanged,
   plannerWindowEnd,
   toDateOnly,
 } from './bookings-planner';
 import { listDatesInRange } from './date-range';
 import { nowIso } from './dynamo-http';
-import { docClient, getTodayInMadrid } from './visit-task-utils';
+import { notifyReadyCleaningPlanBookingChanges } from './slack-cleaning';
+import { docClient, getNowTimeInMadrid, getTodayInMadrid } from './visit-task-utils';
 
 const GUESTY_CLIENT_PATH =
   '/opt/nodejs/node_modules/@nockai/guesty-client/index.mjs';
@@ -297,16 +301,22 @@ export const applyPlannerToReservation = async ({
   reservationId,
   item,
   today = getTodayInMadrid(),
+  nowTime = getNowTimeInMadrid(),
   overrides,
   syncGuesty = false,
+  notifyCleaningPlan = false,
+  previous,
 }: {
   bookingsTable: string;
   settings: PlannerSettings;
   reservationId: string;
   item?: Record<string, unknown> | null;
   today?: string;
+  nowTime?: string;
   overrides?: PlannerOverrides;
   syncGuesty?: boolean;
+  notifyCleaningPlan?: boolean;
+  previous?: BookingPlannerItem | null;
 }) => {
   const current =
     item ?? (await hydrateBooking(bookingsTable, reservationId));
@@ -322,7 +332,9 @@ export const applyPlannerToReservation = async ({
         item: current as BookingPlannerItem,
         settings,
         today,
+        nowTime,
       }),
+      persisted: false,
       syncedToGuesty: false,
     };
   }
@@ -331,6 +343,7 @@ export const applyPlannerToReservation = async ({
     item: current as BookingPlannerItem,
     settings,
     today,
+    nowTime,
     overrides,
   });
 
@@ -341,19 +354,28 @@ export const applyPlannerToReservation = async ({
         ok: true as const,
         reservationId,
         patch,
+        persisted: false,
         syncedToGuesty: false,
       };
     }
   }
 
+  const notesFrozen =
+    !overrides &&
+    isGiftCardFrozen(toDateOnly(current.CheckInDate), today, nowTime);
+  const changed = plannerFieldsChanged(current as BookingPlannerItem, patch);
   const shouldWriteGuesty =
     syncGuesty &&
+    changed &&
+    !notesFrozen &&
     isActivePlannerStatus(current.Status) &&
     (Boolean(overrides) ||
       (settings.plannerEnabled &&
         isInPlannerWindow(toDateOnly(current.CheckInDate), today)));
 
-  await persistPlannerFields(bookingsTable, reservationId, patch);
+  if (changed) {
+    await persistPlannerFields(bookingsTable, reservationId, patch);
+  }
 
   let syncedToGuesty = false;
   let guestyError: string | undefined;
@@ -370,10 +392,43 @@ export const applyPlannerToReservation = async ({
     }
   }
 
+  if (notifyCleaningPlan && !notesFrozen && !overrides) {
+    try {
+      const before = previous ?? (current as BookingPlannerItem);
+      const changes = describePlannerBookingChanges(
+        before,
+        current as BookingPlannerItem,
+        patch,
+      );
+      if (changes.length > 0) {
+        const checkInDates = [
+          toDateOnly(current.CheckInDate),
+          toDateOnly(before.CheckInDate),
+        ];
+        const listingLabel =
+          String(current.ListingNickname ?? '').trim() ||
+          String(current.ListingID ?? '').trim();
+        await notifyReadyCleaningPlanBookingChanges({
+          checkInDates,
+          listingLabel,
+          confirmationCode: String(current.ConfirmationCode ?? '').trim(),
+          guestName: String(current.GuestName ?? '').trim(),
+          changes,
+        });
+      }
+    } catch (error) {
+      console.error(
+        `Failed to notify cleaning plan booking changes for ${reservationId}`,
+        error,
+      );
+    }
+  }
+
   return {
     ok: true as const,
     reservationId,
     patch,
+    persisted: changed,
     syncedToGuesty,
     guestyError,
   };

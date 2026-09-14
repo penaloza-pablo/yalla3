@@ -851,6 +851,11 @@ backend.upsertCleaner.addEnvironment(
   cleaningIncidentsTable.tableName,
 );
 backend.getCleaningPlan.addEnvironment('TABLE_NAME', cleaningPlansTable.tableName);
+backend.applyBookingsPlanner.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
+cleaningPlansTable.grantReadData(backend.applyBookingsPlanner.resources.lambda);
 backend.upsertCleaningPlan.addEnvironment(
   'TABLE_NAME',
   cleaningPlansTable.tableName,
@@ -998,6 +1003,7 @@ slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
 slackSecret.grantRead(backend.upsertVisit.resources.lambda);
 slackSecret.grantRead(backend.upsertCleaningPlan.resources.lambda);
 slackSecret.grantRead(backend.upsertMaintenancePlan.resources.lambda);
+slackSecret.grantRead(backend.applyBookingsPlanner.resources.lambda);
 
 const slackNotificationsTable = new Table(dataStack, 'SlackNotificationsTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
@@ -1023,6 +1029,7 @@ const slackNotificationReaders = [
   backend.processSlackHoy,
   backend.upsertCleaningPlan,
   backend.upsertMaintenancePlan,
+  backend.applyBookingsPlanner,
 ];
 for (const lambdaFunction of slackNotificationReaders) {
   lambdaFunction.addEnvironment(

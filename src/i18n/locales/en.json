@@ -1745,6 +1745,10 @@
       "notify_plan_ready_late_visit": {
         "name": "Plan closed with a visit after 13:01",
         "description": "Posts in #Warning when a cleaning or maintenance plan is marked ready with a visit scheduled after 13:01."
+      },
+      "notify_cleaning_plan_booking": {
+        "name": "Booking changes on a ready cleaning plan",
+        "description": "Posts in #cleanings-aptos when a reservation changes guests, dates, gift card or sofa bed and that day's cleaning plan is already ready. It is not sent from 8:00 AM on check-in day because the gift card is frozen."
       }
     }
   },

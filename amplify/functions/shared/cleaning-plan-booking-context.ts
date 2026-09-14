@@ -22,15 +22,19 @@ import {
 import {
   isP2BuildingId,
   yallaAliasForListingId,
+  yallaAliasForListingNickname,
 } from './property-identity';
 import { docClient } from './visit-task-utils';
 
 export const NEXT_BOOKING_LOOKAHEAD_DAYS = 90;
 const QUERY_CHUNK_SIZE = 10;
+const BOOKING_CONTEXT_ATTRIBUTE_NAMES = {
+  '#status': 'Status',
+};
 const BOOKING_CONTEXT_PROJECTION = [
   'ReservationID',
   'ListingID',
-  'Status',
+  '#status',
   'CheckInDate',
   'CheckOutDate',
   'Guests',
@@ -265,7 +269,10 @@ const queryReservationIdsForCheckInDate = async (
 const hydrateByKeys = async (
   tableName: string,
   keys: Record<string, unknown>[],
-  projectionExpression?: string,
+  projection?: {
+    expression: string;
+    attributeNames?: Record<string, string>;
+  },
 ) => {
   const items = new Map<string, Record<string, unknown>>();
   let pending = keys.slice();
@@ -278,8 +285,13 @@ const hydrateByKeys = async (
           RequestItems: {
             [tableName]: {
               Keys: chunk,
-              ...(projectionExpression
-                ? { ProjectionExpression: projectionExpression }
+              ...(projection
+                ? {
+                    ProjectionExpression: projection.expression,
+                    ...(projection.attributeNames
+                      ? { ExpressionAttributeNames: projection.attributeNames }
+                      : {}),
+                  }
                 : {}),
             },
           },
@@ -339,7 +351,10 @@ const findNextConfirmedBookings = async (
       const loaded = await hydrateByKeys(
         bookingsTable,
         missingIds.map((id) => ({ ReservationID: id })),
-        BOOKING_CONTEXT_PROJECTION,
+        {
+          expression: BOOKING_CONTEXT_PROJECTION,
+          attributeNames: BOOKING_CONTEXT_ATTRIBUTE_NAMES,
+        },
       );
       loaded.forEach((item, id) => {
         projectedBookingById.set(id, item);
@@ -349,8 +364,14 @@ const findNextConfirmedBookings = async (
       .map((id) => projectedBookingById.get(id))
       .filter((item): item is Record<string, unknown> => Boolean(item));
     for (const item of ordered) {
-      const listingId = asString(item.ListingID);
-      if (!needed.has(listingId) || found.has(listingId)) {
+      const listingKeys = [
+        asString(item.ListingID),
+        asString(item.ListingNickname),
+        yallaAliasForListingId(asString(item.ListingID)),
+        yallaAliasForListingNickname(asString(item.ListingNickname)),
+      ].filter(Boolean);
+      const matchKey = listingKeys.find((key) => needed.has(key));
+      if (!matchKey || found.has(matchKey)) {
         continue;
       }
       if (!isActivePlannerStatus(item.Status)) {
@@ -360,8 +381,8 @@ const findNextConfirmedBookings = async (
       if (!checkInDate || checkInDate < fromDate) {
         continue;
       }
-      found.set(listingId, item);
-      needed.delete(listingId);
+      found.set(matchKey, item);
+      needed.delete(matchKey);
     }
   }
 

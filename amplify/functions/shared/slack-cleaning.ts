@@ -1,6 +1,6 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { recordCleaningCompletion } from './cleaner-stats';
-import { isCleaningVisitType, normalizeStartTime } from './cleaning-plan';
+import { getPlanByDate, isCleaningVisitType, normalizeStartTime } from './cleaning-plan';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
@@ -575,6 +575,78 @@ export const notifyCleaningPlanChanges = async (
   const text = `Cambios en el plan de limpieza del ${escapeMrkdwn(date)}:\n${lines}`;
   await slackApi('chat.postMessage', {
     channel: warningsChannelId,
+    text,
+  });
+};
+
+export const notifyReadyCleaningPlanBookingChanges = async ({
+  checkInDates,
+  listingLabel,
+  confirmationCode,
+  guestName,
+  changes,
+}: {
+  checkInDates: string[];
+  listingLabel: string;
+  confirmationCode?: string;
+  guestName?: string;
+  changes: string[];
+}) => {
+  if (changes.length === 0) {
+    return;
+  }
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.cleaningPlanBooking,
+    ))
+  ) {
+    console.log(
+      'Cleaning plan booking notify skipped: automation disabled.',
+    );
+    return;
+  }
+  const plansTable = process.env.CLEANING_PLANS_TABLE;
+  if (!plansTable) {
+    console.warn(
+      'Cleaning plan booking notify skipped: CLEANING_PLANS_TABLE is not configured.',
+    );
+    return;
+  }
+  const uniqueDates = [
+    ...new Set(checkInDates.map((value) => asString(value)).filter(Boolean)),
+  ];
+  const readyDates: string[] = [];
+  for (const date of uniqueDates) {
+    const plan = await getPlanByDate(plansTable, date);
+    const status =
+      typeof plan?.status === 'string' ? plan.status.toUpperCase() : '';
+    if (status === 'READY') {
+      readyDates.push(date);
+    }
+  }
+  if (readyDates.length === 0) {
+    return;
+  }
+  const { cleaningChannelId } = await loadSlackSecrets();
+  if (!cleaningChannelId) {
+    console.error(
+      'Cleaning plan booking notify skipped: missing cleaningChannelId in yalla/slack.',
+    );
+    return;
+  }
+  const who = [listingLabel, guestName, confirmationCode]
+    .map((value) => asString(value))
+    .filter(Boolean)
+    .join(' · ');
+  const lines = changes
+    .map((line) => `• ${escapeMrkdwn(line)}`)
+    .join('\n');
+  const header = `Cambios en reserva (plan de limpieza listo · ${escapeMrkdwn(readyDates.join(', '))})`;
+  const text = who
+    ? `${header} · ${escapeMrkdwn(who)}:\n${lines}`
+    : `${header}:\n${lines}`;
+  await slackApi('chat.postMessage', {
+    channel: cleaningChannelId,
     text,
   });
 };

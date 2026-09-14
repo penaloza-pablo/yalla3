@@ -14,6 +14,19 @@ import {
 type ApplyPayload = {
   reservationId?: string;
   syncGuesty?: boolean;
+  notifyCleaningPlan?: boolean;
+  previous?: {
+    Guests?: unknown;
+    CheckInDate?: unknown;
+    CheckOutDate?: unknown;
+    GiftCard?: unknown;
+    Linen?: unknown;
+    Nights?: unknown;
+    ListingID?: unknown;
+    ListingNickname?: unknown;
+    GuestName?: unknown;
+    ConfirmationCode?: unknown;
+  };
 };
 
 export const handler = async (event: {
@@ -42,6 +55,8 @@ export const handler = async (event: {
     ({
       reservationId: event.reservationId,
       syncGuesty: event.syncGuesty,
+      notifyCleaningPlan: event.notifyCleaningPlan,
+      previous: event.previous,
     } satisfies ApplyPayload);
 
   try {
@@ -52,6 +67,8 @@ export const handler = async (event: {
         settings,
         reservationId: payload.reservationId.trim(),
         syncGuesty: payload.syncGuesty !== false,
+        notifyCleaningPlan: payload.notifyCleaningPlan === true,
+        previous: payload.previous,
       });
       return buildHttpResponse(result.ok ? 200 : 404, result);
     }

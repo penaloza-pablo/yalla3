@@ -111,14 +111,75 @@ function getCheckOut(reservation) {
 
 const ACCESS_FIELD_ID = "6945126331a9580014e33f73";
 
+function toGuestCount(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+  }
+  return 0;
+}
+
+function firstPresentCount(sources, keys) {
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue;
+    for (const key of keys) {
+      if (source[key] == null || source[key] === "") continue;
+      return { present: true, value: Math.max(0, toGuestCount(source[key])) };
+    }
+  }
+  return { present: false, value: 0 };
+}
+
 function getGuests(reservation) {
-  return (
-    reservation?.guestsCount ??
-    reservation?.guestCount ??
-    reservation?.guests?.count ??
-    reservation?.numberOfGuests?.numberOfGuests ??
-    reservation?.numberOfGuests?.total ??
-    0
+  if (!reservation || typeof reservation !== "object") return 0;
+  const nested =
+    (reservation.numberOfGuests && typeof reservation.numberOfGuests === "object"
+      ? reservation.numberOfGuests
+      : null) ||
+    (reservation.guests && typeof reservation.guests === "object"
+      ? reservation.guests
+      : null) ||
+    (reservation.occupancy && typeof reservation.occupancy === "object"
+      ? reservation.occupancy
+      : null);
+  const sources = [reservation, nested];
+  const adults = firstPresentCount(sources, [
+    "numberOfAdults",
+    "adults",
+    "adultCount"
+  ]);
+  const children = firstPresentCount(sources, [
+    "numberOfChildren",
+    "children",
+    "childCount",
+    "numberOfKids",
+    "kids"
+  ]);
+  const infants = firstPresentCount(sources, [
+    "numberOfInfants",
+    "infants",
+    "infantCount",
+    "numberOfBabies",
+    "babies"
+  ]);
+  if (adults.present || children.present || infants.present) {
+    return adults.value + children.value + infants.value;
+  }
+  if (typeof reservation.numberOfGuests === "number") {
+    return Math.max(0, toGuestCount(reservation.numberOfGuests));
+  }
+  return Math.max(
+    0,
+    firstPresentCount(sources, [
+      "guestsCount",
+      "guestCount",
+      "numberOfGuests",
+      "total",
+      "count"
+    ]).value
   );
 }
 
@@ -336,20 +397,42 @@ async function reconcileBookingCleanings(reservationId) {
   );
 }
 
-async function enqueuePlannerApply(reservationId) {
+async function enqueuePlannerApply(reservationId, previous) {
   if (!APPLY_BOOKINGS_PLANNER_FUNCTION || !reservationId) return;
   await lambda.send(new InvokeCommand({
     FunctionName: APPLY_BOOKINGS_PLANNER_FUNCTION,
     InvocationType: "Event",
     Payload: Buffer.from(JSON.stringify({
       reservationId,
-      syncGuesty: true
+      syncGuesty: true,
+      notifyCleaningPlan: true,
+      previous: previous || undefined
     }))
   }));
 }
 
 function todayInMadrid() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
+}
+
+function nowTimeInMadrid() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date());
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function isPlannerNotesFrozen(checkInDate, today, nowTime) {
+  const checkIn = toDateOnly(checkInDate);
+  if (!checkIn || !today) return false;
+  if (checkIn < today) return true;
+  if (checkIn > today) return false;
+  return nowTime >= "08:00";
 }
 
 function toDateOnly(value) {
@@ -496,9 +579,10 @@ async function applyPlannerInline(item) {
   if (giftCardOn == null) giftCardOn = giftCard ? giftCard !== GIFT_CARD_OFF : true;
   const access = String(item.Access?.S || "");
   const warnings = [];
+  const notesFrozen = isPlannerNotesFrozen(checkIn, today, nowTimeInMadrid());
 
   if (appliesDoubleOrTwoSingles) {
-    if (!linenManual && !linen && guests === 1) {
+    if (!notesFrozen && !linenManual && !linen && guests === 1) {
       linen = LINEN_DOUBLE;
     }
     if (linen !== LINEN_DOUBLE && linen !== LINEN_SINGLE) {
@@ -507,7 +591,7 @@ async function applyPlannerInline(item) {
   } else if (linenRule.enabled) {
     if (linenRule.excluded.includes(listingId) && linen !== LINEN_NA && linen !== LINEN_YES && linen !== LINEN_NO) {
       linen = LINEN_NA;
-    } else if (!linenManual && !linen) {
+    } else if (!notesFrozen && !linenManual && linen !== LINEN_YES) {
       if (guests === 1) linen = LINEN_NO;
       else if (guests >= 3) linen = LINEN_YES;
     }
@@ -516,10 +600,10 @@ async function applyPlannerInline(item) {
     }
   }
 
-  if (giftRule.enabled && giftRule.excluded.includes(listingId)) {
+  if (!notesFrozen && giftRule.enabled && giftRule.excluded.includes(listingId)) {
     giftCard = GIFT_CARD_OFF;
     giftCardOn = false;
-  } else if (giftRule.enabled && !giftRule.excluded.includes(listingId)) {
+  } else if (!notesFrozen && giftRule.enabled && !giftRule.excluded.includes(listingId)) {
     if (giftCardOn === false) {
       giftCard = GIFT_CARD_OFF;
     } else if (!giftCard || isAutoGiftCard(giftCard)) {
@@ -529,6 +613,10 @@ async function applyPlannerInline(item) {
     if (!access) warnings.push("gift_card_access_missing");
   }
 
+  if (notesFrozen) {
+    return;
+  }
+
   if (guestRule.enabled && !guestRule.excluded.includes(listingId) && guests === 1) {
     const dismissed = (item.PlannerDismissedWarnings?.L || [])
       .map((value) => value?.S)
@@ -536,6 +624,12 @@ async function applyPlannerInline(item) {
     if (!dismissed.includes("single_guest")) {
       warnings.push("single_guest");
     }
+  }
+
+  const currentGiftCard = String(item.GiftCard?.S || "");
+  const currentLinen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
+  if (currentGiftCard === giftCard && currentLinen === linen) {
+    return;
   }
 
   await ddb.send(new UpdateItemCommand({
@@ -675,6 +769,20 @@ export const handler = async (event) => {
     const previousListingId = getExistingString(existing, "ListingID");
     const oldGuestPaidDay = getExistingNumber(existing, "GuestPaidDay");
     const oldStatus = getExistingString(existing, "Status");
+    const previousPlanner = existing
+      ? {
+          Guests: getExistingNumber(existing, "Guests"),
+          CheckInDate: getExistingString(existing, "CheckInDate"),
+          CheckOutDate: getExistingString(existing, "CheckOutDate"),
+          GiftCard: getExistingString(existing, "GiftCard"),
+          Linen: getExistingString(existing, "Linen"),
+          Nights: getExistingNumber(existing, "Nights"),
+          ListingID: getExistingString(existing, "ListingID"),
+          ListingNickname: getExistingString(existing, "ListingNickname"),
+          GuestName: getExistingString(existing, "GuestName"),
+          ConfirmationCode: getExistingString(existing, "ConfirmationCode")
+        }
+      : undefined;
 
     const item = {
       ReservationID: s(reservationId),
@@ -770,6 +878,17 @@ export const handler = async (event) => {
       copyExistingAttribute(item, existing, "Linen");
     }
 
+    const notesFrozen = isPlannerNotesFrozen(
+      getCheckIn(reservation),
+      todayInMadrid(),
+      nowTimeInMadrid()
+    );
+    if (notesFrozen && existing) {
+      copyExistingAttribute(item, existing, "GiftCard");
+      copyExistingAttribute(item, existing, "Linen");
+      copyExistingAttribute(item, existing, "GiftCardOn");
+    }
+
     await ddb.send(new PutItemCommand({
       TableName: TABLE_NAME,
       Item: item
@@ -781,7 +900,7 @@ export const handler = async (event) => {
       console.error("Failed to apply bookings planner inline", plannerError);
     }
     try {
-      await enqueuePlannerApply(reservationId);
+      await enqueuePlannerApply(reservationId, previousPlanner);
     } catch (plannerError) {
       console.error("Failed to enqueue bookings planner", plannerError);
     }

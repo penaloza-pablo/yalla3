@@ -1745,6 +1745,10 @@
       "notify_plan_ready_late_visit": {
         "name": "Plan cerrado con visita después de las 13:01",
         "description": "Avisa en #Warning al marcar listo un plan de limpieza o mantenimiento si hay una visita programada después de las 13:01."
+      },
+      "notify_cleaning_plan_booking": {
+        "name": "Cambios de reserva en plan de limpieza listo",
+        "description": "Avisa en #cleanings-aptos cuando una reserva cambia huéspedes, fechas, tarjeta o sofá y el plan de esa fecha ya está listo. No se envía a partir de las 8:00 del día de check-in porque la tarjeta queda congelada."
       }
     }
   },

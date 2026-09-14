@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TableSkeleton } from '../design/Feedback'
 import { MobileBodyPortal } from '../MobileBodyPortal'
@@ -104,6 +104,50 @@ const mapBookingContext = (
     hasBookingGap: Boolean(item.hasBookingGap),
     nightsUntilCheckIn: Number(item.nightsUntilCheckIn ?? 0),
   }
+}
+
+const visitMetaParts = (
+  row: CleaningPlanRow,
+  t: (key: string, options?: { count: number }) => string,
+) => {
+  const parts: Array<{ key: string; content: string; kit?: boolean }> = []
+  const typeName =
+    row.cleaningTypes.find((type) => type.id === row.cleaningTypeId)?.name ??
+    ''
+  if (typeName) {
+    parts.push({ key: 'type', content: typeName })
+  }
+  if (
+    row.bookingContext &&
+    Number.isFinite(row.bookingContext.guestCount)
+  ) {
+    parts.push({
+      key: 'guests',
+      content: t('cleaningPlan.badgeGuests', {
+        count: row.bookingContext.guestCount,
+      }),
+    })
+  }
+  if (row.bookingContext?.giftCardLabel) {
+    parts.push({
+      key: 'gift',
+      content: row.bookingContext.giftCardLabel,
+    })
+  }
+  if (row.bookingContext?.hasBookingGap) {
+    parts.push({
+      key: 'gap',
+      content: t('cleaningPlan.badgeBookingsGap'),
+    })
+  }
+  if (row.kit && row.kit.items.length > 0) {
+    parts.push({
+      key: 'kit',
+      content: t('cleaningPlan.badgeKit'),
+      kit: true,
+    })
+  }
+  return parts
 }
 
 type Props = {
@@ -516,6 +560,7 @@ export function CleaningPlanView({
       ) {
         cleanerOptions.push(assignedCleaner)
       }
+      const metaParts = visitMetaParts(row, t)
       return (
         <tr key={row.visitId}>
           <td data-label={t('cleaningPlan.visit')}>
@@ -537,46 +582,30 @@ export function CleaningPlanView({
                   </span>
                 ) : null}
               </div>
-              {row.bookingContext || (row.kit && row.kit.items.length > 0) ? (
-                <div className="operations-visit-badges">
-                  {row.bookingContext?.hasBookingGap ? (
-                    <span className="status operations-visit-status cleaning-plan-badge-gap">
-                      {t('cleaningPlan.badgeBookingsGap')}
-                    </span>
-                  ) : null}
-                  {row.bookingContext?.sofaBedYes ? (
-                    <span className="status operations-visit-status cleaning-plan-badge-sofa">
-                      {t('cleaningPlan.badgeSofaBed')}
-                    </span>
-                  ) : null}
-                  {row.bookingContext &&
-                  Number.isFinite(row.bookingContext.guestCount) ? (
-                    <span className="status operations-visit-status cleaning-plan-badge-guests">
-                      {t('cleaningPlan.badgeGuests', {
-                        count: row.bookingContext.guestCount,
-                      })}
-                    </span>
-                  ) : null}
-                  {row.bookingContext?.giftCardLabel ? (
-                    <span className="status operations-visit-status cleaning-plan-badge-gift">
-                      {row.bookingContext.giftCardLabel}
-                    </span>
-                  ) : null}
-                  {row.bookingContext?.earlyCheckInApplies ? (
-                    <span className="status operations-visit-status cleaning-plan-badge-early">
-                      {t('cleaningPlan.badgeEarlyCheckIn')}
-                    </span>
-                  ) : null}
-                  {row.kit && row.kit.items.length > 0 ? (
-                    <button
-                      type="button"
-                      className="status operations-visit-status cleaning-plan-badge-kit"
-                      onClick={() => setOpenKitRow(row)}
-                    >
-                      {t('cleaningPlan.badgeKit')}
-                    </button>
-                  ) : null}
-                </div>
+              {metaParts.length > 0 ? (
+                <p className="cleaning-visit-meta">
+                  {metaParts.map((part, index) => (
+                    <Fragment key={part.key}>
+                      {index > 0 ? (
+                        <span className="cleaning-visit-meta-sep" aria-hidden="true">
+                          {' '}
+                          ·{' '}
+                        </span>
+                      ) : null}
+                      {part.kit ? (
+                        <button
+                          type="button"
+                          className="cleaning-visit-meta-kit"
+                          onClick={() => setOpenKitRow(row)}
+                        >
+                          {part.content}
+                        </button>
+                      ) : (
+                        <span>{part.content}</span>
+                      )}
+                    </Fragment>
+                  ))}
+                </p>
               ) : null}
             </div>
           </td>
