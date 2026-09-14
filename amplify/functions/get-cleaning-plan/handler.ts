@@ -44,6 +44,17 @@ type PlanItem = {
 const asPlanItems = (value: unknown): PlanItem[] =>
   Array.isArray(value) ? (value as PlanItem[]) : [];
 
+const jsonResponse = (statusCode: number, payload: Record<string, unknown>) => {
+  const response = buildHttpResponse(statusCode, payload);
+  return {
+    ...response,
+    headers: {
+      ...response.headers,
+      'Cache-Control': 'no-store',
+    },
+  };
+};
+
 const mergePlanRows = (
   visits: Record<string, unknown>[],
   plan: Record<string, unknown> | undefined,
@@ -122,7 +133,7 @@ export const handler = async (event: HttpEvent) => {
   const plansTable = process.env.TABLE_NAME;
   const visitsTable = process.env.VISITS_TABLE;
   if (!plansTable || !visitsTable) {
-    return buildHttpResponse(500, {
+    return jsonResponse(500, {
       message: 'TABLE_NAME or VISITS_TABLE is not configured.',
     });
   }
@@ -138,11 +149,11 @@ export const handler = async (event: HttpEvent) => {
         const dateB = typeof b.id === 'string' ? b.id : '';
         return dateB.localeCompare(dateA);
       });
-      return buildHttpResponse(200, { items, count: items.length });
+      return jsonResponse(200, { items, count: items.length });
     }
 
     if (!isDateOnly(plannedDate)) {
-      return buildHttpResponse(400, {
+      return jsonResponse(400, {
         message: 'Provide date=YYYY-MM-DD or list=true.',
       });
     }
@@ -186,6 +197,7 @@ export const handler = async (event: HttpEvent) => {
     }
     const planStatus =
       typeof plan?.status === 'string' ? plan.status : 'DRAFT';
+    const refreshBookingDerived = planStatus.toUpperCase() !== 'READY';
     let bookingContextByPropertyId = new Map<
       string,
       CleaningVisitBookingContext
@@ -210,7 +222,7 @@ export const handler = async (event: HttpEvent) => {
       detailsByPropertyId,
       bookingContextByPropertyId,
       nicknameByPropertyId,
-      planStatus.toUpperCase() !== 'READY',
+      refreshBookingDerived,
     );
     let inventoryById = new Map<string, InventoryPriceItem>();
     const inventoryTable = process.env.INVENTORY_TABLE;
@@ -224,7 +236,11 @@ export const handler = async (event: HttpEvent) => {
     const rulesByProperty = amenitiesRulesByPropertyId(detailItems);
     const rowsWithKit = rows.map((row) => {
       const visit = visits.find((item) => item.id === row.visitId);
-      if (visit?.kit !== undefined && visit.kit !== null) {
+      if (
+        !refreshBookingDerived &&
+        visit?.kit !== undefined &&
+        visit.kit !== null
+      ) {
         return { ...row, kit: kitFromUnknown(visit.kit) };
       }
       return {
@@ -237,7 +253,7 @@ export const handler = async (event: HttpEvent) => {
       };
     });
 
-    return buildHttpResponse(200, {
+    return jsonResponse(200, {
       plannedDate,
       plan: plan ?? null,
       status: planStatus,
@@ -245,7 +261,7 @@ export const handler = async (event: HttpEvent) => {
       count: rowsWithKit.length,
     });
   } catch (error) {
-    return buildHttpResponse(500, {
+    return jsonResponse(500, {
       message: 'Failed to read cleaning plan.',
       details: error instanceof Error ? error.message : String(error),
     });

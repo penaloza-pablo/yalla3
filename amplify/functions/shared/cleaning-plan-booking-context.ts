@@ -45,8 +45,6 @@ const BOOKING_CONTEXT_PROJECTION = [
   'GiftCard',
   'ListingNickname',
 ].join(', ');
-const reservationIdsByDate = new Map<string, string[]>();
-const projectedBookingById = new Map<string, Record<string, unknown>>();
 
 export type CleaningVisitBookingContext = {
   confirmationCode: string;
@@ -233,9 +231,10 @@ export const resolveAutoCleaningType = (
 const queryReservationIdsForCheckInDate = async (
   tableName: string,
   checkInDate: string,
+  cache: Map<string, string[]>,
 ) => {
   const cacheKey = `${tableName}#${checkInDate}`;
-  const cached = reservationIdsByDate.get(cacheKey);
+  const cached = cache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -262,7 +261,7 @@ const queryReservationIdsForCheckInDate = async (
       | Record<string, unknown>
       | undefined;
   } while (exclusiveStartKey);
-  reservationIdsByDate.set(cacheKey, ids);
+  cache.set(cacheKey, ids);
   return ids;
 };
 
@@ -273,6 +272,7 @@ const hydrateByKeys = async (
     expression: string;
     attributeNames?: Record<string, string>;
   },
+  options?: { consistentRead?: boolean },
 ) => {
   const items = new Map<string, Record<string, unknown>>();
   let pending = keys.slice();
@@ -285,6 +285,7 @@ const hydrateByKeys = async (
           RequestItems: {
             [tableName]: {
               Keys: chunk,
+              ...(options?.consistentRead ? { ConsistentRead: true } : {}),
               ...(projection
                 ? {
                     ProjectionExpression: projection.expression,
@@ -330,6 +331,8 @@ const findNextConfirmedBookings = async (
 ) => {
   const needed = new Set(listingIds.filter(Boolean));
   const found = new Map<string, Record<string, unknown>>();
+  const reservationIdsByDate = new Map<string, string[]>();
+  const projectedBookingById = new Map<string, Record<string, unknown>>();
   if (needed.size === 0) {
     return found;
   }
@@ -340,7 +343,13 @@ const findNextConfirmedBookings = async (
   for (let offset = 0; offset < dates.length && needed.size > 0; offset += QUERY_CHUNK_SIZE) {
     const chunk = dates.slice(offset, offset + QUERY_CHUNK_SIZE);
     const idLists = await Promise.all(
-      chunk.map((date) => queryReservationIdsForCheckInDate(bookingsTable, date)),
+      chunk.map((date) =>
+        queryReservationIdsForCheckInDate(
+          bookingsTable,
+          date,
+          reservationIdsByDate,
+        ),
+      ),
     );
     const ids = [...new Set(idLists.flat())];
     if (ids.length === 0) {
@@ -355,6 +364,7 @@ const findNextConfirmedBookings = async (
           expression: BOOKING_CONTEXT_PROJECTION,
           attributeNames: BOOKING_CONTEXT_ATTRIBUTE_NAMES,
         },
+        { consistentRead: true },
       );
       loaded.forEach((item, id) => {
         projectedBookingById.set(id, item);

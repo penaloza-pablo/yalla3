@@ -16,9 +16,7 @@ type WorkProps = {
   visitOverdue?: boolean
   visitClosed?: boolean
   canAct?: boolean
-  skippingId?: string
   onComplete: (task: TaskRecord) => void
-  onSkip: (task: TaskRecord) => void
 }
 
 type DesignProps = {
@@ -170,7 +168,6 @@ export function VisitTaskList(props: Props) {
         const isCancelled = task.status === 'CANCELLED'
         const canToggleTask =
           Boolean(props.canAct) && !isCancelled && !props.visitClosed
-        const isSkipping = props.skippingId === task.id
         const description = displayTaskDescription(
           i18n.language,
           task.description,
@@ -220,18 +217,6 @@ export function VisitTaskList(props: Props) {
                 onClick={() => props.onComplete(task)}
               >
                 <YlIcon name="checkmark" size={16} />
-              </button>
-              <button
-                type="button"
-                className={`btn-icon btn-icon-ghost${
-                  isSkipped || isSkipping ? ' is-task-skipped' : ''
-                }`}
-                aria-label={t('operations.skipTask')}
-                aria-pressed={isSkipped}
-                disabled={!canToggleTask || isSkipped || isSkipping}
-                onClick={() => props.onSkip(task)}
-              >
-                <YlIcon name="xmark" size={16} />
               </button>
             </div>
           </li>

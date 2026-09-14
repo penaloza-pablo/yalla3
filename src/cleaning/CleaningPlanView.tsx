@@ -6,6 +6,7 @@ import { fetchJson } from '../operations/api'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
 import {
   formatDateOnlyLabel,
+  formatDayMonthLabel,
   getMadridMonthRange,
   getTodayMadrid,
   getTomorrowMadrid,
@@ -345,7 +346,9 @@ export function CleaningPlanView({
         const payload = await fetchJson<{
           status?: string
           rows?: Record<string, unknown>[]
-        }>(`${endpoints.getPlan}?date=${encodeURIComponent(date)}`)
+        }>(`${endpoints.getPlan}?date=${encodeURIComponent(date)}`, {
+          cache: 'no-store',
+        })
         setStatus(
           String(payload.status ?? 'DRAFT').toUpperCase() === 'READY'
             ? 'READY'
@@ -529,6 +532,11 @@ export function CleaningPlanView({
   const statusLabel = (value: CleaningPlanStatus) =>
     value === 'READY' ? t('cleaningPlan.ready') : t('cleaningPlan.pending')
 
+  const dayPageTitle =
+    isDayModalOpen && plannedDate
+      ? `${t('pages.Cleaning Plan')} · ${formatDayMonthLabel(plannedDate)}`
+      : t('pages.Cleaning Plan')
+
   const renderVisitRows = () => {
     if (isLoading) {
       return (
@@ -574,7 +582,8 @@ export function CleaningPlanView({
                 >
                   {row.title || row.visitId}
                 </button>
-                {row.visitStatus ? (
+                {row.visitStatus &&
+                row.visitStatus.trim().toUpperCase() !== 'SCHEDULED' ? (
                   <span className="status operations-visit-status status-info">
                     {t(`operations.visitStatuses.${row.visitStatus}`, {
                       defaultValue: row.visitStatus,
@@ -690,22 +699,41 @@ export function CleaningPlanView({
         <div className="page-header-leading">
           <p className="eyebrow">{t('cleaningPlan.eyebrow')}</p>
           <div className="page-title-row">
-            <h1 className="page-title">{t('pages.Cleaning Plan')}</h1>
-            <button
-              type="button"
-              className={`btn-page-info ${isSummaryInfoOpen ? 'is-active' : ''}`}
-              aria-label={
-                isSummaryInfoOpen
-                  ? t('common.hideSummaryInfo')
-                  : t('common.showSummaryInfo')
-              }
-              aria-expanded={isSummaryInfoOpen}
-              onClick={onToggleSummaryInfo}
-            >
-              <YlIcon name="info.circle" size={14} />
-            </button>
+            {isDayModalOpen ? (
+              <button
+                type="button"
+                className="btn-icon page-title-back"
+                onClick={closeDay}
+                aria-label={t('common.back')}
+              >
+                <YlIcon name="chevron.left" size={18} />
+              </button>
+            ) : null}
+            <h1 className="page-title">{dayPageTitle}</h1>
+            {isDayModalOpen ? (
+              <span
+                className={`cleaning-status-tag ${
+                  isReady ? 'is-ready' : 'is-draft'
+                }`}
+              >
+                {statusLabel(status)}
+              </span>
+            ) : (
+              <button
+                type="button"
+                className={`btn-page-info ${isSummaryInfoOpen ? 'is-active' : ''}`}
+                aria-label={
+                  isSummaryInfoOpen
+                    ? t('common.hideSummaryInfo')
+                    : t('common.showSummaryInfo')
+                }
+                aria-expanded={isSummaryInfoOpen}
+                onClick={onToggleSummaryInfo}
+              >
+                <YlIcon name="info.circle" size={14} />
+              </button>
+            )}
           </div>
-          <p className="subtitle">{t('cleaningPlan.subtitle')}</p>
         </div>
         <MobileBodyPortal>
           <div className="page-action-bar">
@@ -980,26 +1008,25 @@ export function CleaningPlanView({
       </section>
       </>
       ) : (
-        <section className="yl-day-page" aria-label={t('pages.Cleaning Plan')}>
-          <div className="yl-day-page-header">
+        <section className="yl-day-page" aria-label={dayPageTitle}>
+          <div className="yl-day-page-header cleaning-day-header">
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-icon page-title-back"
               onClick={closeDay}
+              aria-label={t('common.back')}
             >
-              {t('common.back')}
+              <YlIcon name="chevron.left" size={18} />
             </button>
             <div>
-              <h2>{formatDateOnlyLabel(plannedDate, i18n.language)}</h2>
-              <p className="subtitle">
-                <span
-                  className={`cleaning-status-tag ${
-                    isReady ? 'is-ready' : 'is-draft'
-                  }`}
-                >
-                  {statusLabel(status)}
-                </span>
-              </p>
+              <h2>{dayPageTitle}</h2>
+              <span
+                className={`cleaning-status-tag ${
+                  isReady ? 'is-ready' : 'is-draft'
+                }`}
+              >
+                {statusLabel(status)}
+              </span>
             </div>
           </div>
           {message ? <p className="notice success">{message}</p> : null}

@@ -48,6 +48,11 @@ import type {
   VisitTypeRecord,
 } from './types'
 import { isResolvedTaskStatus } from './types'
+import { IncompleteVisitTasksNotice } from './IncompleteVisitTasksNotice'
+import {
+  appendIncompleteTasksComment,
+  skipOpenVisitTasks,
+} from './incompleteVisitTasks'
 import { YlIcon } from '../design/icons'
 
 type CleaningTypeBadge = {
@@ -242,13 +247,13 @@ export function VisitDetailModal({
   const [cleanerBadge, setCleanerBadge] = useState<string | null>(null)
   const [maintenanceAssigneeBadge, setMaintenanceAssigneeBadge] =
     useState<CleaningTypeBadge | null>(null)
-  const [dismissingTaskId, setDismissingTaskId] = useState('')
   const [visitForm, setVisitForm] = useState<VisitForm | null>(null)
   const [completeForm, setCompleteForm] = useState({
     hours: '1',
     poolOfHours: false,
     specialHours: false,
   })
+  const [completeAnyway, setCompleteAnyway] = useState(false)
   const [cancelForm, setCancelForm] = useState({
     taskAction: 'release' as 'release' | 'cancel',
     cancelConfirmed: false,
@@ -372,28 +377,6 @@ export function VisitDetailModal({
       notifyChanged()
     } catch {
       setError(t('operations.unableSaveTask'))
-    }
-  }
-
-  const handleSkipTask = async (task: TaskRecord) => {
-    if (!endpoints.upsertTask) {
-      return
-    }
-    setDismissingTaskId(task.id)
-    setError('')
-    try {
-      await saveTask(endpoints.upsertTask, {
-        id: task.id,
-        action: 'skip',
-        status: 'SKIPPED',
-        visitId: task.visitId,
-      })
-      await reloadTasks()
-      notifyChanged()
-    } catch {
-      setError(t('operations.unableSaveTask'))
-    } finally {
-      setDismissingTaskId('')
     }
   }
 
@@ -1020,16 +1003,46 @@ export function VisitDetailModal({
     }
   }
 
+  const finishVisit = async (extra?: Record<string, unknown>) => {
+    if (!visit) {
+      return false
+    }
+    let comments = commentsDraft
+    if (visitHasOpenTasks) {
+      if (!completeAnyway) {
+        setError(t('operations.completeAnywayRequired'))
+        return false
+      }
+      if (!endpoints.upsertTask) {
+        setError(t('operations.missingWriteVisit'))
+        return false
+      }
+      comments = appendIncompleteTasksComment(
+        commentsDraft,
+        tasks,
+        t('operations.incompleteTasksCommentHeading'),
+        i18n.language,
+      )
+      try {
+        await skipOpenVisitTasks(endpoints.upsertTask, tasks)
+        await reloadTasks()
+      } catch {
+        setError(t('operations.unableSaveTask'))
+        return false
+      }
+      setCommentsDraft(comments)
+    }
+    return updateVisitStatus('COMPLETED', { comments, ...extra })
+  }
+
   const openComplete = () => {
     if (!visit) {
       return
     }
-    if (visitHasOpenTasks) {
-      setError(t('operations.completeTasksFirst'))
-      return
-    }
-    if (!requiresCompleteVisitWizard(visit.visitTypeId)) {
-      void updateVisitStatus('COMPLETED', { comments: commentsDraft })
+    setCompleteAnyway(false)
+    setError('')
+    if (!visitHasOpenTasks && !requiresCompleteVisitWizard(visit.visitTypeId)) {
+      void finishVisit()
       return
     }
     setCompleteForm({
@@ -1041,23 +1054,22 @@ export function VisitDetailModal({
   }
 
   const submitComplete = async () => {
-    const hours = Number(completeForm.hours)
-    if (!Number.isFinite(hours) || hours <= 0) {
-      setError(t('operations.enterValidHours'))
-      return
+    const needsHours = requiresCompleteVisitWizard(visit?.visitTypeId)
+    const extra: Record<string, unknown> = {}
+    if (needsHours) {
+      const hours = Number(completeForm.hours)
+      if (!Number.isFinite(hours) || hours <= 0) {
+        setError(t('operations.enterValidHours'))
+        return
+      }
+      extra.actualDurationHours = hours
+      extra.appliesToHourBank = completeForm.poolOfHours
+      extra.specialHours = completeForm.specialHours
     }
-    if (visitHasOpenTasks) {
-      setError(t('operations.completeTasksFirst'))
-      return
-    }
-    const ok = await updateVisitStatus('COMPLETED', {
-      actualDurationHours: hours,
-      appliesToHourBank: completeForm.poolOfHours,
-      specialHours: completeForm.specialHours,
-      comments: commentsDraft,
-    })
+    const ok = await finishVisit(extra)
     if (ok) {
       setIsCompleteOpen(false)
+      setCompleteAnyway(false)
     }
   }
 
@@ -1217,13 +1229,9 @@ export function VisitDetailModal({
                   <button
                     type="button"
                     className="btn-icon btn-icon-ghost operations-complete-visit-btn"
-                    disabled={visitHasOpenTasks || isSaving || isRefreshing}
+                    disabled={isSaving || isRefreshing}
                     aria-label={t('operations.completeVisit')}
-                    title={
-                      visitHasOpenTasks
-                        ? t('operations.completeTasksFirst')
-                        : t('operations.completeVisit')
-                    }
+                    title={t('operations.completeVisit')}
                     onClick={openComplete}
                   >
                     <YlIcon name="checkmark" size={16} />
@@ -1346,9 +1354,7 @@ export function VisitDetailModal({
                     visit.status === 'COMPLETED' || visit.status === 'CANCELLED'
                   }
                   canAct={Boolean(endpoints.upsertTask)}
-                  skippingId={dismissingTaskId}
                   onComplete={(task) => void completeTask(task)}
-                  onSkip={(task) => void handleSkipTask(task)}
                 />
               </CollapsibleVisitTasks>
               <label className="full-width operations-visit-comments">
@@ -1593,26 +1599,38 @@ export function VisitDetailModal({
 
   const completeModal = isCompleteOpen ? (
     <div
-      className="modal-overlay is-stacked"
+      className="modal-overlay is-stacked yl-visit-sheet"
       role="dialog"
       aria-modal="true"
       onWheel={trapBackgroundScroll}
       onTouchMove={trapBackgroundScroll}
     >
-      <div className="modal">
+      <div className={`modal operations-detail-modal modal-scrollable${visitHasOpenTasks ? ' has-incomplete-notice' : ''}`}>
         <div className="modal-header">
           <h3 className="modal-title">{t('operations.completeVisit')}</h3>
           <button
             className="btn-icon"
             type="button"
-            onClick={() => setIsCompleteOpen(false)}
+            onClick={() => {
+              setIsCompleteOpen(false)
+              setCompleteAnyway(false)
+            }}
             aria-label={t('common.close')}
           >
             <YlIcon name="xmark" size={16} />
           </button>
         </div>
-        <div className="modal-body form-grid">
+        <div
+          className={
+            requiresCompleteVisitWizard(visit?.visitTypeId)
+              ? 'modal-body form-grid'
+              : 'modal-body'
+          }
+        >
           {errorNotice}
+          <IncompleteVisitTasksNotice tasks={tasks} />
+          {requiresCompleteVisitWizard(visit?.visitTypeId) ? (
+            <>
           <label>
             {t('operations.hours')}
             <input
@@ -1654,12 +1672,24 @@ export function VisitDetailModal({
             />
             {t('operations.specialHours')}
           </label>
+            </>
+          ) : null}
         </div>
-        <div className="modal-footer">
+        <div className="modal-footer operations-complete-visit-footer">
+          {visitHasOpenTasks ? (
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={completeAnyway}
+                onChange={(event) => setCompleteAnyway(event.target.checked)}
+              />
+              {t('operations.completeAnywayConfirm')}
+            </label>
+          ) : null}
           <button
             className="btn-primary"
             type="button"
-            disabled={isSaving}
+            disabled={isSaving || (visitHasOpenTasks && !completeAnyway)}
             onClick={() => void submitComplete()}
           >
             {t('operations.completeVisit')}

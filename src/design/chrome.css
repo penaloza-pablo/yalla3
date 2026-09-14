@@ -70,7 +70,7 @@
 
 .yl-day-page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -79,6 +79,20 @@
   font-size: 1.35rem;
   letter-spacing: -0.03em;
   color: var(--yl-ink);
+}
+
+.cleaning-day-header h2 {
+  font-size: 1.15rem;
+}
+
+.cleaning-day-header .cleaning-status-tag {
+  margin-top: 6px;
+}
+
+@media (min-width: 769px) {
+  .yl-day-page-header.cleaning-day-header {
+    display: none;
+  }
 }
 
 .yl-day-page-actions {
@@ -455,6 +469,12 @@
     flex-wrap: wrap;
     width: 100%;
     gap: 8px;
+  }
+
+  .operations-task-list li:not(.is-editing) .action-buttons {
+    width: auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
   }
 }
 
