@@ -600,35 +600,66 @@ async function applyPlannerInline(item) {
     }
   }
 
-  if (!notesFrozen && giftRule.enabled && giftRule.excluded.includes(listingId)) {
-    giftCard = GIFT_CARD_OFF;
-    giftCardOn = false;
-  } else if (!notesFrozen && giftRule.enabled && !giftRule.excluded.includes(listingId)) {
-    if (giftCardOn === false) {
+  if (giftRule.enabled && giftRule.excluded.includes(listingId)) {
+    if (!notesFrozen) {
       giftCard = GIFT_CARD_OFF;
-    } else if (!giftCard || isAutoGiftCard(giftCard)) {
-      giftCard = nights <= 2 ? GIFT_CARD_OFF : formatGiftCard(guests, item.CheckOutDate?.S);
-      giftCardOn = true;
+      giftCardOn = false;
+    }
+  } else if (giftRule.enabled && !giftRule.excluded.includes(listingId)) {
+    if (!notesFrozen) {
+      if (giftCardOn === false) {
+        giftCard = GIFT_CARD_OFF;
+      } else if (!giftCard || isAutoGiftCard(giftCard)) {
+        giftCard = nights <= 2 ? GIFT_CARD_OFF : formatGiftCard(guests, item.CheckOutDate?.S);
+        giftCardOn = true;
+      }
     }
     if (!access) warnings.push("gift_card_access_missing");
   }
 
-  if (notesFrozen) {
-    return;
-  }
-
-  if (guestRule.enabled && !guestRule.excluded.includes(listingId) && guests === 1) {
-    const dismissed = (item.PlannerDismissedWarnings?.L || [])
-      .map((value) => value?.S)
-      .filter(Boolean);
-    if (!dismissed.includes("single_guest")) {
+  const dismissed = (item.PlannerDismissedWarnings?.L || [])
+    .map((value) => value?.S)
+    .filter(Boolean);
+  if (guests === 1) {
+    if (guestRule.enabled && !guestRule.excluded.includes(listingId) && !dismissed.includes("single_guest")) {
       warnings.push("single_guest");
     }
   }
 
+  if (notesFrozen) {
+    const currentWarnings = (item.PlannerWarnings?.L || [])
+      .map((value) => value?.S)
+      .filter(Boolean)
+      .slice()
+      .sort()
+      .join("|");
+    const nextWarnings = warnings.slice().sort().join("|");
+    if (currentWarnings === nextWarnings) {
+      return;
+    }
+    await ddb.send(new UpdateItemCommand({
+      TableName: TABLE_NAME,
+      Key: { ReservationID: item.ReservationID },
+      UpdateExpression: "SET PlannerWarnings = :warnings, PlannerWarningCount = :count, UpdatedAt = :updatedAt",
+      ExpressionAttributeValues: {
+        ":warnings": { L: warnings.map((code) => ({ S: code })) },
+        ":count": n(warnings.length),
+        ":updatedAt": s(new Date().toISOString())
+      }
+    }));
+    return;
+  }
+
   const currentGiftCard = String(item.GiftCard?.S || "");
   const currentLinen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
-  if (currentGiftCard === giftCard && currentLinen === linen) {
+  const currentWarnings = (item.PlannerWarnings?.L || [])
+    .map((value) => value?.S)
+    .filter(Boolean)
+    .slice()
+    .sort()
+    .join("|");
+  const nextWarnings = warnings.slice().sort().join("|");
+  if (currentGiftCard === giftCard && currentLinen === linen && currentWarnings === nextWarnings) {
     return;
   }
 
@@ -895,14 +926,20 @@ export const handler = async (event) => {
     }));
 
     try {
-      await applyPlannerInline(item);
+      if (APPLY_BOOKINGS_PLANNER_FUNCTION) {
+        await enqueuePlannerApply(reservationId, previousPlanner);
+      } else {
+        await applyPlannerInline(item);
+      }
     } catch (plannerError) {
-      console.error("Failed to apply bookings planner inline", plannerError);
-    }
-    try {
-      await enqueuePlannerApply(reservationId, previousPlanner);
-    } catch (plannerError) {
-      console.error("Failed to enqueue bookings planner", plannerError);
+      console.error("Failed to apply bookings planner", plannerError);
+      if (APPLY_BOOKINGS_PLANNER_FUNCTION) {
+        try {
+          await applyPlannerInline(item);
+        } catch (inlineError) {
+          console.error("Failed to apply bookings planner inline fallback", inlineError);
+        }
+      }
     }
 
     let bookingReconcile = null;

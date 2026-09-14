@@ -97,6 +97,8 @@ export type BookingPlannerItem = {
   GiftCardOn?: unknown;
   EarlyCheckInOn?: unknown;
   LinenManual?: unknown;
+  PlannerWarnings?: unknown;
+  PlannerWarningCount?: unknown;
   PlannerDismissedWarnings?: unknown;
 };
 
@@ -512,6 +514,26 @@ export const asDismissedPlannerWarnings = (value: unknown) => {
   return [...new Set(value.filter(isDismissablePlannerWarning))];
 };
 
+export const asPlannerWarnings = (value: unknown): PlannerWarningCode[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value.filter(
+        (entry): entry is PlannerWarningCode =>
+          entry === 'linen_ask_guest' ||
+          entry === 'gift_card_access_missing' ||
+          entry === 'single_guest' ||
+          entry === 'double_or_two_singles_ask',
+      ),
+    ),
+  ];
+};
+
+const warningKey = (codes: PlannerWarningCode[]) =>
+  [...codes].sort().join('|');
+
 const normalizeEarlyCheckInText = (value: unknown) =>
   asString(value)
     .normalize('NFKC')
@@ -572,11 +594,16 @@ export const computePlannerFields = ({
     earlyCheckIn = overrides.earlyCheckInOn ? EARLY_CHECK_IN_ON : '';
   }
 
-  const dismissedWarnings = asDismissedPlannerWarnings([
+  const guests = toGuestCount(item.Guests);
+  let dismissedWarnings = asDismissedPlannerWarnings([
     ...asDismissedPlannerWarnings(item.PlannerDismissedWarnings),
     ...(overrides?.dismissWarning ? [overrides.dismissWarning] : []),
   ]);
-  const guests = toGuestCount(item.Guests);
+  if (guests !== 1) {
+    dismissedWarnings = dismissedWarnings.filter(
+      (code) => code !== 'single_guest',
+    );
+  }
   const nights = toNightsCount(item);
   const inWindow = isInPlannerWindow(asString(item.CheckInDate), today);
   const active = isActivePlannerStatus(item.Status);
@@ -636,23 +663,27 @@ export const computePlannerFields = ({
     }
   }
 
-  if (giftRule.enabled && !notesFrozen) {
+  if (giftRule.enabled) {
     if (isPropertyExcluded(giftRule, listingId)) {
-      giftCard = GIFT_CARD_OFF;
-      giftCardOn = false;
-    } else {
-      if (giftCardOn === false) {
+      if (!notesFrozen) {
         giftCard = GIFT_CARD_OFF;
-      } else if (
-        overrides?.giftCardOn === true ||
-        !giftCard ||
-        isAutoGiftCardValue(giftCard)
-      ) {
-        giftCard =
-          nights <= 2
-            ? GIFT_CARD_OFF
-            : formatGiftCardValue(guests, asString(item.CheckOutDate));
-        giftCardOn = true;
+        giftCardOn = false;
+      }
+    } else {
+      if (!notesFrozen) {
+        if (giftCardOn === false) {
+          giftCard = GIFT_CARD_OFF;
+        } else if (
+          overrides?.giftCardOn === true ||
+          !giftCard ||
+          isAutoGiftCardValue(giftCard)
+        ) {
+          giftCard =
+            nights <= 2
+              ? GIFT_CARD_OFF
+              : formatGiftCardValue(guests, asString(item.CheckOutDate));
+          giftCardOn = true;
+        }
       }
       if (!access) {
         warnings.push('gift_card_access_missing');
@@ -691,7 +722,86 @@ export const plannerFieldsChanged = (
   asString(current.GiftCard) !== next.giftCard ||
   asString(current.EarlyCheckIn) !== next.earlyCheckIn ||
   asString(current.Access) !== next.access ||
-  asBoolean(current.GiftCardOn) !== next.giftCardOn;
+  asBoolean(current.GiftCardOn) !== next.giftCardOn ||
+  asBoolean(current.EarlyCheckInOn) !== next.earlyCheckInOn ||
+  Boolean(asBoolean(current.LinenManual)) !== next.linenManual;
+
+export const plannerWarningsChanged = (
+  current: BookingPlannerItem,
+  next: PlannerFieldPatch,
+) =>
+  warningKey(asPlannerWarnings(current.PlannerWarnings)) !==
+    warningKey(next.warnings) ||
+  warningKey(asDismissedPlannerWarnings(current.PlannerDismissedWarnings)) !==
+    warningKey(next.dismissedWarnings);
+
+export const plannerStateChanged = (
+  current: BookingPlannerItem,
+  next: PlannerFieldPatch,
+) => plannerFieldsChanged(current, next) || plannerWarningsChanged(current, next);
+
+export const guestyReservationMatchesPlannerPatch = (
+  reservation: unknown,
+  patch: PlannerFieldPatch,
+) => {
+  const root = asRecord(reservation);
+  if (!root) {
+    return false;
+  }
+  const notes = asRecord(root.notes) ?? {};
+  const giftCard =
+    asString(notes.specialRequests) || asString(root.specialRequests);
+  const linen = asString(notes.cleaning);
+  const earlyCheckIn = asString(notes.other);
+  if (giftCard !== patch.giftCard) {
+    return false;
+  }
+  if (linen !== patch.linen) {
+    return false;
+  }
+  if (earlyCheckIn !== patch.earlyCheckIn) {
+    return false;
+  }
+  if (!patch.access.trim()) {
+    return true;
+  }
+  const fields = Array.isArray(root.customFields) ? root.customFields : [];
+  const accessField = fields
+    .map((entry) => asRecord(entry))
+    .find((entry) => asString(entry?.fieldId) === ACCESS_FIELD_ID);
+  return asString(accessField?.value) === patch.access;
+};
+
+export const shouldWritePlannerToGuesty = ({
+  syncGuesty,
+  notesFrozen,
+  status,
+  plannerEnabled,
+  inWindow,
+  hasOverrides,
+  fieldsChanged,
+  remoteMatches,
+}: {
+  syncGuesty: boolean;
+  notesFrozen: boolean;
+  status: unknown;
+  plannerEnabled: boolean;
+  inWindow: boolean;
+  hasOverrides: boolean;
+  fieldsChanged: boolean;
+  remoteMatches: boolean;
+}) => {
+  if (!syncGuesty || notesFrozen) {
+    return false;
+  }
+  if (!isActivePlannerStatus(status) && !hasOverrides) {
+    return false;
+  }
+  if (!hasOverrides && !(plannerEnabled && inWindow)) {
+    return false;
+  }
+  return fieldsChanged || !remoteMatches;
+};
 
 export const describePlannerBookingChanges = (
   before: BookingPlannerItem,

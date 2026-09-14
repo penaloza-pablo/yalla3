@@ -13,11 +13,14 @@ import {
   PLANNER_SETTINGS_ID,
   computePlannerFields,
   describePlannerBookingChanges,
+  guestyReservationMatchesPlannerPatch,
   isActivePlannerStatus,
   isGiftCardFrozen,
   isInPlannerWindow,
   normalizePlannerSettings,
   plannerFieldsChanged,
+  plannerStateChanged,
+  shouldWritePlannerToGuesty,
   plannerWindowEnd,
   toDateOnly,
 } from './bookings-planner';
@@ -268,6 +271,7 @@ const fetchGuestyReservation = async (
 export const syncPlannerFieldsToGuesty = async (
   reservationId: string,
   patch: PlannerFieldPatch,
+  currentReservation?: Record<string, unknown> | null,
 ) => {
   const client = await loadGuestyClient();
   if (!client) {
@@ -275,7 +279,10 @@ export const syncPlannerFieldsToGuesty = async (
   }
 
   const encoded = encodeURIComponent(reservationId);
-  const current = await fetchGuestyReservation(client, reservationId);
+  const current =
+    currentReservation === undefined
+      ? await fetchGuestyReservation(client, reservationId)
+      : currentReservation;
   const notes = asRecord(current?.notes) ?? {};
 
   await client.guestyPut(`/v1/reservations-v3/${encoded}/notes`, {
@@ -363,17 +370,50 @@ export const applyPlannerToReservation = async ({
   const notesFrozen =
     !overrides &&
     isGiftCardFrozen(toDateOnly(current.CheckInDate), today, nowTime);
-  const changed = plannerFieldsChanged(current as BookingPlannerItem, patch);
-  const shouldWriteGuesty =
+  const booking = current as BookingPlannerItem;
+  const fieldsChanged = plannerFieldsChanged(booking, patch);
+  const stateChanged = plannerStateChanged(booking, patch);
+  const hasOverrides = Boolean(overrides);
+  const canTouchGuesty =
     syncGuesty &&
-    changed &&
     !notesFrozen &&
-    isActivePlannerStatus(current.Status) &&
-    (Boolean(overrides) ||
+    (hasOverrides ||
       (settings.plannerEnabled &&
         isInPlannerWindow(toDateOnly(current.CheckInDate), today)));
+  let remoteMatches = false;
+  let remoteReservation: Record<string, unknown> | null | undefined;
+  if (canTouchGuesty && !fieldsChanged) {
+    try {
+      const client = await loadGuestyClient();
+      if (client) {
+        remoteReservation = await fetchGuestyReservation(
+          client,
+          reservationId,
+        );
+        remoteMatches = guestyReservationMatchesPlannerPatch(
+          remoteReservation,
+          patch,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `Failed to compare planner fields with Guesty for ${reservationId}`,
+        error,
+      );
+    }
+  }
+  const shouldWriteGuesty = shouldWritePlannerToGuesty({
+    syncGuesty,
+    notesFrozen,
+    status: current.Status,
+    plannerEnabled: settings.plannerEnabled,
+    inWindow: isInPlannerWindow(toDateOnly(current.CheckInDate), today),
+    hasOverrides,
+    fieldsChanged,
+    remoteMatches,
+  });
 
-  if (changed) {
+  if (stateChanged) {
     await persistPlannerFields(bookingsTable, reservationId, patch);
   }
 
@@ -381,7 +421,11 @@ export const applyPlannerToReservation = async ({
   let guestyError: string | undefined;
   if (shouldWriteGuesty) {
     try {
-      await syncPlannerFieldsToGuesty(reservationId, patch);
+      await syncPlannerFieldsToGuesty(
+        reservationId,
+        patch,
+        remoteReservation,
+      );
       syncedToGuesty = true;
     } catch (error) {
       guestyError = error instanceof Error ? error.message : String(error);
@@ -428,7 +472,7 @@ export const applyPlannerToReservation = async ({
     ok: true as const,
     reservationId,
     patch,
-    persisted: changed,
+    persisted: stateChanged,
     syncedToGuesty,
     guestyError,
   };

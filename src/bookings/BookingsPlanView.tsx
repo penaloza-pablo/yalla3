@@ -141,16 +141,19 @@ const mapRow = (item: Record<string, unknown>): PlanRow => {
 }
 
 const warningsForRow = (row: PlanRow): PlannerWarningCode[] => {
+  const warnings = row.access.trim()
+    ? row.warnings.filter((code) => code !== 'gift_card_access_missing')
+    : row.warnings
   if (isCanonicalLinenValue(row.linen, row.listingId)) {
-    return row.warnings
+    return warnings
   }
   const missingCode = isVerdejoBedListing(row.listingId)
     ? 'double_or_two_singles_ask'
     : 'linen_ask_guest'
-  if (row.warnings.includes(missingCode)) {
-    return row.warnings
+  if (warnings.includes(missingCode)) {
+    return warnings
   }
-  return [...row.warnings, missingCode]
+  return [...warnings, missingCode]
 }
 
 const CheckIcon = () => (

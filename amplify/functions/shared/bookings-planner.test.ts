@@ -1,15 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  ACCESS_FIELD_ID,
   computePlannerFields,
   defaultPlannerSettings,
   describePlannerBookingChanges,
   formatGiftCardValue,
   getReservationGuestCount,
   GIFT_CARD_OFF,
+  guestyReservationMatchesPlannerPatch,
   isGiftCardFrozen,
   LINEN_VALUES,
   plannerFieldsChanged,
+  plannerStateChanged,
+  plannerWarningsChanged,
+  shouldWritePlannerToGuesty,
 } from './bookings-planner';
 
 const enabledSettings = {
@@ -169,4 +174,153 @@ test('describePlannerBookingChanges lists guest and card diffs', () => {
   const lines = describePlannerBookingChanges(baseItem, after, patch);
   assert.ok(lines.some((line) => line.includes('Huéspedes: 1 -> 2')));
   assert.ok(lines.some((line) => line.includes('Tarjeta:')));
+});
+
+test('does not warn about access when the code is already set', () => {
+  const patch = computePlannerFields({
+    item: {
+      ...baseItem,
+      Access: 'https://link.akiles.app/code',
+      PlannerWarnings: ['gift_card_access_missing'],
+      PlannerWarningCount: 1,
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(patch.warnings.includes('gift_card_access_missing'), false);
+  assert.equal(
+    plannerWarningsChanged(
+      {
+        ...baseItem,
+        Access: 'https://link.akiles.app/code',
+        PlannerWarnings: ['gift_card_access_missing'],
+      },
+      patch,
+    ),
+    true,
+  );
+});
+
+test('persists dismissed 1-guest warning until guest count changes', () => {
+  const item = {
+    ...baseItem,
+    Guests: 1,
+    PlannerWarnings: ['single_guest'],
+    PlannerDismissedWarnings: [],
+  };
+  const dismissed = computePlannerFields({
+    item,
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+    overrides: { dismissWarning: 'single_guest' },
+  });
+  assert.equal(dismissed.warnings.includes('single_guest'), false);
+  assert.deepEqual(dismissed.dismissedWarnings, ['single_guest']);
+  assert.equal(plannerFieldsChanged(item, dismissed), false);
+  assert.equal(plannerStateChanged(item, dismissed), true);
+
+  const stillOneGuest = computePlannerFields({
+    item: {
+      ...item,
+      PlannerDismissedWarnings: ['single_guest'],
+      PlannerWarnings: [],
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(stillOneGuest.warnings.includes('single_guest'), false);
+
+  const laterMoreGuests = computePlannerFields({
+    item: {
+      ...item,
+      Guests: 2,
+      PlannerDismissedWarnings: ['single_guest'],
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(laterMoreGuests.dismissedWarnings.includes('single_guest'), false);
+
+  const backToOneGuest = computePlannerFields({
+    item: {
+      ...item,
+      Guests: 1,
+      PlannerDismissedWarnings: laterMoreGuests.dismissedWarnings,
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(backToOneGuest.warnings.includes('single_guest'), true);
+});
+
+test('syncs Guesty when Dynamo already has the calculation', () => {
+  const patch = computePlannerFields({
+    item: baseItem,
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(plannerFieldsChanged(baseItem, patch), false);
+  assert.equal(
+    shouldWritePlannerToGuesty({
+      syncGuesty: true,
+      notesFrozen: false,
+      status: 'confirmed',
+      plannerEnabled: true,
+      inWindow: true,
+      hasOverrides: false,
+      fieldsChanged: false,
+      remoteMatches: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldWritePlannerToGuesty({
+      syncGuesty: true,
+      notesFrozen: false,
+      status: 'confirmed',
+      plannerEnabled: true,
+      inWindow: true,
+      hasOverrides: false,
+      fieldsChanged: false,
+      remoteMatches: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldWritePlannerToGuesty({
+      syncGuesty: true,
+      notesFrozen: true,
+      status: 'confirmed',
+      plannerEnabled: true,
+      inWindow: true,
+      hasOverrides: false,
+      fieldsChanged: true,
+      remoteMatches: false,
+    }),
+    false,
+  );
+  assert.equal(
+    guestyReservationMatchesPlannerPatch(
+      {
+        specialRequests: patch.giftCard,
+        notes: { cleaning: patch.linen, other: patch.earlyCheckIn },
+        customFields: [{ fieldId: ACCESS_FIELD_ID, value: patch.access }],
+      },
+      patch,
+    ),
+    true,
+  );
+  assert.equal(
+    guestyReservationMatchesPlannerPatch(
+      { notes: null, specialRequests: null },
+      patch,
+    ),
+    false,
+  );
 });
