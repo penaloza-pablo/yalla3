@@ -1,5 +1,8 @@
-import { isActivePlannerStatus } from './bookings-planner';
-import { addDaysToDateString } from './date-range';
+import { isActivePlannerStatus, PLANNER_WINDOW_DAYS } from './bookings-planner';
+import {
+  addDaysToDateString,
+  getInclusiveDayCount,
+} from './date-range';
 import { resolveYallaPropertyLabel } from './property-identity';
 
 export const CHECK_IN_TRACKER_STATUSES = [
@@ -12,6 +15,8 @@ export const CHECK_IN_TRACKER_STATUSES = [
 export type CheckInTrackerStatus = (typeof CHECK_IN_TRACKER_STATUSES)[number];
 
 export const CHECK_IN_LOOKBACK_DAYS = 1;
+export const CHECK_IN_TRACKER_MAX_RANGE_DAYS = 14;
+export const CHECK_IN_TRACKER_UPCOMING_DAYS = PLANNER_WINDOW_DAYS;
 
 const CLEANING_VISIT_TYPE_ID = 'visit_type_cleaning';
 const MAINTENANCE_VISIT_TYPE_IDS = [
@@ -45,6 +50,44 @@ const asString = (value: unknown) =>
 
 export const isIsoDateOnly = (value?: string) =>
   Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()));
+
+export const resolveTrackerDateWindow = ({
+  date,
+  from,
+  to,
+  today,
+}: {
+  date?: string;
+  from?: string;
+  to?: string;
+  today: string;
+}):
+  | { ok: true; from: string; to: string }
+  | { ok: false; error: string } => {
+  const start = from?.trim();
+  const end = to?.trim();
+  if (start || end) {
+    if (!start || !end || !isIsoDateOnly(start) || !isIsoDateOnly(end)) {
+      return { ok: false, error: 'from and to must be YYYY-MM-DD.' };
+    }
+    const orderedFrom = start <= end ? start : end;
+    const orderedTo = start <= end ? end : start;
+    const days = getInclusiveDayCount(orderedFrom, orderedTo);
+    if (days < 1 || days > CHECK_IN_TRACKER_MAX_RANGE_DAYS) {
+      return {
+        ok: false,
+        error: `range must be 1-${CHECK_IN_TRACKER_MAX_RANGE_DAYS} days.`,
+      };
+    }
+    return { ok: true, from: orderedFrom, to: orderedTo };
+  }
+
+  const selected = date?.trim() || today;
+  if (!isIsoDateOnly(selected)) {
+    return { ok: false, error: 'date must be YYYY-MM-DD.' };
+  }
+  return { ok: true, from: selected, to: selected };
+};
 
 export const toDateOnly = (value: unknown) => asString(value).slice(0, 10);
 

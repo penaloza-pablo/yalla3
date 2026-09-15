@@ -116,6 +116,7 @@ export function DashboardGrid({
               <DashboardWidget
                 key={placement.id}
                 name={t(definition.titleKey)}
+                kind={definition.kind}
                 scale={scale}
                 onConfigure={
                   showConfig ? () => setConfigId(definition.id) : undefined

@@ -4,6 +4,7 @@ import { SegmentedControl } from '../SegmentedControl'
 import { Specimen } from './Specimen'
 import { DashboardGrid } from '../../dashboard/DashboardGrid'
 import { DashboardLayoutEditor } from '../../dashboard/DashboardLayoutEditor'
+import { IncidentsCheckinWidget } from '../../dashboard/checkin/IncidentsCheckinWidget'
 import { DASHBOARD_LAYOUT_1 } from '../../dashboard/layouts'
 import { useDashboardLayouts } from '../../dashboard/layout-store'
 import { largestScale } from '../../dashboard/scale'
@@ -36,7 +37,7 @@ export function WidgetsSpecimens() {
     id: 'layout.spans',
     widgets: [
       { id: 'span-0', widgetId: 'swatch.rose', colSpan: 1, rowSpan: 1 },
-      { id: 'span-1', widgetId: 'swatch.energy', colSpan: 2, rowSpan: 1 },
+      { id: 'span-1', widgetId: 'swatch.energy', colSpan: 2, rowSpan: 2 },
       { id: 'span-2', widgetId: 'swatch.go', colSpan: 2, rowSpan: 2 },
       { id: 'span-3', widgetId: 'swatch.success', colSpan: 1, rowSpan: 2 },
       { id: 'span-4', widgetId: 'swatch.human', colSpan: 4, rowSpan: 1 },
@@ -47,6 +48,16 @@ export function WidgetsSpecimens() {
   return (
     <>
       <p className="yl-kit-legend">{t('kit.widgetsIntro')}</p>
+      <Specimen
+        refName="yl.widget.incidents"
+        title={t('kit.widgetIncidents')}
+        usage={t('kit.widgetIncidentsUsage')}
+        desktop={
+          <div className="yl-kit-checkin-stage">
+            <IncidentsCheckinWidget colSpan={4} rowSpan={2} />
+          </div>
+        }
+      />
       <Specimen
         refName="yl.dashboard.layout"
         title={t('kit.dashboardLayout')}

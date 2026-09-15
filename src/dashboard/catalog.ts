@@ -25,9 +25,11 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
   },
   {
     id: 'swatch.energy',
-    kind: 'swatch',
+    kind: 'checkin',
     titleKey: 'dashboard.widgets.energy',
     scales: [
+      { colSpan: 4, rowSpan: 2, swatch: 'var(--yl-energy)' },
+      { colSpan: 2, rowSpan: 2, swatch: 'var(--yl-energy)' },
       { colSpan: 2, rowSpan: 1, swatch: 'var(--yl-energy)' },
       { colSpan: 1, rowSpan: 1, swatch: '#de8a7f' },
     ],

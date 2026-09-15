@@ -1,11 +1,12 @@
 import { BatchGetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { queryVisitsForScheduledDate } from '../shared/cleaning-plan';
 import {
-  isIsoDateOnly,
+  CHECK_IN_LOOKBACK_DAYS,
   mapCheckInTrackerRow,
+  resolveTrackerDateWindow,
   shouldIncludeBooking,
 } from '../shared/check-in-tracker';
-import { addDaysToDateString } from '../shared/date-range';
+import { addDaysToDateString, listDatesInRange } from '../shared/date-range';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -116,25 +117,38 @@ export const handler = async (event: HttpEvent) => {
 
   const bookingsTable = process.env.BOOKINGS_TABLE || 'yalla-bookings';
   const visitsTable = process.env.VISITS_TABLE || 'yalla-visits';
-  const dateParam = event.queryStringParameters?.date?.trim();
-  const date = dateParam || getTodayInMadrid();
-  if (!isIsoDateOnly(date)) {
-    return buildHttpResponse(400, { message: 'date must be YYYY-MM-DD.' });
+  const window = resolveTrackerDateWindow({
+    date: event.queryStringParameters?.date,
+    from: event.queryStringParameters?.from,
+    to: event.queryStringParameters?.to,
+    today: getTodayInMadrid(),
+  });
+  if (!window.ok) {
+    return buildHttpResponse(400, { message: window.error });
   }
 
   try {
-    const previousDate = addDaysToDateString(date, -1);
-    const [rawBookings, visitsToday, visitsYesterday] = await Promise.all([
-      queryCheckIns(bookingsTable, date),
-      queryVisitsForScheduledDate(visitsTable, date),
-      queryVisitsForScheduledDate(visitsTable, previousDate),
+    const checkInDates = listDatesInRange(window.from, window.to);
+    const visitDates = listDatesInRange(
+      addDaysToDateString(window.from, -CHECK_IN_LOOKBACK_DAYS),
+      window.to,
+    );
+    const [bookingGroups, visitGroups] = await Promise.all([
+      Promise.all(checkInDates.map((day) => queryCheckIns(bookingsTable, day))),
+      Promise.all(
+        visitDates.map((day) => queryVisitsForScheduledDate(visitsTable, day)),
+      ),
     ]);
-    const confirmed = rawBookings.filter(shouldIncludeBooking);
+    const confirmed = bookingGroups.flat().filter(shouldIncludeBooking);
     const bookings = await hydrateTrackerFlags(bookingsTable, confirmed);
-    const visits = [...visitsYesterday, ...visitsToday];
+    const visits = visitGroups.flat();
     const items = bookings
       .map((item) => mapCheckInTrackerRow(item, visits))
       .sort((left, right) => {
+        const date = left.checkInDate.localeCompare(right.checkInDate);
+        if (date !== 0) {
+          return date;
+        }
         const property = left.property.localeCompare(right.property, 'es');
         if (property !== 0) {
           return property;
@@ -143,7 +157,9 @@ export const handler = async (event: HttpEvent) => {
       });
 
     return buildHttpResponse(200, {
-      date,
+      date: window.from,
+      from: window.from,
+      to: window.to,
       items,
       count: items.length,
     });

@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   applyTrackerFlagPatch,
+  CHECK_IN_TRACKER_MAX_RANGE_DAYS,
   isBlockingVisitForCheckIn,
   mapCheckInTrackerRow,
   resolveCheckInTrackerStatus,
+  resolveTrackerDateWindow,
   shouldIncludeBooking,
 } from './check-in-tracker';
 
@@ -171,4 +173,40 @@ test('only confirmed bookings are tracked', () => {
   assert.equal(shouldIncludeBooking(booking), true);
   assert.equal(shouldIncludeBooking({ ...booking, Status: 'inquiry' }), false);
   assert.equal(shouldIncludeBooking({ ...booking, Status: 'cancelled' }), false);
+});
+
+test('tracker date window accepts a single day or a bounded range', () => {
+  assert.deepEqual(
+    resolveTrackerDateWindow({ today: '2026-09-16' }),
+    { ok: true, from: '2026-09-16', to: '2026-09-16' },
+  );
+  assert.deepEqual(
+    resolveTrackerDateWindow({ date: '2026-09-20', today: '2026-09-16' }),
+    { ok: true, from: '2026-09-20', to: '2026-09-20' },
+  );
+  assert.deepEqual(
+    resolveTrackerDateWindow({
+      from: '2026-09-16',
+      to: '2026-09-22',
+      today: '2026-09-16',
+    }),
+    { ok: true, from: '2026-09-16', to: '2026-09-22' },
+  );
+  const tooWide = resolveTrackerDateWindow({
+    from: '2026-09-01',
+    to: '2026-09-30',
+    today: '2026-09-16',
+  });
+  assert.equal(tooWide.ok, false);
+  const inverted = resolveTrackerDateWindow({
+    from: '2026-09-22',
+    to: '2026-09-16',
+    today: '2026-09-16',
+  });
+  assert.deepEqual(inverted, {
+    ok: true,
+    from: '2026-09-16',
+    to: '2026-09-22',
+  });
+  assert.equal(CHECK_IN_TRACKER_MAX_RANGE_DAYS, 14);
 });

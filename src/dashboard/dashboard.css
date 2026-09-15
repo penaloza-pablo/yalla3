@@ -77,8 +77,66 @@
   cursor: pointer;
 }
 
+.yl-dashboard-widget.is-checkin {
+  padding: 0;
+  background: transparent;
+  color: var(--yl-ink);
+}
+
 .yl-dashboard-widget.is-ink .yl-dashboard-widget-config {
   background: rgba(65, 83, 100, 0.12);
+}
+
+.yl-dashboard-widget.is-checkin .yl-dashboard-widget-config {
+  z-index: 2;
+  background: rgba(246, 241, 232, 0.88);
+  color: var(--yl-ink);
+}
+
+.yl-dashboard-checkin {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.yl-dashboard-checkin.is-loading,
+.yl-dashboard-checkin-mini {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  height: 100%;
+  padding: 10px 12px;
+  border-radius: var(--yl-radius-card);
+  background: #f6f1e8;
+  color: var(--yl-ink);
+  box-sizing: border-box;
+}
+
+.yl-dashboard-checkin-mini-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.yl-dashboard-checkin-status,
+.yl-dashboard-checkin-count {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--yl-text-2);
+}
+
+.yl-kit-checkin-stage {
+  width: 100%;
+  max-width: 680px;
+  min-height: 188px;
+}
+
+.yl-kit-checkin-stage .yl-dashboard-checkin {
+  min-height: 188px;
 }
 
 .yl-dashboard-widget-name {

@@ -7,8 +7,8 @@ export const DASHBOARD_CELL_PX = 156
 export type DashboardColSpan = 1 | 2 | 3 | 4
 export type DashboardRowSpan = 1 | 2 | 3 | 4
 
-/** Scaffold kind. Later: metric, chart, list, and other Yalla data widgets. */
-export type DashboardWidgetKind = 'swatch'
+/** Scaffold kind. Swatches are color tiles; checkin is the Trayecto live widget. */
+export type DashboardWidgetKind = 'swatch' | 'checkin'
 
 export type DashboardWidgetScale = {
   colSpan: DashboardColSpan

@@ -14,7 +14,13 @@ import {
   formatDateOnlyLabel,
   getTodayMadrid,
 } from '../operations/dateHelpers'
+import {
+  asTrackerRow,
+  type TrackerResponse,
+  type TrackerRow,
+} from './checkInTrackerShared'
 import { YallaSwitch } from './YallaSwitch'
+import { syncCheckinLiveFlags } from '../dashboard/checkin/tracker-live-store'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -24,73 +30,12 @@ type Props = {
   onToggleMobileSearch: () => void
 }
 
-type OpenVisit = {
-  id: string
-  kind: 'cleaning' | 'maintenance'
-  scheduledDate: string
-  status: string
-  title: string
-}
-
-type TrackerRow = {
-  id: string
-  listingId: string
-  guestName: string
-  property: string
-  checkInDate: string
-  checkOutDate: string
-  status: CheckInTrackerStatus
-  accessGranted: boolean
-  guestEntered: boolean
-  openVisits: OpenVisit[]
-}
-
-type TrackerResponse = {
-  date?: string
-  items?: TrackerRow[]
-  message?: string
-}
-
 const STATUS_TONE: Record<CheckInTrackerStatus, string> = {
   jobs_pending: 'status-warning',
   property_ready: 'status-neutral',
   access_granted: 'status-info',
   guest_entered: 'status-success',
 }
-
-const asRow = (item: Record<string, unknown>): TrackerRow => ({
-  id: String(item.id ?? item.ReservationID ?? ''),
-  listingId: String(item.listingId ?? ''),
-  guestName: String(item.guestName ?? '—'),
-  property: String(item.property ?? '—'),
-  checkInDate: String(item.checkInDate ?? ''),
-  checkOutDate: String(item.checkOutDate ?? ''),
-  status: CHECK_IN_TRACKER_STATUSES.includes(
-    item.status as CheckInTrackerStatus,
-  )
-    ? (item.status as CheckInTrackerStatus)
-    : 'jobs_pending',
-  accessGranted: item.accessGranted === true,
-  guestEntered: item.guestEntered === true,
-  openVisits: Array.isArray(item.openVisits)
-    ? item.openVisits
-        .map((entry) => {
-          if (!entry || typeof entry !== 'object') {
-            return null
-          }
-          const visit = entry as Record<string, unknown>
-          const kind = visit.kind === 'maintenance' ? 'maintenance' : 'cleaning'
-          return {
-            id: String(visit.id ?? ''),
-            kind,
-            scheduledDate: String(visit.scheduledDate ?? ''),
-            status: String(visit.status ?? ''),
-            title: String(visit.title ?? ''),
-          }
-        })
-        .filter((visit): visit is OpenVisit => Boolean(visit?.id))
-    : [],
-})
 
 const matchesSearch = (query: string, row: TrackerRow) => {
   const normalized = query.trim().toLowerCase()
@@ -141,7 +86,7 @@ export function CheckInTrackerView({
       const payload = await fetchJson<TrackerResponse>(
         `${endpoints.getTracker}?date=${encodeURIComponent(date)}`,
       )
-      setRows((payload.items ?? []).map((item) => asRow(item as unknown as Record<string, unknown>)))
+      setRows((payload.items ?? []).map((item) => asTrackerRow(item as unknown as Record<string, unknown>)))
     } catch (loadError) {
       setRows([])
       setError(
@@ -196,6 +141,7 @@ export function CheckInTrackerView({
       })
       const accessGranted = payload.item?.accessGranted === true
       const guestEntered = payload.item?.guestEntered === true
+      syncCheckinLiveFlags(row.id, { accessGranted, guestEntered })
       setRows((current) =>
         current.map((entry) => {
           if (entry.id !== row.id) {
