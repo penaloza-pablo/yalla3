@@ -43,6 +43,7 @@ const FEATURE_OPTIONS = [
   'Properties',
   'Bookings',
   'Bookings Plan',
+  'Check-in Tracker',
   'Bookings settings',
   'Reviews',
   'Daily Operations',

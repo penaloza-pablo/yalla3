@@ -154,6 +154,28 @@
     "dismissSingleGuestBody": "Solo ciérrala si ya confirmaste con el huésped que la reserva será para una sola persona.",
     "dismissWarningConfirm": "Sí, está confirmado"
   },
+  "checkInTracker": {
+    "eyebrow": "Reservas / Check-in",
+    "subtitle": "Check-ins confirmados del {{date}}. El estado sigue los trabajos, el acceso y si el huésped ya ha entrado a su unidad.",
+    "loading": "Cargando el check-in tracker...",
+    "empty": "No hay check-ins confirmados en esta fecha.",
+    "emptyFiltered": "Ningún check-in coincide con la búsqueda.",
+    "missingEndpoint": "Falta el endpoint del check-in tracker. Redesplega el backend.",
+    "missingWrite": "Falta el endpoint de escritura del check-in tracker. Redesplega el backend.",
+    "loadError": "No se pudo cargar el check-in tracker.",
+    "saveError": "No se pudo actualizar el progreso del check-in.",
+    "search": "Buscar huésped o propiedad",
+    "state": "Estado",
+    "openVisits": "{{count}} visitas abiertas",
+    "markAccess": "Marcar acceso concedido",
+    "markEntered": "Marcar que el huésped ha entrado a su unidad",
+    "status": {
+      "jobs_pending": "Pendiente de trabajos",
+      "property_ready": "Propiedad lista",
+      "access_granted": "Acceso concedido",
+      "guest_entered": "Ha entrado"
+    }
+  },
   "bookingsSettings": {
     "eyebrow": "Reservas / Ajustes",
     "subtitle": "Enciende o apaga el planner y elige propiedades excluidas de cada regla.",
@@ -476,6 +498,7 @@
     "Today": "Hoy",
     "Bookings": "Reservas",
     "Bookings Plan": "Plan de reservas",
+    "Check-in Tracker": "Check-in tracker",
     "Bookings settings": "Ajustes de reservas",
     "Chatbot": "Chatbot",
     "Cleaning Plan": "Plan de limpieza",
@@ -663,6 +686,7 @@
     "Reviews": "Reseñas",
     "Bookings": "Reservas",
     "Bookings Plan": "Plan",
+    "Check-in Tracker": "Check-in",
     "Bookings settings": "Ajustes",
     "Cleaning Plan": "Plan",
     "Cleaning Incidents": "Incidencias",

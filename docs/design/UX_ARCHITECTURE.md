@@ -46,7 +46,7 @@ Hoy            → pulso + atajos (Today)
 Operaciones    → calendario / visitas / tareas / templates
 Limpieza       → plan del día · incidencias · facturación · configuración
 Mantenimiento  → (espejo)
-Reservas       → lista · planificador · reglas
+Reservas       → lista · planificador · check-in tracker · reglas
 Inventario     → stock · conteo · compras · extracciones
 Finanzas       → reportes · movimientos · servicios · grupos
 Administración → usuarios · roles · logs · Slack · cuenta
@@ -94,7 +94,7 @@ Misma sidebar de dos niveles que en escritorio, **visible por defecto**. Ocultar
 | Template Auto Assign | Operaciones → Ajustes de visitas → Auto-asignación | |
 | Inventory / Spot Check / Purchases / Subtractions | Inventario → funcionalidades en sidebar | |
 | Properties / Reviews | Operaciones → Propiedades / Reviews **o** grupo “Calidad” | Reviews es workflow largo: puede merecer entrada propia bajo Operaciones |
-| Bookings * | Reservas → funcionalidades Lista / Plan / Reglas | |
+| Bookings * | Reservas → funcionalidades Lista / Plan / Check-in tracker / Reglas | |
 | Cleaning * | Limpieza → Plan, Incidencias, Facturación, Ajustes | Relabel “Historial” → **Facturación** |
 | Maintenance * | Mantenimiento → espejo de Limpieza | |
 | Property Reports / Groups / Movements / Services / Reports Settings | Finanzas → funcionalidades en sidebar | |

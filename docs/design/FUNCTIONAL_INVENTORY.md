@@ -55,7 +55,7 @@ El valor del producto es **orquestar el día**: visitas, limpiezas, mantenimient
 Inventory     → Inventory | Spot Check | Purchases | Subtractions
                 ES: Inventario | Revisión y conteo | Compras | Extracciones
 Ops           → Properties | Reviews | Unassigned tasks | Visit templates | Template Auto Assign
-Bookings      → Bookings | Bookings Plan | Bookings settings
+Bookings      → Bookings | Bookings Plan | Check-in Tracker | Bookings settings
 Cleaning      → Cleaning Plan | Cleaning Incidents | Cleaning Billing | Cleaning settings
                 ES sidebar: Plan | Incidencias | Historial | Ajustes  (etiquetas ambiguas)
 Maintenance   → Maintenance Plan | Incidents | Billing | settings  (mismo patrón de etiquetas)
@@ -169,6 +169,7 @@ Leyenda de estados típicos: loading, empty, error, success/notice, permiso dene
 | Reviews | Sync Guesty, filtros rating/fechas/status, detalle, workflow multi-step | `get-reviews`, `get-reviews-sync-state`, `proxy-guesty-reviews-sync`, `update-review-workflow` | Conservar todos los pasos del workflow; el panel púrpura es drift visual, no funcional |
 | Bookings lista | Cursor pagination, sync Guesty, filtros status, linen / early CI / gift card | `get-bookings`, `proxy-guesty-bookings-sync` | |
 | Bookings Plan | Planner: linen badges, early CI, warnings dismiss; edición si planner ON | `upsert-booking-planner-fields` | |
+| Check-in Tracker | Tabla diaria de check-ins confirmed; estados derivados de visitas limpieza/mantenimiento (D y D-1) y flags manuales de acceso / huésped ha entrado | `get/upsert-check-in-tracker` | Estados: Pendiente de trabajos → Propiedad lista → Acceso concedido → Ha entrado. «Ha entrado» cubre piso completo y habitación de hostel. |
 | Bookings settings | Toggle planner, apply window, Apply now, reglas por property | `get/upsert-bookings-planner-settings`, `apply-bookings-planner` | Apply now es operación real contra producción |
 
 ### 5.9 Cleaning

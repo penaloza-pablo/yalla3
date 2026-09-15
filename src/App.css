@@ -5857,6 +5857,11 @@ th {
   .data-table-bookings-plan td:nth-child(9)::before { content: 'Warnings'; }
   .data-table-bookings-plan td:nth-child(10)::before { content: 'Actions'; }
 
+  .data-table-check-in-tracker td:nth-child(1)::before { content: 'Guest'; }
+  .data-table-check-in-tracker td:nth-child(2)::before { content: 'Property'; }
+  .data-table-check-in-tracker td:nth-child(3)::before { content: 'Status'; }
+  .data-table-check-in-tracker td:nth-child(4)::before { content: 'Actions'; }
+
   .data-table-reviews td:nth-child(1)::before { content: 'Guest'; }
   .data-table-reviews td:nth-child(2)::before { content: 'Listing'; }
   .data-table-reviews td:nth-child(3)::before { content: 'Rating'; }
@@ -7287,6 +7292,61 @@ th {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.check-in-tracker-date {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.check-in-tracker-date input[type='date'] {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.check-in-tracker-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tracker-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tracker-step {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e4e7ec;
+}
+
+.tracker-step.is-done,
+.tracker-step.is-current {
+  background: #12b76a;
+}
+
+.tracker-step.is-current {
+  box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.2);
+}
+
+.check-in-tracker-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check-in-tracker-actions .plan-detail-control span {
+  font-size: 0.82rem;
+  color: #344054;
 }
 
 .linen-badge-wrap {

@@ -38,6 +38,8 @@ import { getBookingsPlannerSettings } from './functions/get-bookings-planner-set
 import { upsertBookingsPlannerSettings } from './functions/upsert-bookings-planner-settings/resource';
 import { applyBookingsPlanner } from './functions/apply-bookings-planner/resource';
 import { upsertBookingPlannerFields } from './functions/upsert-booking-planner-fields/resource';
+import { getCheckInTracker } from './functions/get-check-in-tracker/resource';
+import { upsertCheckInTracker } from './functions/upsert-check-in-tracker/resource';
 import { getReviews } from './functions/get-reviews/resource';
 import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
 import { updateReviewWorkflow } from './functions/update-review-workflow/resource';
@@ -125,6 +127,8 @@ const backend = defineBackend({
   upsertBookingsPlannerSettings,
   applyBookingsPlanner,
   upsertBookingPlannerFields,
+  getCheckInTracker,
+  upsertCheckInTracker,
   getReviews,
   getReviewsSyncState,
   updateReviewWorkflow,
@@ -213,6 +217,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertBookingsPlannerSettings,
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
+  backend.getCheckInTracker,
+  backend.upsertCheckInTracker,
   backend.getReviews,
   backend.getReviewsSyncState,
   backend.updateReviewWorkflow,
@@ -430,6 +436,8 @@ bookingsTable.grantReadWriteData(backend.applyBookingsPlanner.resources.lambda);
 bookingsTable.grantReadWriteData(
   backend.upsertBookingPlannerFields.resources.lambda,
 );
+bookingsTable.grantReadData(backend.getCheckInTracker.resources.lambda);
+bookingsTable.grantReadWriteData(backend.upsertCheckInTracker.resources.lambda);
 backend.getBookings.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: [
@@ -477,6 +485,19 @@ backend.applyBookingsPlanner.resources.lambda.addToRolePolicy(
 );
 backend.upsertBookingPlannerFields.resources.lambda.addToRolePolicy(
   bookingsPlannerIndexPolicy,
+);
+backend.getCheckInTracker.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+    ],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
 );
 
 const bookingsPlannerSettingsTable = Table.fromTableName(
@@ -579,6 +600,7 @@ reviewsTable.grantWriteData(backend.updateReviewWorkflow.resources.lambda);
 reviewSyncStateTable.grantReadData(backend.getReviewsSyncState.resources.lambda);
 visitsTable.grantReadWriteData(backend.getVisits.resources.lambda);
 visitsTable.grantReadData(backend.getTodaySummary.resources.lambda);
+visitsTable.grantReadData(backend.getCheckInTracker.resources.lambda);
 visitsTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
 visitsTable.grantReadWriteData(backend.handleSlackCommand.resources.lambda);
 visitsTable.grantReadWriteData(backend.notifyCleaningOverdue.resources.lambda);
@@ -859,6 +881,7 @@ const activityLogWriters = [
   backend.proxyGuestyBookingsSync,
   backend.upsertBookingsPlannerSettings,
   backend.upsertBookingPlannerFields,
+  backend.upsertCheckInTracker,
   backend.completeSpotCheck,
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
@@ -1367,6 +1390,7 @@ const visitsIndexPolicy = new PolicyStatement({
   resources: [`${visitsTable.tableArn}/index/*`],
 });
 backend.getCleaningPlan.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.getCheckInTracker.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],
@@ -1899,6 +1923,14 @@ const upsertBookingPlannerFieldsUrl =
   backend.upsertBookingPlannerFields.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getCheckInTrackerUrl =
+  backend.getCheckInTracker.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertCheckInTrackerUrl =
+  backend.upsertCheckInTracker.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getReviewsUrl = backend.getReviews.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -2146,6 +2178,8 @@ backend.addOutput({
     upsertBookingsPlannerSettingsUrl: upsertBookingsPlannerSettingsUrl.url,
     applyBookingsPlannerUrl: applyBookingsPlannerUrl.url,
     upsertBookingPlannerFieldsUrl: upsertBookingPlannerFieldsUrl.url,
+    getCheckInTrackerUrl: getCheckInTrackerUrl.url,
+    upsertCheckInTrackerUrl: upsertCheckInTrackerUrl.url,
     getReviewsUrl: getReviewsUrl.url,
     getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
     updateReviewWorkflowUrl: updateReviewWorkflowUrl.url,

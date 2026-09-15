@@ -15,6 +15,7 @@ export const LOG_FEATURES = {
   PROPERTIES: 'Properties',
   BOOKINGS: 'Bookings',
   BOOKINGS_PLAN: 'Bookings Plan',
+  CHECK_IN_TRACKER: 'Check-in Tracker',
   BOOKINGS_SETTINGS: 'Bookings settings',
   REVIEWS: 'Reviews',
   OPERATIONS: 'Daily Operations',

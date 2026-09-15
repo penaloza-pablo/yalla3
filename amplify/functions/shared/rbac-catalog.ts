@@ -22,7 +22,13 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Bookings',
-    items: ['Bookings', 'Bookings Plan', 'Reviews', 'Bookings settings'],
+    items: [
+      'Bookings',
+      'Bookings Plan',
+      'Check-in Tracker',
+      'Reviews',
+      'Bookings settings',
+    ],
   },
   {
     section: 'Cleaning',
@@ -216,7 +222,7 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 3
+export const PERMISSIONS_CATALOG_VERSION = 4
 
 export const applyPermissionCatalog = (
   permissions: string[],
@@ -256,6 +262,14 @@ export const applyPermissionCatalog = (
       next.includes(pagePermission('Visit templates'))
     if (hasOpsSetup && !next.includes(pagePermission('Job scheduler'))) {
       next.push(pagePermission('Job scheduler'))
+    }
+  }
+  if (from < 4) {
+    if (
+      next.includes(pagePermission('Bookings Plan')) &&
+      !next.includes(pagePermission('Check-in Tracker'))
+    ) {
+      next.push(pagePermission('Check-in Tracker'))
     }
   }
   return next
@@ -322,6 +336,7 @@ export const ROLE_SEEDS: {
         'Properties',
         'Bookings',
         'Bookings Plan',
+        'Check-in Tracker',
         'Bookings settings',
         'Reviews',
         'Unassigned tasks',
@@ -368,6 +383,7 @@ export const ROLE_SEEDS: {
         'Properties',
         'Bookings',
         'Bookings Plan',
+        'Check-in Tracker',
         'Bookings settings',
         'Unassigned tasks',
         'Maintenance Plan',

@@ -154,6 +154,28 @@
     "dismissSingleGuestBody": "Only dismiss it after the guest has confirmed this booking will be for one person.",
     "dismissWarningConfirm": "Yes, it is confirmed"
   },
+  "checkInTracker": {
+    "eyebrow": "Bookings / Check-in",
+    "subtitle": "Confirmed check-ins for {{date}}. Status follows jobs, then access, then whether the guest has entered the unit.",
+    "loading": "Loading check-in tracker...",
+    "empty": "No confirmed check-ins on this date.",
+    "emptyFiltered": "No check-ins match the current search.",
+    "missingEndpoint": "Missing check-in tracker endpoint. Redeploy the backend.",
+    "missingWrite": "Missing check-in tracker write endpoint. Redeploy the backend.",
+    "loadError": "Unable to load the check-in tracker.",
+    "saveError": "Unable to update check-in progress.",
+    "search": "Search guest or property",
+    "state": "Status",
+    "openVisits": "{{count}} open visits",
+    "markAccess": "Mark access granted",
+    "markEntered": "Mark guest has entered the unit",
+    "status": {
+      "jobs_pending": "Jobs pending",
+      "property_ready": "Property ready",
+      "access_granted": "Access granted",
+      "guest_entered": "Guest entered"
+    }
+  },
   "bookingsSettings": {
     "eyebrow": "Bookings / Settings",
     "subtitle": "Turn the planner on or off and choose which properties are excluded from each rule.",
@@ -476,6 +498,7 @@
     "Today": "Today",
     "Bookings": "Bookings",
     "Bookings Plan": "Bookings Plan",
+    "Check-in Tracker": "Check-in Tracker",
     "Bookings settings": "Bookings settings",
     "Chatbot": "Chatbot",
     "Cleaning Plan": "Cleaning Plan",
@@ -663,6 +686,7 @@
     "Reviews": "Reviews",
     "Bookings": "Bookings",
     "Bookings Plan": "Plan",
+    "Check-in Tracker": "Check-in",
     "Bookings settings": "Settings",
     "Cleaning Plan": "Plan",
     "Cleaning Incidents": "Incidents",

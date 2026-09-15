@@ -671,6 +671,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   'Job scheduler': 'arrow.clockwise',
   Bookings: 'calendar',
   'Bookings Plan': 'list.bullet.rectangle',
+  'Check-in Tracker': 'arrow.right.to.bracket',
   'Bookings settings': 'gearshape',
   'Cleaning Plan': 'drop',
   'Cleaning Incidents': 'exclamationmark.triangle',

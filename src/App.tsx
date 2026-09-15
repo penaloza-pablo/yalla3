@@ -52,6 +52,7 @@ import { CleaningIncidentsView } from './cleaning/CleaningIncidentsView'
 import { CleaningBillingView } from './cleaning/CleaningBillingView'
 import { CleaningSettingsView } from './cleaning/CleaningSettingsView'
 import { BookingsPlanView } from './bookings/BookingsPlanView'
+import { CheckInTrackerView } from './bookings/CheckInTrackerView'
 import { BookingsSettingsView } from './bookings/BookingsSettingsView'
 import { LinenBadgeSelect } from './bookings/LinenBadgeSelect'
 import { YallaSwitch } from './bookings/YallaSwitch'
@@ -3236,6 +3237,7 @@ function App() {
       activePage === 'Maintenance Billing' ||
       activePage === 'Maintenance settings' ||
       activePage === 'Bookings Plan' ||
+      activePage === 'Check-in Tracker' ||
       activePage === 'Bookings settings'
     if (needsProperties) {
       void fetchProperties()
@@ -8643,6 +8645,16 @@ function App() {
           <BookingsPlanView
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
+          />
+        ) : activePage === 'Check-in Tracker' ? (
+          <CheckInTrackerView
+            getEndpoint={getEndpoint}
             searchQuery={tableSearchQuery}
             onSearchQueryChange={setTableSearchQuery}
             isMobileSearchOpen={isMobileSearchOpen}
