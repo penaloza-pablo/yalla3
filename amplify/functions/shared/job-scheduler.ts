@@ -10,6 +10,7 @@ import { docClient, getTodayInMadrid } from './visit-task-utils';
 
 export const JOB_SCHEDULER_ID_PREFIX = 'JSR';
 export const UPCOMING_CLEANING_DATES_LIMIT = 3;
+export const SCHEDULED_LOOKAHEAD_DAYS = 30;
 const MAX_VISITS_SCANNED_PER_PROPERTY = 4000;
 
 export type JobSchedulerRule = {
@@ -30,6 +31,8 @@ export type JobSchedulerRuleStatus = {
   lastCompletedVisitTitle: string | null;
   daysSince: number | null;
   isOverdue: boolean;
+  isScheduled: boolean;
+  nextScheduledDate: string | null;
   dueDate: string | null;
 };
 
@@ -191,7 +194,9 @@ export const statusForRule = (
   rule: JobSchedulerRule,
   lastVisit: Record<string, unknown> | undefined,
   today: string,
+  nextScheduledDate?: string | null,
 ): JobSchedulerRuleStatus => {
+  const isScheduled = Boolean(nextScheduledDate);
   if (!lastVisit) {
     return {
       lastCompletedDate: null,
@@ -199,6 +204,8 @@ export const statusForRule = (
       lastCompletedVisitTitle: null,
       daysSince: null,
       isOverdue: true,
+      isScheduled,
+      nextScheduledDate: nextScheduledDate ?? null,
       dueDate: today,
     };
   }
@@ -220,6 +227,8 @@ export const statusForRule = (
     daysSince,
     isOverdue:
       daysSince === null ? true : daysSince >= rule.intervalDays,
+    isScheduled,
+    nextScheduledDate: nextScheduledDate ?? null,
     dueDate,
   };
 };
@@ -317,7 +326,9 @@ export const collectSchedulerPropertyStatus = async (
 
   const remaining = new Set(rules.map((rule) => rule.id));
   const lastByRule = new Map<string, Record<string, unknown>>();
+  const nextScheduledByRule = new Map<string, string>();
   const upcomingSet = new Set<string>();
+  const horizon = addDaysToDateString(today, SCHEDULED_LOOKAHEAD_DAYS);
 
   for (const visit of visits) {
     const scheduledDate =
@@ -331,6 +342,22 @@ export const collectSchedulerPropertyStatus = async (
       isCleaningVisitType(visit.visitTypeId)
     ) {
       upcomingSet.add(scheduledDate);
+    }
+    const isOpen = status !== 'COMPLETED' && status !== 'CANCELLED';
+    if (
+      isOpen &&
+      scheduledDate > today &&
+      scheduledDate <= horizon
+    ) {
+      for (const rule of rules) {
+        if (!visitMatchesRule(visit, rule, templatesById)) {
+          continue;
+        }
+        const current = nextScheduledByRule.get(rule.id);
+        if (!current || scheduledDate < current) {
+          nextScheduledByRule.set(rule.id, scheduledDate);
+        }
+      }
     }
     if (status !== 'COMPLETED' || remaining.size === 0) {
       continue;
@@ -348,7 +375,12 @@ export const collectSchedulerPropertyStatus = async (
 
   const statuses: Record<string, JobSchedulerRuleStatus> = {};
   for (const rule of rules) {
-    statuses[rule.id] = statusForRule(rule, lastByRule.get(rule.id), today);
+    statuses[rule.id] = statusForRule(
+      rule,
+      lastByRule.get(rule.id),
+      today,
+      nextScheduledByRule.get(rule.id) ?? null,
+    );
   }
 
   return {

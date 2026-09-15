@@ -56,6 +56,7 @@ const COLOR_TOKENS = [
   ['--yl-fill', '#eef3f2'],
   ['--yl-success', '#027a48'],
   ['--yl-warning', '#b54708'],
+  ['--yl-caution', '#ac800b'],
   ['--yl-danger', '#b42318'],
 ] as const
 
@@ -688,6 +689,63 @@ export function VisualSystemView({ page }: VisualSystemViewProps) {
             max={12}
             meta={t('kit.progressMeta')}
           />
+        }
+      />
+      <Specimen
+        refName="yl.progress.bar"
+        title={t('kit.progressBar')}
+        usage={t('kit.progressBarUsage')}
+        desktop={
+          <div className="yl-kit-progress-stack">
+            <div className="yl-kit-progress-row">
+              <div
+                className="yl-progress is-ok"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={30}
+                aria-valuenow={10}
+                aria-label={t('kit.progressBarOk')}
+              >
+                <span style={{ width: '33%' }} />
+              </div>
+              <p className="yl-kit-progress-meta">
+                <code>--yl-go</code>
+                {t('kit.progressBarOk')}
+              </p>
+            </div>
+            <div className="yl-kit-progress-row">
+              <div
+                className="yl-progress is-soon"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={30}
+                aria-valuenow={28}
+                aria-label={t('kit.progressBarSoon')}
+              >
+                <span style={{ width: '93%' }} />
+              </div>
+              <p className="yl-kit-progress-meta">
+                <code>--yl-caution</code>
+                {t('kit.progressBarSoon')}
+              </p>
+            </div>
+            <div className="yl-kit-progress-row">
+              <div
+                className="yl-progress is-overdue"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={30}
+                aria-valuenow={30}
+                aria-label={t('kit.progressBarOverdue')}
+              >
+                <span style={{ width: '100%' }} />
+              </div>
+              <p className="yl-kit-progress-meta">
+                <code>--yl-danger</code>
+                {t('kit.progressBarOverdue')}
+              </p>
+            </div>
+          </div>
         }
       />
     </>

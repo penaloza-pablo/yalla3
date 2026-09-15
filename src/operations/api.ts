@@ -243,6 +243,11 @@ export const mapJobSchedulerStatus = (
       ? item.daysSince
       : null,
   isOverdue: item.isOverdue === true,
+  isScheduled: item.isScheduled === true,
+  nextScheduledDate:
+    typeof item.nextScheduledDate === 'string' && item.nextScheduledDate
+      ? item.nextScheduledDate
+      : null,
   dueDate:
     typeof item.dueDate === 'string' && item.dueDate ? item.dueDate : null,
 })

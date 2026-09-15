@@ -154,6 +154,33 @@
   color: var(--yl-text-3);
 }
 
+.yl-kit-progress-stack {
+  display: grid;
+  gap: 14px;
+  max-width: 420px;
+}
+
+.yl-kit-progress-row {
+  display: grid;
+  gap: 6px;
+}
+
+.yl-kit-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--yl-text-2);
+}
+
+.yl-kit-progress-meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--yl-go);
+}
+
 .yl-kit-pending {
   border: 1px dashed var(--yl-go);
   border-radius: 12px;

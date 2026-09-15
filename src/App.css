@@ -7346,7 +7346,39 @@ th {
 .job-scheduler-property {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.job-scheduler-property strong {
+  line-height: 1.2;
+}
+
+.job-scheduler-add-rule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 999px;
+  background: var(--yl-surface);
+  color: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.job-scheduler-add-rule:hover,
+.job-scheduler-add-rule:focus-visible {
+  background: var(--yl-go-soft);
+}
+
+.job-scheduler-add-rule .yl-icon,
+.job-scheduler-add-rule svg {
+  width: 0.7em;
+  height: 0.7em;
 }
 
 .job-scheduler-property-cell {
@@ -7364,6 +7396,19 @@ th {
 
 .job-scheduler-row-overdue td {
   background: #fffcf5;
+}
+
+.job-scheduler-meter-head {
+  width: 140px;
+}
+
+.job-scheduler-progress {
+  min-width: 88px;
+  max-width: 140px;
+}
+
+.job-scheduler-progress .yl-progress {
+  height: 6px;
 }
 
 .job-scheduler-tag {
@@ -7384,11 +7429,23 @@ th {
   color: #b54708;
 }
 
+.job-scheduler-tag.is-scheduled {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
 .job-scheduler-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.job-scheduler-actions .btn-group > button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .job-scheduler-enabled {

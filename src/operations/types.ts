@@ -137,6 +137,8 @@ export type JobSchedulerRuleStatus = {
   lastCompletedVisitTitle: string | null
   daysSince: number | null
   isOverdue: boolean
+  isScheduled: boolean
+  nextScheduledDate: string | null
   dueDate: string | null
 }
 

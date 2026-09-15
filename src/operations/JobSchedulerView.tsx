@@ -51,6 +51,8 @@ type CreateForm = {
   manualDate: string
 }
 
+type ProgressTone = 'ok' | 'soon' | 'overdue'
+
 const emptyRuleForm = (): RuleForm => ({
   id: '',
   propertyId: '',
@@ -76,6 +78,8 @@ const emptyStatus = (): JobSchedulerRuleStatus => ({
   lastCompletedVisitTitle: null,
   daysSince: null,
   isOverdue: true,
+  isScheduled: false,
+  nextScheduledDate: null,
   dueDate: null,
 })
 
@@ -83,6 +87,35 @@ const toggleListValue = (values: string[], value: string) =>
   values.includes(value)
     ? values.filter((entry) => entry !== value)
     : [...values, value]
+
+const isScheduledRule = (
+  rule: JobSchedulerRule,
+  status: JobSchedulerRuleStatus,
+) => rule.enabled && status.isScheduled
+
+const isWarningRule = (
+  rule: JobSchedulerRule,
+  status: JobSchedulerRuleStatus,
+) => rule.enabled && status.isOverdue && !status.isScheduled
+
+const progressForRule = (
+  rule: JobSchedulerRule,
+  status: JobSchedulerRuleStatus,
+  warning: boolean,
+) => {
+  const interval = Math.max(1, rule.intervalDays)
+  const elapsed = status.daysSince
+  const remaining = elapsed === null ? 0 : interval - elapsed
+  const ratio =
+    elapsed === null ? 1 : Math.min(1, Math.max(0, elapsed / interval))
+  const percent = warning ? 100 : Math.round(ratio * 100)
+  const tone: ProgressTone = warning
+    ? 'overdue'
+    : remaining <= 2
+      ? 'soon'
+      : 'ok'
+  return { percent, tone, remaining, interval, elapsed }
+}
 
 export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
   const { t, i18n } = useTranslation()
@@ -225,10 +258,10 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
         return false
       }
       if (overdueOnly) {
-        const hasOverdue = propertyRules.some(
-          (rule) => rule.enabled && (statuses[rule.id]?.isOverdue ?? true),
+        const hasWarning = propertyRules.some((rule) =>
+          isWarningRule(rule, statuses[rule.id] ?? emptyStatus()),
         )
-        if (!hasOverdue) {
+        if (!hasWarning) {
           return false
         }
       }
@@ -284,10 +317,13 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
 
   const openCreateVisit = (rule: JobSchedulerRule) => {
     const dates = upcomingCleaningDates[rule.propertyId] ?? []
+    const needsTemplatePick = rule.templateIds.length > 1
     setCreateForm({
       ruleId: rule.id,
       propertyId: rule.propertyId,
-      templateId: rule.createTemplateId || rule.templateIds[0] || '',
+      templateId: needsTemplatePick
+        ? ''
+        : rule.createTemplateId || rule.templateIds[0] || '',
       dateMode: dates.length > 0 ? 'cleaning' : 'manual',
       cleaningDate: dates[0] ?? '',
       manualDate: today,
@@ -355,46 +391,37 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
     }
   }
 
-  const toggleEnabled = async (rule: JobSchedulerRule, enabled: boolean) => {
-    setError(null)
-    try {
-      await saveRule({
-        id: rule.id,
-        propertyId: rule.propertyId,
-        name: rule.name,
-        intervalDays: rule.intervalDays,
-        templateIds: rule.templateIds,
-        createTemplateId: rule.createTemplateId,
-        enabled,
-      })
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error && saveError.message
-          ? saveError.message
-          : t('jobScheduler.saveError'),
-      )
-    }
-  }
-
-  const deleteRule = async (rule: JobSchedulerRule) => {
+  const deleteRule = async (rule: { id: string; name: string }) => {
     const confirmed = await confirmAction({
       title: t('jobScheduler.delete'),
       message: t('jobScheduler.deleteConfirm', { name: rule.name }),
       destructive: true,
     })
     if (!confirmed) {
-      return
+      return false
     }
     setError(null)
     try {
       await saveRule({ id: rule.id, action: 'delete' })
       setMessage(t('jobScheduler.deleted'))
+      return true
     } catch (saveError) {
       setError(
         saveError instanceof Error && saveError.message
           ? saveError.message
           : t('jobScheduler.saveError'),
       )
+      return false
+    }
+  }
+
+  const deleteRuleFromForm = async () => {
+    if (!form.id) {
+      return
+    }
+    const deleted = await deleteRule({ id: form.id, name: form.name })
+    if (deleted) {
+      setIsFormOpen(false)
     }
   }
 
@@ -455,9 +482,9 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
 
   const createRule = rules.find((rule) => rule.id === createForm.ruleId)
   const createDates = upcomingCleaningDates[createForm.propertyId] ?? []
-  const createTemplates = (createRule?.templateIds ?? [])
-    .map((templateId) => templateById.get(templateId))
-    .filter((template): template is VisitTemplateRecord => Boolean(template))
+  const createTemplateIds = createRule?.templateIds ?? []
+  const needsCreateTemplatePick = createTemplateIds.length > 1
+  const createTemplateReady = Boolean(createForm.templateId)
 
   return (
     <>
@@ -530,9 +557,11 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
               <tr>
                 <th>{t('operations.property')}</th>
                 <th>{t('jobScheduler.rule')}</th>
-                <th>{t('jobScheduler.interval')}</th>
-                <th>{t('jobScheduler.lastCompleted')}</th>
-                <th>{t('jobScheduler.daysSince')}</th>
+                <th>{t('jobScheduler.last')}</th>
+                <th
+                  className="job-scheduler-meter-head"
+                  aria-label={t('jobScheduler.meterColumn')}
+                />
                 <th>{t('common.status')}</th>
                 <th>{t('common.actions')}</th>
               </tr>
@@ -540,7 +569,7 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
             <tbody>
               {visibleProperties.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     {rules.length > 0
                       ? t('jobScheduler.emptyFiltered')
                       : t('jobScheduler.empty')}
@@ -548,23 +577,34 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                 </tr>
               ) : (
                 visibleProperties.flatMap((property) => {
-                  const propertyRules = (rulesByProperty.get(property.id) ?? []).filter(
+                  const propertyRules = (
+                    rulesByProperty.get(property.id) ?? []
+                  ).filter(
                     (rule) =>
                       !overdueOnly ||
-                      (rule.enabled && (statuses[rule.id]?.isOverdue ?? true)),
+                      isWarningRule(rule, statuses[rule.id] ?? emptyStatus()),
                   )
                   const rows =
-                    propertyRules.length > 0
-                      ? propertyRules
-                      : [null]
+                    propertyRules.length > 0 ? propertyRules : [null]
                   return rows.map((rule, index) => {
-                    const status = rule ? statuses[rule.id] ?? emptyStatus() : null
-                    const overdue = Boolean(rule?.enabled && status?.isOverdue)
+                    const status = rule
+                      ? (statuses[rule.id] ?? emptyStatus())
+                      : null
+                    const warning = Boolean(
+                      rule && status && isWarningRule(rule, status),
+                    )
+                    const scheduled = Boolean(
+                      rule && status && isScheduledRule(rule, status),
+                    )
+                    const progress =
+                      rule && status
+                        ? progressForRule(rule, status, warning)
+                        : null
                     return (
                       <tr
                         key={rule ? rule.id : `${property.id}-empty`}
                         className={`${rule && !rule.enabled ? 'muted-row' : ''} ${
-                          overdue ? 'job-scheduler-row-overdue' : ''
+                          warning ? 'job-scheduler-row-overdue' : ''
                         }`.trim()}
                       >
                         {index === 0 ? (
@@ -573,9 +613,8 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                             rowSpan={rows.length}
                           >
                             <div className="job-scheduler-property">
-                              <strong>{getPropertyLabel(property)}</strong>
                               <button
-                                className="btn-icon"
+                                className="job-scheduler-add-rule"
                                 type="button"
                                 aria-label={t('jobScheduler.addForProperty', {
                                   name: getPropertyLabel(property),
@@ -583,12 +622,13 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                                 title={t('jobScheduler.add')}
                                 onClick={() => openCreateRule(property.id)}
                               >
-                                <YlIcon name="plus" size={14} />
+                                <YlIcon name="plus" size={10} />
                               </button>
+                              <strong>{getPropertyLabel(property)}</strong>
                             </div>
                           </td>
                         ) : null}
-                        {rule && status ? (
+                        {rule && status && progress ? (
                           <>
                             <td>
                               <div className="job-scheduler-rule-name">
@@ -598,22 +638,9 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                                 {rule.templateIds.map(templateLabel).join(' · ')}
                               </p>
                             </td>
-                            <td>
-                              {t('jobScheduler.everyDays', {
-                                count: rule.intervalDays,
-                              })}
-                            </td>
-                            <td>
-                              {status.lastCompletedDate
-                                ? formatDateOnlyLabel(
-                                    status.lastCompletedDate,
-                                    locale,
-                                  )
-                                : t('jobScheduler.never')}
-                            </td>
                             <td
                               className={
-                                overdue ? 'job-scheduler-days is-overdue' : ''
+                                warning ? 'job-scheduler-days is-overdue' : ''
                               }
                             >
                               {status.daysSince === null
@@ -623,7 +650,52 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                                   })}
                             </td>
                             <td>
-                              {overdue ? (
+                              <div className="job-scheduler-progress">
+                                <div
+                                  className={`yl-progress is-${progress.tone}`}
+                                  role="progressbar"
+                                  aria-valuemin={0}
+                                  aria-valuemax={progress.interval}
+                                  aria-valuenow={
+                                    warning
+                                      ? progress.interval
+                                      : Math.min(
+                                          progress.interval,
+                                          progress.elapsed ?? progress.interval,
+                                        )
+                                  }
+                                  aria-label={t('jobScheduler.progressLabel', {
+                                    elapsed:
+                                      status.daysSince === null
+                                        ? t('jobScheduler.never')
+                                        : status.daysSince,
+                                    interval: rule.intervalDays,
+                                  })}
+                                >
+                                  <span
+                                    style={{ width: `${progress.percent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              {scheduled ? (
+                                <span
+                                  className="job-scheduler-tag is-scheduled"
+                                  title={
+                                    status.nextScheduledDate
+                                      ? t('jobScheduler.scheduledOn', {
+                                          date: formatDateOnlyLabel(
+                                            status.nextScheduledDate,
+                                            locale,
+                                          ),
+                                        })
+                                      : undefined
+                                  }
+                                >
+                                  {t('jobScheduler.scheduled')}
+                                </span>
+                              ) : warning ? (
                                 <span className="job-scheduler-tag is-warning">
                                   <YlIcon
                                     name="exclamationmark.triangle"
@@ -639,62 +711,33 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                             </td>
                             <td>
                               <div className="job-scheduler-actions">
-                                <button
-                                  className="btn-secondary"
-                                  type="button"
-                                  onClick={() => openCreateVisit(rule)}
-                                >
-                                  {t('jobScheduler.createVisit')}
-                                </button>
-                                <div className="planner-switch compact">
-                                  <YallaSwitch
-                                    on={rule.enabled}
-                                    label={
-                                      rule.enabled
-                                        ? t('bookingsSettings.on')
-                                        : t('bookingsSettings.off')
-                                    }
-                                    onToggle={() =>
-                                      void toggleEnabled(rule, !rule.enabled)
-                                    }
-                                  />
+                                <div className="btn-group">
+                                  <button
+                                    className="btn-icon"
+                                    type="button"
+                                    aria-label={t('jobScheduler.edit')}
+                                    title={t('jobScheduler.edit')}
+                                    onClick={() => openEditRule(rule)}
+                                  >
+                                    <YlIcon name="pencil" size={14} />
+                                  </button>
+                                  <button
+                                    className="btn-icon"
+                                    type="button"
+                                    aria-label={t('jobScheduler.createVisit')}
+                                    title={t('jobScheduler.createVisit')}
+                                    onClick={() => openCreateVisit(rule)}
+                                  >
+                                    <YlIcon name="calendar" size={14} />
+                                  </button>
                                 </div>
-                                <button
-                                  className="btn-icon"
-                                  type="button"
-                                  aria-label={t('jobScheduler.edit')}
-                                  title={t('jobScheduler.edit')}
-                                  onClick={() => openEditRule(rule)}
-                                >
-                                  <YlIcon name="pencil" size={14} />
-                                </button>
-                                <button
-                                  className="btn-icon"
-                                  type="button"
-                                  aria-label={t('common.delete')}
-                                  title={t('common.delete')}
-                                  onClick={() => void deleteRule(rule)}
-                                >
-                                  <YlIcon name="trash" size={14} />
-                                </button>
                               </div>
                             </td>
                           </>
                         ) : (
-                          <>
-                            <td colSpan={5} className="detail-muted">
-                              {t('jobScheduler.noRules')}
-                            </td>
-                            <td>
-                              <button
-                                className="btn-secondary"
-                                type="button"
-                                onClick={() => openCreateRule(property.id)}
-                              >
-                                {t('jobScheduler.add')}
-                              </button>
-                            </td>
-                          </>
+                          <td colSpan={5} className="detail-muted">
+                            {t('jobScheduler.noRules')}
+                          </td>
                         )}
                       </tr>
                     )
@@ -820,29 +863,6 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                   )}
                 </div>
               </div>
-              {form.templateIds.length > 1 ? (
-                <label className="form-field-span">
-                  {t('jobScheduler.createTemplate')}
-                  <select
-                    value={form.createTemplateId}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        createTemplateId: event.target.value,
-                      }))
-                    }
-                  >
-                    {form.templateIds.map((templateId) => (
-                      <option key={templateId} value={templateId}>
-                        {templateLabel(templateId)}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="table-help">
-                    {t('jobScheduler.createTemplateHelp')}
-                  </span>
-                </label>
-              ) : null}
               <div className="form-field-span planner-switch compact job-scheduler-enabled">
                 <YallaSwitch
                   on={form.enabled}
@@ -866,6 +886,15 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
               </div>
             </div>
             <div className="modal-footer">
+              {form.id ? (
+                <button
+                  className="btn-danger modal-footer-start"
+                  type="button"
+                  onClick={() => void deleteRuleFromForm()}
+                >
+                  {t('jobScheduler.delete')}
+                </button>
+              ) : null}
               <button
                 className="btn-secondary"
                 type="button"
@@ -911,25 +940,28 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
               </button>
             </div>
             <div className="modal-body form-grid">
-              {createTemplates.length > 1 ? (
-                <label className="form-field-span">
-                  {t('jobScheduler.createTemplate')}
-                  <select
-                    value={createForm.templateId}
-                    onChange={(event) =>
-                      setCreateForm((current) => ({
-                        ...current,
-                        templateId: event.target.value,
-                      }))
-                    }
-                  >
-                    {createTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name || template.title}
-                      </option>
+              {needsCreateTemplatePick ? (
+                <fieldset className="form-field-span job-scheduler-dates">
+                  <legend>{t('jobScheduler.pickTemplateToCreate')}</legend>
+                  <div className="filter-options">
+                    {createTemplateIds.map((templateId) => (
+                      <label className="filter-option" key={templateId}>
+                        <input
+                          type="radio"
+                          name="job-scheduler-template"
+                          checked={createForm.templateId === templateId}
+                          onChange={() =>
+                            setCreateForm((current) => ({
+                              ...current,
+                              templateId,
+                            }))
+                          }
+                        />
+                        {templateLabel(templateId)}
+                      </label>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </fieldset>
               ) : (
                 <p className="form-field-span table-help">
                   {t('jobScheduler.usingTemplate', {
@@ -937,67 +969,69 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                   })}
                 </p>
               )}
-              <fieldset className="form-field-span job-scheduler-dates">
-                <legend>{t('common.date')}</legend>
-                {createDates.length > 0 ? (
-                  <div className="filter-options">
-                    {createDates.map((date) => (
-                      <label className="filter-option" key={date}>
+              {createTemplateReady ? (
+                <fieldset className="form-field-span job-scheduler-dates">
+                  <legend>{t('common.date')}</legend>
+                  {createDates.length > 0 ? (
+                    <div className="filter-options">
+                      {createDates.map((date) => (
+                        <label className="filter-option" key={date}>
+                          <input
+                            type="radio"
+                            name="job-scheduler-date"
+                            checked={
+                              createForm.dateMode === 'cleaning' &&
+                              createForm.cleaningDate === date
+                            }
+                            onChange={() =>
+                              setCreateForm((current) => ({
+                                ...current,
+                                dateMode: 'cleaning',
+                                cleaningDate: date,
+                              }))
+                            }
+                          />
+                          {t('jobScheduler.cleaningDate', {
+                            date: formatDateOnlyLabel(date, locale),
+                          })}
+                        </label>
+                      ))}
+                      <label className="filter-option">
                         <input
                           type="radio"
                           name="job-scheduler-date"
-                          checked={
-                            createForm.dateMode === 'cleaning' &&
-                            createForm.cleaningDate === date
-                          }
+                          checked={createForm.dateMode === 'manual'}
                           onChange={() =>
                             setCreateForm((current) => ({
                               ...current,
-                              dateMode: 'cleaning',
-                              cleaningDate: date,
+                              dateMode: 'manual',
                             }))
                           }
                         />
-                        {t('jobScheduler.cleaningDate', {
-                          date: formatDateOnlyLabel(date, locale),
-                        })}
+                        {t('jobScheduler.manualDate')}
                       </label>
-                    ))}
-                    <label className="filter-option">
+                    </div>
+                  ) : (
+                    <p className="table-help">{t('jobScheduler.noUpcoming')}</p>
+                  )}
+                  {createForm.dateMode === 'manual' || createDates.length === 0 ? (
+                    <label>
+                      {t('jobScheduler.chooseDate')}
                       <input
-                        type="radio"
-                        name="job-scheduler-date"
-                        checked={createForm.dateMode === 'manual'}
-                        onChange={() =>
+                        type="date"
+                        value={createForm.manualDate}
+                        onChange={(event) =>
                           setCreateForm((current) => ({
                             ...current,
                             dateMode: 'manual',
+                            manualDate: event.target.value,
                           }))
                         }
                       />
-                      {t('jobScheduler.manualDate')}
                     </label>
-                  </div>
-                ) : (
-                  <p className="table-help">{t('jobScheduler.noUpcoming')}</p>
-                )}
-                {createForm.dateMode === 'manual' || createDates.length === 0 ? (
-                  <label>
-                    {t('jobScheduler.chooseDate')}
-                    <input
-                      type="date"
-                      value={createForm.manualDate}
-                      onChange={(event) =>
-                        setCreateForm((current) => ({
-                          ...current,
-                          dateMode: 'manual',
-                          manualDate: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ) : null}
-              </fieldset>
+                  ) : null}
+                </fieldset>
+              ) : null}
             </div>
             <div className="modal-footer">
               <button
@@ -1010,7 +1044,7 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
               <button
                 className="btn-primary"
                 type="button"
-                disabled={isCreating}
+                disabled={isCreating || !createTemplateReady}
                 onClick={() => void submitCreateVisit()}
               >
                 {isCreating

@@ -737,6 +737,18 @@
   border-radius: inherit;
 }
 
+.yl-progress.is-ok span {
+  background: var(--yl-go);
+}
+
+.yl-progress.is-soon span {
+  background: var(--yl-caution);
+}
+
+.yl-progress.is-overdue span {
+  background: var(--yl-danger);
+}
+
 .yl-empty {
   display: flex;
   flex-direction: column;

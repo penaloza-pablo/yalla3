@@ -25,6 +25,7 @@ const PRESETS = [
   'var(--yl-go)',
   'var(--yl-energy)',
   'var(--yl-kk-human)',
+  'var(--yl-caution)',
   'var(--yl-warning)',
   'var(--yl-success)',
   'var(--yl-ink)',
