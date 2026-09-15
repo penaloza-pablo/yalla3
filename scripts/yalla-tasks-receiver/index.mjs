@@ -8,19 +8,28 @@ import {
   PutItemCommand,
   UpdateItemCommand
 } from "@aws-sdk/client-dynamodb";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   extractReservationIdFromTask,
   isCleaningVisitType,
   reconcilePropertyDateLeftovers,
   reconcileReservation,
 } from "../shared/reconcile-booking-cleanings.mjs";
+import {
+  durationMinutesFromSchedule,
+  resolveGuestyVisitSchedule,
+  visitChangeAffectsReadyCleaningPlan,
+} from "../shared/guesty-visit-schedule.mjs";
 
 const ddb = new DynamoDBClient({});
+const lambda = new LambdaClient({});
 
 const VISITS_TABLE = process.env.VISITS_TABLE || "yalla-visits";
 const TASKS_TABLE = process.env.TASKS_TABLE || "yalla-tasks";
 const BOOKINGS_TABLE = process.env.BOOKINGS_TABLE || "yalla-bookings";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
+const REOPEN_CLEANING_PLAN_FROM_VISIT_FUNCTION =
+  process.env.REOPEN_CLEANING_PLAN_FROM_VISIT_FUNCTION || "";
 const DEFAULT_PROPERTY_ID = process.env.DEFAULT_PROPERTY_ID || "other";
 
 const CLEANING_VISIT_TYPE_ID =
@@ -403,28 +412,6 @@ function getScheduledEndTime(task) {
   return toMadridTime(value, "00:00");
 }
 
-function timeToMinutes(value) {
-  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function durationMinutesFromSchedule(startTime, endTime, storedMinutes) {
-  const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
-  if (start != null && end != null && end > start) {
-    return end - start;
-  }
-  const stored = Number(storedMinutes);
-  if (!Number.isFinite(stored) || stored <= 0) {
-    return 0;
-  }
-  if (!Number.isInteger(stored) && stored < 24) {
-    return Math.max(1, Math.round(stored * 60));
-  }
-  return Math.round(stored);
-}
-
 function getEstimatedDurationMinutes(task) {
   const start = getScheduledStartTime(task);
   const end = getScheduledEndTime(task);
@@ -628,24 +615,23 @@ async function updateVisitFromGuesty({ visitId, task, guestyTaskId, eventType, y
         ? "COMPLETED"
         : yallaStatus;
 
-  const guestyStart = getScheduledStartTime(task);
-  const guestyEnd = getScheduledEndTime(task);
-  const existingStartM = timeToMinutes(existingStart);
-  const existingEndM = timeToMinutes(existingEnd);
-  const hasPlannedWindow =
-    existingStartM != null &&
-    existingEndM != null &&
-    existingEndM - existingStartM >= 5;
-  const preserveSchedule =
-    hasPlannedWindow &&
-    (existingSource === "Yalla" || existingIsTerminal);
   const existingDate = existingVisit?.scheduledDate?.S || "";
-  const nextDate = preserveSchedule && existingDate ? existingDate : getScheduledDate(task);
-  const nextStart = preserveSchedule ? existingStart : guestyStart;
-  const nextEnd = preserveSchedule ? existingEnd : guestyEnd;
-  const nextDuration = preserveSchedule
-    ? durationMinutesFromSchedule(existingStart, existingEnd, existingDuration)
-    : getEstimatedDurationMinutes(task);
+  const schedule = resolveGuestyVisitSchedule({
+    existingDate,
+    existingStart,
+    existingEnd,
+    existingDuration,
+    existingSource,
+    existingIsTerminal,
+    guestyDate: getScheduledDate(task),
+    guestyStart: getScheduledStartTime(task),
+    guestyEnd: getScheduledEndTime(task),
+    guestyDuration: getEstimatedDurationMinutes(task),
+  });
+  const nextDate = schedule.nextDate;
+  const nextStart = schedule.nextStart;
+  const nextEnd = schedule.nextEnd;
+  const nextDuration = schedule.nextDuration;
   const keepAutoAssignedTemplate = Boolean(
     existingVisit?.autoAssignedTemplateId?.S
   );
@@ -656,7 +642,7 @@ async function updateVisitFromGuesty({ visitId, task, guestyTaskId, eventType, y
       ":guestyTaskStatus": s(getGuestyTaskStatus(task)),
       ":lastGuestyEventType": s(eventType),
       ":lastSyncedAt": s(now),
-      ":lastUpdateSource": s(preserveSchedule || existingIsTerminal ? (existingSource || "Yalla") : "Guesty"),
+      ":lastUpdateSource": s(schedule.keepYallaSource ? (existingSource || "Yalla") : "Guesty"),
       ":syncStatus": s("Synced"),
       ":rawGuestyPayload": s(JSON.stringify(task)),
       ":status": s(nextStatus),
@@ -712,6 +698,45 @@ async function updateVisitFromGuesty({ visitId, task, guestyTaskId, eventType, y
     },
     ExpressionAttributeValues: expressionValues
   }));
+
+  return {
+    previousDate: existingDate,
+    nextDate,
+    previousStatus: existingStatus,
+    nextStatus,
+  };
+}
+
+async function enqueueCleaningPlanVisitChange(payload) {
+  if (
+    !visitChangeAffectsReadyCleaningPlan({
+      isCleaningVisit: isCleaningVisitType(payload.visitTypeId),
+      previousDate: payload.previousDate,
+      nextDate: payload.nextDate,
+      previousStatus: payload.previousStatus,
+      nextStatus: payload.nextStatus,
+      isCreate: payload.isCreate,
+    })
+  ) {
+    return;
+  }
+  if (!REOPEN_CLEANING_PLAN_FROM_VISIT_FUNCTION) {
+    console.warn(
+      "Cleaning plan visit change skipped: REOPEN_CLEANING_PLAN_FROM_VISIT_FUNCTION is not configured."
+    );
+    return;
+  }
+  try {
+    await lambda.send(
+      new InvokeCommand({
+        FunctionName: REOPEN_CLEANING_PLAN_FROM_VISIT_FUNCTION,
+        InvocationType: "Event",
+        Payload: Buffer.from(JSON.stringify(payload)),
+      })
+    );
+  } catch (error) {
+    console.error("Failed to enqueue cleaning plan reopen from visit change", error);
+  }
 }
 
 async function createTaskFromGuesty({ taskId, task, guestyTaskId, eventType, yallaStatus }) {
@@ -874,16 +899,28 @@ export const handler = async (event) => {
       const visitId = existingVisit
         ? getExistingId(existingVisit)
         : `GST-${guestyTaskId}`;
+      const visitTypeId = getVisitTypeIdForGuestyType(task);
+      let visitChange = {
+        previousDate: "",
+        nextDate: scheduledDate,
+        previousStatus: "",
+        nextStatus: yallaStatus,
+        isCreate: !existingVisit,
+      };
 
       if (existingVisit) {
-        await updateVisitFromGuesty({
-          visitId,
-          task,
-          guestyTaskId,
-          eventType,
-          yallaStatus,
-          existingVisit
-        });
+        visitChange = {
+          ...visitChange,
+          ...(await updateVisitFromGuesty({
+            visitId,
+            task,
+            guestyTaskId,
+            eventType,
+            yallaStatus,
+            existingVisit
+          })),
+          isCreate: false,
+        };
       } else {
         await createVisitFromGuesty({
           visitId,
@@ -893,6 +930,18 @@ export const handler = async (event) => {
           yallaStatus
         });
       }
+
+      await enqueueCleaningPlanVisitChange({
+        visitId,
+        visitTypeId,
+        title: getTaskTitle(task),
+        reservationId: getReservationId(task) || "",
+        previousDate: visitChange.previousDate,
+        nextDate: visitChange.nextDate,
+        previousStatus: visitChange.previousStatus,
+        nextStatus: visitChange.nextStatus,
+        isCreate: visitChange.isCreate,
+      });
 
       let bookingReconcile = null;
       try {

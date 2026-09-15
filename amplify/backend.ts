@@ -100,6 +100,7 @@ import { processSlackHoy } from './functions/process-slack-hoy/resource';
 import { notifyCleaningOverdue } from './functions/notify-cleaning-overdue/resource';
 import { getSlackNotifications } from './functions/get-slack-notifications/resource';
 import { upsertSlackNotification } from './functions/upsert-slack-notification/resource';
+import { reopenCleaningPlanFromVisit } from './functions/reopen-cleaning-plan-from-visit/resource';
 
 const backend = defineBackend({
   auth,
@@ -188,6 +189,7 @@ const backend = defineBackend({
   notifyCleaningOverdue,
   getSlackNotifications,
   upsertSlackNotification,
+  reopenCleaningPlanFromVisit,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -945,6 +947,10 @@ backend.upsertCleaner.addEnvironment(
   cleaningIncidentsTable.tableName,
 );
 backend.getCleaningPlan.addEnvironment('TABLE_NAME', cleaningPlansTable.tableName);
+backend.reopenCleaningPlanFromVisit.addEnvironment(
+  'CLEANING_PLANS_TABLE',
+  cleaningPlansTable.tableName,
+);
 backend.applyBookingsPlanner.addEnvironment(
   'CLEANING_PLANS_TABLE',
   cleaningPlansTable.tableName,
@@ -1096,6 +1102,7 @@ slackSecret.grantRead(backend.handleSlackCommand.resources.lambda);
 slackSecret.grantRead(backend.notifyCleaningOverdue.resources.lambda);
 slackSecret.grantRead(backend.upsertVisit.resources.lambda);
 slackSecret.grantRead(backend.upsertCleaningPlan.resources.lambda);
+slackSecret.grantRead(backend.reopenCleaningPlanFromVisit.resources.lambda);
 slackSecret.grantRead(backend.upsertMaintenancePlan.resources.lambda);
 slackSecret.grantRead(backend.applyBookingsPlanner.resources.lambda);
 
@@ -1124,6 +1131,7 @@ const slackNotificationReaders = [
   backend.upsertCleaningPlan,
   backend.upsertMaintenancePlan,
   backend.applyBookingsPlanner,
+  backend.reopenCleaningPlanFromVisit,
 ];
 for (const lambdaFunction of slackNotificationReaders) {
   lambdaFunction.addEnvironment(
@@ -1229,6 +1237,9 @@ backend.processSlackHoy.addEnvironment(
 cleaningPlansTable.grantReadWriteData(
   backend.upsertCleaningPlan.resources.lambda,
 );
+cleaningPlansTable.grantReadWriteData(
+  backend.reopenCleaningPlanFromVisit.resources.lambda,
+);
 propertyCleaningDetailsTable.grantReadData(
   backend.getPropertyCleaningDetails.resources.lambda,
 );
@@ -1242,6 +1253,7 @@ propertyCleaningDetailsTable.grantReadData(
   backend.upsertCleaningPlan.resources.lambda,
 );
 bookingsTable.grantReadData(backend.getCleaningPlan.resources.lambda);
+bookingsTable.grantReadData(backend.reopenCleaningPlanFromVisit.resources.lambda);
 propertiesTable.grantReadData(backend.getCleaningPlan.resources.lambda);
 backend.getCleaningPlan.resources.lambda.addToRolePolicy(
   new PolicyStatement({
@@ -1792,6 +1804,15 @@ syncTaskToGuesty.grantInvoke(backend.upsertVisit.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.upsertTask.resources.lambda);
 syncTaskToGuesty.grantInvoke(backend.handleSlackCommand.resources.lambda);
 
+const yallaTasksReceiverRole = Role.fromRoleArn(
+  dataStack,
+  'YallaTasksReceiverRole',
+  'arn:aws:iam::471112597523:role/service-role/yalla-tasksReceiver-role-s7mbh3xt',
+);
+backend.reopenCleaningPlanFromVisit.resources.lambda.grantInvoke(
+  yallaTasksReceiverRole,
+);
+
 const getInventoryUrl = backend.getInventory.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -2172,5 +2193,7 @@ backend.addOutput({
     handleSlackCommandUrl: handleSlackCommandUrl.url,
     getSlackNotificationsUrl: getSlackNotificationsUrl.url,
     upsertSlackNotificationUrl: upsertSlackNotificationUrl.url,
+    reopenCleaningPlanFromVisitFunctionName:
+      backend.reopenCleaningPlanFromVisit.resources.lambda.functionName,
   },
 });

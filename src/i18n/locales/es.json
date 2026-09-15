@@ -1833,6 +1833,10 @@
       "notify_cleaning_plan_booking": {
         "name": "Cambios de reserva en plan de limpieza listo",
         "description": "Avisa en #cleanings-aptos cuando una reserva cambia huéspedes, fechas, tarjeta o sofá y el plan de esa fecha ya está listo. No se envía a partir de las 8:00 del día de check-in porque la tarjeta queda congelada."
+      },
+      "notify_cleaning_plan_visit_change": {
+        "name": "Guesty cambia una visita de un plan listo",
+        "description": "Si Guesty mueve o cancela una visita de un plan de limpieza ya listo, reabre el plan y avisa en #cleanings-aptos con un enlace para revisarlo y volver a cerrarlo. Un cambio solo de hora el mismo día no dispara este aviso."
       }
     }
   },

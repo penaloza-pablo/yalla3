@@ -1833,6 +1833,10 @@
       "notify_cleaning_plan_booking": {
         "name": "Booking changes on a ready cleaning plan",
         "description": "Posts in #cleanings-aptos when a reservation changes guests, dates, gift card or sofa bed and that day's cleaning plan is already ready. It is not sent from 8:00 AM on check-in day because the gift card is frozen."
+      },
+      "notify_cleaning_plan_visit_change": {
+        "name": "Guesty changes a visit on a ready plan",
+        "description": "If Guesty moves or cancels a visit that belongs to a ready cleaning plan, the plan is reopened and a message is posted in #cleanings-aptos with a link to review and close it again. A same-day time-only change does not trigger this."
       }
     }
   },
