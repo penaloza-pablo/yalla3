@@ -1,6 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { RemovalPolicy } from 'aws-cdk-lib';
-import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion, StartingPosition } from 'aws-cdk-lib/aws-lambda';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion, Runtime, StartingPosition } from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import {
   AttributeType,
@@ -12,6 +13,7 @@ import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { CfnSchedule } from 'aws-cdk-lib/aws-scheduler';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import path from 'node:path';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { getInventory } from './functions/get-inventory/resource';
@@ -56,8 +58,6 @@ import { upsertVisitTemplate } from './functions/upsert-visit-template/resource'
 import { getVisitTemplateAutoAssign } from './functions/get-visit-template-auto-assign/resource';
 import { upsertVisitTemplateAutoAssign } from './functions/upsert-visit-template-auto-assign/resource';
 import { applyVisitTemplateAutoAssign } from './functions/apply-visit-template-auto-assign/resource';
-import { getJobScheduler } from './functions/get-job-scheduler/resource';
-import { upsertJobSchedulerRule } from './functions/upsert-job-scheduler-rule/resource';
 import { getPropertyReport } from './functions/get-property-report/resource';
 import { upsertPropertyReport } from './functions/upsert-property-report/resource';
 import { getFinanceMovements } from './functions/get-finance-movements/resource';
@@ -145,8 +145,6 @@ const backend = defineBackend({
   getVisitTemplateAutoAssign,
   upsertVisitTemplateAutoAssign,
   applyVisitTemplateAutoAssign,
-  getJobScheduler,
-  upsertJobSchedulerRule,
   getPropertyReport,
   upsertPropertyReport,
   getFinanceMovements,
@@ -234,8 +232,6 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitTemplate,
   backend.getVisitTemplateAutoAssign,
   backend.upsertVisitTemplateAutoAssign,
-  backend.getJobScheduler,
-  backend.upsertJobSchedulerRule,
   backend.getPropertyReport,
   backend.upsertPropertyReport,
   backend.getFinanceMovements,
@@ -341,17 +337,6 @@ const visitTemplateAutoAssignTable = new Table(
   },
 );
 visitTemplateAutoAssignTable.addGlobalSecondaryIndex({
-  indexName: 'propertyId-index',
-  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
-  projectionType: ProjectionType.ALL,
-});
-const jobSchedulerRulesTable = new Table(dataStack, 'JobSchedulerRulesTable', {
-  tableName: 'yalla-job-scheduler-rules',
-  partitionKey: { name: 'id', type: AttributeType.STRING },
-  billingMode: BillingMode.PAY_PER_REQUEST,
-  removalPolicy: RemovalPolicy.RETAIN,
-});
-jobSchedulerRulesTable.addGlobalSecondaryIndex({
   indexName: 'propertyId-index',
   partitionKey: { name: 'propertyId', type: AttributeType.STRING },
   projectionType: ProjectionType.ALL,
@@ -684,38 +669,98 @@ backend.getVisitTemplateAutoAssign.resources.lambda.addToRolePolicy(
     resources: [`${visitTemplateAutoAssignTable.tableArn}/index/*`],
   }),
 );
-backend.getJobScheduler.addEnvironment(
-  'TABLE_NAME',
-  jobSchedulerRulesTable.tableName,
+
+// Keep these Lambdas off the Amplify `function` nested stack. That stack is at
+// CloudFormation's 500-resource limit, so new HTTP functions go here.
+const jobSchedulerStack = backend.createStack('job-scheduler');
+const jobSchedulerRulesTable = new Table(jobSchedulerStack, 'JobSchedulerRulesTable', {
+  tableName: 'yalla-job-scheduler-rules',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+jobSchedulerRulesTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+const jobSchedulerHandlerRoot = path.join(
+  process.cwd(),
+  'amplify/functions',
 );
-backend.upsertJobSchedulerRule.addEnvironment(
-  'TABLE_NAME',
-  jobSchedulerRulesTable.tableName,
+const jobSchedulerAuthEnv = {
+  USER_POOL_ID: userPoolId,
+  USER_POOL_CLIENT_ID: userPoolClientId,
+};
+const jobSchedulerBundling = {
+  forceDockerBundling: false,
+  minify: false,
+  sourcesContent: false,
+  target: 'es2022',
+} as const;
+const getJobSchedulerFn = new NodejsFunction(jobSchedulerStack, 'GetJobScheduler', {
+  entry: path.join(jobSchedulerHandlerRoot, 'get-job-scheduler/handler.ts'),
+  handler: 'handler',
+  runtime: Runtime.NODEJS_22_X,
+  timeout: Duration.seconds(60),
+  memorySize: 512,
+  depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+  bundling: jobSchedulerBundling,
+  environment: {
+    ...jobSchedulerAuthEnv,
+    TABLE_NAME: jobSchedulerRulesTable.tableName,
+    VISITS_TABLE: 'yalla-visits',
+    TEMPLATES_TABLE: 'yalla-visit-templates',
+    CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
+  },
+});
+const upsertJobSchedulerRuleFn = new NodejsFunction(
+  jobSchedulerStack,
+  'UpsertJobSchedulerRule',
+  {
+    entry: path.join(jobSchedulerHandlerRoot, 'upsert-job-scheduler-rule/handler.ts'),
+    handler: 'handler',
+    runtime: Runtime.NODEJS_22_X,
+    timeout: Duration.seconds(20),
+    memorySize: 512,
+    depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+    bundling: jobSchedulerBundling,
+    environment: {
+      ...jobSchedulerAuthEnv,
+      TABLE_NAME: jobSchedulerRulesTable.tableName,
+      LOGS_TABLE: activityLogsTable.tableName,
+    },
+  },
 );
-jobSchedulerRulesTable.grantReadData(backend.getJobScheduler.resources.lambda);
-jobSchedulerRulesTable.grantReadWriteData(
-  backend.upsertJobSchedulerRule.resources.lambda,
-);
-backend.getJobScheduler.resources.lambda.addToRolePolicy(
+jobSchedulerRulesTable.grantReadData(getJobSchedulerFn);
+jobSchedulerRulesTable.grantReadWriteData(upsertJobSchedulerRuleFn);
+getJobSchedulerFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],
     resources: [`${jobSchedulerRulesTable.tableArn}/index/*`],
   }),
 );
-visitsTable.grantReadData(backend.getJobScheduler.resources.lambda);
-backend.getJobScheduler.resources.lambda.addToRolePolicy(
+visitsTable.grantReadData(getJobSchedulerFn);
+getJobSchedulerFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],
     resources: [`${visitsTable.tableArn}/index/*`],
   }),
 );
-visitTemplatesTable.grantReadData(backend.getJobScheduler.resources.lambda);
-backend.getJobScheduler.resources.lambda.addToRolePolicy(
+visitTemplatesTable.grantReadData(getJobSchedulerFn);
+getJobSchedulerFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],
     resources: [`${visitTemplatesTable.tableArn}/index/*`],
   }),
 );
+activityLogsTable.grantWriteData(upsertJobSchedulerRuleFn);
+const getJobSchedulerUrl = getJobSchedulerFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertJobSchedulerRuleUrl = upsertJobSchedulerRuleFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.upsertVisit.addEnvironment(
   'TEMPLATES_TABLE',
@@ -1881,13 +1926,6 @@ const getVisitTemplateAutoAssignUrl =
   });
 const upsertVisitTemplateAutoAssignUrl =
   backend.upsertVisitTemplateAutoAssign.resources.lambda.addFunctionUrl({
-    authType: FunctionUrlAuthType.NONE,
-  });
-const getJobSchedulerUrl = backend.getJobScheduler.resources.lambda.addFunctionUrl({
-  authType: FunctionUrlAuthType.NONE,
-});
-const upsertJobSchedulerRuleUrl =
-  backend.upsertJobSchedulerRule.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
 const getPropertyReportUrl =
