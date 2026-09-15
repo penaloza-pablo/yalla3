@@ -17,6 +17,7 @@ export const NAVIGATION: NavGroup[] = [
       'Unassigned tasks',
       'Visit templates',
       'Template Auto Assign',
+      'Job scheduler',
     ],
   },
   {
@@ -215,7 +216,7 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 2
+export const PERMISSIONS_CATALOG_VERSION = 3
 
 export const applyPermissionCatalog = (
   permissions: string[],
@@ -247,6 +248,14 @@ export const applyPermissionCatalog = (
       !next.includes(ACTION_KEYS.dashboardConfigureWidgets)
     ) {
       next.push(ACTION_KEYS.dashboardConfigureWidgets)
+    }
+  }
+  if (from < 3) {
+    const hasOpsSetup =
+      next.includes(pagePermission('Template Auto Assign')) ||
+      next.includes(pagePermission('Visit templates'))
+    if (hasOpsSetup && !next.includes(pagePermission('Job scheduler'))) {
+      next.push(pagePermission('Job scheduler'))
     }
   }
   return next
@@ -318,6 +327,7 @@ export const ROLE_SEEDS: {
         'Unassigned tasks',
         'Visit templates',
         'Template Auto Assign',
+        'Job scheduler',
         'Cleaning Plan',
         'Cleaning Incidents',
         'Cleaning Billing',

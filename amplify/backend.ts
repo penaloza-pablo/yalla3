@@ -56,6 +56,8 @@ import { upsertVisitTemplate } from './functions/upsert-visit-template/resource'
 import { getVisitTemplateAutoAssign } from './functions/get-visit-template-auto-assign/resource';
 import { upsertVisitTemplateAutoAssign } from './functions/upsert-visit-template-auto-assign/resource';
 import { applyVisitTemplateAutoAssign } from './functions/apply-visit-template-auto-assign/resource';
+import { getJobScheduler } from './functions/get-job-scheduler/resource';
+import { upsertJobSchedulerRule } from './functions/upsert-job-scheduler-rule/resource';
 import { getPropertyReport } from './functions/get-property-report/resource';
 import { upsertPropertyReport } from './functions/upsert-property-report/resource';
 import { getFinanceMovements } from './functions/get-finance-movements/resource';
@@ -143,6 +145,8 @@ const backend = defineBackend({
   getVisitTemplateAutoAssign,
   upsertVisitTemplateAutoAssign,
   applyVisitTemplateAutoAssign,
+  getJobScheduler,
+  upsertJobSchedulerRule,
   getPropertyReport,
   upsertPropertyReport,
   getFinanceMovements,
@@ -230,6 +234,8 @@ const lambdaFunctionsWithHttp = [
   backend.upsertVisitTemplate,
   backend.getVisitTemplateAutoAssign,
   backend.upsertVisitTemplateAutoAssign,
+  backend.getJobScheduler,
+  backend.upsertJobSchedulerRule,
   backend.getPropertyReport,
   backend.upsertPropertyReport,
   backend.getFinanceMovements,
@@ -335,6 +341,17 @@ const visitTemplateAutoAssignTable = new Table(
   },
 );
 visitTemplateAutoAssignTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+const jobSchedulerRulesTable = new Table(dataStack, 'JobSchedulerRulesTable', {
+  tableName: 'yalla-job-scheduler-rules',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+jobSchedulerRulesTable.addGlobalSecondaryIndex({
   indexName: 'propertyId-index',
   partitionKey: { name: 'propertyId', type: AttributeType.STRING },
   projectionType: ProjectionType.ALL,
@@ -665,6 +682,38 @@ backend.getVisitTemplateAutoAssign.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],
     resources: [`${visitTemplateAutoAssignTable.tableArn}/index/*`],
+  }),
+);
+backend.getJobScheduler.addEnvironment(
+  'TABLE_NAME',
+  jobSchedulerRulesTable.tableName,
+);
+backend.upsertJobSchedulerRule.addEnvironment(
+  'TABLE_NAME',
+  jobSchedulerRulesTable.tableName,
+);
+jobSchedulerRulesTable.grantReadData(backend.getJobScheduler.resources.lambda);
+jobSchedulerRulesTable.grantReadWriteData(
+  backend.upsertJobSchedulerRule.resources.lambda,
+);
+backend.getJobScheduler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${jobSchedulerRulesTable.tableArn}/index/*`],
+  }),
+);
+visitsTable.grantReadData(backend.getJobScheduler.resources.lambda);
+backend.getJobScheduler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${visitsTable.tableArn}/index/*`],
+  }),
+);
+visitTemplatesTable.grantReadData(backend.getJobScheduler.resources.lambda);
+backend.getJobScheduler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${visitTemplatesTable.tableArn}/index/*`],
   }),
 );
 
@@ -1834,6 +1883,13 @@ const upsertVisitTemplateAutoAssignUrl =
   backend.upsertVisitTemplateAutoAssign.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getJobSchedulerUrl = backend.getJobScheduler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertJobSchedulerRuleUrl =
+  backend.upsertJobSchedulerRule.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getPropertyReportUrl =
   backend.getPropertyReport.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
@@ -2035,6 +2091,8 @@ backend.addOutput({
     upsertVisitTemplateUrl: upsertVisitTemplateUrl.url,
     getVisitTemplateAutoAssignUrl: getVisitTemplateAutoAssignUrl.url,
     upsertVisitTemplateAutoAssignUrl: upsertVisitTemplateAutoAssignUrl.url,
+    getJobSchedulerUrl: getJobSchedulerUrl.url,
+    upsertJobSchedulerRuleUrl: upsertJobSchedulerRuleUrl.url,
     getPropertyReportUrl: getPropertyReportUrl.url,
     upsertPropertyReportUrl: upsertPropertyReportUrl.url,
     getFinanceMovementsUrl: getFinanceMovementsUrl.url,

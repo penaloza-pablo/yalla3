@@ -1,4 +1,6 @@
 import type {
+  JobSchedulerRule,
+  JobSchedulerRuleStatus,
   TaskRecord,
   VisitRecord,
   VisitTemplateAutoAssignRule,
@@ -184,6 +186,88 @@ export const getVisitTemplateAutoAssignRules = async (endpoint: string) => {
 }
 
 export const saveVisitTemplateAutoAssign = (
+  endpoint: string,
+  payload: Record<string, unknown>,
+) =>
+  fetchJson<ListResponse<Record<string, unknown>>>(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const mapJobSchedulerRule = (
+  item: Record<string, unknown>,
+): JobSchedulerRule => {
+  const templateIds = Array.isArray(item.templateIds)
+    ? item.templateIds.map((value) => String(value).trim()).filter(Boolean)
+    : []
+  const createTemplateId =
+    String(item.createTemplateId ?? '').trim() || templateIds[0] || ''
+  return {
+    id: String(item.id ?? ''),
+    propertyId: String(item.propertyId ?? ''),
+    name: String(item.name ?? '').trim(),
+    intervalDays:
+      typeof item.intervalDays === 'number' && Number.isInteger(item.intervalDays)
+        ? item.intervalDays
+        : Number(item.intervalDays) || 0,
+    templateIds:
+      templateIds.length > 0
+        ? [...new Set(templateIds)]
+        : createTemplateId
+          ? [createTemplateId]
+          : [],
+    createTemplateId,
+    enabled: item.enabled !== false,
+  }
+}
+
+export const mapJobSchedulerStatus = (
+  item: Record<string, unknown>,
+): JobSchedulerRuleStatus => ({
+  lastCompletedDate:
+    typeof item.lastCompletedDate === 'string' && item.lastCompletedDate
+      ? item.lastCompletedDate
+      : null,
+  lastCompletedVisitId:
+    typeof item.lastCompletedVisitId === 'string' && item.lastCompletedVisitId
+      ? item.lastCompletedVisitId
+      : null,
+  lastCompletedVisitTitle:
+    typeof item.lastCompletedVisitTitle === 'string' &&
+    item.lastCompletedVisitTitle
+      ? item.lastCompletedVisitTitle
+      : null,
+  daysSince:
+    typeof item.daysSince === 'number' && Number.isFinite(item.daysSince)
+      ? item.daysSince
+      : null,
+  isOverdue: item.isOverdue === true,
+  dueDate:
+    typeof item.dueDate === 'string' && item.dueDate ? item.dueDate : null,
+})
+
+export const getJobScheduler = async (endpoint: string) => {
+  const payload = await fetchJson<
+    ListResponse<Record<string, unknown>> & {
+      today?: string
+      statuses?: Record<string, Record<string, unknown>>
+      upcomingCleaningDates?: Record<string, string[]>
+    }
+  >(endpoint)
+  const statuses: Record<string, JobSchedulerRuleStatus> = {}
+  for (const [ruleId, status] of Object.entries(payload.statuses ?? {})) {
+    statuses[ruleId] = mapJobSchedulerStatus(status)
+  }
+  return {
+    rules: (payload.items ?? []).map(mapJobSchedulerRule),
+    today: typeof payload.today === 'string' ? payload.today : '',
+    statuses,
+    upcomingCleaningDates: payload.upcomingCleaningDates ?? {},
+  }
+}
+
+export const saveJobSchedulerRule = (
   endpoint: string,
   payload: Record<string, unknown>,
 ) =>

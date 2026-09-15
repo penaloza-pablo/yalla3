@@ -7326,9 +7326,97 @@ th {
   box-shadow: 0 0 0 1px currentColor;
 }
 
+.job-scheduler-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.job-scheduler-toolbar .search-input {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.job-scheduler-filter {
+  white-space: nowrap;
+}
+
+.job-scheduler-property {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-scheduler-property-cell {
+  vertical-align: top;
+}
+
+.job-scheduler-rule-name {
+  font-weight: 600;
+}
+
+.job-scheduler-days.is-overdue {
+  color: #b54708;
+  font-weight: 700;
+}
+
+.job-scheduler-row-overdue td {
+  background: #fffcf5;
+}
+
+.job-scheduler-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #344054;
+  white-space: nowrap;
+}
+
+.job-scheduler-tag.is-warning {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.job-scheduler-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-scheduler-enabled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.job-scheduler-dates {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.job-scheduler-dates legend {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
 @media (max-width: 768px) {
   .detail-span-2 {
     grid-column: span 1;
+  }
+
+  .job-scheduler-property-cell {
+    vertical-align: middle;
   }
 }
 

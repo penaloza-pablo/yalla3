@@ -57,6 +57,7 @@ type VisitPayload = {
   cancelTaskAction?: 'release' | 'cancel';
   syncTaskDueDates?: boolean;
   appendTasks?: boolean;
+  sourceTemplateId?: string;
   action?: string;
   tasks?: Array<{
     title?: string;
@@ -343,6 +344,12 @@ export const handler = async (event: {
       (typeof existing?.specialHours === 'boolean'
         ? existing.specialHours
         : false),
+    sourceTemplateId:
+      payload.sourceTemplateId !== undefined
+        ? payload.sourceTemplateId.trim()
+        : typeof existing?.sourceTemplateId === 'string'
+          ? existing.sourceTemplateId
+          : undefined,
     startedAt:
       payload.startedAt ??
       (typeof existing?.startedAt === 'string' ? existing.startedAt : undefined),

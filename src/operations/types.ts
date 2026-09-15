@@ -121,6 +121,25 @@ export type VisitTemplateAutoAssignRule = {
   enabled: boolean
 }
 
+export type JobSchedulerRule = {
+  id: string
+  propertyId: string
+  name: string
+  intervalDays: number
+  templateIds: string[]
+  createTemplateId: string
+  enabled: boolean
+}
+
+export type JobSchedulerRuleStatus = {
+  lastCompletedDate: string | null
+  lastCompletedVisitId: string | null
+  lastCompletedVisitTitle: string | null
+  daysSince: number | null
+  isOverdue: boolean
+  dueDate: string | null
+}
+
 export type VisitDraftTask = {
   id?: string
   status?: TaskStatus

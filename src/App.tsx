@@ -32,6 +32,7 @@ import {
   isEarlyCheckInEnabled,
 } from '../amplify/functions/shared/bookings-planner'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
+import { JobSchedulerView } from './operations/JobSchedulerView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage, rememberPageInSection } from './lib/lastActivePage'
 import { readPageFromLocation, readTodayViewFromLocation, writePageToUrl } from './lib/page-route'
@@ -3220,6 +3221,7 @@ function App() {
       activePage === 'Unassigned tasks' ||
       activePage === 'Visit templates' ||
       activePage === 'Template Auto Assign' ||
+      activePage === 'Job scheduler' ||
       activePage === 'Property Reports' ||
       activePage === 'Property Groups' ||
       activePage === 'Movements' ||
@@ -8620,6 +8622,11 @@ function App() {
           />
         ) : activePage === 'Template Auto Assign' ? (
           <TemplateAutoAssignView
+            getEndpoint={getEndpoint}
+            propertyOptions={activeManagedPropertyOptions}
+          />
+        ) : activePage === 'Job scheduler' ? (
+          <JobSchedulerView
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
           />

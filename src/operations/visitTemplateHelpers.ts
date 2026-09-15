@@ -160,6 +160,7 @@ export const buildApplyTemplateVisitPayload = (
   estimatedDurationMinutes:
     template.estimatedDurationMinutes ?? visit.estimatedDurationMinutes,
   appendTasks: true,
+  sourceTemplateId: template.id,
   tasks: templateTasksPayload(template),
 })
 

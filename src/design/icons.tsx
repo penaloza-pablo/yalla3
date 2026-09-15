@@ -668,6 +668,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   'Unassigned tasks': 'list.bullet',
   'Visit templates': 'doc.text',
   'Template Auto Assign': 'arrow.triangle.2.circlepath',
+  'Job scheduler': 'arrow.clockwise',
   Bookings: 'calendar',
   'Bookings Plan': 'list.bullet.rectangle',
   'Bookings settings': 'gearshape',
