@@ -400,6 +400,7 @@ const pagesWithMobileSearch = new Set([
   'Bookings',
   'Cleaning Incidents',
   'Maintenance Incidents',
+  'Job scheduler',
 ])
 const MOBILE_TITLE_COLLAPSE_DISTANCE = 56
 const OTHER_OPTION = '__other__'
@@ -5044,6 +5045,8 @@ function App() {
         return t('rbac.searchRoles')
       case 'Visit templates':
         return t('operations.searchTemplates')
+      case 'Job scheduler':
+        return t('jobScheduler.search')
       case 'Cleaning Incidents':
         return t('cleaningIncidents.search')
       case 'Maintenance Incidents':
@@ -8629,6 +8632,12 @@ function App() {
           <JobSchedulerView
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
+            searchQuery={tableSearchQuery}
+            onSearchQueryChange={setTableSearchQuery}
+            isMobileSearchOpen={isMobileSearchOpen}
+            onToggleMobileSearch={() =>
+              setIsMobileSearchOpen((current) => !current)
+            }
           />
         ) : activePage === 'Bookings Plan' ? (
           <BookingsPlanView

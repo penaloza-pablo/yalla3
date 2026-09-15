@@ -2,6 +2,7 @@ import { QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { isCleaningVisitType } from './cleaning-plan';
 import { addDaysToDateString, calendarDaysBetween } from './date-range';
 import { normalizeStatus } from './dynamo-http';
+import { seedCompletionForRule } from './job-scheduler-seeds';
 import {
   isP2BuildingId,
   P2_REPORT_MEMBER_IDS,
@@ -116,10 +117,14 @@ export const visitTitleMatchesTemplateText = (
   if (!title || !text) {
     return false;
   }
-  if (title === text) {
+  if (title === text || title.startsWith(`${text} +`)) {
     return true;
   }
-  return title.startsWith(`${text} +`);
+  const templateBase = text.split(' - ')[0]?.trim() ?? '';
+  if (!templateBase || templateBase === text || !templateBase.includes(' ')) {
+    return false;
+  }
+  return title === templateBase || title.startsWith(`${templateBase} +`);
 };
 
 export const visitMatchesTemplate = (
@@ -375,9 +380,16 @@ export const collectSchedulerPropertyStatus = async (
 
   const statuses: Record<string, JobSchedulerRuleStatus> = {};
   for (const rule of rules) {
+    const lastVisit = lastByRule.get(rule.id);
+    const lastDate = lastVisit ? completionDateForVisit(lastVisit) : '';
+    const seed = seedCompletionForRule(rule, templatesById, today);
+    const visitForStatus =
+      seed && (!lastDate || seed.date > lastDate)
+        ? { scheduledDate: seed.date, title: seed.title }
+        : lastVisit;
     statuses[rule.id] = statusForRule(
       rule,
-      lastByRule.get(rule.id),
+      visitForStatus,
       today,
       nextScheduledByRule.get(rule.id) ?? null,
     );

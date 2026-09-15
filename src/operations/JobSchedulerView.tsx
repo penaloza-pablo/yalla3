@@ -3,13 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { YallaSwitch } from '../bookings/YallaSwitch'
 import { useConfirm } from '../design/ConfirmDialog'
 import { YlIcon } from '../design/icons'
+import { MobileBodyPortal } from '../MobileBodyPortal'
 import {
   getJobScheduler,
   getVisitTemplates,
   saveJobSchedulerRule,
   saveVisit,
 } from './api'
-import { formatDateOnlyLabel, getTodayMadrid } from './dateHelpers'
+import { seedCompletionForRule } from '../../amplify/functions/shared/job-scheduler-seeds'
+import {
+  addDaysToDateString,
+  calendarDaysBetween,
+  formatDateOnlyLabel,
+  getTodayMadrid,
+} from './dateHelpers'
 import {
   filterTemplateAutoAssignPropertyOptions,
   getPropertyLabel,
@@ -30,6 +37,15 @@ import type {
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
   propertyOptions: PropertyOption[]
+  searchQuery: string
+  onSearchQueryChange: (value: string) => void
+  isMobileSearchOpen: boolean
+  onToggleMobileSearch: () => void
+}
+
+type SchedulerFilters = {
+  overdueOnly: boolean
+  showEmptyProperties: boolean
 }
 
 type RuleForm = {
@@ -52,6 +68,11 @@ type CreateForm = {
 }
 
 type ProgressTone = 'ok' | 'soon' | 'overdue'
+
+const emptyFilters = (): SchedulerFilters => ({
+  overdueOnly: false,
+  showEmptyProperties: true,
+})
 
 const emptyRuleForm = (): RuleForm => ({
   id: '',
@@ -101,23 +122,30 @@ const isWarningRule = (
 const progressForRule = (
   rule: JobSchedulerRule,
   status: JobSchedulerRuleStatus,
-  warning: boolean,
 ) => {
   const interval = Math.max(1, rule.intervalDays)
   const elapsed = status.daysSince
   const remaining = elapsed === null ? 0 : interval - elapsed
+  const overdue = status.isOverdue || elapsed === null
   const ratio =
     elapsed === null ? 1 : Math.min(1, Math.max(0, elapsed / interval))
-  const percent = warning ? 100 : Math.round(ratio * 100)
-  const tone: ProgressTone = warning
+  const percent = overdue ? 100 : Math.round(ratio * 100)
+  const tone: ProgressTone = overdue
     ? 'overdue'
     : remaining <= 2
       ? 'soon'
       : 'ok'
-  return { percent, tone, remaining, interval, elapsed }
+  return { percent, tone, remaining, interval, elapsed, overdue }
 }
 
-export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
+export function JobSchedulerView({
+  getEndpoint,
+  propertyOptions,
+  searchQuery,
+  onSearchQueryChange,
+  isMobileSearchOpen,
+  onToggleMobileSearch,
+}: Props) {
   const { t, i18n } = useTranslation()
   const confirmAction = useConfirm()
   const locale = i18n.language
@@ -151,9 +179,9 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [overdueOnly, setOverdueOnly] = useState(false)
-  const [showEmptyProperties, setShowEmptyProperties] = useState(true)
+  const [filters, setFilters] = useState<SchedulerFilters>(emptyFilters)
+  const [filterDraft, setFilterDraft] = useState<SchedulerFilters>(emptyFilters)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [form, setForm] = useState<RuleForm>(emptyRuleForm)
@@ -178,6 +206,30 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
     () => new Map(templates.map((template) => [template.id, template])),
     [templates],
   )
+  const displayStatuses = useMemo(() => {
+    const next: Record<string, JobSchedulerRuleStatus> = {}
+    for (const rule of rules) {
+      const status = statuses[rule.id] ?? emptyStatus()
+      const seed = seedCompletionForRule(rule, templateById, today)
+      if (
+        !seed ||
+        (status.lastCompletedDate && status.lastCompletedDate >= seed.date)
+      ) {
+        next[rule.id] = status
+        continue
+      }
+      const daysSince = calendarDaysBetween(seed.date, today)
+      next[rule.id] = {
+        ...status,
+        lastCompletedDate: seed.date,
+        lastCompletedVisitTitle: seed.title,
+        daysSince,
+        isOverdue: daysSince >= rule.intervalDays,
+        dueDate: addDaysToDateString(seed.date, rule.intervalDays),
+      }
+    }
+    return next
+  }, [rules, statuses, templateById, today])
   const rulesByProperty = useMemo(() => {
     const grouped = new Map<string, JobSchedulerRule[]>()
     for (const rule of rules) {
@@ -251,15 +303,19 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
   }, [load])
 
   const visibleProperties = useMemo(() => {
-    const query = search.trim().toLowerCase()
+    const query = searchQuery.trim().toLowerCase()
     return properties.filter((property) => {
       const propertyRules = rulesByProperty.get(property.id) ?? []
-      if (!showEmptyProperties && propertyRules.length === 0 && rules.length > 0) {
+      if (
+        !filters.showEmptyProperties &&
+        propertyRules.length === 0 &&
+        rules.length > 0
+      ) {
         return false
       }
-      if (overdueOnly) {
+      if (filters.overdueOnly) {
         const hasWarning = propertyRules.some((rule) =>
-          isWarningRule(rule, statuses[rule.id] ?? emptyStatus()),
+          isWarningRule(rule, displayStatuses[rule.id] ?? emptyStatus()),
         )
         if (!hasWarning) {
           return false
@@ -282,15 +338,23 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
       return haystack.includes(query)
     })
   }, [
-    overdueOnly,
+    filters.overdueOnly,
+    filters.showEmptyProperties,
     properties,
     rules.length,
     rulesByProperty,
-    search,
-    showEmptyProperties,
-    statuses,
+    searchQuery,
+    displayStatuses,
     templateById,
   ])
+
+  const activeFilterCount =
+    (filters.overdueOnly ? 1 : 0) + (filters.showEmptyProperties ? 0 : 1)
+
+  const openFilters = () => {
+    setFilterDraft({ ...filters })
+    setIsFilterOpen(true)
+  }
 
   const openCreateRule = (propertyId = '') => {
     setForm({
@@ -496,60 +560,81 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
           </div>
           <p className="subtitle">{t('jobScheduler.subtitle')}</p>
         </div>
-        <div className="header-actions">
-          <button
-            className="btn-ghost"
-            type="button"
-            aria-label={t('common.refresh')}
-            title={t('common.refresh')}
-            onClick={() => void load()}
+        <MobileBodyPortal>
+          <div
+            className={`page-action-bar ${
+              isMobileSearchOpen ? 'is-search-open' : ''
+            }`}
           >
-            <YlIcon name="arrow.clockwise" size={16} />
-          </button>
-          <button
-            className="btn-ghost"
-            type="button"
-            aria-label={t('jobScheduler.add')}
-            title={t('jobScheduler.add')}
-            onClick={() => openCreateRule()}
-          >
-            <YlIcon name="plus" size={16} />
-          </button>
-        </div>
+            <input
+              className="search-input"
+              placeholder={t('jobScheduler.search')}
+              type="search"
+              aria-label={t('jobScheduler.search')}
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+            />
+            <div className="header-actions">
+              <button
+                className={`btn-ghost btn-search-toggle ${
+                  isMobileSearchOpen ? 'is-active' : ''
+                }`}
+                type="button"
+                aria-label={
+                  isMobileSearchOpen
+                    ? t('common.hideSearch')
+                    : t('common.showSearch')
+                }
+                aria-expanded={isMobileSearchOpen}
+                onClick={onToggleMobileSearch}
+              >
+                {isMobileSearchOpen ? (
+                  <YlIcon name="xmark" size={16} />
+                ) : (
+                  <YlIcon name="magnifyingglass" size={16} />
+                )}
+              </button>
+              <button
+                className={`btn-ghost btn-filter ${
+                  isFilterOpen || activeFilterCount > 0 ? 'is-active' : ''
+                }`}
+                type="button"
+                aria-label={t('common.filters')}
+                onClick={openFilters}
+              >
+                <YlIcon name="line.3.horizontal.decrease" size={16} />
+                {activeFilterCount > 0 ? (
+                  <span className="filter-badge">{activeFilterCount}</span>
+                ) : null}
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                aria-label={t('jobScheduler.add')}
+                title={t('jobScheduler.add')}
+                onClick={() => openCreateRule()}
+              >
+                <YlIcon name="plus" size={16} />
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                aria-label={t('common.refresh')}
+                title={t('common.refresh')}
+                onClick={() => void load()}
+                disabled={isLoading}
+              >
+                <YlIcon name="arrow.clockwise" size={16} />
+              </button>
+            </div>
+          </div>
+        </MobileBodyPortal>
       </header>
 
       {error ? <p className="notice error">{error}</p> : null}
       {message ? <p className="notice success">{message}</p> : null}
 
       <section className="card">
-        <div className="job-scheduler-toolbar">
-          <input
-            className="search-input"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t('jobScheduler.search')}
-            aria-label={t('jobScheduler.search')}
-          />
-          <label className="filter-option job-scheduler-filter">
-            <input
-              type="checkbox"
-              checked={overdueOnly}
-              onChange={(event) => setOverdueOnly(event.target.checked)}
-            />
-            {t('jobScheduler.overdueOnly')}
-          </label>
-          {rules.length > 0 ? (
-            <label className="filter-option job-scheduler-filter">
-              <input
-                type="checkbox"
-                checked={showEmptyProperties}
-                onChange={(event) => setShowEmptyProperties(event.target.checked)}
-              />
-              {t('jobScheduler.showEmpty')}
-            </label>
-          ) : null}
-        </div>
         {isLoading ? <p>{t('common.loading')}</p> : null}
         <div className="table-wrap">
           <table className="data-table job-scheduler-table">
@@ -581,14 +666,14 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                     rulesByProperty.get(property.id) ?? []
                   ).filter(
                     (rule) =>
-                      !overdueOnly ||
-                      isWarningRule(rule, statuses[rule.id] ?? emptyStatus()),
+                      !filters.overdueOnly ||
+                      isWarningRule(rule, displayStatuses[rule.id] ?? emptyStatus()),
                   )
                   const rows =
                     propertyRules.length > 0 ? propertyRules : [null]
                   return rows.map((rule, index) => {
                     const status = rule
-                      ? (statuses[rule.id] ?? emptyStatus())
+                      ? (displayStatuses[rule.id] ?? emptyStatus())
                       : null
                     const warning = Boolean(
                       rule && status && isWarningRule(rule, status),
@@ -597,35 +682,18 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                       rule && status && isScheduledRule(rule, status),
                     )
                     const progress =
-                      rule && status
-                        ? progressForRule(rule, status, warning)
-                        : null
+                      rule && status ? progressForRule(rule, status) : null
                     return (
                       <tr
                         key={rule ? rule.id : `${property.id}-empty`}
-                        className={`${rule && !rule.enabled ? 'muted-row' : ''} ${
-                          warning ? 'job-scheduler-row-overdue' : ''
-                        }`.trim()}
+                        className={rule && !rule.enabled ? 'muted-row' : ''}
                       >
                         {index === 0 ? (
                           <td
                             className="job-scheduler-property-cell"
                             rowSpan={rows.length}
                           >
-                            <div className="job-scheduler-property">
-                              <button
-                                className="job-scheduler-add-rule"
-                                type="button"
-                                aria-label={t('jobScheduler.addForProperty', {
-                                  name: getPropertyLabel(property),
-                                })}
-                                title={t('jobScheduler.add')}
-                                onClick={() => openCreateRule(property.id)}
-                              >
-                                <YlIcon name="plus" size={10} />
-                              </button>
-                              <strong>{getPropertyLabel(property)}</strong>
-                            </div>
+                            <strong>{getPropertyLabel(property)}</strong>
                           </td>
                         ) : null}
                         {rule && status && progress ? (
@@ -657,7 +725,7 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
                                   aria-valuemin={0}
                                   aria-valuemax={progress.interval}
                                   aria-valuenow={
-                                    warning
+                                    progress.overdue
                                       ? progress.interval
                                       : Math.min(
                                           progress.interval,
@@ -748,6 +816,78 @@ export function JobSchedulerView({ getEndpoint, propertyOptions }: Props) {
           </table>
         </div>
       </section>
+
+      {isFilterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">
+                  {t('jobScheduler.filterSubtitle')}
+                </p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                aria-label={t('common.closeFilters')}
+                onClick={() => setIsFilterOpen(false)}
+              >
+                <YlIcon name="xmark" size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-options">
+                <label className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filterDraft.overdueOnly}
+                    onChange={(event) =>
+                      setFilterDraft((current) => ({
+                        ...current,
+                        overdueOnly: event.target.checked,
+                      }))
+                    }
+                  />
+                  {t('jobScheduler.overdueOnly')}
+                </label>
+                <label className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filterDraft.showEmptyProperties}
+                    onChange={(event) =>
+                      setFilterDraft((current) => ({
+                        ...current,
+                        showEmptyProperties: event.target.checked,
+                      }))
+                    }
+                  />
+                  {t('jobScheduler.showEmpty')}
+                </label>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setFilterDraft(emptyFilters())}
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setFilters({ ...filterDraft })
+                  setIsFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">

@@ -6,7 +6,7 @@ const TOKEN_HEX: Record<string, string> = {
   'var(--yl-ink)': '#415364',
   'var(--yl-success)': '#027a48',
   'var(--yl-warning)': '#b54708',
-  'var(--yl-caution)': '#ac800b',
+  'var(--yl-caution)': '#e9cc25',
   'var(--yl-danger)': '#b42318',
   'var(--yl-fill)': '#eef3f2',
   'var(--yl-go-soft)': '#eef3f2',

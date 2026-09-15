@@ -56,7 +56,7 @@ const COLOR_TOKENS = [
   ['--yl-fill', '#eef3f2'],
   ['--yl-success', '#027a48'],
   ['--yl-warning', '#b54708'],
-  ['--yl-caution', '#ac800b'],
+  ['--yl-caution', '#e9cc25'],
   ['--yl-danger', '#b42318'],
 ] as const
 

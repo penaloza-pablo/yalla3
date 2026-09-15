@@ -7326,61 +7326,6 @@ th {
   box-shadow: 0 0 0 1px currentColor;
 }
 
-.job-scheduler-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-  margin-bottom: 16px;
-}
-
-.job-scheduler-toolbar .search-input {
-  flex: 1 1 220px;
-  min-width: 180px;
-}
-
-.job-scheduler-filter {
-  white-space: nowrap;
-}
-
-.job-scheduler-property {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.job-scheduler-property strong {
-  line-height: 1.2;
-}
-
-.job-scheduler-add-rule {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.15em;
-  height: 1.15em;
-  padding: 0;
-  margin: 0;
-  flex-shrink: 0;
-  border: 1px solid var(--yl-stroke);
-  border-radius: 999px;
-  background: var(--yl-surface);
-  color: inherit;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.job-scheduler-add-rule:hover,
-.job-scheduler-add-rule:focus-visible {
-  background: var(--yl-go-soft);
-}
-
-.job-scheduler-add-rule .yl-icon,
-.job-scheduler-add-rule svg {
-  width: 0.7em;
-  height: 0.7em;
-}
-
 .job-scheduler-property-cell {
   vertical-align: top;
 }
@@ -7392,10 +7337,6 @@ th {
 .job-scheduler-days.is-overdue {
   color: #b54708;
   font-weight: 700;
-}
-
-.job-scheduler-row-overdue td {
-  background: #fffcf5;
 }
 
 .job-scheduler-meter-head {
