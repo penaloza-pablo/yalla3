@@ -23,6 +23,19 @@ test('English percent and status stay available', () => {
   assert.equal(planningStatus(rows, 'en'), 'Pending')
 })
 
+test('radar labels name each plan', () => {
+  const english = planningRows(base, 'en')
+  assert.deepEqual(
+    english.map((row) => row.label),
+    ['Maintenance Plan', 'Cleaning Plan', 'Bookings Plan'],
+  )
+  const spanish = planningRows(base, 'es')
+  assert.deepEqual(
+    spanish.map((row) => row.label),
+    ['Plan de mantenimiento', 'Plan de limpieza', 'Plan de reservas'],
+  )
+})
+
 test('ten of one hundred with a warning is ninety percent', () => {
   const rows = planningRows(
     {

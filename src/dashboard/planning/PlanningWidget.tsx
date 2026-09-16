@@ -57,7 +57,7 @@ export function PlanningWidget({
           (row) =>
             `${row.label}: ${row.completed} ${planningLocale(locale) === 'es' ? 'de' : 'of'} ${row.total}${
               row.key === 'bookings'
-                ? ` ${copy.withoutAlarms}, ${row.percent}`
+                ? ''
                 : ` ${copy.closedTodayTomorrow}`
             }`,
         )
@@ -89,9 +89,7 @@ export function PlanningWidget({
               <>
                 {rows.map((row, index) => {
                   const geometry = radarGeometry(index)
-                  const detail = `${row.label} ${row.completed}/${row.total}${
-                    row.key === 'bookings' ? ` · ${row.percent}` : ''
-                  }`
+                  const detail = `${row.label} ${row.completed}/${row.total}`
                   return (
                     <g
                       key={row.key}

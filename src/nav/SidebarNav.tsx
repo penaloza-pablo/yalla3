@@ -9,11 +9,10 @@ import { PAGE_ICON, YlIcon, type YlIconName } from '../design/icons'
 import {
   canAccessTodayView,
   TODAY_NAV_ITEMS,
-  TODAY_SECTION_ID,
   type TodayViewMode,
 } from './todayViews'
 
-const COLLAPSED_SECTIONS_KEY = 'yalla.sidebar.collapsedSections.v1'
+const COLLAPSED_SECTIONS_KEY = 'yalla.sidebar.collapsedSections.v2'
 
 type SidebarNavProps = {
   coreItems: string[]
@@ -115,11 +114,8 @@ export function SidebarNav({
   )?.section
   const todaySectionActive = activePage === 'Daily Operations'
   const isFlat = navMode === 'flat'
-  const sectionIds = [
-    ...(showTodayViews ? [TODAY_SECTION_ID] : []),
-    ...groups.map((group) => group.section),
-  ]
-  const sectionIdsKey = sectionIds.join('|')
+  const accordionIds = groups.map((group) => group.section)
+  const accordionIdsKey = accordionIds.join('|')
 
   useLayoutEffect(() => {
     const pending = pendingScrollPin.current
@@ -137,14 +133,15 @@ export function SidebarNav({
     if (isFlat || (!activeSection && !todaySectionActive)) {
       return
     }
-    const sectionToOpen = todaySectionActive ? TODAY_SECTION_ID : activeSection
-    if (!sectionToOpen) {
-      return
-    }
-    const ids = sectionIdsKey ? sectionIdsKey.split('|') : []
+    const ids = accordionIdsKey ? accordionIdsKey.split('|') : []
     setCollapsedSections((current) => {
-      const next = new Set(ids)
-      next.delete(sectionToOpen)
+      const next = new Set(current)
+      for (const id of ids) {
+        next.add(id)
+      }
+      if (activeSection) {
+        next.delete(activeSection)
+      }
       const unchanged = ids.every((id) => next.has(id) === current.has(id))
       if (unchanged) {
         return current
@@ -152,7 +149,7 @@ export function SidebarNav({
       writeCollapsedSections(next)
       return next
     })
-  }, [activePage, activeSection, isFlat, sectionIdsKey, todaySectionActive])
+  }, [activePage, activeSection, accordionIdsKey, isFlat, todaySectionActive])
 
   const toggleSection = (section: string, header: HTMLButtonElement) => {
     const scroller = header.closest('.nav')
@@ -165,7 +162,10 @@ export function SidebarNav({
     }
     setCollapsedSections((current) => {
       const opening = current.has(section)
-      const next = new Set(sectionIds)
+      const next = new Set(current)
+      for (const id of accordionIds) {
+        next.add(id)
+      }
       if (opening) {
         next.delete(section)
       }
@@ -174,7 +174,6 @@ export function SidebarNav({
     })
   }
 
-  const todayOpen = !collapsedSections.has(TODAY_SECTION_ID)
   const todayRows = showTodayViews
     ? todayItems.map((item) => (
         <FeatureRow
@@ -212,29 +211,9 @@ export function SidebarNav({
   return (
     <div className="sidebar-nav">
       {todayRows.length > 0 ? (
-        <div className="sidebar-nav-group sidebar-nav-root">
-          <button
-            type="button"
-            className={`sidebar-nav-header ${todayOpen ? '' : 'is-collapsed'}`}
-            aria-expanded={todayOpen}
-            aria-controls="sidebar-section-today"
-            onClick={(event) =>
-              toggleSection(TODAY_SECTION_ID, event.currentTarget)
-            }
-          >
-            <YlIcon
-              name={todayOpen ? 'chevron.down' : 'chevron.right'}
-              size={12}
-              variant="regular"
-            />
-            <span>{labelForPage('Daily Operations')}</span>
-          </button>
-          {todayOpen ? (
-            <ul className="sidebar-nav-list" id="sidebar-section-today">
-              {todayRows}
-            </ul>
-          ) : null}
-        </div>
+        <ul className="sidebar-nav-list sidebar-nav-root" id="sidebar-section-today">
+          {todayRows}
+        </ul>
       ) : null}
       {otherCoreItems.length > 0 ? (
         <ul className="sidebar-nav-list sidebar-nav-root">

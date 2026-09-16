@@ -8,7 +8,9 @@
 
 .yl-dashboard.is-board {
   position: fixed;
-  inset: var(--yl-space-3);
+  inset-block: var(--yl-space-3);
+  inset-inline-end: var(--yl-space-3);
+  inset-inline-start: calc(260px + (var(--yl-space-3) * 2));
   z-index: 1;
   display: block;
   width: auto;
@@ -16,6 +18,12 @@
   overflow: hidden;
   pointer-events: none;
   box-sizing: border-box;
+}
+
+@media (min-width: 769px) {
+  .app.app-collapsed .yl-dashboard.is-board {
+    inset-inline-start: var(--yl-space-3);
+  }
 }
 
 .yl-dashboard-boot {
@@ -77,9 +85,9 @@
   display: grid;
   grid-template-columns: repeat(
     var(--yl-dashboard-columns, 4),
-    var(--yl-dashboard-cell, 156px)
+    var(--yl-dashboard-track, var(--yl-dashboard-cell, 156px))
   );
-  grid-auto-rows: var(--yl-dashboard-cell, 156px);
+  grid-auto-rows: var(--yl-dashboard-track, var(--yl-dashboard-cell, 156px));
   grid-auto-flow: dense;
   gap: var(--yl-dashboard-gap, 12px);
   width: max-content;
@@ -150,6 +158,19 @@
   padding: 0;
   background: transparent;
   color: var(--yl-ink);
+}
+
+.yl-dashboard-widget.is-activity > :not(.yl-dashboard-widget-config),
+.yl-dashboard-widget.is-checkin > :not(.yl-dashboard-widget-config),
+.yl-dashboard-widget.is-date > :not(.yl-dashboard-widget-config),
+.yl-dashboard-widget.is-planning > :not(.yl-dashboard-widget-config),
+.yl-dashboard-widget.is-reviews > :not(.yl-dashboard-widget-config),
+.yl-dashboard-widget.is-supplies > :not(.yl-dashboard-widget-config) {
+  flex: none;
+  width: calc(100% / var(--yl-dashboard-widget-scale, 1));
+  height: calc(100% / var(--yl-dashboard-widget-scale, 1));
+  transform: scale(var(--yl-dashboard-widget-scale, 1));
+  transform-origin: 0 0;
 }
 
 .yl-dashboard-planning,

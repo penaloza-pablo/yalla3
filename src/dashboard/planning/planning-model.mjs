@@ -1,8 +1,8 @@
 const EN = {
   labels: {
-    maintenance: 'Maintenance',
-    cleaning: 'Cleaning',
-    bookings: 'Bookings',
+    maintenance: 'Maintenance Plan',
+    cleaning: 'Cleaning Plan',
+    bookings: 'Bookings Plan',
   },
   title: 'Planning',
   ariaLabel: 'Planning status',
@@ -21,9 +21,9 @@ const EN = {
 
 const ES = {
   labels: {
-    maintenance: 'Maintenance',
-    cleaning: 'Cleaning',
-    bookings: 'Bookings',
+    maintenance: 'Plan de mantenimiento',
+    cleaning: 'Plan de limpieza',
+    bookings: 'Plan de reservas',
   },
   title: 'Planificación',
   ariaLabel: 'Estado de planificación',

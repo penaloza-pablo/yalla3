@@ -327,8 +327,8 @@
     padding-inline-start: 72px;
   }
 
-  .app.app-collapsed .main:has(.yl-dashboard.is-board) {
-    padding-inline-start: 0;
+  .app.app-collapsed .yl-dashboard.is-board {
+    inset-inline-start: var(--yl-space-3);
   }
 }
 

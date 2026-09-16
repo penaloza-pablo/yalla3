@@ -6,8 +6,11 @@ import { resolveVisibleWidgets } from './scale'
 import {
   DASHBOARD_CELL_PX,
   DASHBOARD_COLUMNS,
-  DASHBOARD_GAP_PX,
   DASHBOARD_INSET_PX,
+  DASHBOARD_SIDEBAR_PX,
+  DASHBOARD_TRACK_GAP_PX,
+  DASHBOARD_TRACK_PX,
+  DASHBOARD_WIDGET_SCALE,
 } from './types'
 import type { DashboardLayout, DashboardWidgetPlacement } from './types'
 import { widgetLabel } from './labels'
@@ -31,8 +34,10 @@ const viewportBox = (variant: 'board' | 'embedded') => {
   if (variant !== 'board') {
     return { width: window.innerWidth, height: Number.POSITIVE_INFINITY }
   }
+  const sidebar =
+    window.innerWidth >= 769 ? DASHBOARD_SIDEBAR_PX + DASHBOARD_INSET_PX : 0
   return {
-    width: Math.max(0, window.innerWidth - DASHBOARD_INSET_PX * 2),
+    width: Math.max(0, window.innerWidth - DASHBOARD_INSET_PX * 2 - sidebar),
     height: Math.max(0, window.innerHeight - DASHBOARD_INSET_PX * 2),
   }
 }
@@ -60,10 +65,14 @@ export function DashboardGrid({
     }
 
     const update = () => {
-      const width = host.clientWidth
-      const height =
-        variant === 'board' ? host.clientHeight : Number.POSITIVE_INFINITY
-      setAvailable({ width, height })
+      if (variant === 'board') {
+        setAvailable(viewportBox('board'))
+        return
+      }
+      setAvailable({
+        width: host.clientWidth,
+        height: Number.POSITIVE_INFINITY,
+      })
     }
 
     update()
@@ -103,7 +112,9 @@ export function DashboardGrid({
           style={
             {
               '--yl-dashboard-cell': `${DASHBOARD_CELL_PX}px`,
-              '--yl-dashboard-gap': `${DASHBOARD_GAP_PX}px`,
+              '--yl-dashboard-track': `${DASHBOARD_TRACK_PX}px`,
+              '--yl-dashboard-widget-scale': String(DASHBOARD_WIDGET_SCALE),
+              '--yl-dashboard-gap': `${DASHBOARD_TRACK_GAP_PX}px`,
               '--yl-dashboard-columns': String(
                 resolved.columns || DASHBOARD_COLUMNS,
               ),

@@ -13,7 +13,7 @@ const icons = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.door}</svg>`;
 const escape = text => String(text).replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const EN = {
-  stages: ['Jobs pending', 'Property ready', 'Access granted', 'Guest entered'],
+  stages: ['Jobs pending', 'Property ready', 'Access granted', 'Checked in'],
   guest: 'Guest',
   property: 'Property',
   emptyTitle: 'No check-ins',
