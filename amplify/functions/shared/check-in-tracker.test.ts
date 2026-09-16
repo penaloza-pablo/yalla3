@@ -8,6 +8,7 @@ import {
   resolveCheckInTrackerStatus,
   resolveTrackerDateWindow,
   shouldIncludeBooking,
+  summarizeDayActivity,
 } from './check-in-tracker';
 
 const booking = {
@@ -209,4 +210,49 @@ test('tracker date window accepts a single day or a bounded range', () => {
     to: '2026-09-22',
   });
   assert.equal(CHECK_IN_TRACKER_MAX_RANGE_DAYS, 14);
+});
+
+test('day activity counts today check-ins, closed jobs, and early arrivals', () => {
+  const activity = summarizeDayActivity(
+    [
+      {
+        ...booking,
+        CheckInGuestEntered: true,
+        CheckInAccessGranted: true,
+        EarlyCheckInOn: true,
+      },
+      {
+        ...booking,
+        ReservationID: 'res-2',
+        GuestName: 'Bea',
+        CheckInDate: '2026-09-17',
+      },
+    ],
+    [
+      visit({ status: 'COMPLETED' }),
+      visit({
+        id: 'visit-2',
+        status: 'COMPLETED',
+        visitTypeId: 'visit_type_maintenance',
+        teamId: 'team_maintenance',
+      }),
+      visit({
+        id: 'visit-3',
+        propertyId: 'listing-b',
+        status: 'SCHEDULED',
+      }),
+      visit({
+        id: 'visit-4',
+        propertyId: 'listing-b',
+        scheduledDate: '2026-09-15',
+        status: 'SCHEDULED',
+      }),
+    ],
+    '2026-09-16',
+  );
+  assert.deepEqual(activity, {
+    checkins: { total: 1, completed: 1, early: 1 },
+    cleaning: { total: 2, completed: 1 },
+    maintenance: { total: 1, completed: 1 },
+  });
 });

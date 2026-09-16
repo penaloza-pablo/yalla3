@@ -1,21 +1,40 @@
 import { useTranslation } from 'react-i18next'
 import { YlIcon } from '../design/icons'
+import { ActivityDayWidget } from './activity/ActivityDayWidget'
 import { IncidentsCheckinWidget } from './checkin/IncidentsCheckinWidget'
+import { PlanningDayWidget } from './planning/PlanningDayWidget'
 import { colorNeedsInk } from './color'
-import type { DashboardWidgetKind, DashboardWidgetScale } from './types'
+import type {
+  ActivityPresentation,
+  DashboardWidgetKind,
+  DashboardWidgetScale,
+  PlanningPresentation,
+} from './types'
 import './dashboard.css'
 
 type Props = {
   name: string
   kind: DashboardWidgetKind
   scale: DashboardWidgetScale
+  activity?: ActivityPresentation
+  planning?: PlanningPresentation
   onConfigure?: () => void
 }
 
-export function DashboardWidget({ name, kind, scale, onConfigure }: Props) {
+export function DashboardWidget({
+  name,
+  kind,
+  scale,
+  activity,
+  planning,
+  onConfigure,
+}: Props) {
   const { t } = useTranslation()
   const isCheckin = kind === 'checkin'
-  const ink = !isCheckin && colorNeedsInk(scale.swatch)
+  const isActivity = kind === 'activity'
+  const isPlanning = kind === 'planning'
+  const isLive = isCheckin || isActivity || isPlanning
+  const ink = !isLive && colorNeedsInk(scale.swatch)
   const spanLabel = t('dashboard.spanLabel', {
     cols: scale.colSpan,
     rows: scale.rowSpan,
@@ -24,12 +43,12 @@ export function DashboardWidget({ name, kind, scale, onConfigure }: Props) {
   return (
     <article
       className={`yl-dashboard-widget${isCheckin ? ' is-checkin' : ''}${
-        ink ? ' is-ink' : ''
-      }`}
+        isActivity ? ' is-activity' : ''
+      }${isPlanning ? ' is-planning' : ''}${ink ? ' is-ink' : ''}`}
       style={{
         gridColumn: `span ${scale.colSpan}`,
         gridRow: `span ${scale.rowSpan}`,
-        ...(isCheckin
+        ...(isLive
           ? {}
           : {
               background: scale.swatch,
@@ -53,7 +72,27 @@ export function DashboardWidget({ name, kind, scale, onConfigure }: Props) {
         </button>
       ) : null}
       {isCheckin ? (
-        <IncidentsCheckinWidget colSpan={scale.colSpan} rowSpan={scale.rowSpan} />
+        <IncidentsCheckinWidget
+          name={name}
+          colSpan={scale.colSpan}
+          rowSpan={scale.rowSpan}
+        />
+      ) : isActivity ? (
+        <ActivityDayWidget
+          name={name}
+          colSpan={scale.colSpan}
+          rowSpan={scale.rowSpan}
+          variant={activity?.variant ?? 'frequency'}
+          tone={activity?.tone ?? 'original'}
+        />
+      ) : isPlanning ? (
+        <PlanningDayWidget
+          name={name}
+          colSpan={scale.colSpan}
+          rowSpan={scale.rowSpan}
+          variant={planning?.variant ?? 'rings'}
+          tone={planning?.tone ?? 'slate'}
+        />
       ) : (
         <>
           <p className="yl-dashboard-widget-name">{name}</p>
@@ -63,4 +102,3 @@ export function DashboardWidget({ name, kind, scale, onConfigure }: Props) {
     </article>
   )
 }
-

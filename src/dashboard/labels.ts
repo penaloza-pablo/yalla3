@@ -7,3 +7,8 @@ export const layoutLabel = (
 ) =>
   layout.name?.trim() ||
   t('dashboard.layoutName', { n: dashboardLayoutNumber(layout.id) })
+
+export const widgetLabel = (
+  widget: { title?: string; titleKey: string },
+  t: TFunction,
+) => widget.title?.trim() || t(widget.titleKey)

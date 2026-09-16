@@ -87,6 +87,39 @@
   background: rgba(65, 83, 100, 0.12);
 }
 
+.yl-dashboard-widget.is-activity {
+  padding: 0;
+  background: transparent;
+  color: var(--yl-ink);
+}
+
+.yl-dashboard-widget.is-activity .yl-dashboard-widget-config,
+.yl-dashboard-widget.is-planning .yl-dashboard-widget-config {
+  z-index: 2;
+  background: rgba(246, 241, 232, 0.88);
+  color: var(--yl-ink);
+}
+
+.yl-dashboard-widget.is-planning {
+  padding: 0;
+  background: transparent;
+  color: var(--yl-ink);
+}
+
+.yl-dashboard-planning {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.yl-dashboard-activity {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .yl-dashboard-widget.is-checkin .yl-dashboard-widget-config {
   z-index: 2;
   background: rgba(246, 241, 232, 0.88);
@@ -135,8 +168,39 @@
   min-height: 188px;
 }
 
-.yl-kit-checkin-stage .yl-dashboard-checkin {
-  min-height: 188px;
+.yl-kit-activity-stage {
+  width: 100%;
+  max-width: 680px;
+  min-height: 156px;
+}
+
+.yl-kit-activity-stage .yl-dashboard-activity {
+  min-height: 156px;
+}
+
+.yl-kit-planning-stage,
+.yl-kit-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.yl-kit-variant-tile {
+  min-height: 220px;
+  height: 324px;
+}
+
+.yl-kit-variant-tile .yl-dashboard-activity,
+.yl-kit-variant-tile .yl-dashboard-planning,
+.yl-kit-variant-tile .yl-dashboard-checkin-mini {
+  height: 100%;
+}
+
+.yl-kit-variant-tile.is-wide {
+  grid-column: 1 / -1;
+  min-height: 156px;
+  height: 188px;
 }
 
 .yl-dashboard-widget-name {

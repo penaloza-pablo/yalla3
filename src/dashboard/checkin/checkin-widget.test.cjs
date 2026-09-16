@@ -12,7 +12,7 @@ const ctx={HTMLElement:FakeElement,CustomEvent,Date,matchMedia:()=>({matches:tru
 const dir=__dirname+'/';
 const code=fs.readFileSync(dir+'checkin-model.mjs','utf8').replaceAll('export ','')+'\n'+fs.readFileSync(dir+'checkin-widget.js','utf8').split('\n').slice(1).join('\n').replace('export class','class');
 vm.runInNewContext(code,ctx);
-const Widget=registry.get('kk-checkin');const w=new Widget();w.connectedCallback();assert.match(w.shadowRoot.innerHTML,/Sin check-ins/);
+const Widget=registry.get('kk-checkin');const w=new Widget();w.connectedCallback();assert.match(w.shadowRoot.innerHTML,/No check-ins/);
 const data=Array.from({length:14},(_,i)=>({id:String(i),name:'Pablo',property:'López Silva',checkInDate:'2026-09-15',visits:[],accessGranted:false,entered:false}));
 w.guests=data;assert.equal(w.selectedId,'0');
 let changes=[];w.addEventListener('guest-change',e=>changes.push(e.detail));
@@ -28,7 +28,8 @@ let intent;w.addEventListener('checkin-action',e=>intent=e.detail);
 click({action:'grant-access'});assert.equal(intent.id,'13');assert.equal(intent.action,'grant-access');assert.equal(w.guests[0].accessGranted,false);
 w.setAttribute('variant','threshold');assert.match(w.shadowRoot.innerHTML,/class="doors"/);
 w.guests=[{...data[0],name:'<script>alert(1)</script>'}];assert.ok(!w.shadowRoot.innerHTML.includes('<script>alert'));
-w.guests=[];assert.match(w.shadowRoot.innerHTML,/Sin check-ins/);
+w.guests=[];assert.match(w.shadowRoot.innerHTML,/No check-ins/);
+w.setAttribute('lang','es');w.guests=[];assert.match(w.shadowRoot.innerHTML,/Sin check-ins/);
 console.log('PASS: empty state, 14 guests, navigation bounds, busy lock, accumulated wheel input, stable selected ID, controlled action event, threshold rendering and escaped names. Isolated runtime test; no browser layout tested.');
 
 // Compact Trayecto: progress nodes are the only state-changing controls.

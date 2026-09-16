@@ -28,6 +28,7 @@ export interface CheckinWidgetProps {
   selectedId?: string
   busy?: boolean
   error?: string
+  lang?: string
   onAction: (event: { id: string; action: CheckinAction }) => void
   onGuestChange?: (event: { id: string; index: number }) => void
   className?: string
@@ -64,6 +65,7 @@ export function CheckinWidget({
   selectedId,
   busy = false,
   error = '',
+  lang = 'en',
   onAction,
   onGuestChange,
   className,
@@ -102,5 +104,5 @@ export function CheckinWidget({
     }
   }, [busy, error, guests, selectedId])
 
-  return createElement('kk-checkin', { ref, variant, className, style })
+  return createElement('kk-checkin', { ref, variant, className, style, lang })
 }

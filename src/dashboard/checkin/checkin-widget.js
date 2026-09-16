@@ -12,6 +12,64 @@ const icons = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.door}</svg>`;
 const escape = text => String(text).replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
+const EN = {
+  stages: ['Jobs pending', 'Property ready', 'Access granted', 'Guest entered'],
+  guest: 'Guest',
+  property: 'Property',
+  emptyTitle: 'No check-ins',
+  emptyBody: "Today's arrivals will appear here.",
+  pendingOne: '1 pending visit · access blocked',
+  pendingMany: (n) => `${n} pending visits · access blocked`,
+  ready: 'Ready to receive the guest',
+  waiting: 'Waiting for the guest to enter',
+  done: 'Check-in complete',
+  grant: 'Grant access',
+  enter: 'Mark entry',
+  undo: 'Undo entry',
+  revoke: 'Revoke access',
+  saving: 'Saving',
+  savingEllipsis: 'Saving…',
+  alreadyDone: 'Already completed',
+  needsReady: 'Requires property ready',
+  needsAccess: 'Requires access granted',
+  process: 'Check-in process',
+  ariaCheckin: (name) => `Check-in for ${name}`,
+  prev: 'Previous guest',
+  next: 'Next guest',
+  swipe: 'Swipe to change guest',
+  live: (name, property, stage, busy, number, total) => `${name}, ${property}. ${stage}.${busy ? ' Saving change.' : ''} Guest ${number} of ${total}.`,
+};
+const ES = {
+  stages: STAGES,
+  guest: 'Huésped',
+  property: 'Propiedad',
+  emptyTitle: 'Sin check-ins',
+  emptyBody: 'Las llegadas de hoy aparecerán aquí.',
+  pendingOne: '1 visita pendiente · acceso bloqueado',
+  pendingMany: (n) => `${n} visitas pendientes · acceso bloqueado`,
+  ready: 'Todo preparado para recibirle',
+  waiting: 'Esperando la entrada del huésped',
+  done: 'Check-in completado',
+  grant: 'Conceder acceso',
+  enter: 'Marcar entrada',
+  undo: 'Deshacer entrada',
+  revoke: 'Revocar acceso',
+  saving: 'Guardando',
+  savingEllipsis: 'Guardando…',
+  alreadyDone: 'Ya completado',
+  needsReady: 'Requiere propiedad lista',
+  needsAccess: 'Requiere acceso concedido',
+  process: 'Proceso de check-in',
+  ariaCheckin: (name) => `Check-in de ${name}`,
+  prev: 'Huésped anterior',
+  next: 'Siguiente huésped',
+  swipe: 'Desliza para cambiar de huésped',
+  live: (name, property, stage, busy, number, total) => `${name}, ${property}. ${stage}.${busy ? ' Guardando cambio.' : ''} Huésped ${number} de ${total}.`,
+};
+const copyFor = (el) => {
+  const lang = String(el.getAttribute('lang') || 'en').toLowerCase();
+  return lang.startsWith('es') ? ES : EN;
+};
 const css = `
   :host{--kk-slate:#415364;--kk-green:#3D5B58;--kk-pink:#E3B9B3;--kk-blue:#A1B1C8;--kk-violet:#5E3653;--kk-paper:#F6F1E8;--kk-radius:28px;--kk-font:Gogh,'Avenir Next',system-ui,sans-serif;--kk-label-font:Mohave,'Avenir Next Condensed',system-ui,sans-serif;display:block;width:100%;height:100%;container-type:size;color:var(--kk-slate);font-family:var(--kk-font)}
   *{box-sizing:border-box}button{font:inherit;cursor:pointer}button:disabled{cursor:default;opacity:.38}button:focus-visible{outline:3px solid var(--kk-violet);outline-offset:4px}svg{width:19px;height:19px;flex-shrink:0} .shell{position:relative;height:100%;display:flex;flex-direction:column;border-radius:var(--kk-radius);overflow:hidden;background:var(--kk-paper);border:1px solid #41536418;box-shadow:0 12px 26px -24px #24363266}
@@ -51,7 +109,7 @@ const css = `
 `;
 
 export class KnockKnockCheckin extends HTMLElement {
-  static observedAttributes = ['variant'];
+  static observedAttributes = ['variant', 'lang'];
   #guests = []; #index = 0; #busy = false; #error = ''; #wheel = 0; #last = 0; #lastWheel = 0; #touch = null;
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
@@ -127,30 +185,32 @@ export class KnockKnockCheckin extends HTMLElement {
     const active = this.shadowRoot.activeElement;
     const focus = active?.dataset.action ? `[data-action="${active.dataset.action}"]` : active?.dataset.move ? `[data-move="${active.dataset.move}"]` : null;
     const g = this.#guests[this.#index], threshold = this.getAttribute('variant') === 'threshold';
-    if (!g) { this.shadowRoot.innerHTML = `<style>${css}</style><div class="shell empty"><strong>Sin check-ins</strong><p>Las próximas llegadas aparecerán aquí.</p></div>`; return; }
+    if (!g) { this.shadowRoot.innerHTML = `<style>${css}</style><div class="shell empty"><strong>${copyFor(this).emptyTitle}</strong><p>${copyFor(this).emptyBody}</p></div>`; return; }
+    const copy = copyFor(this);
     const stage = getStage(g), pending = openVisits(g).length, number = this.#index + 1;
     const names = ['tools', 'door', 'key', 'check'];
-    const text = pending ? `${pending} ${pending === 1 ? 'visita pendiente' : 'visitas pendientes'} · acceso bloqueado` : ['','Todo preparado para recibirle','Esperando la entrada del huésped','Check-in completado'][stage];
+    const statusText = pending ? (pending === 1 ? copy.pendingOne : copy.pendingMany(pending)) : ['', copy.ready, copy.waiting, copy.done][stage];
     const action = stage === 1 ? 'grant-access' : stage === 2 ? 'mark-entered' : stage === 3 ? 'undo-entry' : '';
-    const label = stage === 1 ? 'Conceder acceso' : stage === 2 ? 'Marcar entrada' : 'Deshacer entrada';
+    const label = stage === 1 ? copy.grant : stage === 2 ? copy.enter : copy.undo;
     const steps = STAGES.map((s, i) => {
       const cls = i < stage ? 'past' : i === stage ? 'current' : 'future';
-      if (threshold) return `<li class="door-step ${cls}" ${i === stage ? 'aria-current="step"' : ''}><div class="portal" aria-hidden="true"><span class="door-icon">${icon(i < stage ? 'check' : names[i])}</span><div class="leaf"><span class="door-num">0${i + 1}</span></div></div><span class="step-label">${s}</span></li>`;
+      const stageLabel = copy.stages[i] || s;
+      if (threshold) return `<li class="door-step ${cls}" ${i === stage ? 'aria-current="step"' : ''}><div class="portal" aria-hidden="true"><span class="door-icon">${icon(i < stage ? 'check' : names[i])}</span><div class="leaf"><span class="door-num">0${i + 1}</span></div></div><span class="step-label">${stageLabel}</span></li>`;
       const stepAction = i === 2 ? 'grant-access' : i === 3 ? 'mark-entered' : '';
       const enabled = !this.#busy && (i === 2 && stage === 1 || i === 3 && stage === 2);
-      const actionLabel = i === 2 ? 'Conceder acceso' : 'Marcar entrada';
-      const reason = this.#busy ? 'Guardando' : i <= stage ? 'Ya completado' : i === 2 ? 'Requiere propiedad lista' : 'Requiere acceso concedido';
-      const inner = `<span class="dot" aria-hidden="true">${i <= stage ? icon(i < stage ? 'check' : names[i]) : i + 1}</span><span class="step-label">${s}</span>`;
+      const actionLabel = i === 2 ? copy.grant : copy.enter;
+      const reason = this.#busy ? copy.saving : i <= stage ? copy.alreadyDone : i === 2 ? copy.needsReady : copy.needsAccess;
+      const inner = `<span class="dot" aria-hidden="true">${i <= stage ? icon(i < stage ? 'check' : names[i]) : i + 1}</span><span class="step-label">${stageLabel}</span>`;
       return `<li class="step ${cls} ${enabled ? 'actionable' : ''}" ${i === stage ? 'aria-current="step"' : ''}>${stepAction ? `<button type="button" class="step-control" data-action="${stepAction}" aria-disabled="${!enabled}" aria-label="${actionLabel}${enabled ? '' : '. ' + reason}">${inner}</button>` : inner}</li>`;
     }).join('');
-    this.shadowRoot.innerHTML = `<style>${css}</style><section class="shell ${threshold ? 'threshold' : 'journey'} ${stage === 0 ? 'pending-stage' : ''}" aria-label="Check-in de ${escape(g.name)}" aria-busy="${this.#busy}">
-      <div class="content">${threshold ? `<div class="top"><div class="eyebrow"><span></span>Who's there?</div><div class="status ${stage === 0 ? 'pending' : ''}">${icon(names[stage])}${STAGES[stage]}</div></div>` : ''}
-      <div class="identity"><div class="person"><span class="avatar" aria-hidden="true">${escape(Array.from(g.name)[0])}</span><div><small>Huésped</small><div class="name">${escape(g.name)}</div></div></div><span class="route-arrow">${icon('arrow')}</span><div class="property"><small>Propiedad</small>${escape(g.property)}</div></div>
-      <ol class="${threshold ? 'doors' : 'steps'}" aria-label="Proceso de check-in">${steps}</ol>
-      ${threshold ? `<div class="foot"><span class="hint">${icon(stage === 3 ? 'check' : stage === 0 ? 'tools' : 'door')}${text}</span><div class="actions">${stage === 2 ? `<button class="undo" data-action="revoke-access" ${this.#busy ? 'disabled' : ''}>Revocar acceso</button>` : ''}${action ? `<button class="${stage === 3 ? 'undo' : 'btn'}" data-action="${action}" ${this.#busy ? 'disabled' : ''}>${this.#busy ? 'Guardando…' : label}${stage < 3 ? icon('arrow') : ''}</button>` : ''}</div></div>` : ''}</div>
+    this.shadowRoot.innerHTML = `<style>${css}</style><section class="shell ${threshold ? 'threshold' : 'journey'} ${stage === 0 ? 'pending-stage' : ''}" aria-label="${copy.ariaCheckin(escape(g.name))}" aria-busy="${this.#busy}">
+      <div class="content">${threshold ? `<div class="top"><div class="eyebrow"><span></span>Who's there?</div><div class="status ${stage === 0 ? 'pending' : ''}">${icon(names[stage])}${copy.stages[stage]}</div></div>` : ''}
+      <div class="identity"><div class="person"><span class="avatar" aria-hidden="true">${escape(Array.from(g.name)[0])}</span><div><small>${copy.guest}</small><div class="name">${escape(g.name)}</div></div></div><span class="route-arrow">${icon('arrow')}</span><div class="property"><small>${copy.property}</small>${escape(g.property)}</div></div>
+      <ol class="${threshold ? 'doors' : 'steps'}" aria-label="${copy.process}">${steps}</ol>
+      ${threshold ? `<div class="foot"><span class="hint">${icon(stage === 3 ? 'check' : stage === 0 ? 'tools' : 'door')}${statusText}</span><div class="actions">${stage === 2 ? `<button class="undo" data-action="revoke-access" ${this.#busy ? 'disabled' : ''}>${copy.revoke}</button>` : ''}${action ? `<button class="${stage === 3 ? 'undo' : 'btn'}" data-action="${action}" ${this.#busy ? 'disabled' : ''}>${this.#busy ? copy.savingEllipsis : label}${stage < 3 ? icon('arrow') : ''}</button>` : ''}</div></div>` : ''}</div>
       ${this.#error ? `<div class="error" role="alert">${escape(this.#error)}</div>` : ''}
-      <div class="nav"><div class="overview" aria-hidden="true">${this.#guests.map((_, i) => `<span class="${i === this.#index ? 'active' : ''}"></span>`).join('')}</div><span class="nav-note">${icon('up')}Desliza para cambiar de huésped</span><div class="pager"><span class="count"><b>${String(number).padStart(2, '0')}</b><span> / ${String(this.#guests.length).padStart(2, '0')}</span></span><button data-move="-1" aria-label="Huésped anterior" ${this.#canMove(-1) ? '' : 'disabled'}>${icon('up')}</button><button data-move="1" aria-label="Siguiente huésped" ${this.#canMove(1) ? '' : 'disabled'}>${icon('down')}</button></div></div>
-      <span class="sr" role="status" aria-live="polite">${escape(g.name)}, ${escape(g.property)}. ${STAGES[stage]}.${this.#busy ? ' Guardando cambio.' : ''} Huésped ${number} de ${this.#guests.length}.</span>
+      <div class="nav"><div class="overview" aria-hidden="true">${this.#guests.map((_, i) => `<span class="${i === this.#index ? 'active' : ''}"></span>`).join('')}</div><span class="nav-note">${icon('up')}${copy.swipe}</span><div class="pager"><span class="count"><b>${String(number).padStart(2, '0')}</b><span> / ${String(this.#guests.length).padStart(2, '0')}</span></span><button data-move="-1" aria-label="${copy.prev}" ${this.#canMove(-1) ? '' : 'disabled'}>${icon('up')}</button><button data-move="1" aria-label="${copy.next}" ${this.#canMove(1) ? '' : 'disabled'}>${icon('down')}</button></div></div>
+      <span class="sr" role="status" aria-live="polite">${escape(copy.live(g.name, g.property, copy.stages[stage], this.#busy, number, this.#guests.length))}</span>
       </section>`;
     if (focus) (this.shadowRoot.querySelector(focus) || this.shadowRoot.querySelector('.step-control[aria-disabled="false"], .actions button'))?.focus({ preventScroll: true });
   }

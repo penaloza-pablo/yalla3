@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useConfirm } from '../design/ConfirmDialog'
 import { YlIcon } from '../design/icons'
 import {
   isProtectedDashboardLayoutId,
 } from '../../amplify/functions/shared/dashboard-layout'
-import { layoutLabel } from './labels'
+import { layoutLabel, widgetLabel } from './labels'
 import { DashboardGrid } from './DashboardGrid'
 import { DashboardWidgetConfig } from './DashboardWidgetConfig'
 import {
@@ -42,6 +42,26 @@ const asRowSpan = (value: string): DashboardRowSpan => {
   return 1
 }
 
+const cloneLayout = (layout: DashboardLayout): DashboardLayout => ({
+  id: layout.id,
+  name: layout.name,
+  widgets: layout.widgets.map((widget) => ({ ...widget })),
+})
+
+const layoutSignature = (layout: DashboardLayout) =>
+  JSON.stringify({
+    id: layout.id,
+    name: layout.name?.trim() ?? '',
+    widgets: layout.widgets.map((widget) => ({
+      id: widget.id,
+      widgetId: widget.widgetId,
+      colSpan: widget.colSpan,
+      rowSpan: widget.rowSpan,
+      colStart: widget.colStart,
+      rowStart: widget.rowStart,
+    })),
+  })
+
 export function DashboardLayoutEditor() {
   const { t } = useTranslation()
   const confirm = useConfirm()
@@ -51,24 +71,28 @@ export function DashboardLayoutEditor() {
   const [selectedId, setSelectedId] = useState(layouts[0]?.id ?? 'layout-1')
   const [widgetToAdd, setWidgetToAdd] = useState(catalog[0]?.id ?? '')
   const [configId, setConfigId] = useState<string | null>(null)
-  const [nameDraft, setNameDraft] = useState('')
+  const [draft, setDraft] = useState<DashboardLayout | null>(null)
 
-  const selected =
+  const stored =
     layouts.find((layout) => layout.id === selectedId) ?? layouts[0] ?? null
+  const selected =
+    draft && stored && draft.id === stored.id ? draft : stored
   const configWidget = catalog.find((widget) => widget.id === configId) ?? null
+  const dirty = Boolean(
+    selected && stored && layoutSignature(selected) !== layoutSignature(stored),
+  )
 
-  useEffect(() => {
-    if (selected && selected.id !== selectedId) {
-      setSelectedId(selected.id)
+  const patchLayout = (next: DashboardLayout) => {
+    setDraft(cloneLayout(next))
+  }
+
+  const persistLayout = (layout: DashboardLayout) => {
+    const next: DashboardLayout = {
+      ...layout,
+      name: layout.name?.trim() || undefined,
     }
-  }, [selected, selectedId])
-
-  useEffect(() => {
-    setNameDraft(selected?.name ?? '')
-  }, [selected?.id, selected?.name])
-
-  const updateLayout = (next: DashboardLayout) => {
     saveDashboardLayout(next)
+    setDraft(null)
     setSelectedId(next.id)
   }
 
@@ -90,7 +114,7 @@ export function DashboardLayoutEditor() {
       colSpan: preferred.colSpan,
       rowSpan: preferred.rowSpan,
     }
-    updateLayout({
+    patchLayout({
       ...selected,
       widgets: [...selected.widgets, placement],
     })
@@ -103,7 +127,7 @@ export function DashboardLayoutEditor() {
     if (!selected) {
       return
     }
-    updateLayout({
+    patchLayout({
       ...selected,
       widgets: selected.widgets.map((widget) =>
         widget.id === placementId ? { ...widget, ...patch } : widget,
@@ -115,14 +139,45 @@ export function DashboardLayoutEditor() {
     if (!selected) {
       return
     }
-    updateLayout({
+    patchLayout({
       ...selected,
       widgets: selected.widgets.filter((widget) => widget.id !== placementId),
     })
   }
 
-  const addLayout = () => {
+  const requestSelectLayout = async (nextId: string) => {
+    if (nextId === selectedId) {
+      return
+    }
+    if (dirty && selected) {
+      const accepted = await confirm({
+        title: t('dashboard.unsavedLayoutTitle'),
+        message: t('dashboard.unsavedLayoutBody'),
+        confirmLabel: t('common.save'),
+        cancelLabel: t('dashboard.discardLayout'),
+      })
+      if (accepted) {
+        persistLayout(selected)
+      }
+    }
+    setDraft(null)
+    setSelectedId(nextId)
+  }
+
+  const addLayout = async () => {
+    if (dirty && selected) {
+      const accepted = await confirm({
+        title: t('dashboard.unsavedLayoutTitle'),
+        message: t('dashboard.unsavedLayoutBody'),
+        confirmLabel: t('common.save'),
+        cancelLabel: t('dashboard.discardLayout'),
+      })
+      if (accepted) {
+        persistLayout(selected)
+      }
+    }
     const created = createDashboardLayout()
+    setDraft(null)
     setSelectedId(created.id)
   }
 
@@ -142,6 +197,7 @@ export function DashboardLayoutEditor() {
       return
     }
     deleteDashboardLayout(selected.id)
+    setDraft(null)
     setSelectedId('layout-1')
   }
 
@@ -149,17 +205,6 @@ export function DashboardLayoutEditor() {
     id: layout.id,
     label: layoutLabel(layout, t),
   }))
-
-  const commitName = () => {
-    if (!selected) {
-      return
-    }
-    const nextName = nameDraft.trim()
-    if (nextName === (selected.name ?? '').trim()) {
-      return
-    }
-    updateLayout({ ...selected, name: nextName || undefined })
-  }
 
   if (!selected) {
     return null
@@ -174,7 +219,7 @@ export function DashboardLayoutEditor() {
             className="select-input"
             value={selected.id}
             aria-label={t('dashboard.layout')}
-            onChange={(event) => setSelectedId(event.target.value)}
+            onChange={(event) => void requestSelectLayout(event.target.value)}
           >
             {layoutOptions.map((option) => (
               <option key={option.id} value={option.id}>
@@ -187,19 +232,23 @@ export function DashboardLayoutEditor() {
           {t('dashboard.layoutNameField')}
           <input
             className="search-input"
-            value={nameDraft}
+            value={selected.name ?? ''}
             aria-label={t('dashboard.layoutNameField')}
-            onChange={(event) => setNameDraft(event.target.value)}
-            onBlur={commitName}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.currentTarget.blur()
-              }
-            }}
+            onChange={(event) =>
+              patchLayout({ ...selected, name: event.target.value })
+            }
           />
         </label>
         <div className="yl-dashboard-editor-actions">
-          <button className="btn-secondary" type="button" onClick={addLayout}>
+          <button
+            className="btn-primary"
+            type="button"
+            disabled={!dirty}
+            onClick={() => persistLayout(selected)}
+          >
+            {t('dashboard.saveLayout')}
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => void addLayout()}>
             <YlIcon name="plus" size={16} />
             {t('dashboard.newLayout')}
           </button>
@@ -229,7 +278,7 @@ export function DashboardLayoutEditor() {
             >
               {catalog.map((widget) => (
                 <option key={widget.id} value={widget.id}>
-                  {t(widget.titleKey)}
+                  {widgetLabel(widget, t)}
                 </option>
               ))}
             </select>
@@ -259,7 +308,7 @@ export function DashboardLayoutEditor() {
                     <tr key={placement.id}>
                       <td>
                         {definition
-                          ? t(definition.titleKey)
+                          ? widgetLabel(definition, t)
                           : placement.widgetId}
                       </td>
                       <td>
@@ -342,7 +391,7 @@ export function DashboardLayoutEditor() {
             <tbody>
               {catalog.map((widget) => (
                 <tr key={widget.id}>
-                  <td>{t(widget.titleKey)}</td>
+                  <td>{widgetLabel(widget, t)}</td>
                   <td>
                     {widget.scales
                       .map((scale) =>

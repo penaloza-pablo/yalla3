@@ -21,7 +21,19 @@ export type TrackerRow = {
   status: CheckInTrackerStatus
   accessGranted: boolean
   guestEntered: boolean
+  earlyCheckIn: boolean
   openVisits: TrackerOpenVisit[]
+}
+
+export type TrackerActivityCounts = {
+  total: number
+  completed: number
+}
+
+export type TrackerActivity = {
+  checkins: TrackerActivityCounts & { early: number }
+  cleaning: TrackerActivityCounts
+  maintenance: TrackerActivityCounts
 }
 
 export type TrackerResponse = {
@@ -29,6 +41,7 @@ export type TrackerResponse = {
   from?: string
   to?: string
   items?: TrackerRow[]
+  activity?: TrackerActivity
   message?: string
 }
 
@@ -44,6 +57,7 @@ export const asTrackerRow = (item: Record<string, unknown>): TrackerRow => ({
     : 'jobs_pending',
   accessGranted: item.accessGranted === true,
   guestEntered: item.guestEntered === true,
+  earlyCheckIn: item.earlyCheckIn === true,
   openVisits: Array.isArray(item.openVisits)
     ? item.openVisits
         .map((entry) => {

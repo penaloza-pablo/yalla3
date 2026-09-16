@@ -5,6 +5,8 @@ import { Specimen } from './Specimen'
 import { DashboardGrid } from '../../dashboard/DashboardGrid'
 import { DashboardLayoutEditor } from '../../dashboard/DashboardLayoutEditor'
 import { IncidentsCheckinWidget } from '../../dashboard/checkin/IncidentsCheckinWidget'
+import { ActivityDayWidget } from '../../dashboard/activity/ActivityDayWidget'
+import { PlanningDayWidget } from '../../dashboard/planning/PlanningDayWidget'
 import { DASHBOARD_LAYOUT_1 } from '../../dashboard/layouts'
 import { useDashboardLayouts } from '../../dashboard/layout-store'
 import { largestScale } from '../../dashboard/scale'
@@ -55,6 +57,103 @@ export function WidgetsSpecimens() {
         desktop={
           <div className="yl-kit-checkin-stage">
             <IncidentsCheckinWidget colSpan={4} rowSpan={2} />
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.widget.activity"
+        title={t('kit.widgetActivity')}
+        usage={t('kit.widgetActivityUsage')}
+        desktop={
+          <div className="yl-kit-variant-grid">
+            <div className="yl-kit-variant-tile">
+              <ActivityDayWidget
+                name={t('dashboard.widgets.orbitOriginal')}
+                colSpan={2}
+                rowSpan={2}
+                variant="arcs"
+                tone="original"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <ActivityDayWidget
+                name={t('dashboard.widgets.orbitRose')}
+                colSpan={2}
+                rowSpan={2}
+                variant="arcs"
+                tone="rose"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <ActivityDayWidget
+                name={t('dashboard.widgets.orbitSlate')}
+                colSpan={2}
+                rowSpan={2}
+                variant="arcs"
+                tone="slate"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <ActivityDayWidget
+                name={t('dashboard.widgets.orbitBlue')}
+                colSpan={2}
+                rowSpan={2}
+                variant="arcs"
+                tone="blue"
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-wide">
+              <ActivityDayWidget
+                name={t('dashboard.widgets.human')}
+                colSpan={4}
+                rowSpan={1}
+                variant="frequency"
+              />
+            </div>
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.widget.planning"
+        title={t('kit.widgetPlanning')}
+        usage={t('kit.widgetPlanningUsage')}
+        desktop={
+          <div className="yl-kit-planning-stage">
+            <div className="yl-kit-variant-tile">
+              <PlanningDayWidget
+                name={t('dashboard.widgets.planningRadarSlate')}
+                colSpan={2}
+                rowSpan={2}
+                variant="rings"
+                tone="slate"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <PlanningDayWidget
+                name={t('dashboard.widgets.planningRadarCream')}
+                colSpan={2}
+                rowSpan={2}
+                variant="rings"
+                tone="cream"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <PlanningDayWidget
+                name={t('dashboard.widgets.planningRadarGreen')}
+                colSpan={2}
+                rowSpan={2}
+                variant="rings"
+                tone="green"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <PlanningDayWidget
+                name={t('dashboard.widgets.planningLedger')}
+                colSpan={2}
+                rowSpan={2}
+                variant="ledger"
+              />
+            </div>
           </div>
         }
       />

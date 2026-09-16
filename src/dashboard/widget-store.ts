@@ -9,6 +9,11 @@ type StoredFile = {
   widgets?: unknown
 }
 
+type WidgetOverride = {
+  scales: DashboardWidgetScale[]
+  title?: string
+}
+
 const listeners = new Set<() => void>()
 
 const notify = () => {
@@ -30,48 +35,91 @@ const parseScale = (value: unknown): DashboardWidgetScale | null => {
   return { colSpan, rowSpan, swatch, ...(markup ? { markup } : {}) }
 }
 
+const parseScales = (value: unknown): DashboardWidgetScale[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const unique = new Map<string, DashboardWidgetScale>()
+  for (const scale of value.map((item) => parseScale(item))) {
+    if (!scale) {
+      continue
+    }
+    unique.set(scaleKey(scale.colSpan, scale.rowSpan), scale)
+  }
+  return [...unique.values()]
+}
+
+const parseTitle = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const title = value.trim()
+  return title || undefined
+}
+
 const parseOverrides = () => {
   if (typeof window === 'undefined') {
-    return new Map<string, DashboardWidgetScale[]>()
+    return new Map<string, WidgetOverride>()
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) {
-      return new Map<string, DashboardWidgetScale[]>()
+      return new Map<string, WidgetOverride>()
     }
     const parsed = JSON.parse(raw) as StoredFile
     const widgets =
       parsed.widgets && typeof parsed.widgets === 'object' && !Array.isArray(parsed.widgets)
         ? (parsed.widgets as Record<string, unknown>)
         : {}
-    const overrides = new Map<string, DashboardWidgetScale[]>()
+    const overrides = new Map<string, WidgetOverride>()
     for (const [id, entry] of Object.entries(widgets)) {
-      const scales = Array.isArray(entry)
-        ? entry
-        : entry && typeof entry === 'object' && Array.isArray((entry as { scales?: unknown }).scales)
-          ? (entry as { scales: unknown[] }).scales
-          : []
-      const parsedScales = scales
-        .map((scale) => parseScale(scale))
-        .filter((scale): scale is DashboardWidgetScale => Boolean(scale))
-      const unique = new Map<string, DashboardWidgetScale>()
-      for (const scale of parsedScales) {
-        unique.set(scaleKey(scale.colSpan, scale.rowSpan), scale)
-      }
-      overrides.set(id, [...unique.values()])
+      const scales = parseScales(
+        Array.isArray(entry)
+          ? entry
+          : entry && typeof entry === 'object'
+            ? (entry as { scales?: unknown }).scales
+            : [],
+      )
+      const title =
+        entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? parseTitle((entry as { title?: unknown }).title)
+          : undefined
+      overrides.set(id, { scales, ...(title ? { title } : {}) })
     }
     return overrides
   } catch {
-    return new Map<string, DashboardWidgetScale[]>()
+    return new Map<string, WidgetOverride>()
   }
+}
+
+const catalogScales = (widgetId: string) => {
+  const catalog = DASHBOARD_WIDGETS.find((widget) => widget.id === widgetId)
+  return (catalog?.scales ?? []).map((scale) => ({ ...scale }))
+}
+
+const writeOverrides = (current: Map<string, WidgetOverride>) => {
+  const payload = {
+    widgets: Object.fromEntries(
+      [...current.entries()].map(([id, item]) => [
+        id,
+        {
+          scales: item.scales,
+          ...(item.title ? { title: item.title } : {}),
+        },
+      ]),
+    ),
+  }
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  notify()
 }
 
 const cloneWidget = (
   widget: DashboardWidgetDefinition,
-  scales?: DashboardWidgetScale[],
+  override?: WidgetOverride,
 ): DashboardWidgetDefinition => ({
   ...widget,
-  scales: (scales ?? widget.scales).map((scale) => ({ ...scale })),
+  title: override?.title,
+  scales: (override?.scales ?? widget.scales).map((scale) => ({ ...scale })),
 })
 
 export const subscribeDashboardWidgets = (listener: () => void) => {
@@ -83,9 +131,7 @@ export const subscribeDashboardWidgets = (listener: () => void) => {
 
 export const listDashboardWidgets = (): DashboardWidgetDefinition[] => {
   const overrides = parseOverrides()
-  return DASHBOARD_WIDGETS.map((widget) =>
-    cloneWidget(widget, overrides.get(widget.id)),
-  )
+  return DASHBOARD_WIDGETS.map((widget) => cloneWidget(widget, overrides.get(widget.id)))
 }
 
 export const dashboardWidgetsById = () =>
@@ -98,15 +144,25 @@ export const saveWidgetScales = (widgetId: string, scales: DashboardWidgetScale[
   }
   const nextScales = [...unique.values()]
   const current = parseOverrides()
-  current.set(widgetId, nextScales)
-  const payload = {
-    widgets: Object.fromEntries(
-      [...current.entries()].map(([id, item]) => [id, { scales: item }]),
-    ),
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  notify()
+  const previous = current.get(widgetId)
+  current.set(widgetId, {
+    scales: nextScales,
+    ...(previous?.title ? { title: previous.title } : {}),
+  })
+  writeOverrides(current)
   return nextScales
+}
+
+export const saveWidgetTitle = (widgetId: string, title: string) => {
+  const current = parseOverrides()
+  const previous = current.get(widgetId)
+  const nextTitle = parseTitle(title)
+  current.set(widgetId, {
+    scales: previous?.scales ?? catalogScales(widgetId),
+    ...(nextTitle ? { title: nextTitle } : {}),
+  })
+  writeOverrides(current)
+  return nextTitle
 }
 
 export const useDashboardWidgets = () => {

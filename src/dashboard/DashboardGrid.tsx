@@ -10,6 +10,7 @@ import {
   DASHBOARD_INSET_PX,
 } from './types'
 import type { DashboardLayout } from './types'
+import { widgetLabel } from './labels'
 import { useDashboardWidgets } from './widget-store'
 import './dashboard.css'
 
@@ -115,9 +116,11 @@ export function DashboardGrid({
             return (
               <DashboardWidget
                 key={placement.id}
-                name={t(definition.titleKey)}
+                name={widgetLabel(definition, t)}
                 kind={definition.kind}
                 scale={scale}
+                activity={definition.activity}
+                planning={definition.planning}
                 onConfigure={
                   showConfig ? () => setConfigId(definition.id) : undefined
                 }

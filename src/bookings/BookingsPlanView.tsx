@@ -18,14 +18,16 @@ import type { PropertyOption } from '../operations/types'
 import {
   PLANNER_WINDOW_DAYS,
   type PlannerWarningCode,
-  canonicalizeLinenValue,
   isCanonicalLinenValue,
   isDismissablePlannerWarning,
-  isEarlyCheckInEnabled,
-  isVerdejoBedListing,
   normalizePlannerSettings,
 } from '../../amplify/functions/shared/bookings-planner'
-import { resolveYallaPropertyLabel } from '../../amplify/functions/shared/property-identity'
+import {
+  isConfirmedPlannerStatus,
+  mapPlannerPlanRow,
+  warningsForPlannerPlanRow,
+  type PlannerPlanRow,
+} from './planner-plan-row'
 import { YallaSwitch } from './YallaSwitch'
 import { LinenBadgeSelect } from './LinenBadgeSelect'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
@@ -39,47 +41,14 @@ type Props = {
   onToggleMobileSearch: () => void
 }
 
-type PlanRow = {
-  id: string
-  listingId: string
-  guestName: string
-  property: string
-  checkIn: string
-  checkOut: string
-  guests: string
-  nights: string
-  status: string
-  linen: string
-  giftCard: string
-  giftCardOn: boolean
-  access: string
-  earlyCheckInOn: boolean
-  warnings: PlannerWarningCode[]
-}
+type PlanRow = PlannerPlanRow
 
 type BookingsApiResponse = {
   items?: Record<string, unknown>[]
   nextCursor?: string | null
 }
 
-const asString = (value: unknown) =>
-  typeof value === 'string' ? value.trim() : value == null ? '' : String(value)
-
-const asBoolean = (value: unknown, fallback = false) =>
-  typeof value === 'boolean' ? value : fallback
-
-const asWarnings = (value: unknown): PlannerWarningCode[] =>
-  Array.isArray(value)
-    ? value.filter(
-        (entry): entry is PlannerWarningCode =>
-          entry === 'linen_ask_guest' ||
-          entry === 'gift_card_access_missing' ||
-          entry === 'single_guest' ||
-          entry === 'double_or_two_singles_ask',
-      )
-    : []
-
-const isConfirmed = (status: string) => status.toLowerCase() === 'confirmed'
+const isConfirmed = isConfirmedPlannerStatus
 
 const formatDayMonth = (value: string) => {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -107,54 +76,8 @@ const matchesSearch = (query: string, row: PlanRow) => {
   ].some((value) => value.toLowerCase().includes(normalized))
 }
 
-const mapRow = (item: Record<string, unknown>): PlanRow => {
-  const giftCard = asString(item.GiftCard ?? item.giftCard)
-  const early = asString(item.EarlyCheckIn ?? item.earlyCheckIn)
-  const listingId = asString(item.ListingID ?? item.listingId)
-  return {
-    id: asString(item.ReservationID ?? item.id),
-    listingId,
-    guestName: asString(item.GuestName) || '—',
-    property:
-      resolveYallaPropertyLabel({
-        id: listingId,
-        listingNickname: asString(item.ListingNickname ?? item.ListingName),
-        nickname: asString(item.ListingNickname ?? item.ListingName),
-      }) || '—',
-    checkIn: asString(item.CheckInDate).slice(0, 10),
-    checkOut: asString(item.CheckOutDate).slice(0, 10),
-    guests: asString(item.Guests),
-    nights: asString(item.Nights),
-    status: asString(item.Status),
-    linen: canonicalizeLinenValue(item.Linen ?? item.linen, listingId),
-    giftCard,
-    giftCardOn: asBoolean(
-      item.GiftCardOn ?? item.giftCardOn,
-      Boolean(giftCard) && giftCard !== 'Sin tarjeta',
-    ),
-    access: asString(item.Access ?? item.access),
-    earlyCheckInOn:
-      asBoolean(item.EarlyCheckInOn ?? item.earlyCheckInOn, false) ||
-      isEarlyCheckInEnabled(early),
-    warnings: asWarnings(item.PlannerWarnings ?? item.warnings),
-  }
-}
-
-const warningsForRow = (row: PlanRow): PlannerWarningCode[] => {
-  const warnings = row.access.trim()
-    ? row.warnings.filter((code) => code !== 'gift_card_access_missing')
-    : row.warnings
-  if (isCanonicalLinenValue(row.linen, row.listingId)) {
-    return warnings
-  }
-  const missingCode = isVerdejoBedListing(row.listingId)
-    ? 'double_or_two_singles_ask'
-    : 'linen_ask_guest'
-  if (warnings.includes(missingCode)) {
-    return warnings
-  }
-  return [...warnings, missingCode]
-}
+const mapRow = mapPlannerPlanRow
+const warningsForRow = warningsForPlannerPlanRow
 
 const CheckIcon = () => (
   <YlIcon name="checkmark.circle" size={18} variant="fill" />

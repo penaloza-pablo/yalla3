@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SegmentedControl } from '../design/SegmentedControl'
 import { YlIcon } from '../design/icons'
 import { swatchToHex } from './color'
-import { saveWidgetScales } from './widget-store'
+import { widgetLabel } from './labels'
+import { saveWidgetScales, saveWidgetTitle } from './widget-store'
 import type {
   DashboardColSpan,
   DashboardRowSpan,
@@ -55,7 +56,22 @@ export function DashboardWidgetConfig({ widget, onClose }: Props) {
   const [draftCol, setDraftCol] = useState<DashboardColSpan>(2)
   const [draftRow, setDraftRow] = useState<DashboardRowSpan>(1)
   const [draftSwatch, setDraftSwatch] = useState('#2f9e44')
-  const name = t(widget.titleKey)
+  const [nameDraft, setNameDraft] = useState(() => widget.title ?? t(widget.titleKey))
+  const name = widgetLabel({ ...widget, title: nameDraft }, t)
+
+  const commitName = useCallback(() => {
+    const nextName = nameDraft.trim()
+    const fallback = t(widget.titleKey)
+    const stored = nextName && nextName !== fallback ? nextName : ''
+    saveWidgetTitle(widget.id, stored)
+    setNameDraft(stored || fallback)
+  }, [nameDraft, t, widget.id, widget.titleKey])
+
+  const handleClose = useCallback(() => {
+    commitName()
+    onClose()
+  }, [commitName, onClose])
+
   const active =
     scales.find((scale) => scaleKey(scale.colSpan, scale.rowSpan) === activeKey) ??
     scales[0] ??
@@ -64,12 +80,12 @@ export function DashboardWidgetConfig({ widget, onClose }: Props) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [handleClose])
 
   const persist = (next: DashboardWidgetScale[], selectKey?: string) => {
     const unique = new Map<string, DashboardWidgetScale>()
@@ -134,12 +150,27 @@ export function DashboardWidgetConfig({ widget, onClose }: Props) {
           </h1>
           <p className="subtitle">{t('dashboard.scaleHint')}</p>
         </div>
-        <button className="btn-secondary" type="button" onClick={onClose}>
+        <button className="btn-secondary" type="button" onClick={handleClose}>
           {t('common.close')}
         </button>
       </header>
 
       <div className="yl-dashboard-config-body">
+        <label className="form-field">
+          {t('dashboard.widgetNameField')}
+          <input
+            className="search-input"
+            value={nameDraft}
+            aria-label={t('dashboard.widgetNameField')}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onBlur={commitName}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur()
+              }
+            }}
+          />
+        </label>
         {scales.length === 0 ? (
           <p className="yl-dashboard-editor-empty">{t('dashboard.emptyScales')}</p>
         ) : (

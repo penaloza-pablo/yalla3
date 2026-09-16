@@ -10,6 +10,7 @@ import {
 import '../dashboard.css'
 
 type Props = {
+  name?: string
   colSpan?: DashboardColSpan
   rowSpan?: DashboardRowSpan
 }
@@ -36,8 +37,12 @@ const resolveError = (
   return error
 }
 
-export function IncidentsCheckinWidget({ colSpan = 2, rowSpan = 2 }: Props) {
-  const { t } = useTranslation()
+export function IncidentsCheckinWidget({
+  name,
+  colSpan = 2,
+  rowSpan = 2,
+}: Props) {
+  const { t, i18n } = useTranslation()
   const { guests, loading, busy, error, rows } = useCheckinLive()
   useEffect(() => {
     void loadUpcomingCheckins()
@@ -52,12 +57,14 @@ export function IncidentsCheckinWidget({ colSpan = 2, rowSpan = 2 }: Props) {
 
   const compact = colSpan === 1 && rowSpan === 1
   const message = resolveError(error, t)
+  const title = name || t('dashboard.widgets.energy')
+  const locale = i18n.resolvedLanguage || i18n.language || 'en'
 
   if (loading && guests.length === 0) {
     return (
       <div className={compact ? 'yl-dashboard-checkin-mini' : 'yl-dashboard-checkin is-loading'}>
         {compact ? (
-          <p className="yl-dashboard-widget-name">{t('dashboard.widgets.energy')}</p>
+          <p className="yl-dashboard-widget-name">{title}</p>
         ) : null}
         <p className="yl-dashboard-checkin-status">{t('checkInTracker.loading')}</p>
       </div>
@@ -68,7 +75,7 @@ export function IncidentsCheckinWidget({ colSpan = 2, rowSpan = 2 }: Props) {
     return (
       <div className={compact ? 'yl-dashboard-checkin-mini' : 'yl-dashboard-checkin is-loading'}>
         {compact ? (
-          <p className="yl-dashboard-widget-name">{t('dashboard.widgets.energy')}</p>
+          <p className="yl-dashboard-widget-name">{title}</p>
         ) : null}
         <p className="yl-dashboard-checkin-status" role="alert">
           {message}
@@ -81,7 +88,7 @@ export function IncidentsCheckinWidget({ colSpan = 2, rowSpan = 2 }: Props) {
     const current = rows[0]
     return (
       <div className="yl-dashboard-checkin-mini">
-        <p className="yl-dashboard-widget-name">{t('dashboard.widgets.energy')}</p>
+        <p className="yl-dashboard-widget-name">{title}</p>
         {loading && rows.length === 0 ? (
           <p className="yl-dashboard-checkin-status">{t('checkInTracker.loading')}</p>
         ) : current ? (
@@ -108,6 +115,7 @@ export function IncidentsCheckinWidget({ colSpan = 2, rowSpan = 2 }: Props) {
         variant="journey"
         busy={busy}
         error={message}
+        lang={locale}
         onAction={handleAction}
         style={{
           '--kk-radius': 'var(--yl-radius-card)',

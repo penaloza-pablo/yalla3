@@ -5,6 +5,7 @@ import {
   mapCheckInTrackerRow,
   resolveTrackerDateWindow,
   shouldIncludeBooking,
+  summarizeDayActivity,
 } from '../shared/check-in-tracker';
 import { addDaysToDateString, listDatesInRange } from '../shared/date-range';
 import {
@@ -162,6 +163,9 @@ export const handler = async (event: HttpEvent) => {
       to: window.to,
       items,
       count: items.length,
+      ...(window.from === window.to
+        ? { activity: summarizeDayActivity(bookings, visits, window.from) }
+        : {}),
     });
   } catch (error) {
     return buildHttpResponse(500, {

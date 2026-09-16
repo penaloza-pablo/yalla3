@@ -1,4 +1,8 @@
-import { isActivePlannerStatus, PLANNER_WINDOW_DAYS } from './bookings-planner';
+import {
+  isActivePlannerStatus,
+  isEarlyCheckInEnabled,
+  PLANNER_WINDOW_DAYS,
+} from './bookings-planner';
 import {
   addDaysToDateString,
   getInclusiveDayCount,
@@ -17,6 +21,17 @@ export type CheckInTrackerStatus = (typeof CHECK_IN_TRACKER_STATUSES)[number];
 export const CHECK_IN_LOOKBACK_DAYS = 1;
 export const CHECK_IN_TRACKER_MAX_RANGE_DAYS = 14;
 export const CHECK_IN_TRACKER_UPCOMING_DAYS = PLANNER_WINDOW_DAYS;
+
+export type DayActivityCounts = {
+  total: number;
+  completed: number;
+};
+
+export type DayActivity = {
+  checkins: DayActivityCounts & { early: number };
+  cleaning: DayActivityCounts;
+  maintenance: DayActivityCounts;
+};
 
 const CLEANING_VISIT_TYPE_ID = 'visit_type_cleaning';
 const MAINTENANCE_VISIT_TYPE_IDS = [
@@ -214,6 +229,63 @@ export const blockingVisitsForListing = (
 export const shouldIncludeBooking = (item: Record<string, unknown>) =>
   isActivePlannerStatus(item.Status ?? item.status);
 
+export const bookingHasEarlyCheckIn = (item: Record<string, unknown>) =>
+  item.EarlyCheckInOn === true ||
+  item.earlyCheckInOn === true ||
+  isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn);
+
+export const isCompletedVisitStatus = (status: unknown) =>
+  asString(status).toUpperCase() === 'COMPLETED';
+
+export const summarizeDayActivity = (
+  bookings: Record<string, unknown>[],
+  visits: Record<string, unknown>[],
+  date: string,
+): DayActivity => {
+  const dayBookings = bookings.filter(
+    (item) => toDateOnly(item.CheckInDate ?? item.checkInDate) === date,
+  );
+  const checkins = {
+    total: dayBookings.length,
+    completed: 0,
+    early: 0,
+  };
+  for (const item of dayBookings) {
+    const row = mapCheckInTrackerRow(item, visits);
+    if (row.status === 'guest_entered') {
+      checkins.completed += 1;
+    }
+    if (row.earlyCheckIn) {
+      checkins.early += 1;
+    }
+  }
+
+  const cleaning = { total: 0, completed: 0 };
+  const maintenance = { total: 0, completed: 0 };
+  for (const visit of visits) {
+    if (toDateOnly(visit.scheduledDate) !== date) {
+      continue;
+    }
+    if (asString(visit.status).toUpperCase() === 'CANCELLED') {
+      continue;
+    }
+    const kind = trackerVisitKind(visit);
+    if (kind === 'cleaning') {
+      cleaning.total += 1;
+      if (isCompletedVisitStatus(visit.status)) {
+        cleaning.completed += 1;
+      }
+    } else if (kind === 'maintenance') {
+      maintenance.total += 1;
+      if (isCompletedVisitStatus(visit.status)) {
+        maintenance.completed += 1;
+      }
+    }
+  }
+
+  return { checkins, cleaning, maintenance };
+};
+
 export const mapCheckInTrackerRow = (
   item: Record<string, unknown>,
   visits: Record<string, unknown>[],
@@ -238,6 +310,7 @@ export const mapCheckInTrackerRow = (
     status: resolveCheckInTrackerStatus(flags, openVisits.length > 0),
     accessGranted: flags.accessGranted,
     guestEntered: flags.guestEntered,
+    earlyCheckIn: bookingHasEarlyCheckIn(item),
     openVisits,
   };
 };

@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
-import { CHECK_IN_TRACKER_UPCOMING_DAYS } from '../../../amplify/functions/shared/check-in-tracker'
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
-import { fetchJson } from '../../operations/api'
+import { fetchJson, getVisitsByDate } from '../../operations/api'
 import { addDaysToDateString, getTodayMadrid } from '../../operations/dateHelpers'
 import {
   asTrackerRow,
+  type TrackerActivity,
   type TrackerResponse,
   type TrackerRow,
 } from '../../bookings/checkInTrackerShared'
+import {
+  isCompletedVisitStatus,
+  trackerVisitKind,
+  toDateOnly,
+} from '../../../amplify/functions/shared/check-in-tracker'
 import type { CheckinAction, CheckinGuest } from './CheckinWidget'
 import {
   applyTrackerFlagsToRow,
@@ -19,6 +24,7 @@ import {
 type LiveState = {
   rows: TrackerRow[]
   guests: CheckinGuest[]
+  activity: TrackerActivity | null
   loading: boolean
   busy: boolean
   error: string
@@ -38,6 +44,7 @@ let loadedAt = 0
 let state: LiveState = {
   rows: [],
   guests: [],
+  activity: null,
   loading: false,
   busy: false,
   error: '',
@@ -47,20 +54,118 @@ let state: LiveState = {
 
 const STALE_MS = 20_000
 
+const emptyCounts = () => ({ total: 0, completed: 0 })
+
+const checkinsFromRows = (rows: TrackerRow[]) => ({
+  total: rows.length,
+  completed: rows.filter((row) => row.status === 'guest_entered').length,
+  early: rows.filter((row) => row.earlyCheckIn).length,
+})
+
+const mergeActivity = (
+  rows: TrackerRow[],
+  activity: TrackerActivity | null,
+): TrackerActivity | null => {
+  if (!activity) {
+    return {
+      checkins: checkinsFromRows(rows),
+      cleaning: emptyCounts(),
+      maintenance: emptyCounts(),
+    }
+  }
+  return {
+    ...activity,
+    checkins: checkinsFromRows(rows),
+  }
+}
+
+const parseActivity = (value: unknown): TrackerActivity | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const item = value as Record<string, unknown>
+  const readCounts = (entry: unknown, extraEarly = false) => {
+    if (!entry || typeof entry !== 'object') {
+      return null
+    }
+    const counts = entry as Record<string, unknown>
+    const total = Number(counts.total)
+    const completed = Number(counts.completed)
+    if (
+      !Number.isSafeInteger(total) ||
+      !Number.isSafeInteger(completed) ||
+      total < 0 ||
+      completed < 0 ||
+      completed > total
+    ) {
+      return null
+    }
+    if (!extraEarly) {
+      return { total, completed }
+    }
+    const early = Number(counts.early)
+    if (!Number.isSafeInteger(early) || early < 0 || early > total) {
+      return null
+    }
+    return { total, completed, early }
+  }
+  const checkins = readCounts(item.checkins, true)
+  const cleaning = readCounts(item.cleaning)
+  const maintenance = readCounts(item.maintenance)
+  if (!checkins || !cleaning || !maintenance || !('early' in checkins)) {
+    return null
+  }
+  return {
+    checkins: checkins as TrackerActivity['checkins'],
+    cleaning,
+    maintenance,
+  }
+}
+
+const visitActivityFromItems = (
+  visits: Record<string, unknown>[],
+  date: string,
+) => {
+  const cleaning = emptyCounts()
+  const maintenance = emptyCounts()
+  for (const visit of visits) {
+    if (toDateOnly(visit.scheduledDate) !== date) {
+      continue
+    }
+    const status = String(visit.status ?? '')
+    if (status.toUpperCase() === 'CANCELLED') {
+      continue
+    }
+    const kind = trackerVisitKind(visit)
+    if (kind === 'cleaning') {
+      cleaning.total += 1
+      if (isCompletedVisitStatus(status)) {
+        cleaning.completed += 1
+      }
+    } else if (kind === 'maintenance') {
+      maintenance.total += 1
+      if (isCompletedVisitStatus(status)) {
+        maintenance.completed += 1
+      }
+    }
+  }
+  return { cleaning, maintenance }
+}
+
 const setState = (patch: Partial<LiveState>) => {
   state = { ...state, ...patch }
   if (patch.rows) {
     state.guests = patch.rows.map(trackerRowToGuest)
+    state.activity = mergeActivity(patch.rows, patch.activity ?? state.activity)
+  } else if (patch.activity) {
+    state.activity = mergeActivity(state.rows, patch.activity)
   }
   notify()
 }
 
-const upcomingWindow = () => {
-  const from = getTodayMadrid()
-  return {
-    from,
-    to: addDaysToDateString(from, CHECK_IN_TRACKER_UPCOMING_DAYS - 1),
-  }
+const todayWindow = () => {
+  const day = getTodayMadrid()
+  return { from: day, to: day }
 }
 
 const parseItems = (payload: TrackerResponse) =>
@@ -77,7 +182,7 @@ const loadRangeWithFallback = async (
     `${endpoint}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   )
   if (ranged.from === from && ranged.to === to) {
-    return parseItems(ranged)
+    return { rows: parseItems(ranged), activity: parseActivity(ranged.activity) }
   }
 
   const knownDate = ranged.date || from
@@ -113,7 +218,29 @@ const loadRangeWithFallback = async (
       }
     }
   }
-  return [...byId.values()]
+  return {
+    rows: [...byId.values()],
+    activity: parseActivity(ranged.activity),
+  }
+}
+
+const loadVisitActivity = async (date: string) => {
+  const endpoint = getAmplifyEndpoint(
+    'getVisitsUrl',
+    import.meta.env.VITE_GET_VISITS_URL,
+  )
+  if (!endpoint) {
+    return null
+  }
+  try {
+    const payload = await getVisitsByDate(endpoint, date)
+    return visitActivityFromItems(
+      (payload.items ?? []) as unknown as Record<string, unknown>[],
+      date,
+    )
+  } catch {
+    return null
+  }
 }
 
 export const useCheckinLive = () => {
@@ -148,24 +275,32 @@ export const loadUpcomingCheckins = (force = false) => {
       setState({
         loading: false,
         rows: [],
+        activity: null,
         error: 'missingEndpoint',
       })
       return
     }
-    const { from, to } = upcomingWindow()
+    const { from, to } = todayWindow()
     setState({ loading: true, error: '', from, to })
     try {
+      const loaded = await loadRangeWithFallback(endpoint, from, to)
       const rows = sortUpcomingTrackerRows(
-        (await loadRangeWithFallback(endpoint, from, to)).filter((row) =>
-          Boolean(row.id),
-        ),
+        loaded.rows.filter((row) => Boolean(row.id)),
       )
+      let activity = mergeActivity(rows, loaded.activity)
+      if (!loaded.activity) {
+        const visitCounts = await loadVisitActivity(from)
+        if (visitCounts) {
+          activity = { checkins: checkinsFromRows(rows), ...visitCounts }
+        }
+      }
       loadedAt = Date.now()
-      setState({ loading: false, rows, from, to, error: '' })
+      setState({ loading: false, rows, activity, from, to, error: '' })
     } catch (loadError) {
       setState({
         loading: false,
         rows: [],
+        activity: null,
         error:
           loadError instanceof Error && loadError.message
             ? loadError.message
@@ -208,11 +343,12 @@ export const saveCheckinAction = async (
       guestEntered: payload.item?.guestEntered === true,
     }
     loadedAt = 0
+    const rows = state.rows.map((entry) =>
+      entry.id === row.id ? applyTrackerFlagsToRow(entry, flags) : entry,
+    )
     setState({
       busy: false,
-      rows: state.rows.map((entry) =>
-        entry.id === row.id ? applyTrackerFlagsToRow(entry, flags) : entry,
-      ),
+      rows,
     })
   } catch (saveError) {
     setState({
