@@ -211,6 +211,15 @@ export function WidgetsSpecimens() {
                 variant="ledger"
               />
             </div>
+            <div className="yl-kit-variant-tile is-cell">
+              <PlanningDayWidget
+                name={t('dashboard.widgets.planningRadarSlate')}
+                colSpan={1}
+                rowSpan={1}
+                variant="rings"
+                tone="slate"
+              />
+            </div>
           </div>
         }
       />
@@ -236,6 +245,14 @@ export function WidgetsSpecimens() {
                 variant="postcard"
               />
             </div>
+            <div className="yl-kit-variant-tile is-cell">
+              <ReviewsDayWidget
+                name={t('dashboard.widgets.reviewsEditorial')}
+                colSpan={1}
+                rowSpan={1}
+                variant="editorial"
+              />
+            </div>
           </div>
         }
       />
@@ -258,6 +275,14 @@ export function WidgetsSpecimens() {
                 name={t('dashboard.widgets.suppliesGrid')}
                 colSpan={2}
                 rowSpan={2}
+                variant="grid"
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-cell">
+              <SuppliesDayWidget
+                name={t('dashboard.widgets.suppliesGrid')}
+                colSpan={1}
+                rowSpan={1}
                 variant="grid"
               />
             </div>

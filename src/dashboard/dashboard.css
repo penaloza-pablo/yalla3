@@ -116,10 +116,49 @@
 .yl-dashboard-reviews,
 .yl-dashboard-supplies,
 .yl-dashboard-date {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
+  container-type: size;
+  container-name: kk-slot;
+}
+
+.yl-dashboard-planning > .kk-planning,
+.yl-dashboard-reviews > .kk-reviews,
+.yl-dashboard-supplies > .kk-supplies,
+.yl-dashboard-date > .kk-date {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Native knock-knock canvas is 220×220; 1×1 dashboard cells are 156×156. */
+.yl-dashboard-planning.is-cell,
+.yl-dashboard-reviews.is-cell,
+.yl-dashboard-supplies.is-cell {
+  display: block;
+  overflow: hidden;
+}
+
+.yl-dashboard-planning.is-cell > .kk-planning,
+.yl-dashboard-reviews.is-cell > .kk-reviews,
+.yl-dashboard-supplies.is-cell > .kk-supplies {
+  position: absolute;
+  top: 0;
+  left: 0;
+  flex: none;
+  width: 220px;
+  height: 220px;
+  max-width: none;
+  transform: scale(0.709090909);
+  transform: scale(calc(var(--yl-dashboard-cell, 156px) / 220px));
+  transform-origin: 0 0;
 }
 
 .yl-dashboard-activity {
@@ -218,6 +257,17 @@
 .yl-kit-variant-tile.is-tall {
   min-height: 492px;
   height: 492px;
+}
+
+.yl-kit-variant-tile.is-cell {
+  --yl-dashboard-cell: 156px;
+  width: 156px;
+  height: 156px;
+  min-height: 156px;
+  max-width: 156px;
+  justify-self: start;
+  overflow: hidden;
+  position: relative;
 }
 
 .yl-dashboard-widget-name {
