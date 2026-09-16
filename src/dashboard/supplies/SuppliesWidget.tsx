@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react'
 import {
   SUPPLY_ICONS,
-  SUPPLY_ROWS,
   suppliesCopy,
   suppliesState,
+  supplyRows,
 } from './supplies-model.mjs'
 import './supplies.css'
 
@@ -43,6 +43,7 @@ export function SuppliesWidget({
   onPurchasesOpen,
 }: SuppliesWidgetProps) {
   const copy = suppliesCopy(locale)
+  const rows = supplyRows(locale)
   let state: ReturnType<typeof suppliesState> | null = null
   let problem = error
   try {
@@ -104,7 +105,7 @@ export function SuppliesWidget({
                   )}
                 </div>
                 <div className="ks-purchases">
-                  {SUPPLY_ROWS.slice(1).map((row) => (
+                  {rows.slice(1).map((row) => (
                     <div
                       key={row.key}
                       className={`ks-item ${
@@ -124,7 +125,7 @@ export function SuppliesWidget({
               </>
             ) : (
               <div className="ks-grid-body">
-                {SUPPLY_ROWS.map((row) => {
+                {rows.map((row) => {
                   const open =
                     row.key === 'stockAlerts' ? onInventoryOpen : onPurchasesOpen
                   return (
@@ -159,7 +160,7 @@ export function SuppliesWidget({
                           {data[row.key]}
                         </strong>
                       ) : (
-                        <span className="ks-tile-check" aria-label="Sin pendientes">
+                        <span className="ks-tile-check" aria-label={copy.nonePending}>
                           ✓
                         </span>
                       )}
@@ -171,7 +172,7 @@ export function SuppliesWidget({
               </div>
             )}
             <span className="ks-sr" role="status" aria-live="polite">
-              {SUPPLY_ROWS.map((row) => `${row.detail}: ${data[row.key]}`).join('. ')}
+              {rows.map((row) => `${row.detail}: ${data[row.key]}`).join('. ')}
             </span>
           </>
         )

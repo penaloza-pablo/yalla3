@@ -54,7 +54,10 @@ export const useReviewsLive = () => {
   return getReviewsLiveState()
 }
 
-export const loadReviewsSnapshot = (force = false) => {
+export const loadReviewsSnapshot = (
+  force = false,
+  options?: { silent?: boolean },
+) => {
   if (inflight) {
     return inflight
   }
@@ -71,7 +74,9 @@ export const loadReviewsSnapshot = (force = false) => {
       setState({ loading: false, activeCount: null, error: 'missingEndpoint' })
       return
     }
-    setState({ loading: true, error: '' })
+    if (!(options?.silent && state.activeCount !== null)) {
+      setState({ loading: true, error: '' })
+    }
     try {
       const payload = await withLiveRetry(() =>
         fetchJson<ReviewsApiResponse>(endpoint),

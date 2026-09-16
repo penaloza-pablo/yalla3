@@ -87,7 +87,10 @@ export const useSuppliesLive = () => {
   return getSuppliesLiveState()
 }
 
-export const loadSuppliesSnapshot = (force = false) => {
+export const loadSuppliesSnapshot = (
+  force = false,
+  options?: { silent?: boolean },
+) => {
   if (inflight) {
     return inflight
   }
@@ -112,7 +115,9 @@ export const loadSuppliesSnapshot = (force = false) => {
       setState({ loading: false, data: null, error: 'missingPurchasesEndpoint' })
       return
     }
-    setState({ loading: true, error: '' })
+    if (!(options?.silent && state.data)) {
+      setState({ loading: true, error: '' })
+    }
     try {
       const { inventory, purchases } = await withLiveRetry(async () => {
         const [nextInventory, nextPurchases] = await Promise.all([

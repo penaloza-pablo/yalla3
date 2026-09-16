@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import type { CSSProperties, FormEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { getTodayMadrid } from '../../operations/dateHelpers'
 import { dateAllowed, dateParts } from './date-model.mjs'
 import './date.css'
 
@@ -67,6 +68,25 @@ export function DateWidget({
     input.current?.focus()
   }
 
+  const goToday = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (disabled) {
+      return
+    }
+    const today = getTodayMadrid()
+    try {
+      if (!dateAllowed(today, minDate, maxDate)) {
+        return
+      }
+    } catch {
+      return
+    }
+    if (today !== value) {
+      onDateChange(today)
+    }
+  }
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (disabled) {
@@ -99,14 +119,10 @@ export function DateWidget({
 
   return (
     <div className={`kk-date ${className}`.trim()} style={style}>
-      <button
-        type="button"
-        ref={trigger}
-        className={`kd-column${variant === 'editorial' ? ' kd-editorial' : ''}`}
-        onClick={open}
-        disabled={disabled}
-        aria-haspopup="dialog"
-        aria-label={t('dashboard.dateAria', { full: parts.full })}
+      <div
+        className={`kd-column${variant === 'editorial' ? ' kd-editorial' : ''}${
+          disabled ? ' is-disabled' : ''
+        }`}
       >
         {variant === 'photo' ? (
           <>
@@ -118,9 +134,6 @@ export function DateWidget({
         )}
         <span className="kd-eyebrow" aria-hidden="true">
           {t('dashboard.dateEyebrow')}
-          <svg className="kd-icon" viewBox="0 0 24 24">
-            <path d="M4 5h16v16H4ZM8 3v4M16 3v4M4 10h16" />
-          </svg>
         </span>
         <time className="kd-date" dateTime={value} aria-hidden="true">
           <span className="kd-day">{parts.day}</span>
@@ -134,7 +147,27 @@ export function DateWidget({
             <span>↗</span>
           </span>
         </span>
-      </button>
+        <button
+          type="button"
+          ref={trigger}
+          className="kd-open"
+          onClick={open}
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-label={t('dashboard.dateAria', { full: parts.full })}
+        />
+        <button
+          type="button"
+          className="kd-today"
+          onClick={goToday}
+          disabled={disabled}
+          aria-label={t('dashboard.dateToday')}
+        >
+          <svg className="kd-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5h16v16H4ZM8 3v4M16 3v4M4 10h16" />
+          </svg>
+        </button>
+      </div>
       <dialog
         ref={dialog}
         className="kd-dialog"

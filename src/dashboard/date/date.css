@@ -28,10 +28,39 @@
   background: var(--kd-green);
   color: var(--kd-paper);
   text-align: left;
-  cursor: pointer;
   font: inherit;
   padding: 0;
   box-shadow: none;
+}
+
+.kk-date .kd-open {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.kk-date .kd-today {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .kk-date .kd-photo {
@@ -60,7 +89,7 @@
   position: absolute;
   top: 18px;
   left: 16px;
-  right: 16px;
+  right: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -148,14 +177,20 @@
   transform: translateX(3px);
 }
 
-.kk-date .kd-column:focus-visible {
+.kk-date .kd-open:focus-visible,
+.kk-date .kd-today:focus-visible {
   outline: 3px solid var(--kd-pink);
-  outline-offset: 4px;
+  outline-offset: 3px;
 }
 
-.kk-date .kd-column:disabled {
+.kk-date .kd-column.is-disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.kk-date .kd-open:disabled,
+.kk-date .kd-today:disabled {
+  cursor: wait;
 }
 
 .kk-date .kd-editorial {
@@ -171,7 +206,8 @@
   border-color: #41536445;
 }
 
-.kk-date .kd-editorial:focus-visible {
+.kk-date .kd-editorial .kd-open:focus-visible,
+.kk-date .kd-editorial .kd-today:focus-visible {
   outline-color: var(--kd-slate);
 }
 

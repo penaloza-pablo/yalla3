@@ -103,7 +103,10 @@ export const usePlanningLive = () => {
   return getPlanningLiveState()
 }
 
-export const loadPlanningSnapshot = (force = false) => {
+export const loadPlanningSnapshot = (
+  force = false,
+  options?: { silent?: boolean },
+) => {
   if (inflight) {
     return inflight
   }
@@ -128,7 +131,9 @@ export const loadPlanningSnapshot = (force = false) => {
       setState({ loading: false, data: null, error: 'missingBookingsEndpoint' })
       return
     }
-    setState({ loading: true, error: '' })
+    if (!(options?.silent && state.data)) {
+      setState({ loading: true, error: '' })
+    }
     try {
       const { summary, rows } = await withLiveRetry(async () => {
         const [nextSummary, nextRows] = await Promise.all([

@@ -55,7 +55,7 @@ export function ActivityDayWidget({
   tone = 'original',
 }: Props) {
   const { t, i18n } = useTranslation()
-  const { ready } = usePermissions()
+  const { ready, canTodayView } = usePermissions()
   const nav = useDashboardNav()
   const selectedDate = useDashboardDate()
   const { activity, loading, error, from } = useCheckinLive()
@@ -73,20 +73,27 @@ export function ActivityDayWidget({
   const awaiting = loading || from !== selectedDate
   const dateLabel = labelForDate(selectedDate, locale)
 
+  const openAgenda = (
+    event: { preventDefault(): void; stopPropagation(): void },
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    nav?.toTodayView(canTodayView('day') ? 'day' : 'agenda')
+  }
+
   if (compact) {
     const checkins = awaiting ? undefined : activity?.checkins
     return (
       <div
         className={`yl-dashboard-checkin-mini${nav ? ' is-link' : ''}`}
-        role={nav ? 'link' : undefined}
+        role={nav ? 'button' : undefined}
         tabIndex={nav ? 0 : undefined}
-        onClick={nav ? () => nav.toTodayView('agenda') : undefined}
+        onClick={nav ? openAgenda : undefined}
         onKeyDown={
           nav
             ? (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  nav.toTodayView('agenda')
+                  openAgenda(event)
                 }
               }
             : undefined
@@ -125,7 +132,11 @@ export function ActivityDayWidget({
         locale={locale}
         dateLabel={dateLabel}
         error={message && !activity ? message : ''}
-        onOpen={nav ? () => nav.toTodayView('agenda') : undefined}
+        onOpen={
+          nav
+            ? () => nav.toTodayView(canTodayView('day') ? 'day' : 'agenda')
+            : undefined
+        }
         style={{
           '--kk-radius': 'var(--yl-radius-card)',
           '--kk-font': 'inherit',

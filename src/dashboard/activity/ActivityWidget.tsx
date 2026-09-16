@@ -67,26 +67,27 @@ export function ActivityWidget({
     }
   }
 
+  const open = (event: { preventDefault(): void; stopPropagation(): void }) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onOpen?.()
+  }
+
   return (
     <section
       className={`kk-activity ${onOpen ? 'is-link' : ''} ${className}`.trim()}
       style={style}
       aria-label={`${copy.activity} · ${resolvedDate}`}
       aria-busy={data === null && !error}
-      role={onOpen ? 'link' : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-      onClick={onOpen}
-      onKeyDown={
-        onOpen
-          ? (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onOpen()
-              }
-            }
-          : undefined
-      }
     >
+      {onOpen ? (
+        <button
+          type="button"
+          className="ka-hit"
+          aria-label={`${copy.activity} · ${resolvedDate}`}
+          onClick={open}
+        />
+      ) : null}
       <div
         className={`ka-card ${
           variant === 'frequency' ? 'ka-frequency' : `ka-orbit ka-tone-${tone}`
@@ -131,12 +132,12 @@ export function ActivityWidget({
                   </div>
                   <p className="ka-caption">{orbitCaption(row, locale)}</p>
                   <div className="ka-meta">
-                    {row.key === 'checkins' ? (
+                    {row.key === 'checkins' && data!.checkins.early > 0 ? (
                       <Early
                         value={data!.checkins.early}
                         label={copy.earlyAria(data!.checkins.early)}
                       />
-                    ) : row.complete ? (
+                    ) : row.key !== 'checkins' && row.complete ? (
                       <span className="ka-done">✓ {copy.allSet}</span>
                     ) : null}
                   </div>
@@ -150,12 +151,12 @@ export function ActivityWidget({
                   <div>
                     <h3 className="ka-row-name">{row.label}</h3>
                     <div className="ka-row-meta">
-                      {row.key === 'checkins' ? (
+                      {row.key === 'checkins' && data!.checkins.early > 0 ? (
                         <Early
                           value={data!.checkins.early}
                           label={copy.earlyAria(data!.checkins.early)}
                         />
-                      ) : row.total === 0 ? (
+                      ) : row.key === 'checkins' ? null : row.total === 0 ? (
                         row.empty
                       ) : (
                         copy.jobsToday

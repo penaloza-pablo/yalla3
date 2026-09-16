@@ -450,6 +450,17 @@ export function DailyOperationsView({
       setInternalDashboardViewMode(mode)
     }
   }
+  const [viewSwitchLock, setViewSwitchLock] = useState(false)
+  const previousViewMode = useRef(dashboardViewMode)
+  useEffect(() => {
+    if (previousViewMode.current === dashboardViewMode) {
+      return
+    }
+    previousViewMode.current = dashboardViewMode
+    setViewSwitchLock(true)
+    const timer = window.setTimeout(() => setViewSwitchLock(false), 450)
+    return () => window.clearTimeout(timer)
+  }, [dashboardViewMode])
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0)
   const [templateFilterCount, setTemplateFilterCount] = useState(0)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -2218,7 +2229,7 @@ export function DailyOperationsView({
       dashboardViewMode === 'board')
 
   return (
-    <>
+    <div className={viewSwitchLock ? 'yl-ops-view-lock' : undefined}>
       {hideDashboardPageHeader ? null : (
       <header className={`page-header${mode === 'dashboard' ? ' page-header--no-title' : ''}`}>
         {mode !== 'dashboard' ? (
@@ -3671,6 +3682,6 @@ export function DailyOperationsView({
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

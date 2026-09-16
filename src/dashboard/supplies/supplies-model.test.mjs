@@ -4,6 +4,7 @@ import {
   suppliesState,
   countStockAlerts,
   countInventoryStockAlerts,
+  supplyRows,
 } from './supplies-model.mjs'
 
 const zero = {
@@ -50,6 +51,17 @@ test('invalid totals and ambiguous item records fail', () => {
     assert.throws(() => suppliesState({ ...zero, stockAlerts: value }))
   }
   assert.throws(() => countStockAlerts([{ id: 'a', reorder: true }]))
+})
+
+test('grid labels follow the UI language', () => {
+  assert.deepEqual(
+    supplyRows('en').map((row) => row.label),
+    ['Inventory', 'Delivery', 'Overdue', 'Invoice'],
+  )
+  assert.deepEqual(
+    supplyRows('es').map((row) => row.label),
+    ['Inventario', 'Por recibir', 'Atrasados', 'Sin factura'],
+  )
 })
 
 test('inventory Reorder or Low Stock counts unique items', () => {

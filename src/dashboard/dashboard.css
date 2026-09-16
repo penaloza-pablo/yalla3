@@ -64,8 +64,13 @@
   align-items: center;
 }
 
-.yl-dashboard.is-board .yl-dashboard-grid {
+.yl-dashboard.is-board .yl-dashboard-grid,
+.yl-dashboard-still-there {
   pointer-events: auto;
+}
+
+.yl-dashboard-still-there {
+  z-index: 6;
 }
 
 .yl-dashboard-grid {
@@ -125,6 +130,7 @@
   padding: 0;
   background: transparent;
   color: var(--yl-ink);
+  pointer-events: auto;
 }
 
 .yl-dashboard-widget.is-activity .yl-dashboard-widget-config,

@@ -3961,6 +3961,10 @@ th {
   margin: 0 0 12px;
 }
 
+.yl-ops-view-lock {
+  pointer-events: none;
+}
+
 .operations-day-date-filter {
   margin-bottom: 12px;
 }

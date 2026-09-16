@@ -14,6 +14,7 @@ const EN = {
   allClear: ['All', 'set.'],
   stockClear: ['Stock', 'set.'],
   noStockAlerts: 'No inventory alerts',
+  nonePending: 'No pending items',
   restockOne: 'item to restock',
   restockMany: 'items to restock',
   stockCaption: 'Reorder + Low stock',
@@ -28,6 +29,7 @@ const ES = {
   allClear: ['Todo', 'al día.'],
   stockClear: ['Stock', 'al día.'],
   noStockAlerts: 'Sin alertas de inventario',
+  nonePending: 'Sin pendientes',
   restockOne: 'artículo por reponer',
   restockMany: 'artículos por reponer',
   stockCaption: 'Reorder + Low stock',
@@ -98,32 +100,37 @@ export function countInventoryStockAlerts(items) {
   return count
 }
 
-export const SUPPLY_ROWS = [
-  {
-    key: 'stockAlerts',
-    label: 'Inventario',
-    detail: 'Reorder + Low stock',
-    icon: 'box',
-  },
-  {
-    key: 'waitingDelivery',
-    label: 'Por recibir',
-    detail: 'Waiting delivery',
-    icon: 'delivery',
-  },
-  {
-    key: 'overdue',
-    label: 'Atrasados',
-    detail: 'Overdue',
-    icon: 'clock',
-  },
-  {
-    key: 'waitingInvoice',
-    label: 'Sin factura',
-    detail: 'Invoice off',
-    icon: 'invoice',
-  },
-]
+export function supplyRows(lang) {
+  const es = suppliesLocale(lang) === 'es'
+  return [
+    {
+      key: 'stockAlerts',
+      label: es ? 'Inventario' : 'Inventory',
+      detail: 'Reorder + Low stock',
+      icon: 'box',
+    },
+    {
+      key: 'waitingDelivery',
+      label: es ? 'Por recibir' : 'Delivery',
+      detail: 'Waiting delivery',
+      icon: 'delivery',
+    },
+    {
+      key: 'overdue',
+      label: es ? 'Atrasados' : 'Overdue',
+      detail: 'Overdue',
+      icon: 'clock',
+    },
+    {
+      key: 'waitingInvoice',
+      label: es ? 'Sin factura' : 'Invoice',
+      detail: 'Invoice off',
+      icon: 'invoice',
+    },
+  ]
+}
+
+export const SUPPLY_ROWS = supplyRows('es')
 
 export const SUPPLY_ICONS = {
   box: 'M3 7 12 3l9 4v10l-9 4-9-4ZM3 7l9 4 9-4M12 11v10M8 5l9 4',

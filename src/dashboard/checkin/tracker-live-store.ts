@@ -320,8 +320,10 @@ export const subscribeCheckinLive = (listener: () => void) => {
 export const loadUpcomingCheckins = (
   force = false,
   date = getDashboardDate(),
+  options?: { silent?: boolean },
 ) => {
-  if (inflight && inflightDate === date && !force) {
+  const silent = Boolean(options?.silent)
+  if (inflight && inflightDate === date && (!force || silent)) {
     return inflight
   }
   if (
@@ -340,6 +342,10 @@ export const loadUpcomingCheckins = (
   inflightDate = date
   const from = date
   const to = date
+  const keepVisible =
+    silent &&
+    state.from === date &&
+    (state.activity !== null || state.rows.length > 0)
 
   inflight = (async () => {
     const endpoint = getAmplifyEndpoint('getCheckInTrackerUrl')
@@ -357,7 +363,9 @@ export const loadUpcomingCheckins = (
       })
       return
     }
-    setState({ loading: true, error: '' })
+    if (!keepVisible) {
+      setState({ loading: true, error: '' })
+    }
     try {
       const [loaded, earlyById] = await Promise.all([
         withLiveRetry(

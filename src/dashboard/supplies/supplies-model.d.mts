@@ -10,6 +10,7 @@ export function suppliesCopy(lang?: string): {
   allClear: [string, string]
   stockClear: [string, string]
   noStockAlerts: string
+  nonePending: string
   restockOne: string
   restockMany: string
   stockCaption: string
@@ -29,9 +30,10 @@ export const SUPPLY_ICONS: Record<
   'box' | 'delivery' | 'clock' | 'invoice' | 'check',
   string
 >
-export const SUPPLY_ROWS: {
+export function supplyRows(lang?: string): Array<{
   key: keyof SuppliesData
   label: string
   detail: string
   icon: keyof typeof SUPPLY_ICONS
-}[]
+}>
+export const SUPPLY_ROWS: ReturnType<typeof supplyRows>
