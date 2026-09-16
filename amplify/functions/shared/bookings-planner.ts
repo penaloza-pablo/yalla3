@@ -97,6 +97,8 @@ export type BookingPlannerItem = {
   GiftCardOn?: unknown;
   EarlyCheckInOn?: unknown;
   LinenManual?: unknown;
+  ConfirmationCode?: unknown;
+  GuestName?: unknown;
   PlannerWarnings?: unknown;
   PlannerWarningCount?: unknown;
   PlannerDismissedWarnings?: unknown;

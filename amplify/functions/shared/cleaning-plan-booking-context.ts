@@ -312,7 +312,7 @@ const hydrateByKeys = async (
   return items;
 };
 
-const loadPropertiesById = async (tableName: string, propertyIds: string[]) => {
+export const loadPropertiesById = async (tableName: string, propertyIds: string[]) => {
   const unique = [...new Set(propertyIds.filter(Boolean))];
   if (unique.length === 0) {
     return new Map<string, Record<string, unknown>>();
@@ -324,15 +324,66 @@ const loadPropertiesById = async (tableName: string, propertyIds: string[]) => {
   return items;
 };
 
-const findNextConfirmedBookings = async (
+export const listingIdentityKeys = (...values: Array<string | undefined | null>) => {
+  const keys = new Set<string>();
+  for (const value of values.map((entry) => asString(entry)).filter(Boolean)) {
+    keys.add(value);
+    const byId = yallaAliasForListingId(value);
+    if (byId) {
+      keys.add(byId);
+    }
+    const byNickname = yallaAliasForListingNickname(value);
+    if (byNickname) {
+      keys.add(byNickname);
+    }
+  }
+  return keys;
+};
+
+export const visitMatchesListingKeys = (
+  visit: Record<string, unknown>,
+  listingKeys: Set<string>,
+) => {
+  const visitKeys = listingIdentityKeys(
+    asString(visit.propertyId),
+    asString(visit.Property),
+    asString(visit.property),
+    asString(visit.listingId),
+  );
+  for (const key of visitKeys) {
+    if (listingKeys.has(key)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export type NextBookingQueryOptions = {
+  excludeReservationIds?: Iterable<string>;
+  extraBookings?: Record<string, unknown>[];
+};
+
+export const findNextConfirmedBookings = async (
   bookingsTable: string,
   listingIds: string[],
   fromDate: string,
+  options?: NextBookingQueryOptions,
 ) => {
   const needed = new Set(listingIds.filter(Boolean));
   const found = new Map<string, Record<string, unknown>>();
   const reservationIdsByDate = new Map<string, string[]>();
   const projectedBookingById = new Map<string, Record<string, unknown>>();
+  const extraBookings = options?.extraBookings ?? [];
+  const extraIds = new Set(
+    extraBookings
+      .map((item) => asString(item.ReservationID))
+      .filter(Boolean),
+  );
+  const excluded = new Set(
+    [...(options?.excludeReservationIds ?? [])]
+      .map((value) => asString(value))
+      .filter(Boolean),
+  );
   if (needed.size === 0) {
     return found;
   }
@@ -352,10 +403,18 @@ const findNextConfirmedBookings = async (
       ),
     );
     const ids = [...new Set(idLists.flat())];
-    if (ids.length === 0) {
+    for (const extra of extraBookings) {
+      const extraId = asString(extra.ReservationID);
+      const checkInDate = toDateOnly(extra.CheckInDate);
+      if (extraId && checkInDate && chunk.includes(checkInDate)) {
+        ids.push(extraId);
+      }
+    }
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
       continue;
     }
-    const missingIds = ids.filter((id) => !projectedBookingById.has(id));
+    const missingIds = uniqueIds.filter((id) => !projectedBookingById.has(id));
     if (missingIds.length > 0) {
       const loaded = await hydrateByKeys(
         bookingsTable,
@@ -370,18 +429,28 @@ const findNextConfirmedBookings = async (
         projectedBookingById.set(id, item);
       });
     }
-    const ordered = ids
+    for (const extra of extraBookings) {
+      const extraId = asString(extra.ReservationID);
+      if (extraId) {
+        projectedBookingById.set(extraId, extra);
+      }
+    }
+    const ordered = uniqueIds
       .map((id) => projectedBookingById.get(id))
       .filter((item): item is Record<string, unknown> => Boolean(item));
     for (const item of ordered) {
+      const reservationId = asString(item.ReservationID);
+      if (excluded.has(reservationId) && !extraIds.has(reservationId)) {
+        continue;
+      }
       const listingKeys = [
         asString(item.ListingID),
         asString(item.ListingNickname),
         yallaAliasForListingId(asString(item.ListingID)),
         yallaAliasForListingNickname(asString(item.ListingNickname)),
       ].filter(Boolean);
-      const matchKey = listingKeys.find((key) => needed.has(key));
-      if (!matchKey || found.has(matchKey)) {
+      const matchingKeys = listingKeys.filter((key) => needed.has(key));
+      if (matchingKeys.length === 0) {
         continue;
       }
       if (!isActivePlannerStatus(item.Status)) {
@@ -391,12 +460,46 @@ const findNextConfirmedBookings = async (
       if (!checkInDate || checkInDate < fromDate) {
         continue;
       }
-      found.set(matchKey, item);
-      needed.delete(matchKey);
+      for (const key of matchingKeys) {
+        if (!found.has(key)) {
+          found.set(key, item);
+        }
+        needed.delete(key);
+      }
     }
   }
 
   return found;
+};
+
+export const pickNextBookingForVisit = (
+  found: Map<string, Record<string, unknown>>,
+  visit: Record<string, unknown>,
+) => {
+  const visitKeys = listingIdentityKeys(
+    asString(visit.propertyId),
+    asString(visit.Property),
+    asString(visit.property),
+    asString(visit.listingId),
+  );
+  for (const key of visitKeys) {
+    const item = found.get(key);
+    if (item) {
+      return item;
+    }
+  }
+  for (const item of found.values()) {
+    const itemKeys = listingIdentityKeys(
+      asString(item.ListingID),
+      asString(item.ListingNickname),
+    );
+    for (const key of visitKeys) {
+      if (itemKeys.has(key)) {
+        return item;
+      }
+    }
+  }
+  return undefined;
 };
 
 const parseAccommodates = (value: unknown) => {

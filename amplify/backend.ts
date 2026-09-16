@@ -1019,7 +1019,27 @@ backend.applyBookingsPlanner.addEnvironment(
   'CLEANING_PLANS_TABLE',
   cleaningPlansTable.tableName,
 );
-cleaningPlansTable.grantReadData(backend.applyBookingsPlanner.resources.lambda);
+backend.applyBookingsPlanner.addEnvironment('VISITS_TABLE', 'yalla-visits');
+backend.applyBookingsPlanner.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
+backend.applyBookingsPlanner.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+backend.applyBookingsPlanner.addEnvironment(
+  'APP_BASE_URL',
+  'https://main.dd8kh4wy2zlme.amplifyapp.com',
+);
+cleaningPlansTable.grantReadWriteData(
+  backend.applyBookingsPlanner.resources.lambda,
+);
+visitsTable.grantReadData(backend.applyBookingsPlanner.resources.lambda);
+propertiesTable.grantReadData(backend.applyBookingsPlanner.resources.lambda);
+propertyCleaningDetailsTable.grantReadData(
+  backend.applyBookingsPlanner.resources.lambda,
+);
 backend.upsertCleaningPlan.addEnvironment(
   'TABLE_NAME',
   cleaningPlansTable.tableName,
@@ -1437,6 +1457,7 @@ const visitsIndexPolicy = new PolicyStatement({
   resources: [`${visitsTable.tableArn}/index/*`],
 });
 backend.getCleaningPlan.resources.lambda.addToRolePolicy(visitsIndexPolicy);
+backend.applyBookingsPlanner.resources.lambda.addToRolePolicy(visitsIndexPolicy);
 backend.upsertCleaningPlan.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:Query', 'dynamodb:Scan'],

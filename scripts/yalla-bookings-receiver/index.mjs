@@ -811,7 +811,8 @@ export const handler = async (event) => {
           ListingID: getExistingString(existing, "ListingID"),
           ListingNickname: getExistingString(existing, "ListingNickname"),
           GuestName: getExistingString(existing, "GuestName"),
-          ConfirmationCode: getExistingString(existing, "ConfirmationCode")
+          ConfirmationCode: getExistingString(existing, "ConfirmationCode"),
+          Status: getExistingString(existing, "Status")
         }
       : undefined;
 

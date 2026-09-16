@@ -26,6 +26,7 @@ import {
 } from './bookings-planner';
 import { listDatesInRange } from './date-range';
 import { nowIso } from './dynamo-http';
+import { reopenCleaningPlansForBookingContextChange } from './cleaning-plan-booking-change';
 import { notifyReadyCleaningPlanBookingChanges } from './slack-cleaning';
 import { docClient, getNowTimeInMadrid, getTodayInMadrid } from './visit-task-utils';
 
@@ -331,7 +332,26 @@ export const applyPlannerToReservation = async ({
     return { ok: false as const, reason: 'not_found' };
   }
 
+  const reopenFromBookingContext = async () => {
+    if (!notifyCleaningPlan || overrides) {
+      return { reopenedDates: [] as string[], notified: false };
+    }
+    try {
+      return await reopenCleaningPlansForBookingContextChange({
+        current: current as BookingPlannerItem,
+        previous,
+      });
+    } catch (error) {
+      console.error(
+        `Failed to reopen cleaning plans for booking ${reservationId}`,
+        error,
+      );
+      return { reopenedDates: [] as string[], notified: false };
+    }
+  };
+
   if (!isActivePlannerStatus(current.Status) && !overrides) {
+    const reopened = await reopenFromBookingContext();
     return {
       ok: true as const,
       reservationId,
@@ -343,6 +363,7 @@ export const applyPlannerToReservation = async ({
       }),
       persisted: false,
       syncedToGuesty: false,
+      reopenedDates: reopened.reopenedDates,
     };
   }
 
@@ -357,12 +378,14 @@ export const applyPlannerToReservation = async ({
   if (!settings.plannerEnabled && !overrides) {
     const existingCount = Number(current.PlannerWarningCount);
     if (!existingCount) {
+      const reopened = await reopenFromBookingContext();
       return {
         ok: true as const,
         reservationId,
         patch,
         persisted: false,
         syncedToGuesty: false,
+        reopenedDates: reopened.reopenedDates,
       };
     }
   }
@@ -436,7 +459,13 @@ export const applyPlannerToReservation = async ({
     }
   }
 
-  if (notifyCleaningPlan && !notesFrozen && !overrides) {
+  const reopened = await reopenFromBookingContext();
+  if (
+    notifyCleaningPlan &&
+    !notesFrozen &&
+    !overrides &&
+    reopened.reopenedDates.length === 0
+  ) {
     try {
       const before = previous ?? (current as BookingPlannerItem);
       const changes = describePlannerBookingChanges(
@@ -475,6 +504,7 @@ export const applyPlannerToReservation = async ({
     persisted: stateChanged,
     syncedToGuesty,
     guestyError,
+    reopenedDates: reopened.reopenedDates,
   };
 };
 
