@@ -70,14 +70,18 @@ export function DashboardLayoutEditor() {
   const widgetById = new Map(catalog.map((widget) => [widget.id, widget]))
   const [selectedId, setSelectedId] = useState(layouts[0]?.id ?? 'layout-1')
   const [widgetToAdd, setWidgetToAdd] = useState(catalog[0]?.id ?? '')
-  const [configId, setConfigId] = useState<string | null>(null)
+  const [configTarget, setConfigTarget] = useState<{
+    widgetId: string
+    placementId?: string
+  } | null>(null)
   const [draft, setDraft] = useState<DashboardLayout | null>(null)
 
   const stored =
     layouts.find((layout) => layout.id === selectedId) ?? layouts[0] ?? null
   const selected =
     draft && stored && draft.id === stored.id ? draft : stored
-  const configWidget = catalog.find((widget) => widget.id === configId) ?? null
+  const configWidget =
+    catalog.find((widget) => widget.id === configTarget?.widgetId) ?? null
   const dirty = Boolean(
     selected && stored && layoutSignature(selected) !== layoutSignature(stored),
   )
@@ -264,7 +268,16 @@ export function DashboardLayoutEditor() {
         </div>
       </div>
 
-      <DashboardGrid layout={selected} />
+      <DashboardGrid
+        layout={selected}
+        showConfig
+        onConfigurePlacement={(placement) =>
+          setConfigTarget({
+            widgetId: placement.widgetId,
+            placementId: placement.id,
+          })
+        }
+      />
 
       <div className="yl-dashboard-editor-placements">
         <div className="yl-dashboard-editor-add">
@@ -353,7 +366,12 @@ export function DashboardLayoutEditor() {
                             <button
                               className="btn-secondary"
                               type="button"
-                              onClick={() => setConfigId(definition.id)}
+                              onClick={() =>
+                                setConfigTarget({
+                                  widgetId: definition.id,
+                                  placementId: placement.id,
+                                })
+                              }
                             >
                               <YlIcon name="gearshape" size={16} />
                               {t('dashboard.configureWidgetShort')}
@@ -406,7 +424,7 @@ export function DashboardLayoutEditor() {
                     <button
                       className="btn-secondary"
                       type="button"
-                      onClick={() => setConfigId(widget.id)}
+                      onClick={() => setConfigTarget({ widgetId: widget.id })}
                     >
                       <YlIcon name="gearshape" size={16} />
                       {t('dashboard.configureWidgetShort')}
@@ -421,9 +439,29 @@ export function DashboardLayoutEditor() {
 
       {configWidget ? (
         <DashboardWidgetConfig
-          key={configWidget.id}
+          key={`${configTarget?.placementId ?? 'catalog'}:${configWidget.id}`}
           widget={configWidget}
-          onClose={() => setConfigId(null)}
+          catalog={configTarget?.placementId ? catalog : undefined}
+          onReplace={
+            configTarget?.placementId
+              ? (widgetId) => {
+                  const placementId = configTarget.placementId
+                  if (!placementId) {
+                    return
+                  }
+                  patchLayout({
+                    ...selected,
+                    widgets: selected.widgets.map((item) =>
+                      item.id === placementId
+                        ? { ...item, widgetId }
+                        : item,
+                    ),
+                  })
+                  setConfigTarget({ placementId, widgetId })
+                }
+              : undefined
+          }
+          onClose={() => setConfigTarget(null)}
         />
       ) : null}
     </div>

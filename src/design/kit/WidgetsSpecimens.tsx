@@ -7,6 +7,10 @@ import { DashboardLayoutEditor } from '../../dashboard/DashboardLayoutEditor'
 import { IncidentsCheckinWidget } from '../../dashboard/checkin/IncidentsCheckinWidget'
 import { ActivityDayWidget } from '../../dashboard/activity/ActivityDayWidget'
 import { PlanningDayWidget } from '../../dashboard/planning/PlanningDayWidget'
+import { ReviewsDayWidget } from '../../dashboard/reviews/ReviewsDayWidget'
+import { SuppliesDayWidget } from '../../dashboard/supplies/SuppliesDayWidget'
+import { DateDayWidget } from '../../dashboard/date/DateDayWidget'
+import { DATE_IMAGE_SRC } from '../../dashboard/date/DateWidget'
 import { DASHBOARD_LAYOUT_1 } from '../../dashboard/layouts'
 import { useDashboardLayouts } from '../../dashboard/layout-store'
 import { largestScale } from '../../dashboard/scale'
@@ -40,16 +44,69 @@ export function WidgetsSpecimens() {
     widgets: [
       { id: 'span-0', widgetId: 'swatch.rose', colSpan: 1, rowSpan: 1 },
       { id: 'span-1', widgetId: 'swatch.energy', colSpan: 2, rowSpan: 2 },
-      { id: 'span-2', widgetId: 'swatch.go', colSpan: 2, rowSpan: 2 },
+      { id: 'span-2', widgetId: 'date.photo', colSpan: 2, rowSpan: 2 },
       { id: 'span-3', widgetId: 'swatch.success', colSpan: 1, rowSpan: 2 },
       { id: 'span-4', widgetId: 'swatch.human', colSpan: 4, rowSpan: 1 },
-      { id: 'span-5', widgetId: 'swatch.go', colSpan: 2, rowSpan: 3 },
+      { id: 'span-5', widgetId: 'date.photo', colSpan: 2, rowSpan: 3 },
     ],
   }
 
   return (
     <>
       <p className="yl-kit-legend">{t('kit.widgetsIntro')}</p>
+      <Specimen
+        refName="yl.widget.date"
+        title={t('kit.widgetDate')}
+        usage={t('kit.widgetDateUsage')}
+        desktop={
+          <div className="yl-kit-variant-grid">
+            <div className="yl-kit-variant-tile is-tall">
+              <DateDayWidget
+                name={t('dashboard.widgets.datePhoto')}
+                colSpan={2}
+                rowSpan={3}
+                variant="photo"
+                imageSrc={DATE_IMAGE_SRC.door}
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-tall">
+              <DateDayWidget
+                name={t('dashboard.widgets.dateEditorial')}
+                colSpan={2}
+                rowSpan={3}
+                variant="editorial"
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-tall">
+              <DateDayWidget
+                name={t('dashboard.widgets.dateBalconies')}
+                colSpan={2}
+                rowSpan={3}
+                variant="photo"
+                imageSrc={DATE_IMAGE_SRC.balconies}
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-tall">
+              <DateDayWidget
+                name={t('dashboard.widgets.dateWelcome')}
+                colSpan={2}
+                rowSpan={3}
+                variant="photo"
+                imageSrc={DATE_IMAGE_SRC.welcome}
+              />
+            </div>
+            <div className="yl-kit-variant-tile is-tall">
+              <DateDayWidget
+                name={t('dashboard.widgets.dateStaircase')}
+                colSpan={2}
+                rowSpan={3}
+                variant="photo"
+                imageSrc={DATE_IMAGE_SRC.staircase}
+              />
+            </div>
+          </div>
+        }
+      />
       <Specimen
         refName="yl.widget.incidents"
         title={t('kit.widgetIncidents')}
@@ -152,6 +209,56 @@ export function WidgetsSpecimens() {
                 colSpan={2}
                 rowSpan={2}
                 variant="ledger"
+              />
+            </div>
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.widget.reviews"
+        title={t('kit.widgetReviews')}
+        usage={t('kit.widgetReviewsUsage')}
+        desktop={
+          <div className="yl-kit-variant-grid">
+            <div className="yl-kit-variant-tile">
+              <ReviewsDayWidget
+                name={t('dashboard.widgets.reviewsEditorial')}
+                colSpan={2}
+                rowSpan={2}
+                variant="editorial"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <ReviewsDayWidget
+                name={t('dashboard.widgets.reviewsPostcard')}
+                colSpan={2}
+                rowSpan={2}
+                variant="postcard"
+              />
+            </div>
+          </div>
+        }
+      />
+      <Specimen
+        refName="yl.widget.supplies"
+        title={t('kit.widgetSupplies')}
+        usage={t('kit.widgetSuppliesUsage')}
+        desktop={
+          <div className="yl-kit-variant-grid">
+            <div className="yl-kit-variant-tile">
+              <SuppliesDayWidget
+                name={t('dashboard.widgets.suppliesFocus')}
+                colSpan={2}
+                rowSpan={2}
+                variant="focus"
+              />
+            </div>
+            <div className="yl-kit-variant-tile">
+              <SuppliesDayWidget
+                name={t('dashboard.widgets.suppliesGrid')}
+                colSpan={2}
+                rowSpan={2}
+                variant="grid"
               />
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
 import { fetchJson, getVisitsByDate } from '../../operations/api'
-import { addDaysToDateString, getTodayMadrid } from '../../operations/dateHelpers'
+import { addDaysToDateString } from '../../operations/dateHelpers'
+import { getDashboardDate } from '../dashboard-date-store'
 import {
   asTrackerRow,
   type TrackerActivity,
@@ -39,6 +40,9 @@ const notify = () => {
 }
 
 let inflight: Promise<void> | null = null
+let inflightDate = ''
+let loadGeneration = 0
+let inflightController: AbortController | null = null
 let loadedAt = 0
 
 let state: LiveState = {
@@ -163,10 +167,9 @@ const setState = (patch: Partial<LiveState>) => {
   notify()
 }
 
-const todayWindow = () => {
-  const day = getTodayMadrid()
-  return { from: day, to: day }
-}
+const isAbortError = (error: unknown) =>
+  (error instanceof DOMException && error.name === 'AbortError') ||
+  (error instanceof Error && error.name === 'AbortError')
 
 const parseItems = (payload: TrackerResponse) =>
   (payload.items ?? []).map((item) =>
@@ -177,9 +180,11 @@ const loadRangeWithFallback = async (
   endpoint: string,
   from: string,
   to: string,
+  signal?: AbortSignal,
 ) => {
   const ranged = await fetchJson<TrackerResponse>(
     `${endpoint}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { signal },
   )
   if (ranged.from === from && ranged.to === to) {
     return { rows: parseItems(ranged), activity: parseActivity(ranged.activity) }
@@ -208,6 +213,7 @@ const loadRangeWithFallback = async (
     dates.map((date) =>
       fetchJson<TrackerResponse>(
         `${endpoint}?date=${encodeURIComponent(date)}`,
+        { signal },
       ),
     ),
   )
@@ -224,7 +230,7 @@ const loadRangeWithFallback = async (
   }
 }
 
-const loadVisitActivity = async (date: string) => {
+const loadVisitActivity = async (date: string, signal?: AbortSignal) => {
   const endpoint = getAmplifyEndpoint(
     'getVisitsUrl',
     import.meta.env.VITE_GET_VISITS_URL,
@@ -233,12 +239,15 @@ const loadVisitActivity = async (date: string) => {
     return null
   }
   try {
-    const payload = await getVisitsByDate(endpoint, date)
+    const payload = await getVisitsByDate(endpoint, date, { signal })
     return visitActivityFromItems(
       (payload.items ?? []) as unknown as Record<string, unknown>[],
       date,
     )
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
     return null
   }
 }
@@ -261,35 +270,66 @@ export const subscribeCheckinLive = (listener: () => void) => {
   }
 }
 
-export const loadUpcomingCheckins = (force = false) => {
-  if (inflight) {
+export const loadUpcomingCheckins = (
+  force = false,
+  date = getDashboardDate(),
+) => {
+  if (inflight && inflightDate === date && !force) {
     return inflight
   }
-  if (!force && loadedAt > 0 && Date.now() - loadedAt < STALE_MS) {
+  if (
+    !force &&
+    state.from === date &&
+    loadedAt > 0 &&
+    Date.now() - loadedAt < STALE_MS
+  ) {
     return Promise.resolve()
   }
+
+  const generation = ++loadGeneration
+  inflightController?.abort()
+  const controller = new AbortController()
+  inflightController = controller
+  inflightDate = date
+  const from = date
+  const to = date
 
   inflight = (async () => {
     const endpoint = getAmplifyEndpoint('getCheckInTrackerUrl')
     if (!endpoint) {
+      if (generation !== loadGeneration) {
+        return
+      }
       setState({
         loading: false,
         rows: [],
         activity: null,
         error: 'missingEndpoint',
+        from,
+        to,
       })
       return
     }
-    const { from, to } = todayWindow()
-    setState({ loading: true, error: '', from, to })
+    setState({ loading: true, error: '' })
     try {
-      const loaded = await loadRangeWithFallback(endpoint, from, to)
+      const loaded = await loadRangeWithFallback(
+        endpoint,
+        from,
+        to,
+        controller.signal,
+      )
+      if (generation !== loadGeneration || controller.signal.aborted) {
+        return
+      }
       const rows = sortUpcomingTrackerRows(
         loaded.rows.filter((row) => Boolean(row.id)),
       )
       let activity = mergeActivity(rows, loaded.activity)
       if (!loaded.activity) {
-        const visitCounts = await loadVisitActivity(from)
+        const visitCounts = await loadVisitActivity(from, controller.signal)
+        if (generation !== loadGeneration || controller.signal.aborted) {
+          return
+        }
         if (visitCounts) {
           activity = { checkins: checkinsFromRows(rows), ...visitCounts }
         }
@@ -297,10 +337,19 @@ export const loadUpcomingCheckins = (force = false) => {
       loadedAt = Date.now()
       setState({ loading: false, rows, activity, from, to, error: '' })
     } catch (loadError) {
+      if (
+        generation !== loadGeneration ||
+        controller.signal.aborted ||
+        isAbortError(loadError)
+      ) {
+        return
+      }
       setState({
         loading: false,
         rows: [],
         activity: null,
+        from,
+        to,
         error:
           loadError instanceof Error && loadError.message
             ? loadError.message
@@ -308,7 +357,10 @@ export const loadUpcomingCheckins = (force = false) => {
       })
     }
   })().finally(() => {
-    inflight = null
+    if (generation === loadGeneration) {
+      inflight = null
+      inflightDate = ''
+    }
   })
 
   return inflight

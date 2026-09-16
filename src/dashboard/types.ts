@@ -7,8 +7,15 @@ export const DASHBOARD_CELL_PX = 156
 export type DashboardColSpan = 1 | 2 | 3 | 4
 export type DashboardRowSpan = 1 | 2 | 3 | 4
 
-/** Scaffold kind. Swatches are color tiles; checkin, activity and planning are live widgets. */
-export type DashboardWidgetKind = 'swatch' | 'checkin' | 'activity' | 'planning'
+/** Scaffold kind. Swatches are color tiles; the rest are live widgets. */
+export type DashboardWidgetKind =
+  | 'swatch'
+  | 'date'
+  | 'checkin'
+  | 'activity'
+  | 'planning'
+  | 'reviews'
+  | 'supplies'
 
 export type ActivityPresentation = {
   variant: 'arcs' | 'frequency'
@@ -18,6 +25,19 @@ export type ActivityPresentation = {
 export type PlanningPresentation = {
   variant: 'rings' | 'ledger'
   tone?: 'slate' | 'cream' | 'green'
+}
+
+export type ReviewsPresentation = {
+  variant: 'editorial' | 'postcard'
+}
+
+export type SuppliesPresentation = {
+  variant: 'focus' | 'grid'
+}
+
+export type DatePresentation = {
+  variant: 'photo' | 'editorial'
+  imageSrc?: string
 }
 
 export type DashboardWidgetScale = {
@@ -37,6 +57,9 @@ export type DashboardWidgetDefinition = {
   scales: DashboardWidgetScale[]
   activity?: ActivityPresentation
   planning?: PlanningPresentation
+  reviews?: ReviewsPresentation
+  supplies?: SuppliesPresentation
+  date?: DatePresentation
 }
 
 export type DashboardWidgetPlacement = {

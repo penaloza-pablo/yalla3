@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DashboardColSpan, DashboardRowSpan } from '../types'
+import { useDashboardDate } from '../dashboard-date-store'
 import { CheckinWidget, type CheckinAction } from './CheckinWidget'
 import {
   loadUpcomingCheckins,
@@ -43,10 +44,12 @@ export function IncidentsCheckinWidget({
   rowSpan = 2,
 }: Props) {
   const { t, i18n } = useTranslation()
-  const { guests, loading, busy, error, rows } = useCheckinLive()
+  const selectedDate = useDashboardDate()
+  const { guests, loading, busy, error, rows, from } = useCheckinLive()
   useEffect(() => {
-    void loadUpcomingCheckins()
-  }, [])
+    void loadUpcomingCheckins(false, selectedDate)
+  }, [selectedDate])
+  const awaiting = loading || from !== selectedDate
 
   const handleAction = useCallback(
     ({ id, action }: { id: string; action: CheckinAction }) => {
@@ -60,7 +63,7 @@ export function IncidentsCheckinWidget({
   const title = name || t('dashboard.widgets.energy')
   const locale = i18n.resolvedLanguage || i18n.language || 'en'
 
-  if (loading && guests.length === 0) {
+  if (awaiting) {
     return (
       <div className={compact ? 'yl-dashboard-checkin-mini' : 'yl-dashboard-checkin is-loading'}>
         {compact ? (
@@ -89,9 +92,7 @@ export function IncidentsCheckinWidget({
     return (
       <div className="yl-dashboard-checkin-mini">
         <p className="yl-dashboard-widget-name">{title}</p>
-        {loading && rows.length === 0 ? (
-          <p className="yl-dashboard-checkin-status">{t('checkInTracker.loading')}</p>
-        ) : current ? (
+        {current ? (
           <>
             <p className="yl-dashboard-checkin-mini-name">{current.guestName}</p>
             <p className="yl-dashboard-checkin-status">

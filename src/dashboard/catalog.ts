@@ -1,6 +1,15 @@
+import { DATE_IMAGE_SRC } from './date/DateWidget'
 import type { DashboardWidgetDefinition, DashboardWidgetScale } from './types'
 
 const ACTIVITY_SWATCH = 'var(--yl-kk-human)'
+const DATE_GREEN = '#3D5B58'
+const DATE_PINK = '#E3B9B3'
+const DATE_SCALES = (swatch: string): DashboardWidgetScale[] => [
+  { colSpan: 2, rowSpan: 3, swatch },
+  { colSpan: 1, rowSpan: 3, swatch },
+  { colSpan: 2, rowSpan: 2, swatch },
+  { colSpan: 1, rowSpan: 1, swatch },
+]
 const ORBIT_SCALES: DashboardWidgetScale[] = [
   { colSpan: 4, rowSpan: 2, swatch: ACTIVITY_SWATCH },
   { colSpan: 2, rowSpan: 2, swatch: ACTIVITY_SWATCH },
@@ -25,14 +34,39 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     scales: [{ colSpan: 1, rowSpan: 1, swatch: 'rgb(23, 158, 198)' }],
   },
   {
-    id: 'swatch.go',
-    kind: 'swatch',
-    titleKey: 'dashboard.widgets.go',
-    scales: [
-      { colSpan: 2, rowSpan: 3, swatch: '#2f9e44' },
-      { colSpan: 2, rowSpan: 2, swatch: '#e4c01f' },
-      { colSpan: 2, rowSpan: 1, swatch: '#b497d6' },
-    ],
+    id: 'date.photo',
+    kind: 'date',
+    titleKey: 'dashboard.widgets.datePhoto',
+    date: { variant: 'photo', imageSrc: DATE_IMAGE_SRC.door },
+    scales: DATE_SCALES(DATE_GREEN),
+  },
+  {
+    id: 'date.editorial',
+    kind: 'date',
+    titleKey: 'dashboard.widgets.dateEditorial',
+    date: { variant: 'editorial' },
+    scales: DATE_SCALES(DATE_PINK),
+  },
+  {
+    id: 'date.balconies',
+    kind: 'date',
+    titleKey: 'dashboard.widgets.dateBalconies',
+    date: { variant: 'photo', imageSrc: DATE_IMAGE_SRC.balconies },
+    scales: DATE_SCALES(DATE_GREEN),
+  },
+  {
+    id: 'date.welcome',
+    kind: 'date',
+    titleKey: 'dashboard.widgets.dateWelcome',
+    date: { variant: 'photo', imageSrc: DATE_IMAGE_SRC.welcome },
+    scales: DATE_SCALES(DATE_GREEN),
+  },
+  {
+    id: 'date.staircase',
+    kind: 'date',
+    titleKey: 'dashboard.widgets.dateStaircase',
+    date: { variant: 'photo', imageSrc: DATE_IMAGE_SRC.staircase },
+    scales: DATE_SCALES(DATE_GREEN),
   },
   {
     id: 'swatch.energy',
@@ -112,6 +146,34 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     kind: 'planning',
     titleKey: 'dashboard.widgets.planningLedger',
     planning: { variant: 'ledger' },
+    scales: PLANNING_SCALES('#F6F1E8'),
+  },
+  {
+    id: 'reviews.editorial',
+    kind: 'reviews',
+    titleKey: 'dashboard.widgets.reviewsEditorial',
+    reviews: { variant: 'editorial' },
+    scales: PLANNING_SCALES('#3D5B58'),
+  },
+  {
+    id: 'reviews.postcard',
+    kind: 'reviews',
+    titleKey: 'dashboard.widgets.reviewsPostcard',
+    reviews: { variant: 'postcard' },
+    scales: PLANNING_SCALES('#F6F1E8'),
+  },
+  {
+    id: 'supplies.focus',
+    kind: 'supplies',
+    titleKey: 'dashboard.widgets.suppliesFocus',
+    supplies: { variant: 'focus' },
+    scales: PLANNING_SCALES('#3D5B58'),
+  },
+  {
+    id: 'supplies.grid',
+    kind: 'supplies',
+    titleKey: 'dashboard.widgets.suppliesGrid',
+    supplies: { variant: 'grid' },
     scales: PLANNING_SCALES('#F6F1E8'),
   },
   {

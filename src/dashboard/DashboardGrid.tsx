@@ -9,7 +9,7 @@ import {
   DASHBOARD_GAP_PX,
   DASHBOARD_INSET_PX,
 } from './types'
-import type { DashboardLayout } from './types'
+import type { DashboardLayout, DashboardWidgetPlacement } from './types'
 import { widgetLabel } from './labels'
 import { useDashboardWidgets } from './widget-store'
 import './dashboard.css'
@@ -18,6 +18,7 @@ type Props = {
   layout: DashboardLayout
   variant?: 'board' | 'embedded'
   showConfig?: boolean
+  onConfigurePlacement?: (placement: DashboardWidgetPlacement) => void
 }
 
 const viewportBox = (variant: 'board' | 'embedded') => {
@@ -40,6 +41,7 @@ export function DashboardGrid({
   layout,
   variant = 'embedded',
   showConfig = false,
+  onConfigurePlacement,
 }: Props) {
   const { t } = useTranslation()
   const widgets = useDashboardWidgets()
@@ -121,8 +123,19 @@ export function DashboardGrid({
                 scale={scale}
                 activity={definition.activity}
                 planning={definition.planning}
+                reviews={definition.reviews}
+                supplies={definition.supplies}
+                date={definition.date}
                 onConfigure={
-                  showConfig ? () => setConfigId(definition.id) : undefined
+                  showConfig
+                    ? () => {
+                        if (onConfigurePlacement) {
+                          onConfigurePlacement(placement)
+                          return
+                        }
+                        setConfigId(definition.id)
+                      }
+                    : undefined
                 }
               />
             )

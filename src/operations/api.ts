@@ -33,9 +33,14 @@ export const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
-export const getVisitsByDate = (endpoint: string, scheduledDate: string) =>
+export const getVisitsByDate = (
+  endpoint: string,
+  scheduledDate: string,
+  init?: RequestInit,
+) =>
   fetchJson<ListResponse<VisitRecord>>(
     `${endpoint}?scheduledDate=${encodeURIComponent(scheduledDate)}`,
+    init,
   )
 
 export const getVisitsByDateRange = (

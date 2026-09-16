@@ -5,7 +5,10 @@ import type {
   DashboardColSpan,
   DashboardRowSpan,
 } from '../types'
+import { getTodayMadrid } from '../../operations/dateHelpers'
+import { useDashboardDate } from '../dashboard-date-store'
 import { loadUpcomingCheckins, useCheckinLive } from '../checkin/tracker-live-store'
+import { dateParts } from '../date/date-model.mjs'
 import { ActivityWidget, type ActivityData } from './ActivityWidget'
 import '../dashboard.css'
 
@@ -30,6 +33,18 @@ const resolveError = (error: string, t: (key: string) => string) => {
   return error
 }
 
+const labelForDate = (date: string, locale: string) => {
+  if (date === getTodayMadrid()) {
+    return undefined
+  }
+  try {
+    const parts = dateParts(date, locale)
+    return `${parts.day} ${parts.month}`
+  } catch {
+    return date
+  }
+}
+
 export function ActivityDayWidget({
   name,
   colSpan = 4,
@@ -38,22 +53,25 @@ export function ActivityDayWidget({
   tone = 'original',
 }: Props) {
   const { t, i18n } = useTranslation()
-  const { activity, loading, error } = useCheckinLive()
+  const selectedDate = useDashboardDate()
+  const { activity, loading, error, from } = useCheckinLive()
   useEffect(() => {
-    void loadUpcomingCheckins()
-  }, [])
+    void loadUpcomingCheckins(false, selectedDate)
+  }, [selectedDate])
 
   const compact = colSpan === 1 && rowSpan === 1
   const message = resolveError(error, t)
   const locale = i18n.resolvedLanguage || i18n.language || 'en'
   const title = name || t('dashboard.widgets.human')
+  const awaiting = loading || from !== selectedDate
+  const dateLabel = labelForDate(selectedDate, locale)
 
   if (compact) {
-    const checkins = activity?.checkins
+    const checkins = awaiting ? undefined : activity?.checkins
     return (
       <div className="yl-dashboard-checkin-mini">
         <p className="yl-dashboard-widget-name">{title}</p>
-        {loading && !activity ? (
+        {awaiting ? (
           <p className="yl-dashboard-checkin-status">{t('checkInTracker.loading')}</p>
         ) : message && !activity ? (
           <p className="yl-dashboard-checkin-status" role="alert">
@@ -74,7 +92,7 @@ export function ActivityDayWidget({
     )
   }
 
-  const data: ActivityData | null = loading && !activity ? null : activity
+  const data: ActivityData | null = awaiting || (loading && !activity) ? null : activity
 
   return (
     <div className="yl-dashboard-activity">
@@ -83,6 +101,7 @@ export function ActivityDayWidget({
         variant={variant}
         tone={tone}
         locale={locale}
+        dateLabel={dateLabel}
         error={message && !activity ? message : ''}
         style={{
           '--kk-radius': 'var(--yl-radius-card)',

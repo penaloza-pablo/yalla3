@@ -1,0 +1,338 @@
+.kk-date {
+  --kd-paper: #f6f1e8;
+  --kd-green: #3d5b58;
+  --kd-pink: #e3b9b3;
+  --kd-slate: #415364;
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  container-type: size;
+  color: var(--kd-paper);
+}
+
+.kk-date * {
+  box-sizing: border-box;
+}
+
+.kk-date .kd-column {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: var(--yl-radius-card, 26px);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--kd-green);
+  color: var(--kd-paper);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  box-shadow: none;
+}
+
+.kk-date .kd-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
+.kk-date .kd-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 38, 36, 0.67),
+    rgba(20, 38, 36, 0.12) 45%,
+    transparent 63%,
+    rgba(20, 38, 36, 0.87)
+  );
+}
+
+.kk-date .kd-eyebrow {
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: clamp(8px, 4.2cqw, 10px);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.kk-date .kd-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+}
+
+.kk-date .kd-date {
+  position: absolute;
+  top: 22%;
+  left: 14px;
+  right: 14px;
+  display: block;
+}
+
+.kk-date .kd-day {
+  display: block;
+  font-size: clamp(42px, 38cqw, 96px);
+  line-height: 0.93;
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kk-date .kd-month {
+  display: block;
+  font-family: Georgia, serif;
+  font-size: clamp(20px, 16cqw, 39px);
+  line-height: 1.3;
+  letter-spacing: -1.5px;
+  margin-top: 6px;
+}
+
+.kk-date .kd-weekday {
+  display: block;
+  font-size: clamp(9px, 4.6cqw, 11px);
+  letter-spacing: 1px;
+  text-transform: capitalize;
+  margin-top: 10px;
+  opacity: 0.9;
+}
+
+.kk-date .kd-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+}
+
+.kk-date .kd-year {
+  display: block;
+  font-size: clamp(10px, 5cqw, 12px);
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+}
+
+.kk-date .kd-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: clamp(9px, 4.6cqw, 11px);
+  border-top: 1px solid #f6f1e840;
+  padding-top: 12px;
+}
+
+.kk-date .kd-change span:last-child {
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.kk-date .kd-column:hover .kd-change span:last-child {
+  transform: translateX(3px);
+}
+
+.kk-date .kd-column:focus-visible {
+  outline: 3px solid var(--kd-pink);
+  outline-offset: 4px;
+}
+
+.kk-date .kd-column:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.kk-date .kd-editorial {
+  background: var(--kd-pink);
+  color: var(--kd-slate);
+}
+
+.kk-date .kd-editorial .kd-date {
+  top: 24%;
+}
+
+.kk-date .kd-editorial .kd-change {
+  border-color: #41536445;
+}
+
+.kk-date .kd-editorial:focus-visible {
+  outline-color: var(--kd-slate);
+}
+
+.kk-date .kd-door-art {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 53%;
+  height: 29%;
+  border: 14px solid var(--kd-slate);
+  border-bottom: 0;
+  border-radius: 90px 90px 0 0;
+  opacity: 0.95;
+}
+
+.kk-date .kd-door-art:before {
+  content: '';
+  position: absolute;
+  inset: 0 29% 0 0;
+  background: var(--kd-paper);
+  border-radius: 60px 0 0 0;
+  transform: skewY(-12deg);
+  transform-origin: left bottom;
+}
+
+.kk-date .kd-door-art:after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--kd-slate);
+  left: 54%;
+  top: 55%;
+}
+
+.kk-date .kd-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid #41536425;
+  border-radius: 22px;
+  padding: 24px;
+  color: var(--kd-slate);
+  background: var(--kd-paper);
+  box-shadow: 0 22px 70px #10242140;
+  font-family: inherit;
+}
+
+.kk-date .kd-dialog::backdrop {
+  background: #162a2766;
+  backdrop-filter: blur(3px);
+}
+
+.kk-date .kd-dialog h2 {
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  margin: 0 0 9px;
+}
+
+.kk-date .kd-dialog p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0 0 20px;
+  color: #526671;
+}
+
+.kk-date .kd-dialog label {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+
+.kk-date .kd-dialog input {
+  width: 100%;
+  min-height: 46px;
+  min-width: 0;
+  border: 1px solid #41536444;
+  border-radius: 9px;
+  background: #fffcf7;
+  color: var(--kd-slate);
+  font: inherit;
+  font-size: 16px;
+  padding: 9px 11px;
+  color-scheme: light;
+}
+
+.kk-date .kd-actions {
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.kk-date .kd-actions button {
+  border: 1px solid #41536435;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--kd-slate);
+  padding: 11px 13px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kk-date .kd-actions .kd-apply {
+  background: var(--kd-green);
+  color: var(--kd-paper);
+  border-color: var(--kd-green);
+}
+
+.kk-date .kd-dialog :is(button, input):focus-visible {
+  outline: 3px solid var(--kd-slate);
+  outline-offset: 3px;
+}
+
+.kk-date .kd-form-error {
+  font-size: 12px;
+  color: #5e3653;
+  margin-top: 10px;
+}
+
+.kk-date .kd-invalid {
+  color: #415364;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 16px;
+}
+
+@container (max-height: 200px) {
+  .kk-date .kd-eyebrow,
+  .kk-date .kd-footer,
+  .kk-date .kd-weekday,
+  .kk-date .kd-door-art {
+    display: none;
+  }
+
+  .kk-date .kd-date {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .kk-date .kd-day {
+    font-size: clamp(28px, 28cqw, 48px);
+  }
+
+  .kk-date .kd-month {
+    font-size: clamp(14px, 12cqw, 22px);
+    margin-top: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kk-date .kd-change span:last-child {
+    transition: none;
+  }
+}

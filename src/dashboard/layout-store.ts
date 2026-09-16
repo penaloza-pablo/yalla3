@@ -51,7 +51,8 @@ const parsePlacement = (
     return null
   }
   const item = value as Record<string, unknown>
-  const widgetId = typeof item.widgetId === 'string' ? item.widgetId : ''
+  const rawWidgetId = typeof item.widgetId === 'string' ? item.widgetId : ''
+  const widgetId = rawWidgetId === 'swatch.go' ? 'date.photo' : rawWidgetId
   const colSpan = asColSpan(item.colSpan)
   const rowSpan = asRowSpan(item.rowSpan)
   if (!widgetId || !colSpan || !rowSpan) {

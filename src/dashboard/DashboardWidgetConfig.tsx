@@ -34,6 +34,8 @@ const PRESETS = [
 
 type Props = {
   widget: DashboardWidgetDefinition
+  catalog?: DashboardWidgetDefinition[]
+  onReplace?: (widgetId: string) => void
   onClose: () => void
 }
 
@@ -45,7 +47,12 @@ const sortScales = (scales: DashboardWidgetScale[]) =>
       right.rowSpan - left.rowSpan,
   )
 
-export function DashboardWidgetConfig({ widget, onClose }: Props) {
+export function DashboardWidgetConfig({
+  widget,
+  catalog,
+  onReplace,
+  onClose,
+}: Props) {
   const { t } = useTranslation()
   const [scales, setScales] = useState<DashboardWidgetScale[]>(() =>
     sortScales(widget.scales.map((scale) => ({ ...scale }))),
@@ -156,6 +163,26 @@ export function DashboardWidgetConfig({ widget, onClose }: Props) {
       </header>
 
       <div className="yl-dashboard-config-body">
+        {onReplace && catalog && catalog.length > 0 ? (
+          <label className="form-field">
+            {t('dashboard.replaceWidget')}
+            <select
+              className="select-input"
+              value={widget.id}
+              aria-label={t('dashboard.replaceWidget')}
+              onChange={(event) => onReplace(event.target.value)}
+            >
+              {catalog.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {widgetLabel(item, t)}
+                </option>
+              ))}
+            </select>
+            <span className="form-field-hint">
+              {t('dashboard.replaceWidgetHint')}
+            </span>
+          </label>
+        ) : null}
         <label className="form-field">
           {t('dashboard.widgetNameField')}
           <input
