@@ -15,6 +15,7 @@ import {
   SLACK_OVERDUE_FIELD,
 } from '../shared/slack-cleaning';
 import { loadSlackSecrets, slackApi } from '../shared/slack';
+import { grantDueCheckInAccess } from '../shared/grant-check-in-access';
 import { notifyEarlyCheckInReady } from '../shared/slack-early-check-in';
 import { notifyScheduledOpsDigests } from '../shared/slack-ops-digest';
 import {
@@ -138,8 +139,15 @@ export const handler = async (event?: unknown) => {
     console.error('Failed to notify early check-in ready', error);
   }
 
+  let access;
+  try {
+    access = await grantDueCheckInAccess();
+  } catch (error) {
+    console.error('Failed to auto-grant check-in access', error);
+  }
+
   if (earlyCheckInForce) {
-    return { early };
+    return { early, access };
   }
 
   const opsDigestForce = isOpsDigestEvent(event);
@@ -151,20 +159,20 @@ export const handler = async (event?: unknown) => {
   }
 
   if (opsDigestForce) {
-    return { early, digest };
+    return { early, access, digest };
   }
 
   if (
     !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
   ) {
     console.log('Slack overdue notify skipped: automation disabled.');
-    return { early, digest };
+    return { early, access, digest };
   }
 
   const secrets = await loadSlackSecrets({ forceRefresh: true });
   if (!secrets.botToken) {
     console.error('Slack notify skipped: missing botToken in yalla/slack.');
-    return { early, digest };
+    return { early, access, digest };
   }
 
   const today = getTodayInMadrid();
@@ -236,5 +244,5 @@ export const handler = async (event?: unknown) => {
     }
   }
 
-  return { early, digest };
+  return { early, access, digest };
 };

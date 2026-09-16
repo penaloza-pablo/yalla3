@@ -25,8 +25,10 @@ import {
   AGENDA_DAY_COUNT,
   addHoursToTimeString,
   formatAgendaDayLabel,
+  formatMinutesAsTime,
   getAgendaDateRange,
   isTerminalVisit,
+  plannedArrivalToMinutes,
   visitScheduleWriteFields,
 } from './operationsViewHelpers'
 import { filterPropertySelectOptions, getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
@@ -977,6 +979,9 @@ export function DailyOperationsView({
               isEarlyCheckInEnabled(
                 asRecordString(record, ['EarlyCheckIn', 'earlyCheckIn']),
               ),
+            checkInStartMinutes: plannedArrivalToMinutes(
+              asRecordString(record, ['PlannedArrival', 'plannedArrival']),
+            ),
           })
         }
         if (
@@ -1039,6 +1044,44 @@ export function DailyOperationsView({
           ),
         )
         setError(t('operations.unableSaveEarlyCheckIn'))
+      }
+    },
+    [endpoints.upsertPlannerFields, t],
+  )
+
+  const handleCheckInTimeChange = useCallback(
+    async (booking: DayBookingEvent, checkInStartMinutes: number) => {
+      const reservationId = booking.reservationId?.trim()
+      const plannedArrival = formatMinutesAsTime(checkInStartMinutes)
+      setDayBookings((current) =>
+        current.map((entry) =>
+          entry.id === booking.id
+            ? { ...entry, checkInStartMinutes }
+            : entry,
+        ),
+      )
+      if (!reservationId || !endpoints.upsertPlannerFields) {
+        return
+      }
+      try {
+        await fetchJson(endpoints.upsertPlannerFields, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            reservationId,
+            plannedArrival,
+          }),
+        })
+      } catch (saveError) {
+        setDayBookings((current) =>
+          current.map((entry) =>
+            entry.id === booking.id
+              ? { ...entry, checkInStartMinutes: booking.checkInStartMinutes }
+              : entry,
+          ),
+        )
+        setError(t('operations.unableSaveCheckInTime'))
+        throw saveError
       }
     },
     [endpoints.upsertPlannerFields, t],
@@ -2463,6 +2506,7 @@ export function DailyOperationsView({
               onVisitClick={setSelectedVisitId}
               onVisitTimeChange={handleVisitTimeChange}
               onEarlyCheckInChange={handleEarlyCheckInChange}
+              onCheckInTimeChange={handleCheckInTimeChange}
               canCreateVisit={can(ACTION_KEYS.dailyOpsCreate)}
               onCreateVisit={openCreateVisit}
               onOpenFilters={openFilters}

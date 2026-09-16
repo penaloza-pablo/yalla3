@@ -269,6 +269,44 @@ const fetchGuestyReservation = async (
   }
 };
 
+export const syncPlannedArrivalToGuesty = async (
+  reservationId: string,
+  plannedArrival: string,
+) => {
+  const client = await loadGuestyClient();
+  if (!client) {
+    throw new Error('Guesty client is not available.');
+  }
+  const encoded = encodeURIComponent(reservationId);
+  await client.guestyPut(`/v1/reservations/${encoded}`, {
+    plannedArrival,
+  }).catch(async (error) => {
+    console.warn('Guesty v1 plannedArrival update failed, trying v3 dates', error);
+    await client.guestyPut(`/v1/reservations-v3/${encoded}/dates`, {
+      plannedArrival,
+      applyRecalculation: false,
+    });
+  });
+};
+
+export const persistPlannedArrival = async (
+  bookingsTable: string,
+  reservationId: string,
+  plannedArrival: string,
+) => {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: bookingsTable,
+      Key: { ReservationID: reservationId },
+      UpdateExpression: 'SET PlannedArrival = :plannedArrival, UpdatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':plannedArrival': plannedArrival,
+        ':updatedAt': nowIso(),
+      },
+    }),
+  );
+};
+
 export const syncPlannerFieldsToGuesty = async (
   reservationId: string,
   patch: PlannerFieldPatch,

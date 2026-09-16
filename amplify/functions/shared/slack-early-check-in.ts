@@ -15,6 +15,7 @@ import {
 } from './visit-task-utils';
 
 export const EARLY_CHECK_IN_READY_FIELD = 'EarlyCheckInReadyNotified';
+export const EARLY_CHECK_IN_ACCESS_FIELD = 'EarlyCheckInAccessNotified';
 export const EARLY_CHECK_IN_NOTIFY_TIME = '11:00';
 
 const asString = (value: unknown) =>
@@ -183,6 +184,10 @@ const markNotified = async (
 const earlyCheckInReadyMessage = (label: string, guestName: string) =>
   `${escapeMrkdwn(label)} lista para Early check-in. Guest: ${escapeMrkdwn(guestName)}`;
 
+export const earlyCheckInAccessEnabledMessage = (
+  guestName: string,
+) => `Acceso de early check-in habilitado. Guest: ${escapeMrkdwn(guestName)}`;
+
 const propertyLabel = (
   booking: Record<string, unknown>,
   propertyId: string,
@@ -197,6 +202,34 @@ const propertyLabel = (
     yallaAliasForListingId(asString(booking.ListingID)) ||
     propertyId
   );
+};
+
+export const notifyEarlyCheckInAccessEnabled = async (
+  booking: Record<string, unknown>,
+) => {
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.earlyCheckInReady,
+    ))
+  ) {
+    return false;
+  }
+  const { warningsChannelId } = await loadSlackSecrets();
+  if (!warningsChannelId) {
+    console.error(
+      'Early check-in access notify skipped: missing warningsChannelId in yalla/slack.',
+    );
+    return false;
+  }
+  const guestName =
+    asString(booking.GuestName) ||
+    asString(booking.ListingNickname) ||
+    asString(booking.ReservationID);
+  await slackApi('chat.postMessage', {
+    channel: warningsChannelId,
+    text: earlyCheckInAccessEnabledMessage(guestName),
+  });
+  return true;
 };
 
 export type EarlyCheckInReadyResult = {

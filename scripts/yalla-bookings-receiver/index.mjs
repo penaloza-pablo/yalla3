@@ -109,6 +109,38 @@ function getCheckOut(reservation) {
   );
 }
 
+function normalizePlannedArrival(value) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return "";
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    hours > 23 ||
+    minutes > 59
+  ) {
+    return "";
+  }
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function getPlannedArrival(reservation) {
+  const candidates = [
+    reservation?.plannedArrival,
+    reservation?.plannedArrivalTime,
+    reservation?.checkInTime,
+    reservation?.listing?.defaultCheckInTime
+  ];
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    const normalized = normalizePlannedArrival(candidate);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
 const ACCESS_FIELD_ID = "6945126331a9580014e33f73";
 
 function toGuestCount(value) {
@@ -824,6 +856,9 @@ export const handler = async (event) => {
       ListingNickname: s(listingNickname),
       CheckInDate: s(getCheckIn(reservation)),
       CheckOutDate: s(getCheckOut(reservation)),
+      PlannedArrival: s(
+        pickStoredString(getPlannedArrival(reservation), existing, "PlannedArrival")
+      ),
       Guests: n(getGuests(reservation)),
       Nights: n(nights),
       GuestName: s(getGuestName(reservation)),
@@ -913,6 +948,8 @@ export const handler = async (event) => {
     copyExistingAttribute(item, existing, "AkilesMemberId");
     copyExistingAttribute(item, existing, "AkilesCheckedInAt");
     copyExistingAttribute(item, existing, "AkilesCheckedInEventId");
+    copyExistingAttribute(item, existing, "EarlyCheckInReadyNotified");
+    copyExistingAttribute(item, existing, "EarlyCheckInAccessNotified");
 
     const incomingLinen = getNestedOptionalText(reservation?.notes, "cleaning");
     if (incomingLinen === undefined || String(incomingLinen).trim() === "") {

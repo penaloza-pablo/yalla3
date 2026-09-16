@@ -87,6 +87,7 @@ test('skips properties without Akiles locks', () => {
   assert.equal(isExcludedAkilesProperty('Esperanza 9'), true);
   assert.equal(isExcludedAkilesProperty('Esperanza 14'), false);
   assert.equal(isExcludedAkilesProperty('Rodas'), true);
+  assert.equal(isExcludedAkilesProperty('Mendizabal'), true);
   assert.equal(
     canMarkAkilesCheckIn({
       Status: 'confirmed',

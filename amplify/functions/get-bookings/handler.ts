@@ -47,6 +47,7 @@ const PLANNER_ATTRIBUTES = [
   'EarlyCheckIn',
   'GiftCardOn',
   'EarlyCheckInOn',
+  'PlannedArrival',
   'LinenManual',
   'PlannerWarnings',
   'PlannerWarningCount',

@@ -182,6 +182,14 @@ export const BOOKING_CHECK_OUT_END = 11 * 60
 export const BOOKING_DURATION_MINUTES = 30
 export const EARLY_CHECK_IN_DURATION_MINUTES = 15
 
+export const plannedArrivalToMinutes = (value?: string) => {
+  const match = value?.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) {
+    return BOOKING_CHECK_IN_START
+  }
+  return parseTimeToMinutes(value)
+}
+
 export type DayTimelineWindow = {
   startMinutes: number
   endMinutes: number

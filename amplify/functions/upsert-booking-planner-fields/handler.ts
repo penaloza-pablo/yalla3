@@ -6,8 +6,11 @@ import {
 import {
   applyPlannerToReservation,
   getPlannerSettings,
+  persistPlannedArrival,
+  syncPlannedArrivalToGuesty,
 } from '../shared/bookings-planner-apply';
 import { isAllowedPlannerLinenValue, isDismissablePlannerWarning } from '../shared/bookings-planner';
+import { normalizePlannedArrival } from '../shared/check-in-time';
 import {
   buildHttpResponse,
   corsHeaders,
@@ -22,6 +25,7 @@ type FieldsPayload = {
   giftCardOn?: boolean;
   earlyCheckInOn?: boolean;
   access?: string;
+  plannedArrival?: string;
   dismissWarning?: string;
 };
 
@@ -73,8 +77,54 @@ export const handler = async (event: {
     payload.giftCardOn !== undefined ||
     payload.earlyCheckInOn !== undefined ||
     payload.access !== undefined;
+  const plannedArrival =
+    payload.plannedArrival === undefined
+      ? undefined
+      : normalizePlannedArrival(payload.plannedArrival);
+  if (payload.plannedArrival !== undefined && !plannedArrival) {
+    return buildHttpResponse(400, { message: 'plannedArrival must be HH:mm.' });
+  }
+  if (!hasGuestyFields && !plannedArrival && payload.dismissWarning === undefined) {
+    return buildHttpResponse(400, { message: 'No fields to update.' });
+  }
 
   try {
+    let syncedPlannedArrival = false;
+    if (plannedArrival) {
+      try {
+        await syncPlannedArrivalToGuesty(reservationId, plannedArrival);
+        syncedPlannedArrival = true;
+      } catch (error) {
+        console.error(
+          `Failed to sync planned arrival to Guesty for ${reservationId}`,
+          error,
+        );
+        if (!hasGuestyFields && payload.dismissWarning === undefined) {
+          return buildHttpResponse(502, {
+            message: 'Failed to update check-in time in Guesty.',
+            details: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      await persistPlannedArrival(bookingsTable, reservationId, plannedArrival);
+    }
+
+    if (!hasGuestyFields && payload.dismissWarning === undefined) {
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.BOOKINGS_PLAN,
+        action: 'update',
+        entityId: reservationId,
+        summary: `updated planned arrival for ${quoted(reservationId)}`,
+      });
+      return buildHttpResponse(200, {
+        item: {
+          ReservationID: reservationId,
+          PlannedArrival: plannedArrival,
+        },
+        syncedToGuesty: syncedPlannedArrival,
+      });
+    }
+
     const settings = await getPlannerSettings(settingsTable);
     const result = await applyPlannerToReservation({
       bookingsTable,
@@ -111,8 +161,9 @@ export const handler = async (event: {
       item: {
         ReservationID: reservationId,
         ...result.patch,
+        ...(plannedArrival ? { PlannedArrival: plannedArrival } : {}),
       },
-      syncedToGuesty: result.syncedToGuesty,
+      syncedToGuesty: Boolean(result.syncedToGuesty || syncedPlannedArrival),
     });
   } catch (error) {
     return buildHttpResponse(500, {

@@ -29,7 +29,13 @@ export const CHECK_IN_TRACKER_PRESERVED_FIELDS = [
 ] as const;
 
 const GUESTY_OBJECT_ID = /^[a-f0-9]{24}$/i;
-const EXCLUDED_PROPERTY_NAMES = ['baranda', 'almendro', 'esperanza 9', 'rodas'];
+const EXCLUDED_PROPERTY_NAMES = [
+  'baranda',
+  'almendro',
+  'esperanza 9',
+  'rodas',
+  'mendizabal',
+];
 const RESERVATION_METADATA_KEYS = [
   'sourceID',
   'sourceId',

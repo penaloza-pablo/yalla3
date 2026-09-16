@@ -112,6 +112,10 @@ type Props = {
     scheduledEndTime: string,
   ) => void
   onEarlyCheckInChange?: (booking: DayBookingEvent, enabled: boolean) => void
+  onCheckInTimeChange?: (
+    booking: DayBookingEvent,
+    checkInStartMinutes: number,
+  ) => Promise<void> | void
   canCreateVisit?: boolean
   onCreateVisit?: () => void
   onOpenFilters?: () => void
@@ -146,6 +150,7 @@ export function OperationsDayView({
   onVisitClick,
   onVisitTimeChange,
   onEarlyCheckInChange,
+  onCheckInTimeChange,
   canCreateVisit = false,
   onCreateVisit,
   onOpenFilters,
@@ -169,7 +174,12 @@ export function OperationsDayView({
           return booking
         }
         const stored = readDayCheckInLayout(dayViewDate, booking.id)
-        const resolved = resolveCheckInLayout({ ...booking, ...stored })
+        const resolved = resolveCheckInLayout({
+          earlyCheckIn: booking.earlyCheckIn,
+          checkInStartMinutes:
+            booking.checkInStartMinutes ?? stored?.checkInStartMinutes,
+          earlyLeadMinutes: stored?.earlyLeadMinutes,
+        })
         return {
           ...booking,
           ...resolved,
@@ -183,8 +193,10 @@ export function OperationsDayView({
   const handleCheckInLayoutChange = useCallback(
     (booking: DayBookingEvent, layout: StoredCheckInLayout) => {
       const previous = resolveCheckInLayout({
-        ...booking,
-        ...readDayCheckInLayout(dayViewDate, booking.id),
+        earlyCheckIn: booking.earlyCheckIn,
+        checkInStartMinutes: booking.checkInStartMinutes,
+        earlyLeadMinutes: readDayCheckInLayout(dayViewDate, booking.id)
+          ?.earlyLeadMinutes,
       })
       writeDayCheckInLayout(dayViewDate, booking.id, layout)
       setLayoutEpoch((value) => value + 1)
@@ -193,8 +205,16 @@ export function OperationsDayView({
       if (wasOn !== nowOn) {
         onEarlyCheckInChange?.(booking, nowOn)
       }
+      if (layout.checkInStartMinutes !== previous.checkInStartMinutes) {
+        void Promise.resolve(
+          onCheckInTimeChange?.(booking, layout.checkInStartMinutes),
+        ).catch(() => {
+          writeDayCheckInLayout(dayViewDate, booking.id, previous)
+          setLayoutEpoch((value) => value + 1)
+        })
+      }
     },
-    [dayViewDate, onEarlyCheckInChange],
+    [dayViewDate, onCheckInTimeChange, onEarlyCheckInChange],
   )
 
   useEffect(() => {

@@ -1049,6 +1049,7 @@
     "checkInDetails": "Check-in",
     "checkOutDetails": "Check-out",
     "unableSaveEarlyCheckIn": "No se pudo actualizar el early check-in en Bookings Plan.",
+    "unableSaveCheckInTime": "No se pudo actualizar la hora de entrada en Guesty.",
     "visitId": "ID",
     "visitTitle": "Título",
     "assignTask": "Asignar",

@@ -11,7 +11,9 @@ const PRESERVED_FIELDS = [
   "CheckInGuestEnteredBy",
   "AkilesMemberId",
   "AkilesCheckedInAt",
-  "AkilesCheckedInEventId"
+  "AkilesCheckedInEventId",
+  "EarlyCheckInReadyNotified",
+  "EarlyCheckInAccessNotified"
 ];
 
 test("bookings receiver copies check-in tracker flags across Guesty PutItem", () => {
