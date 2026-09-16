@@ -831,6 +831,44 @@ const getCheckInTrackerUrl = getCheckInTrackerFn.addFunctionUrl({
 const upsertCheckInTrackerUrl = upsertCheckInTrackerFn.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const akilesSecret = Secret.fromSecretNameV2(
+  jobSchedulerStack,
+  'YallaAkilesSecret',
+  'yalla/akiles',
+);
+const receiveAkilesEventsFn = new NodejsFunction(
+  jobSchedulerStack,
+  'ReceiveAkilesEvents',
+  {
+    entry: path.join(
+      jobSchedulerHandlerRoot,
+      'receive-akiles-events/handler.ts',
+    ),
+    handler: 'handler',
+    runtime: Runtime.NODEJS_22_X,
+    timeout: Duration.seconds(20),
+    memorySize: 512,
+    depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+    bundling: jobSchedulerBundling,
+    environment: {
+      BOOKINGS_TABLE: 'yalla-bookings',
+      LOGS_TABLE: activityLogsTable.tableName,
+      AKILES_SECRET_ID: 'yalla/akiles',
+    },
+  },
+);
+bookingsTable.grantReadWriteData(receiveAkilesEventsFn);
+activityLogsTable.grantWriteData(receiveAkilesEventsFn);
+akilesSecret.grantRead(receiveAkilesEventsFn);
+receiveAkilesEventsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['secretsmanager:PutSecretValue'],
+    resources: [akilesSecret.secretArn],
+  }),
+);
+const receiveAkilesEventsUrl = receiveAkilesEventsFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 
 backend.upsertVisit.addEnvironment(
   'TEMPLATES_TABLE',
@@ -2239,6 +2277,7 @@ backend.addOutput({
     upsertBookingPlannerFieldsUrl: upsertBookingPlannerFieldsUrl.url,
     getCheckInTrackerUrl: getCheckInTrackerUrl.url,
     upsertCheckInTrackerUrl: upsertCheckInTrackerUrl.url,
+    receiveAkilesEventsUrl: receiveAkilesEventsUrl.url,
     getReviewsUrl: getReviewsUrl.url,
     getReviewsSyncStateUrl: getReviewsSyncStateUrl.url,
     updateReviewWorkflowUrl: updateReviewWorkflowUrl.url,

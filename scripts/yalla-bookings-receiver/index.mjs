@@ -904,6 +904,15 @@ export const handler = async (event) => {
     copyExistingAttribute(item, existing, "PlannerWarningCount");
     copyExistingAttribute(item, existing, "PlannerDismissedWarnings");
     copyExistingAttribute(item, existing, "LinenManual");
+    copyExistingAttribute(item, existing, "CheckInAccessGranted");
+    copyExistingAttribute(item, existing, "CheckInAccessGrantedAt");
+    copyExistingAttribute(item, existing, "CheckInAccessGrantedBy");
+    copyExistingAttribute(item, existing, "CheckInGuestEntered");
+    copyExistingAttribute(item, existing, "CheckInGuestEnteredAt");
+    copyExistingAttribute(item, existing, "CheckInGuestEnteredBy");
+    copyExistingAttribute(item, existing, "AkilesMemberId");
+    copyExistingAttribute(item, existing, "AkilesCheckedInAt");
+    copyExistingAttribute(item, existing, "AkilesCheckedInEventId");
 
     const incomingLinen = getNestedOptionalText(reservation?.notes, "cleaning");
     if (incomingLinen === undefined || String(incomingLinen).trim() === "") {
