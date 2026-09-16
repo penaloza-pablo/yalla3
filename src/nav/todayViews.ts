@@ -9,8 +9,10 @@ export { TODAY_VIEW_MODES, type TodayViewMode }
 export const TODAY_VIEW_QUERY_KEY = 'view'
 export const TODAY_SECTION_ID = 'today-views'
 
+export const DEFAULT_TODAY_VIEW: TodayViewMode = 'board'
+
 export const parseTodayView = (value: string | null | undefined): TodayViewMode =>
-  isTodayViewMode(value) ? value : 'dashboard'
+  isTodayViewMode(value) ? value : DEFAULT_TODAY_VIEW
 
 export const isTodayVisitView = (view: TodayViewMode) =>
   view === 'day' || view === 'kanban' || view === 'agenda' || view === 'myJobs'

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TODAY_VIEW,
   parseTodayView,
   TODAY_VIEW_QUERY_KEY,
   type TodayViewMode,
@@ -19,7 +20,7 @@ export const readPageFromLocation = (validPages: Set<string>): string | null => 
 
 export const readTodayViewFromLocation = (): TodayViewMode => {
   if (typeof window === 'undefined') {
-    return 'dashboard'
+    return DEFAULT_TODAY_VIEW
   }
   return parseTodayView(
     new URLSearchParams(window.location.search).get(TODAY_VIEW_QUERY_KEY),
@@ -39,11 +40,11 @@ export const writePageToUrl = (
   const currentView = url.searchParams.get(TODAY_VIEW_QUERY_KEY)
   const nextView =
     page === 'Daily Operations'
-      ? extras?.view && extras.view !== 'dashboard'
-        ? extras.view
-        : extras && 'view' in extras
-          ? null
-          : currentView
+      ? extras && 'view' in extras
+        ? extras.view && extras.view !== DEFAULT_TODAY_VIEW
+          ? extras.view
+          : null
+        : currentView
       : null
   const viewUnchanged = (nextView || null) === (currentView || null)
   if (currentPage === page && viewUnchanged) {

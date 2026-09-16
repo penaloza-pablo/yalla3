@@ -1,4 +1,5 @@
 import {
+  bookingHasEarlyCheckIn,
   CHECK_IN_TRACKER_STATUSES,
   type CheckInTrackerStatus,
 } from '../../amplify/functions/shared/check-in-tracker'
@@ -57,7 +58,7 @@ export const asTrackerRow = (item: Record<string, unknown>): TrackerRow => ({
     : 'jobs_pending',
   accessGranted: item.accessGranted === true,
   guestEntered: item.guestEntered === true,
-  earlyCheckIn: item.earlyCheckIn === true,
+  earlyCheckIn: bookingHasEarlyCheckIn(item),
   openVisits: Array.isArray(item.openVisits)
     ? item.openVisits
         .map((entry) => {

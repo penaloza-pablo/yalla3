@@ -39,6 +39,7 @@ type Props = {
   onSearchQueryChange: (value: string) => void
   isMobileSearchOpen: boolean
   onToggleMobileSearch: () => void
+  warningsOnly?: boolean
 }
 
 type PlanRow = PlannerPlanRow
@@ -113,6 +114,7 @@ export function BookingsPlanView({
   onSearchQueryChange,
   isMobileSearchOpen,
   onToggleMobileSearch,
+  warningsOnly: warningsOnlyProp = false,
 }: Props) {
   const { t } = useTranslation()
   const endpoints = useMemo(
@@ -149,14 +151,19 @@ export function BookingsPlanView({
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
-  const [warningsOnly, setWarningsOnly] = useState(false)
-  const [warningsOnlyDraft, setWarningsOnlyDraft] = useState(false)
+  const [warningsOnly, setWarningsOnly] = useState(warningsOnlyProp)
+  const [warningsOnlyDraft, setWarningsOnlyDraft] = useState(warningsOnlyProp)
   const [giftCardExcludedIds, setGiftCardExcludedIds] = useState<string[]>([])
   const [dismissConfirm, setDismissConfirm] = useState<{
     row: PlanRow
     code: PlannerWarningCode
   } | null>(null)
   const accessInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  useEffect(() => {
+    setWarningsOnly(warningsOnlyProp)
+    setWarningsOnlyDraft(warningsOnlyProp)
+  }, [warningsOnlyProp])
 
   const windowLabel = useMemo(() => {
     const today = getTodayMadrid()

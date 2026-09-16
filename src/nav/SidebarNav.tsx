@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NavGroup } from '../../amplify/functions/shared/rbac-catalog'
 import {
@@ -98,6 +98,11 @@ export function SidebarNav({
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     () => readCollapsedSections(),
   )
+  const pendingScrollPin = useRef<{
+    scroller: HTMLElement
+    header: HTMLElement
+    top: number
+  } | null>(null)
   const showTodayViews = coreItems.includes('Daily Operations')
   const otherCoreItems = coreItems.filter((item) => item !== 'Daily Operations')
   const todayItems = TODAY_NAV_ITEMS.filter((item) =>
@@ -108,6 +113,23 @@ export function SidebarNav({
   )?.section
   const todaySectionActive = activePage === 'Daily Operations'
   const isFlat = navMode === 'flat'
+  const sectionIds = [
+    ...(showTodayViews ? [TODAY_SECTION_ID] : []),
+    ...groups.map((group) => group.section),
+  ]
+  const sectionIdsKey = sectionIds.join('|')
+
+  useLayoutEffect(() => {
+    const pending = pendingScrollPin.current
+    if (!pending) {
+      return
+    }
+    pendingScrollPin.current = null
+    const delta = pending.header.getBoundingClientRect().top - pending.top
+    if (delta !== 0) {
+      pending.scroller.scrollTop += delta
+    }
+  }, [collapsedSections])
 
   useEffect(() => {
     if (isFlat || (!activeSection && !todaySectionActive)) {
@@ -117,24 +139,33 @@ export function SidebarNav({
     if (!sectionToOpen) {
       return
     }
+    const ids = sectionIdsKey ? sectionIdsKey.split('|') : []
     setCollapsedSections((current) => {
-      if (!current.has(sectionToOpen)) {
+      const next = new Set(ids)
+      next.delete(sectionToOpen)
+      const unchanged = ids.every((id) => next.has(id) === current.has(id))
+      if (unchanged) {
         return current
       }
-      const next = new Set(current)
-      next.delete(sectionToOpen)
       writeCollapsedSections(next)
       return next
     })
-  }, [activePage, activeSection, isFlat, todaySectionActive])
+  }, [activePage, activeSection, isFlat, sectionIdsKey, todaySectionActive])
 
-  const toggleSection = (section: string) => {
+  const toggleSection = (section: string, header: HTMLButtonElement) => {
+    const scroller = header.closest('.nav')
+    if (scroller instanceof HTMLElement) {
+      pendingScrollPin.current = {
+        scroller,
+        header,
+        top: header.getBoundingClientRect().top,
+      }
+    }
     setCollapsedSections((current) => {
-      const next = new Set(current)
-      if (next.has(section)) {
+      const opening = current.has(section)
+      const next = new Set(sectionIds)
+      if (opening) {
         next.delete(section)
-      } else {
-        next.add(section)
       }
       writeCollapsedSections(next)
       return next
@@ -185,7 +216,9 @@ export function SidebarNav({
             className={`sidebar-nav-header ${todayOpen ? '' : 'is-collapsed'}`}
             aria-expanded={todayOpen}
             aria-controls="sidebar-section-today"
-            onClick={() => toggleSection(TODAY_SECTION_ID)}
+            onClick={(event) =>
+              toggleSection(TODAY_SECTION_ID, event.currentTarget)
+            }
           >
             <YlIcon
               name={todayOpen ? 'chevron.down' : 'chevron.right'}
@@ -224,7 +257,9 @@ export function SidebarNav({
               className={`sidebar-nav-header ${isOpen ? '' : 'is-collapsed'}`}
               aria-expanded={isOpen}
               aria-controls={sectionId}
-              onClick={() => toggleSection(group.section)}
+              onClick={(event) =>
+                toggleSection(group.section, event.currentTarget)
+              }
             >
               <YlIcon
                 name={isOpen ? 'chevron.down' : 'chevron.right'}

@@ -15,15 +15,15 @@ test('zero is a calm state, missing is loading', () => {
 })
 
 test('singular, plural and invalid totals', () => {
-  assert.equal(reviewState(1, 'es').label, '1 reseña en gestión')
-  assert.equal(reviewState(3, 'es').label, '3 reseñas en gestión')
+  assert.equal(reviewState(1, 'es').label, '1 requiere atención')
+  assert.equal(reviewState(3, 'es').label, '3 requieren atención')
   for (const value of [-1, NaN, Infinity, 1.5, undefined]) {
     assert.throws(() => reviewState(value, 'es'))
   }
 })
 
 test('English labels stay available', () => {
-  assert.equal(reviewState(1, 'en').label, '1 review in review')
+  assert.equal(reviewState(1, 'en').label, '1 needs attention')
   assert.equal(reviewState(0, 'en').label, 'No pending reviews')
 })
 

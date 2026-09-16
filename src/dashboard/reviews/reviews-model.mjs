@@ -3,17 +3,16 @@ const EN = {
   tag: 'In review',
   loading: 'Loading reviews…',
   invalid: 'Unable to read the reviews indicator.',
-  ariaLabel: 'Reviews in review',
+  ariaLabel: 'Reviews needing attention',
   nonePending: 'No pending reviews',
   nonePendingLines: ['No pending', 'reviews'],
   postcardLabel: 'in review',
   calmTitle: ['All', 'calm.'],
   upToDateTitle: ['Up to', 'date.'],
   caption: 'Every stay counts.',
-  inReview: (count) =>
-    count === 1 ? 'review in review' : 'reviews in review',
+  inReview: () => 'Needs attention',
   inReviewFull: (count) =>
-    `${count} ${count === 1 ? 'review in review' : 'reviews in review'}`,
+    `${count} ${count === 1 ? 'needs attention' : 'need attention'}`,
 }
 
 const ES = {
@@ -21,7 +20,7 @@ const ES = {
   tag: 'En gestión',
   loading: 'Cargando reseñas…',
   invalid: 'No se pudo leer el indicador de reseñas.',
-  ariaLabel: 'Reseñas en gestión',
+  ariaLabel: 'Reseñas que requieren atención',
   nonePending: 'Sin reseñas pendientes',
   nonePendingLines: ['Sin reseñas', 'pendientes'],
   postcardLabel: 'en gestión',
@@ -29,9 +28,9 @@ const ES = {
   upToDateTitle: ['Al', 'día.'],
   caption: 'Cada experiencia cuenta.',
   inReview: (count) =>
-    count === 1 ? 'reseña en gestión' : 'reseñas en gestión',
+    count === 1 ? 'Requiere atención' : 'Requieren atención',
   inReviewFull: (count) =>
-    `${count} ${count === 1 ? 'reseña en gestión' : 'reseñas en gestión'}`,
+    `${count} ${count === 1 ? 'requiere atención' : 'requieren atención'}`,
 }
 
 export function reviewsLocale(lang) {

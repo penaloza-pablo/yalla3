@@ -36,6 +36,7 @@
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overflow-anchor: none;
 }
 
 .sidebar.is-collapsed:not(.is-mobile-open) {

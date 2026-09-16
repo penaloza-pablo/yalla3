@@ -30,6 +30,8 @@ const TRACKER_FLAG_ATTRIBUTES = [
   'CheckInGuestEntered',
   'CheckInGuestEnteredAt',
   'CheckInGuestEnteredBy',
+  'EarlyCheckIn',
+  'EarlyCheckInOn',
 ];
 
 const asString = (value: unknown) =>

@@ -442,7 +442,7 @@ export function DailyOperationsView({
   )
   const [sessionEmail, setSessionEmail] = useState('')
   const [internalDashboardViewMode, setInternalDashboardViewMode] =
-    useState<TodayViewMode>('dashboard')
+    useState<TodayViewMode>('board')
   const dashboardViewMode = dashboardViewModeProp ?? internalDashboardViewMode
   const setDashboardViewMode = (mode: TodayViewMode) => {
     onDashboardViewModeChange?.(mode)

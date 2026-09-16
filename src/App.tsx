@@ -1916,6 +1916,7 @@ function App() {
   const [reviewsCreatedPreset, setReviewsCreatedPreset] = useState<
     'none' | 'last7' | 'last30'
   >('none')
+  const [bookingsPlanWarningsOnly, setBookingsPlanWarningsOnly] = useState(false)
   const [reviewsSortDirection, setReviewsSortDirection] = useState<'asc' | 'desc'>(
     'desc',
   )
@@ -4894,6 +4895,9 @@ function App() {
     if (page === 'Reviews' && options?.reviewsCreatedPreset) {
       setReviewsCreatedPreset(options.reviewsCreatedPreset)
     }
+    if (page === 'Bookings Plan') {
+      setBookingsPlanWarningsOnly(Boolean(options?.bookingsPlanWarningsOnly))
+    }
   }
 
   useEffect(() => {
@@ -4917,25 +4921,13 @@ function App() {
     if (canTodayView(todayView)) {
       return
     }
-    const fallback = todayViews[0]
+    const fallback = todayViews.includes('board') ? 'board' : todayViews[0]
     if (!fallback) {
       return
     }
     setTodayView(fallback)
     writePageToUrl('Daily Operations', 'replace', { view: fallback })
   }, [activePage, canTodayView, permissionsReady, todayView, todayViews])
-
-  useEffect(() => {
-    if (activePage !== 'Daily Operations') {
-      return
-    }
-    setIsSidebarCollapsed(true)
-    try {
-      window.localStorage.setItem('yalla.sidebar.hidden.v1', '1')
-    } catch {
-      // Ignore storage failures (private mode, quota, etc.).
-    }
-  }, [activePage])
 
   const clearDeepLinkPlanDate = useCallback(() => {
     setDeepLinkPlanDate('')
@@ -8688,6 +8680,7 @@ function App() {
             onToggleMobileSearch={() =>
               setIsMobileSearchOpen((current) => !current)
             }
+            warningsOnly={bookingsPlanWarningsOnly}
           />
         ) : activePage === 'Check-in Tracker' ? (
           <CheckInTrackerView

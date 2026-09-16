@@ -6,6 +6,7 @@ export type DashboardNavigateOptions = {
   purchaseStatuses?: string[]
   purchaseInvoiceOff?: boolean
   reviewsCreatedPreset?: 'none' | 'last7' | 'last30'
+  bookingsPlanWarningsOnly?: boolean
 }
 
 export type DashboardNavigation = {

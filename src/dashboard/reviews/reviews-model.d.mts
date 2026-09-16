@@ -15,7 +15,7 @@ export function reviewsCopy(lang?: string): {
   calmTitle: [string, string]
   upToDateTitle: [string, string]
   caption: string
-  inReview: (count: number) => string
+  inReview: (count?: number) => string
   inReviewFull: (count: number) => string
 }
 export function reviewState(activeCount: number | null, lang?: string): ReviewState

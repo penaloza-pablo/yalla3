@@ -11,6 +11,7 @@ import {
   type TrackerRow,
 } from '../../bookings/checkInTrackerShared'
 import {
+  bookingHasEarlyCheckIn,
   isCompletedVisitStatus,
   trackerVisitKind,
   toDateOnly,
@@ -253,6 +254,51 @@ const loadVisitActivity = async (date: string, signal?: AbortSignal) => {
   }
 }
 
+const loadEarlyFlagsForDate = async (
+  date: string,
+  signal?: AbortSignal,
+): Promise<Map<string, boolean> | null> => {
+  const endpoint = getAmplifyEndpoint(
+    'getBookingsUrl',
+    import.meta.env.VITE_GET_BOOKINGS_URL,
+  )
+  if (!endpoint) {
+    return null
+  }
+  try {
+    const items: Record<string, unknown>[] = []
+    let cursor: string | null = null
+    do {
+      const query = new URLSearchParams({
+        checkInFrom: date,
+        checkInTo: date,
+        status: 'confirmed',
+        limit: '200',
+      })
+      if (cursor) {
+        query.set('cursor', cursor)
+      }
+      const payload = await fetchJson<{
+        items?: Record<string, unknown>[]
+        nextCursor?: string | null
+      }>(`${endpoint}?${query.toString()}`, { signal })
+      items.push(...(payload.items ?? []))
+      cursor = payload.nextCursor ?? null
+    } while (cursor)
+    return new Map(
+      items.flatMap((item) => {
+        const id = String(item.ReservationID ?? item.id ?? '').trim()
+        return id ? [[id, bookingHasEarlyCheckIn(item)] as const] : []
+      }),
+    )
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
+    return null
+  }
+}
+
 export const useCheckinLive = () => {
   const [, setVersion] = useState(0)
   useEffect(
@@ -313,16 +359,25 @@ export const loadUpcomingCheckins = (
     }
     setState({ loading: true, error: '' })
     try {
-      const loaded = await withLiveRetry(
-        () => loadRangeWithFallback(endpoint, from, to, controller.signal),
-        { signal: controller.signal },
-      )
+      const [loaded, earlyById] = await Promise.all([
+        withLiveRetry(
+          () => loadRangeWithFallback(endpoint, from, to, controller.signal),
+          { signal: controller.signal },
+        ),
+        loadEarlyFlagsForDate(from, controller.signal),
+      ])
       if (generation !== loadGeneration || controller.signal.aborted) {
         return
       }
-      const rows = sortUpcomingTrackerRows(
+      let rows = sortUpcomingTrackerRows(
         loaded.rows.filter((row) => Boolean(row.id)),
       )
+      if (earlyById) {
+        rows = rows.map((row) => ({
+          ...row,
+          earlyCheckIn: earlyById.get(row.id) ?? row.earlyCheckIn,
+        }))
+      }
       let activity = mergeActivity(rows, loaded.activity)
       if (!loaded.activity) {
         const visitCounts = await loadVisitActivity(from, controller.signal)

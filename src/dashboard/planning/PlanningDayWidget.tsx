@@ -75,7 +75,9 @@ export function PlanningDayWidget({
                   nav.toPage('Cleaning Plan')
                   return
                 }
-                nav.toPage('Bookings')
+                nav.toPage('Bookings Plan', {
+                  bookingsPlanWarningsOnly: true,
+                })
               }
             : undefined
         }

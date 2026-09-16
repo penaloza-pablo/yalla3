@@ -232,6 +232,7 @@ export const shouldIncludeBooking = (item: Record<string, unknown>) =>
 export const bookingHasEarlyCheckIn = (item: Record<string, unknown>) =>
   item.EarlyCheckInOn === true ||
   item.earlyCheckInOn === true ||
+  item.earlyCheckIn === true ||
   isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn);
 
 export const isCompletedVisitStatus = (status: unknown) =>

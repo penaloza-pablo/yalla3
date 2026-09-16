@@ -9,6 +9,7 @@ import {
   resolveTrackerDateWindow,
   shouldIncludeBooking,
   summarizeDayActivity,
+  bookingHasEarlyCheckIn,
 } from './check-in-tracker';
 
 const booking = {
@@ -255,4 +256,14 @@ test('day activity counts today check-ins, closed jobs, and early arrivals', () 
     cleaning: { total: 2, completed: 1 },
     maintenance: { total: 1, completed: 1 },
   });
+});
+
+test('early check-in follows EarlyCheckInOn and Early check-in text', () => {
+  assert.equal(bookingHasEarlyCheckIn({ EarlyCheckInOn: true }), true);
+  assert.equal(bookingHasEarlyCheckIn({ earlyCheckIn: true }), true);
+  assert.equal(
+    bookingHasEarlyCheckIn({ EarlyCheckIn: 'Early check-in' }),
+    true,
+  );
+  assert.equal(bookingHasEarlyCheckIn({ EarlyCheckInOn: false }), false);
 });
