@@ -36,7 +36,12 @@ import { JobSchedulerView } from './operations/JobSchedulerView'
 import { VisitDetailModal } from './operations/VisitDetailModal'
 import { readRememberedPage, rememberActivePage, rememberPageInSection } from './lib/lastActivePage'
 import { readPageFromLocation, readTodayViewFromLocation, writePageToUrl } from './lib/page-route'
-import { TODAY_NAV_ITEMS, type TodayViewMode } from './nav/todayViews'
+import {
+  TODAY_NAV_ITEMS,
+  TODAY_VIEW_QUERY_KEY,
+  normalizeTodayView,
+  type TodayViewMode,
+} from './nav/todayViews'
 import { visibleNavGroups } from './nav/catalog'
 import { SidebarNav } from './nav/SidebarNav'
 import { BrandMark } from './design/Brand'
@@ -4847,10 +4852,11 @@ function App() {
   }
 
   const navigateToTodayView = (view: TodayViewMode) => {
+    const nextView = normalizeTodayView(view)
     setActivePage('Daily Operations')
     persistPage('Daily Operations')
-    setTodayView(view)
-    writePageToUrl('Daily Operations', 'push', { view })
+    setTodayView(nextView)
+    writePageToUrl('Daily Operations', 'push', { view: nextView })
     setIsMobileNavOpen(false)
     setIsSummaryInfoOpen(false)
     setIsMobileSearchOpen(false)
@@ -4918,16 +4924,25 @@ function App() {
     if (!permissionsReady || activePage !== 'Daily Operations') {
       return
     }
+    const resolvedView = normalizeTodayView(todayView)
+    const urlView = new URLSearchParams(window.location.search).get(
+      TODAY_VIEW_QUERY_KEY,
+    )
+    if (resolvedView !== todayView || urlView === 'day') {
+      setTodayView(resolvedView)
+      writePageToUrl('Daily Operations', 'replace', { view: resolvedView })
+      return
+    }
     if (canTodayView(todayView)) {
       return
     }
-    const fallback = todayViews.includes('board') ? 'board' : todayViews[0]
+    const fallback = TODAY_NAV_ITEMS.find((item) => canTodayView(item.view))?.view
     if (!fallback) {
       return
     }
     setTodayView(fallback)
     writePageToUrl('Daily Operations', 'replace', { view: fallback })
-  }, [activePage, canTodayView, permissionsReady, todayView, todayViews])
+  }, [activePage, canTodayView, permissionsReady, todayView])
 
   const clearDeepLinkPlanDate = useCallback(() => {
     setDeepLinkPlanDate('')

@@ -78,7 +78,7 @@ export function ActivityDayWidget({
   ) => {
     event.preventDefault()
     event.stopPropagation()
-    nav?.toTodayView(canTodayView('day') ? 'day' : 'agenda')
+    nav?.toTodayView(canTodayView('agenda2') ? 'agenda2' : 'agenda')
   }
 
   if (compact) {
@@ -134,7 +134,7 @@ export function ActivityDayWidget({
         error={message && !activity ? message : ''}
         onOpen={
           nav
-            ? () => nav.toTodayView(canTodayView('day') ? 'day' : 'agenda')
+            ? () => nav.toTodayView(canTodayView('agenda2') ? 'agenda2' : 'agenda')
             : undefined
         }
         style={{

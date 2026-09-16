@@ -4303,30 +4303,7 @@ th {
 .operations-day-title-row .section-title,
 .operations-day-title-row .today-card-title {
   margin: 0;
-}
-
-.operations-day-date-trigger {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin: 0;
-  cursor: pointer;
-  color: inherit;
-}
-
-.operations-day-date-trigger .operations-day-date-input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
-  font-size: 16px;
-  color: transparent;
-  background: transparent;
+  cursor: default;
 }
 
 .operations-day-card-actions {
@@ -4378,6 +4355,12 @@ th {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.operations-day-calendar-btn {
+  margin: 0;
+  cursor: pointer;
+  border-radius: 999px;
 }
 
 .operations-day-date-stepper .operations-day-nav-btn {
@@ -4976,6 +4959,333 @@ th {
   right: 8px;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.operations-day-card.is-compact {
+  --agenda2-cream: #ffffff;
+  --agenda2-slate: #415364;
+  --agenda2-pink: #e3b9b3;
+  --agenda2-blue: #a1b1c8;
+  --agenda2-green: #3d5b58;
+  --agenda2-done: #edf0e9;
+  --agenda2-early: #d9be79;
+  --agenda2-name: 182px;
+  background: var(--agenda2-cream);
+  color: var(--agenda2-slate);
+  border-radius: 23px;
+  overflow: hidden;
+}
+
+.operations-day-card.is-compact .operations-day-header {
+  padding: 18px 20px 10px;
+}
+
+.operations-day-card.is-compact .operations-day-scroll {
+  overflow: auto;
+  max-height: min(78vh, 920px);
+}
+
+.operations-day-card.is-compact .operations-day-table {
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.operations-day-card.is-compact .operations-day-table th,
+.operations-day-card.is-compact .operations-day-table td {
+  border: 0;
+  padding: 0;
+  vertical-align: middle;
+  box-shadow: inset 0 -1px 0 rgb(65 83 100 / 8%);
+}
+
+.operations-day-card.is-compact .operations-day-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--agenda2-cream);
+  border-bottom: 1px solid rgb(65 83 100 / 12%);
+}
+
+.operations-day-card.is-compact .operations-day-property-header,
+.operations-day-card.is-compact .operations-day-property-cell {
+  position: sticky;
+  left: 0;
+  width: var(--agenda2-name);
+  min-width: var(--agenda2-name);
+  max-width: var(--agenda2-name);
+  background: var(--agenda2-cream);
+  color: var(--agenda2-slate);
+  font-weight: 600;
+}
+
+.operations-day-card.is-compact .operations-day-property-header {
+  z-index: 7;
+  padding: 12px 14px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operations-day-card.is-compact .operations-day-property-cell {
+  z-index: 4;
+  min-height: 52px;
+  padding: 0;
+  vertical-align: top;
+  box-shadow: 1px 0 0 rgb(65 83 100 / 9%);
+}
+
+.operations-day-card.is-compact .operations-day-property-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 52px;
+  padding: 12px 14px;
+}
+
+.operations-day-card.is-compact .operations-day-row-child .operations-day-property-cell,
+.operations-day-card.is-compact .operations-day-row-child .operations-day-timeline-cell {
+  background: var(--agenda2-cream);
+}
+
+.operations-day-card.is-compact .operations-mtl-toggle {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.operations-day-card.is-compact .operations-day-property-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.operations-day-card.is-compact .operations-day-overlap-toggle {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgb(65 83 100 / 15%);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.operations-day-card.is-compact .operations-day-overlap-toggle:hover,
+.operations-day-card.is-compact .operations-day-overlap-toggle:focus-visible {
+  background: rgb(65 83 100 / 6%);
+}
+
+.operations-day-card.is-compact .operations-day-timeline-cell {
+  padding: 0 !important;
+  min-width: 720px;
+  vertical-align: top;
+}
+
+.operations-day-card.is-compact .operations-day-hours-wrap,
+.operations-day-card.is-compact .operations-day-hours,
+.operations-day-card.is-compact .operations-day-track {
+  min-width: 720px;
+}
+
+.operations-day-card.is-compact .operations-day-hours-wrap {
+  height: 42px;
+}
+
+.operations-day-card.is-compact .operations-day-hours {
+  height: 42px;
+}
+
+.operations-day-card.is-compact .operations-day-hour {
+  top: 13px;
+  color: var(--agenda2-slate);
+  font-variant-numeric: tabular-nums;
+}
+
+.operations-day-card.is-compact .operations-day-track {
+  background-image: linear-gradient(
+    to right,
+    transparent calc(100% - 1px),
+    rgb(65 83 100 / 7%) 0
+  );
+  background-size: calc(100% / 7) 100%;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block--compact {
+  height: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block--compact .operations-day-block-body,
+.operations-day-card.is-compact
+  .operations-day-visit-block--compact
+  > button.operations-day-block-body--button {
+  min-height: 28px;
+  padding: 0 18px;
+  gap: 4px;
+}
+
+.operations-day-card.is-compact .operations-day-visit-summary {
+  font-size: 10px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.operations-day-card.is-compact .operations-day-visit-type-icon {
+  flex-shrink: 0;
+}
+
+.operations-day-card.is-compact .operations-day-visit-status {
+  flex-shrink: 0;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: 5px;
+  padding: 2px 4px;
+  background: rgb(255 255 255 / 33%);
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-cleaning {
+  background: var(--agenda2-pink);
+  color: #503f48;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-maintenance {
+  background: var(--agenda2-blue);
+  color: #293f51;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-other-team {
+  background: #c5b8c4;
+  color: #3b2d3a;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-completed {
+  background: var(--agenda2-done);
+  color: var(--agenda2-green);
+  box-shadow: inset 0 0 0 1px rgb(61 91 88 / 33%);
+  opacity: 1;
+  border-color: transparent;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-completed::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--agenda2-pink);
+}
+
+.operations-day-card.is-compact
+  .operations-day-visit-block.is-completed.is-maintenance::before {
+  background: #91a6c1;
+}
+
+.operations-day-card.is-compact
+  .operations-day-visit-block.is-completed
+  .operations-day-visit-status {
+  background: var(--agenda2-green);
+  color: #fff;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-overlap-group {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  background: var(--agenda2-slate);
+  color: var(--agenda2-cream);
+  box-shadow: none;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 18px;
+  font: inherit;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.is-overlap-group.is-completed {
+  background: var(--agenda2-done);
+  color: var(--agenda2-green);
+  box-shadow: inset 0 0 0 1px rgb(61 91 88 / 33%);
+}
+
+.operations-day-card.is-compact
+  .operations-day-visit-block.is-overlap-group.is-completed::before {
+  display: none;
+}
+
+.operations-day-card.is-compact
+  .operations-day-visit-block.is-overlap-group.is-completed
+  .operations-day-visit-status {
+  background: var(--agenda2-green);
+  color: #fff;
+}
+
+.operations-day-card.is-compact .operations-day-visit-block.has-time-overlap,
+.operations-day-card.is-compact .operations-day-visit-block.has-same-team-overlap {
+  box-shadow: none;
+}
+
+.operations-day-card.is-compact .operations-day-booking-block.is-early-check-in {
+  top: 6px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 6px;
+  border-top: 2px solid rgb(217 190 121 / 40%);
+  border-bottom: 2px solid var(--agenda2-early);
+  background-color: rgb(217 190 121 / 10%);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(217 190 121 / 10%) 0 4px,
+    rgb(217 190 121 / 2%) 4px 9px
+  );
+  z-index: 0;
+  color: transparent;
+}
+
+.operations-day-card.is-compact .operations-day-booking-block.is-milestone {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 1px solid rgb(65 83 100 / 14%);
+  border-radius: 8px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px var(--agenda2-cream);
+  z-index: 3;
+  overflow: visible;
+}
+
+.operations-day-card.is-compact .operations-day-booking-block.is-check-in.is-milestone {
+  background: #dde8e0;
+  color: var(--agenda2-green);
+  border-radius: 8px;
+}
+
+.operations-day-card.is-compact .operations-day-booking-block.is-check-out.is-milestone {
+  background: #e4e6e3;
+  color: var(--agenda2-slate);
+  border-radius: 8px;
+}
+
+.operations-day-card.is-compact .operations-day-empty {
+  padding: 24px 20px 28px;
 }
 
 .operations-sync-spinner {
@@ -6566,6 +6876,66 @@ th {
   .operations-day-track,
   .operations-day-track-wrap {
     min-width: 560px;
+  }
+
+  .operations-day-card.is-compact {
+    padding: 0;
+    border: 1px solid rgb(65 83 100 / 8%);
+    background: var(--agenda2-cream, #ffffff);
+    box-shadow: none;
+    border-radius: 22px;
+  }
+
+  .operations-day-card.is-compact .operations-day-scroll {
+    overflow: auto;
+  }
+
+  .operations-day-card.is-compact .operations-day-table {
+    min-width: 900px;
+    width: max-content;
+  }
+
+  .operations-day-card.is-compact .operations-day-table thead {
+    display: table-header-group;
+  }
+
+  .operations-day-card.is-compact .operations-day-table tbody {
+    display: table-row-group;
+    gap: 0;
+  }
+
+  .operations-day-card.is-compact .operations-day-table tbody tr {
+    display: table-row;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .operations-day-card.is-compact .operations-day-property-cell {
+    position: sticky;
+    display: table-cell;
+    min-width: var(--agenda2-name, 182px);
+    max-width: var(--agenda2-name, 182px);
+    width: var(--agenda2-name, 182px);
+    padding: 0;
+    border: 0;
+    background: var(--agenda2-cream, #ffffff);
+  }
+
+  .operations-day-card.is-compact .operations-day-timeline-cell {
+    display: table-cell;
+    min-width: 720px;
+    width: auto;
+    padding: 0 !important;
+    overflow: visible;
+  }
+
+  .operations-day-card.is-compact .operations-day-hours-wrap,
+  .operations-day-card.is-compact .operations-day-hours,
+  .operations-day-card.is-compact .operations-day-track,
+  .operations-day-card.is-compact .operations-day-track-wrap {
+    min-width: 720px;
   }
 
   .operations-day-resize-handle {

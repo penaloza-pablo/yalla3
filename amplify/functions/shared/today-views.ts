@@ -2,6 +2,7 @@ export const TODAY_VIEW_MODES = [
   'dashboard',
   'board',
   'day',
+  'agenda2',
   'kanban',
   'agenda',
   'myJobs',

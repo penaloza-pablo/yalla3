@@ -48,7 +48,11 @@ import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
-import { isTodayVisitView, type TodayViewMode } from '../nav/todayViews'
+import {
+  isDayTimelineView,
+  isTodayVisitView,
+  type TodayViewMode,
+} from '../nav/todayViews'
 import type { DashboardNavigateOptions } from '../dashboard/dashboard-navigation'
 import {
   linkedPersonById,
@@ -911,7 +915,7 @@ export function DailyOperationsView({
   }, [endpoints.visits, visitQueryRange])
 
   const loadDayBookings = useCallback(async () => {
-    if (!endpoints.bookings || dashboardViewMode !== 'day') {
+    if (!endpoints.bookings || !isDayTimelineView(dashboardViewMode)) {
       setDayBookings([])
       return
     }
@@ -1388,7 +1392,7 @@ export function DailyOperationsView({
 
   const goToDayView = (date: string) => {
     setDayViewDate(date)
-    setDashboardViewMode('day')
+    setDashboardViewMode('agenda2')
   }
 
   const shiftAgendaDates = (deltaDays: number) => {
@@ -2224,6 +2228,7 @@ export function DailyOperationsView({
   const hideDashboardPageHeader =
     mode === 'dashboard' &&
     (dashboardViewMode === 'day' ||
+      dashboardViewMode === 'agenda2' ||
       dashboardViewMode === 'kanban' ||
       dashboardViewMode === 'myJobs' ||
       dashboardViewMode === 'board')
@@ -2389,7 +2394,7 @@ export function DailyOperationsView({
               getEndpoint={getEndpoint}
               onNavigate={(page, options) => {
                 if (page === 'Daily Operations') {
-                  setDashboardViewMode('day')
+                  setDashboardViewMode('agenda2')
                   return
                 }
                 onNavigate?.(page, options)
@@ -2444,6 +2449,7 @@ export function DailyOperationsView({
             />
           ) : (
             <OperationsDayView
+              variant={dashboardViewMode === 'agenda2' ? 'compact' : 'default'}
               dayViewDate={dayViewDate}
               displayRows={mtlDisplayRows}
               visits={filteredVisits.filter(
@@ -2705,7 +2711,7 @@ export function DailyOperationsView({
                   </div>
                 </div>
                 )}
-                {dashboardViewMode === 'day' ? (
+                {isDayTimelineView(dashboardViewMode) ? (
                   <div className="filter-group">
                     <p className="filter-title">{t('operations.bookings')}</p>
                     <div className="filter-options">

@@ -7,6 +7,7 @@ import {
 } from '../../amplify/functions/shared/nav-mode'
 import { PAGE_ICON, YlIcon, type YlIconName } from '../design/icons'
 import {
+  canAccessTodayView,
   TODAY_NAV_ITEMS,
   TODAY_SECTION_ID,
   type TodayViewMode,
@@ -105,8 +106,9 @@ export function SidebarNav({
   } | null>(null)
   const showTodayViews = coreItems.includes('Daily Operations')
   const otherCoreItems = coreItems.filter((item) => item !== 'Daily Operations')
-  const todayItems = TODAY_NAV_ITEMS.filter((item) =>
-    visibleTodayViews ? visibleTodayViews.includes(item.view) : true,
+  const todayItems = TODAY_NAV_ITEMS.filter(
+    (item) =>
+      !visibleTodayViews || canAccessTodayView(item.view, visibleTodayViews),
   )
   const activeSection = groups.find((group) =>
     group.items.includes(activePage),

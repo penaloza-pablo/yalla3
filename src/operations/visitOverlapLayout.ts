@@ -316,6 +316,126 @@ export const buildDayTimelineVisits = (
   return items
 }
 
+export const COMPACT_ROW_HEIGHT = 52
+export const COMPACT_VISIT_HEIGHT = 28
+export const COMPACT_VISIT_TOP = 10
+export const COMPACT_LANE_STEP = 34
+export const COMPACT_MILESTONE_SIZE = 26
+export const COMPACT_MILESTONE_TOP = 11
+export const COMPACT_EARLY_TOP = 6
+export const COMPACT_EARLY_HEIGHT = 36
+export const COMPACT_EARLY_BOTTOM_INSET = 10
+
+export type CompactVisitCluster = {
+  key: string
+  start: number
+  end: number
+  visits: VisitRecord[]
+}
+
+export const compactRowHeight = (laneCount: number) =>
+  COMPACT_ROW_HEIGHT + COMPACT_LANE_STEP * Math.max(0, laneCount - 1)
+
+export const compactVisitTop = (laneIndex: number) =>
+  COMPACT_VISIT_TOP + laneIndex * COMPACT_LANE_STEP
+
+export const compactGroupCompletion = (visits: VisitRecord[]) => {
+  const counted = visits.filter((visit) => visit.status !== 'CANCELLED')
+  const completedCount = counted.filter(
+    (visit) => visit.status === 'COMPLETED',
+  ).length
+  return {
+    completedCount,
+    pendingCount: counted.length - completedCount,
+    allCompleted: counted.length > 0 && completedCount === counted.length,
+  }
+}
+
+export const buildCompactVisitClusters = (
+  visits: VisitRecord[],
+): CompactVisitCluster[] =>
+  buildRangeOverlapComponents(
+    visits.map((visit) => {
+      const { start, end } = getVisitTimeRange(visit)
+      return { id: visit.id, start, end, visit }
+    }),
+  ).map((group) => {
+    const items = [...group].sort(
+      (a, b) => a.start - b.start || a.id.localeCompare(b.id),
+    )
+    return {
+      key: clusterKeyForVisits(items.map((item) => item.visit)),
+      start: Math.min(...items.map((item) => item.start)),
+      end: Math.max(...items.map((item) => item.end)),
+      visits: items.map((item) => item.visit),
+    }
+  })
+
+const toCompactTimelineVisit = (
+  visit: VisitRecord,
+  cluster: CompactVisitCluster,
+  laneIndex: number,
+  isClusterExpanded: boolean,
+): DayTimelineVisit => {
+  const { start, end } = getVisitTimeRange(visit)
+  return {
+    visit,
+    unitKey: visit.id,
+    mergedVisits: [visit],
+    isSameTeamMerge: false,
+    start,
+    end,
+    hasTimeOverlap: cluster.visits.length > 1,
+    overlapCount: cluster.visits.length,
+    stackLayer: 0,
+    clusterKey: cluster.key,
+    clusterSize: cluster.visits.length,
+    isMultiTeamOverlap: new Set(cluster.visits.map((item) => item.teamId)).size > 1,
+    isClusterExpanded,
+    laneIndex,
+  }
+}
+
+export const layoutCompactTimelineVisits = (
+  visits: VisitRecord[],
+  expandedClusterKeys: Set<string>,
+): {
+  items: DayTimelineVisit[]
+  clusters: CompactVisitCluster[]
+  channelHeight: number
+} => {
+  const clusters = buildCompactVisitClusters(visits)
+  const items: DayTimelineVisit[] = []
+  let maxLanes = 1
+
+  clusters.forEach((cluster) => {
+    const overlapping = cluster.visits.length > 1
+    const isExpanded = overlapping && expandedClusterKeys.has(cluster.key)
+    if (overlapping && !isExpanded) {
+      return
+    }
+    if (isExpanded) {
+      maxLanes = Math.max(maxLanes, cluster.visits.length)
+    }
+    cluster.visits.forEach((visit, index) => {
+      items.push(
+        toCompactTimelineVisit(
+          visit,
+          cluster,
+          isExpanded ? index : 0,
+          isExpanded,
+        ),
+      )
+    })
+  })
+
+  return {
+    items,
+    clusters,
+    channelHeight: compactRowHeight(maxLanes),
+  }
+}
+
 export const layoutDayTimelineVisits = (
   items: DayTimelineVisit[],
   expandedClusterKeys: Set<string>,

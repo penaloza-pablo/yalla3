@@ -24,6 +24,7 @@ import {
   resolveTodayViews,
   type TodayViewMode,
 } from '../../amplify/functions/shared/today-views'
+import { canAccessTodayView } from '../nav/todayViews'
 import { resolveRoleLayoutId } from '../dashboard/layout-store'
 import { authFetch } from '../lib/auth-fetch'
 import { getAmplifyEndpoint } from '../lib/amplify-endpoint'
@@ -192,7 +193,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         (page === 'Services & Subscriptions' &&
           permissions.has(pagePermission('Finance solution 3'))),
       canTodayView: (view: TodayViewMode) =>
-        isTodayViewMode(view) && todayViews.includes(view),
+        isTodayViewMode(view) && canAccessTodayView(view, todayViews),
       refresh: () => load(),
     }),
     [

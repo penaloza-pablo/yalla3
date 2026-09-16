@@ -22,7 +22,6 @@ import {
 import {
   DEFAULT_TODAY_VIEWS,
   resolveTodayViews,
-  TODAY_VIEW_MODES,
   type TodayViewMode,
 } from '../../amplify/functions/shared/today-views'
 import { translatePage, translateSection } from '../i18n/display'
@@ -36,7 +35,11 @@ import {
   writeRoleLayoutAssignment,
 } from '../dashboard/layout-store'
 import { layoutLabel } from '../dashboard/labels'
-import { TODAY_NAV_ITEMS } from '../nav/todayViews'
+import {
+  TODAY_ROLE_NAV_ITEMS,
+  roleShowsTodayView,
+  toggleAllowedTodayView,
+} from '../nav/todayViews'
 import { usePermissions } from './PermissionsProvider'
 
 type RoleRow = {
@@ -235,15 +238,7 @@ export function RolesPanel({
   }
 
   const toggleTodayView = (view: TodayViewMode) => {
-    setTodayViewsDraft((current) => {
-      const next = current.includes(view)
-        ? current.filter((entry) => entry !== view)
-        : [...current, view]
-      if (next.length === 0) {
-        return current
-      }
-      return TODAY_VIEW_MODES.filter((item) => next.includes(item))
-    })
+    setTodayViewsDraft((current) => toggleAllowedTodayView(current, view))
   }
 
   const renderPageRows = (sectionLabel: string, items: readonly string[]) =>
@@ -548,8 +543,8 @@ export function RolesPanel({
                 </tr>
               </thead>
               <tbody>
-                {TODAY_NAV_ITEMS.map((item) => {
-                  const checked = todayViewsDraft.includes(item.view)
+                {TODAY_ROLE_NAV_ITEMS.map((item) => {
+                  const checked = roleShowsTodayView(item.view, todayViewsDraft)
                   return (
                     <tr key={item.view}>
                       <td>{t(item.labelKey)}</td>

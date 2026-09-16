@@ -150,7 +150,8 @@
 .page-action-bar .header-actions > .btn-secondary,
 .page-action-bar .header-actions > .btn-ghost,
 .page-action-bar .header-actions > .btn-icon,
-.operations-day-card-actions > button {
+.operations-day-card-actions > button,
+.operations-day-calendar-btn {
   width: var(--yl-touch);
   height: var(--yl-touch);
   min-width: var(--yl-touch);

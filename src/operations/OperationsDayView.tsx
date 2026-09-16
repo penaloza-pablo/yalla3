@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { getPropertyLabel, isYallaP2Property } from './propertyHelpers'
@@ -45,14 +45,25 @@ import {
 import { getTeamBlockStyle, getTeamSortKey } from './teamColors'
 import {
   buildDayTimelineVisits,
+  compactGroupCompletion,
+  compactVisitTop,
+  COMPACT_EARLY_BOTTOM_INSET,
+  COMPACT_EARLY_HEIGHT,
+  COMPACT_EARLY_TOP,
+  COMPACT_MILESTONE_TOP,
+  COMPACT_ROW_HEIGHT,
+  COMPACT_VISIT_TOP,
   dayVisitExpandsOverlapOnClick,
   formatVisitBarTitle,
   formatVisitSummaryLine,
+  layoutCompactTimelineVisits,
   layoutDayTimelineVisits,
   pointerHitsCollapsedVisitOverlap,
   visitBlockTop,
+  type CompactVisitCluster,
   type DayTimelineVisit,
 } from './visitOverlapLayout'
+import { isCleaningVisitType, isMaintenanceVisitType } from './visitTypeIds'
 import type { PropertyOption, VisitRecord } from './types'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
@@ -82,7 +93,10 @@ export type DayBookingEvent = {
   earlyLeadMinutes?: number
 }
 
+type DayViewVariant = 'default' | 'compact'
+
 type Props = {
+  variant?: DayViewVariant
   dayViewDate: string
   displayRows: MtlDisplayRow[]
   visits: VisitRecord[]
@@ -120,6 +134,7 @@ type DayTableRow = {
 const CLICK_THRESHOLD_PX = 4
 
 export function OperationsDayView({
+  variant = 'default',
   dayViewDate,
   displayRows,
   visits,
@@ -137,6 +152,7 @@ export function OperationsDayView({
   activeFilterCount = 0,
   filtersActive = false,
 }: Props) {
+  const compact = variant === 'compact'
   const { t } = useTranslation()
   const [expandedMtlIds, setExpandedMtlIds] = useState<Set<string>>(new Set())
   const [selectedBooking, setSelectedBooking] = useState<DayBookingEvent | null>(
@@ -261,7 +277,9 @@ export function OperationsDayView({
       if (showPrincipalRow) {
         rows.push({
           key: row.principal.id,
-          propertyLabel: getMtlGroupLabel(row),
+          propertyLabel: compact
+            ? getPropertyLabel(row.principal)
+            : getMtlGroupLabel(row),
           propertyVisits: isExpanded
             ? principalVisits
             : getVisitsForPropertyIds(visits, row.propertyIds).sort((a, b) =>
@@ -308,7 +326,7 @@ export function OperationsDayView({
     })
 
     return rows
-  }, [orderedRows, visits, bookingsWithLayout, expandedMtlIds])
+  }, [orderedRows, visits, bookingsWithLayout, expandedMtlIds, compact])
 
   const toggleMtlGroup = (principalId: string) => {
     setExpandedMtlIds((current) => {
@@ -323,7 +341,9 @@ export function OperationsDayView({
   }
 
   return (
-    <section className="card operations-day-card">
+    <section
+      className={`card operations-day-card${compact ? ' is-compact' : ''}`}
+    >
       <OperationsDayListHeader
         dayViewDate={dayViewDate}
         onDayDateChange={onDayDateChange}
@@ -376,6 +396,11 @@ export function OperationsDayView({
         <table className="operations-day-table">
           <thead>
             <tr>
+              {compact ? (
+                <th className="operations-day-property-header" scope="col">
+                  {t('operations.property')}
+                </th>
+              ) : null}
               <th className="operations-day-timeline-header">
                 <div className="operations-day-hours-wrap">
                   <button
@@ -420,6 +445,7 @@ export function OperationsDayView({
               <DayPropertyRow
                 key={row.key}
                 row={row}
+                compact={compact}
                 timelineWindow={timelineWindow}
                 propertiesById={propertiesById}
                 teamById={teamById}
@@ -509,6 +535,7 @@ export function OperationsDayView({
 
 type DayPropertyRowProps = {
   row: DayTableRow
+  compact: boolean
   timelineWindow: DayTimelineWindow
   propertiesById: Map<string, PropertyOption>
   teamById: Map<string, string>
@@ -529,6 +556,7 @@ type DayPropertyRowProps = {
 
 function DayPropertyRow({
   row,
+  compact,
   timelineWindow,
   propertiesById,
   teamById,
@@ -543,42 +571,127 @@ function DayPropertyRow({
   const [expandedClusterKeys, setExpandedClusterKeys] = useState<Set<string>>(
     () => new Set(),
   )
-  const { items: timelineVisits, channelHeight } = useMemo(
+  const compactLayout = useMemo(
     () =>
-      layoutDayTimelineVisits(
-        buildDayTimelineVisits(row.propertyVisits),
-        expandedClusterKeys,
-        teamById,
-      ),
-    [expandedClusterKeys, row.propertyVisits, teamById],
+      compact
+        ? layoutCompactTimelineVisits(row.propertyVisits, expandedClusterKeys)
+        : null,
+    [compact, expandedClusterKeys, row.propertyVisits],
   )
-  const hasExpandedClusters = timelineVisits.some(
-    (entry) => entry.isClusterExpanded,
+  const defaultLayout = useMemo(
+    () =>
+      compact
+        ? null
+        : layoutDayTimelineVisits(
+            buildDayTimelineVisits(row.propertyVisits),
+            expandedClusterKeys,
+            teamById,
+          ),
+    [compact, expandedClusterKeys, row.propertyVisits, teamById],
   )
+  const timelineVisits = compact
+    ? compactLayout?.items ?? []
+    : defaultLayout?.items ?? []
+  const channelHeight = compact
+    ? compactLayout?.channelHeight ?? 52
+    : defaultLayout?.channelHeight ?? 0
+  const compactClusters = compactLayout?.clusters ?? []
+  const overlapClusterKeys = compactClusters
+    .filter((cluster) => cluster.visits.length > 1)
+    .map((cluster) => cluster.key)
+  const hasOverlapGroups = overlapClusterKeys.length > 0
+  const hasExpandedClusters = compact
+    ? overlapClusterKeys.some((key) => expandedClusterKeys.has(key))
+    : timelineVisits.some((entry) => entry.isClusterExpanded)
+
+  const toggleCompactOverlaps = () => {
+    setExpandedClusterKeys((current) => {
+      const anyOpen = overlapClusterKeys.some((key) => current.has(key))
+      if (anyOpen) {
+        return new Set()
+      }
+      return new Set(overlapClusterKeys)
+    })
+  }
+
+  const mtlToggle = row.canExpand ? (
+    <button
+      type="button"
+      className="operations-mtl-toggle"
+      onClick={() => onToggleMtlGroup(row.mtlPrincipalId!)}
+      aria-expanded={row.isExpanded}
+      aria-label={
+        row.isExpanded
+          ? t('operations.collapseProperty', { name: row.propertyLabel })
+          : t('operations.expandProperty', { name: row.propertyLabel })
+      }
+    >
+      <YlDisclosureIcon open={row.isExpanded} />
+    </button>
+  ) : null
 
   return (
     <tr
       className={row.isChildRow ? 'operations-day-row-child' : undefined}
       aria-label={row.propertyLabel}
     >
-      <td className="operations-day-timeline-cell">
-        {row.canExpand || hasExpandedClusters ? (
-          <div className="operations-day-row-controls">
-            {row.canExpand ? (
+      {compact ? (
+        <th
+          className={`operations-day-property-cell${
+            row.isChildRow ? ' is-child' : ''
+          }${row.canExpand ? ' is-mtl-header' : ''}`}
+          scope="row"
+        >
+          <div className="operations-day-property-inner">
+            <span
+              className="operations-day-property-name"
+              title={row.propertyLabel}
+              tabIndex={0}
+            >
+              {row.propertyLabel}
+            </span>
+            {hasOverlapGroups ? (
               <button
                 type="button"
-                className="operations-mtl-toggle"
-                onClick={() => onToggleMtlGroup(row.mtlPrincipalId!)}
-                aria-expanded={row.isExpanded}
+                className="operations-day-overlap-toggle"
+                aria-expanded={hasExpandedClusters}
                 aria-label={
-                  row.isExpanded
-                    ? t('operations.collapseProperty', { name: row.propertyLabel })
-                    : t('operations.expandProperty', { name: row.propertyLabel })
+                  hasExpandedClusters
+                    ? t('operations.collapsePropertyVisits', {
+                        name: row.propertyLabel,
+                      })
+                    : t('operations.expandPropertyVisits', {
+                        name: row.propertyLabel,
+                      })
                 }
+                title={
+                  hasExpandedClusters
+                    ? t('operations.collapsePropertyVisits', {
+                        name: row.propertyLabel,
+                      })
+                    : t('operations.expandPropertyVisits', {
+                        name: row.propertyLabel,
+                      })
+                }
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleCompactOverlaps()
+                }}
               >
-                <YlDisclosureIcon open={row.isExpanded} />
+                <YlIcon
+                  name={hasExpandedClusters ? 'chevron.up' : 'chevron.down'}
+                  size={14}
+                />
               </button>
             ) : null}
+            {mtlToggle}
+          </div>
+        </th>
+      ) : null}
+      <td className="operations-day-timeline-cell">
+        {!compact && (row.canExpand || hasExpandedClusters) ? (
+          <div className="operations-day-row-controls">
+            {mtlToggle}
             {hasExpandedClusters ? (
               <button
                 type="button"
@@ -594,6 +707,9 @@ function DayPropertyRow({
           </div>
         ) : null}
         <DayTimelineTrack
+          compact={compact}
+          compactClusters={compactClusters}
+          showRoomLabel={row.showRoomLabel}
           propertyVisits={row.propertyVisits}
           propertyBookings={row.propertyBookings}
           timelineVisits={timelineVisits}
@@ -626,6 +742,9 @@ function DayPropertyRow({
 }
 
 type DayTimelineTrackProps = {
+  compact: boolean
+  compactClusters: CompactVisitCluster[]
+  showRoomLabel: boolean
   propertyVisits: VisitRecord[]
   propertyBookings: DayBookingEvent[]
   timelineVisits: DayTimelineVisit[]
@@ -661,6 +780,9 @@ function minutesFromTrackPointer(
 }
 
 function DayTimelineTrack({
+  compact,
+  compactClusters,
+  showRoomLabel,
   propertyVisits,
   propertyBookings,
   timelineVisits,
@@ -816,7 +938,9 @@ function DayTimelineTrack({
     if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id) || entry.isSameTeamMerge) {
       return
     }
-    const hitsOverlap = pointerHitsOverlap(entry, event.clientX, event.clientY)
+    const hitsOverlap = compact
+      ? false
+      : pointerHitsOverlap(entry, event.clientX, event.clientY)
     pointerHitOverlapRef.current = hitsOverlap
     if (expandMtlOnVisitClick || hitsOverlap) {
       dragMovedRef.current = false
@@ -859,6 +983,11 @@ function DayTimelineTrack({
     }
     if (expandMtlOnVisitClick) {
       onExpandMtlGroup?.()
+      return
+    }
+    if (compact) {
+      pointerHitOverlapRef.current = false
+      onVisitClick(entry.visit.id)
       return
     }
     const hitsOverlap =
@@ -917,6 +1046,8 @@ function DayTimelineTrack({
         {timelineVisits.map((entry) => (
           <DayVisitBlock
             key={entry.unitKey}
+            compact={compact}
+            showRoomLabel={showRoomLabel}
             entry={entry}
             timelineWindow={timelineWindow}
             propertiesById={propertiesById}
@@ -929,9 +1060,29 @@ function DayTimelineTrack({
             handleBlockClick={handleBlockClick}
           />
         ))}
+        {compact
+          ? compactClusters
+              .filter((cluster) => cluster.visits.length > 1)
+              .filter(
+                (cluster) =>
+                  !timelineVisits.some(
+                    (entry) => entry.clusterKey === cluster.key,
+                  ),
+              )
+              .map((cluster) => (
+                <CompactOverlapGroupBar
+                  key={cluster.key}
+                  cluster={cluster}
+                  timelineWindow={timelineWindow}
+                  onExpand={() => onExpandOverlapCluster(cluster.key)}
+                />
+              ))
+          : null}
         {propertyBookings.map((booking) => (
           <DayBookingBlock
             key={booking.id}
+            compact={compact}
+            channelHeight={channelHeight}
             booking={booking}
             timelineWindow={timelineWindow}
             onCheckInLayoutChange={onCheckInLayoutChange}
@@ -1012,7 +1163,118 @@ function DayTimelineTrack({
   )
 }
 
+function timelineRangeStyle(
+  start: number,
+  end: number,
+  timelineWindow: DayTimelineWindow,
+) {
+  const clipped = clipVisitToDayWindow(start, end, timelineWindow)
+  if (clipped.visualEnd <= clipped.visualStart) {
+    return null
+  }
+  const left = minutesToPositionPercent(clipped.visualStart, timelineWindow)
+  const width = Math.max(
+    2,
+    minutesToPositionPercent(clipped.visualEnd, timelineWindow) -
+      minutesToPositionPercent(clipped.visualStart, timelineWindow),
+  )
+  return { left, width, clipped }
+}
+
+function compactVisitToneClass(
+  visit: VisitRecord,
+  teamById: Map<string, string>,
+) {
+  if (
+    isCleaningVisitType(visit.visitTypeId) ||
+    getTeamSortKey(visit.teamId, teamById) === 'limpieza'
+  ) {
+    return 'is-cleaning'
+  }
+  if (
+    isMaintenanceVisitType(visit.visitTypeId) ||
+    getTeamSortKey(visit.teamId, teamById) === 'mantenimiento'
+  ) {
+    return 'is-maintenance'
+  }
+  return 'is-other-team'
+}
+
+function compactVisitLabel(
+  visit: VisitRecord,
+  property: PropertyOption | undefined,
+  showRoomLabel: boolean,
+) {
+  const typeLabel = visit.title.trim() || formatVisitBarTitle(visit, { property })
+  if (!showRoomLabel || !property) {
+    return typeLabel
+  }
+  const roomLabel = property.listingNickname.trim() || getPropertyLabel(property)
+  if (!roomLabel || roomLabel === typeLabel) {
+    return typeLabel
+  }
+  return `${typeLabel} · ${roomLabel}`
+}
+
+function CompactOverlapGroupBar({
+  cluster,
+  timelineWindow,
+  onExpand,
+}: {
+  cluster: CompactVisitCluster
+  timelineWindow: DayTimelineWindow
+  onExpand: () => void
+}) {
+  const { t } = useTranslation()
+  const range = timelineRangeStyle(cluster.start, cluster.end, timelineWindow)
+  if (!range) {
+    return null
+  }
+  const completion = compactGroupCompletion(cluster.visits)
+  const summary = cluster.visits
+    .map((visit) => formatVisitSummaryLine(visit))
+    .join('\n')
+
+  return (
+    <button
+      type="button"
+      className={`operations-day-visit-block operations-day-visit-block--compact is-overlap-group${
+        completion.allCompleted ? ' is-completed' : ''
+      }`}
+      style={{
+        left: `${range.left}%`,
+        width: `${range.width}%`,
+        top: `${COMPACT_VISIT_TOP}px`,
+      }}
+      title={summary}
+      aria-expanded={false}
+      aria-label={t('operations.overlappingVisits', {
+        count: cluster.visits.length,
+      })}
+      onClick={(event) => {
+        event.stopPropagation()
+        onExpand()
+      }}
+    >
+      <span className="operations-day-visit-summary">
+        {t('operations.overlappingVisits', { count: cluster.visits.length })}
+      </span>
+      <span className="operations-day-visit-status">
+        {completion.allCompleted
+          ? t('operations.visitsDone')
+          : completion.completedCount > 0
+            ? t('operations.visitsDoneCount', {
+                count: completion.completedCount,
+              })
+            : null}
+      </span>
+    </button>
+  )
+}
+
 type DayVisitBlockProps = {
+  compact: boolean
+  showRoomLabel: boolean
   entry: DayTimelineVisit
   timelineWindow: DayTimelineWindow
   propertiesById: Map<string, PropertyOption>
@@ -1051,6 +1313,8 @@ function formatSameTeamMergeLabel(
 }
 
 function DayVisitBlock({
+  compact,
+  showRoomLabel,
   entry,
   timelineWindow,
   propertiesById,
@@ -1068,6 +1332,9 @@ function DayVisitBlock({
   const start = isDragging ? previewRange!.start : entry.start
   const end = isDragging ? previewRange!.end : entry.end
   const clipped = clipVisitToDayWindow(start, end, timelineWindow)
+  if (compact && clipped.visualEnd <= clipped.visualStart) {
+    return null
+  }
   const left = minutesToPositionPercent(clipped.visualStart, timelineWindow)
   const width = Math.max(
     2,
@@ -1077,18 +1344,36 @@ function DayVisitBlock({
   const isSyncing = syncingVisitIds.has(visit.id)
   const isEditable = !isTerminalVisit(visit) && !entry.isSameTeamMerge
   const property = propertiesById.get(visit.propertyId)
-  const barLabel = entry.isSameTeamMerge
-    ? formatSameTeamMergeLabel(visit.teamId, teamById, t)
-    : formatVisitBarTitle(visit, { property })
+  const barLabel = compact
+    ? compactVisitLabel(visit, property, showRoomLabel)
+    : entry.isSameTeamMerge
+      ? formatSameTeamMergeLabel(visit.teamId, teamById, t)
+      : formatVisitBarTitle(visit, { property })
   const expandsOverlap =
-    entry.isSameTeamMerge || dayVisitExpandsOverlapOnClick(entry)
+    !compact && (entry.isSameTeamMerge || dayVisitExpandsOverlapOnClick(entry))
   const clickHint = expandMtlOnVisitClick
     ? t('operations.expandRoomsOnVisitClick')
     : entry.isSameTeamMerge
       ? t('operations.chooseOverlappingVisit')
-      : dayVisitExpandsOverlapOnClick(entry)
+      : !compact && dayVisitExpandsOverlapOnClick(entry)
         ? t('operations.expandOverlappingVisits')
         : undefined
+  const typeIcon = compact
+    ? isCleaningVisitType(visit.visitTypeId) ||
+      getTeamSortKey(visit.teamId, teamById) === 'limpieza'
+      ? 'drop'
+      : isMaintenanceVisitType(visit.visitTypeId) ||
+          getTeamSortKey(visit.teamId, teamById) === 'mantenimiento'
+        ? 'wrench.and.screwdriver'
+        : null
+    : null
+  const statusLabel = compact
+    ? visit.status === 'COMPLETED'
+      ? t('operations.visitDone')
+      : visit.status === 'CANCELLED'
+        ? null
+        : t('operations.visitPendingShort')
+    : null
 
   const summaryTitle = `${
     entry.isSameTeamMerge
@@ -1114,22 +1399,24 @@ function DayVisitBlock({
       }${isDragging ? ' is-dragging' : ''}${isSyncing ? ' is-syncing' : ''}${
         clipped.extendsBefore ? ' extends-before' : ''
       }${clipped.extendsAfter ? ' extends-after' : ''}${
-        entry.hasTimeOverlap ? ' has-time-overlap' : ''
-      }${expandsOverlap || expandMtlOnVisitClick ? ' is-overlap-group' : ''}${
+        !compact && entry.hasTimeOverlap ? ' has-time-overlap' : ''
+      }${!compact && (expandsOverlap || expandMtlOnVisitClick) ? ' is-overlap-group' : ''}${
         lockDrag ? ' is-click-expand' : ''
-      } has-team-solid`}
+      }${compact ? ` ${compactVisitToneClass(visit, teamById)}` : ' has-team-solid'}`}
       style={{
         left: `${left}%`,
         width: `${width}%`,
-        top: `${visitBlockTop(entry)}px`,
-        ...getTeamBlockStyle(visit.teamId, teamById),
+        top: `${compact ? compactVisitTop(entry.laneIndex) : visitBlockTop(entry)}px`,
+        ...(compact ? {} : getTeamBlockStyle(visit.teamId, teamById)),
         zIndex: isDragging
           ? 5
-          : entry.isClusterExpanded
+          : compact
             ? 2
-            : entry.hasTimeOverlap
-              ? Math.min(5, 2 + entry.stackLayer)
-              : 2,
+            : entry.isClusterExpanded
+              ? 2
+              : entry.hasTimeOverlap
+                ? Math.min(5, 2 + entry.stackLayer)
+                : 2,
       }}
       title={summaryTitle}
     >
@@ -1163,9 +1450,15 @@ function DayVisitBlock({
                 aria-hidden="true"
               />
             ) : null}
+            {typeIcon ? (
+              <YlIcon name={typeIcon} size={12} className="operations-day-visit-type-icon" />
+            ) : null}
             <span className="operations-day-visit-summary">
               {barLabel}
             </span>
+            {statusLabel ? (
+              <span className="operations-day-visit-status">{statusLabel}</span>
+            ) : null}
           </div>
           {lockDrag ? null : (
             <span
@@ -1183,12 +1476,18 @@ function DayVisitBlock({
             handleBlockClick(entry, event.clientX, event.clientY)
           }
         >
+          {typeIcon ? (
+            <YlIcon name={typeIcon} size={12} className="operations-day-visit-type-icon" />
+          ) : null}
           <span className="operations-day-visit-summary">
             {barLabel}
           </span>
+          {statusLabel ? (
+            <span className="operations-day-visit-status">{statusLabel}</span>
+          ) : null}
         </button>
       )}
-      {isTerminalVisit(visit) ? (
+      {!compact && isTerminalVisit(visit) ? (
         <span className="operations-day-terminal-mark">
           {visit.status === 'COMPLETED' ? <YlIcon name="checkmark" size={12} /> : <YlIcon name="xmark" size={12} />}
         </span>
@@ -1209,6 +1508,48 @@ function DayBookingIcon({ kind }: { kind: DayBookingEvent['kind'] }) {
   )
 }
 
+function CompactMilestone({
+  minutes,
+  timelineWindow,
+  className,
+  title,
+  children,
+  onMovePointerDown,
+  onClick,
+}: {
+  minutes: number
+  timelineWindow: DayTimelineWindow
+  className: string
+  title: string
+  children?: ReactNode
+  onMovePointerDown?: (event: React.PointerEvent) => void
+  onClick?: () => void
+}) {
+  if (
+    minutes < timelineWindow.startMinutes ||
+    minutes > timelineWindow.endMinutes
+  ) {
+    return null
+  }
+  const left = minutesToPositionPercent(minutes, timelineWindow)
+  return (
+    <div
+      className={className}
+      style={{
+        left: `${left}%`,
+        top: `${COMPACT_MILESTONE_TOP}px`,
+      }}
+      title={title}
+      aria-label={title}
+      role={onMovePointerDown || onClick ? 'button' : undefined}
+      onPointerDown={onMovePointerDown}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  )
+}
+
 function DayBookingTimeBlock({
   start,
   end,
@@ -1216,6 +1557,7 @@ function DayBookingTimeBlock({
   className,
   title,
   children,
+  style,
   onMovePointerDown,
   onClick,
 }: {
@@ -1225,6 +1567,7 @@ function DayBookingTimeBlock({
   className: string
   title: string
   children?: ReactNode
+  style?: CSSProperties
   onMovePointerDown?: (event: React.PointerEvent) => void
   onClick?: () => void
 }) {
@@ -1244,6 +1587,7 @@ function DayBookingTimeBlock({
       style={{
         left: `${left}%`,
         width: `${width}%`,
+        ...style,
       }}
       title={title}
       aria-label={title}
@@ -1266,11 +1610,15 @@ type BookingDrag = {
 }
 
 function DayBookingBlock({
+  compact,
+  channelHeight,
   booking,
   timelineWindow,
   onCheckInLayoutChange,
   onBookingClick,
 }: {
+  compact: boolean
+  channelHeight: number
   booking: DayBookingEvent
   timelineWindow: DayTimelineWindow
   onCheckInLayoutChange: (
@@ -1405,13 +1753,27 @@ function DayBookingBlock({
 
   if (booking.kind === 'check-out') {
     const start = BOOKING_CHECK_OUT_END - BOOKING_DURATION_MINUTES
+    const title = `${t('common.checkOut')} · ${booking.guestName}`
+    if (compact) {
+      return (
+        <CompactMilestone
+          minutes={BOOKING_CHECK_OUT_END}
+          timelineWindow={timelineWindow}
+          className="operations-day-booking-block is-check-out is-milestone"
+          title={title}
+          onClick={() => onBookingClick(booking)}
+        >
+          <DayBookingIcon kind="check-out" />
+        </CompactMilestone>
+      )
+    }
     return (
       <DayBookingTimeBlock
         start={start}
         end={BOOKING_CHECK_OUT_END}
         timelineWindow={timelineWindow}
         className="operations-day-booking-block is-check-out"
-        title={`${t('common.checkOut')} · ${booking.guestName}`}
+        title={title}
         onClick={() => onBookingClick(booking)}
       >
         <DayBookingIcon kind="check-out" />
@@ -1422,18 +1784,39 @@ function DayBookingBlock({
   const start = display.checkInStartMinutes
   const end = start + BOOKING_DURATION_MINUTES
   const showEarlyCheckIn = display.earlyLeadMinutes > 0
+  const earlyStart = start - display.earlyLeadMinutes
+  const earlyTitle = compact && showEarlyCheckIn
+    ? `${t('bookingsPlan.earlyCheckIn')} · ${formatMinutesAsTime(earlyStart)}–${formatMinutesAsTime(start)} · ${t('operations.earlyRequestNoGuarantee')} · ${booking.guestName}`
+    : `${t('bookingsPlan.earlyCheckIn')} · ${booking.guestName}`
+  const checkInTitle =
+    compact && showEarlyCheckIn
+      ? `${t('common.checkIn')} · ${booking.guestName} · ${t('operations.earlyRequestNoGuarantee')}`
+      : `${t('common.checkIn')} · ${booking.guestName}`
+  const earlyHeight =
+    channelHeight > COMPACT_ROW_HEIGHT
+      ? channelHeight - COMPACT_EARLY_TOP - COMPACT_EARLY_BOTTOM_INSET
+      : COMPACT_EARLY_HEIGHT
 
   return (
     <>
       {showEarlyCheckIn ? (
         <DayBookingTimeBlock
-          start={start - display.earlyLeadMinutes}
+          start={earlyStart}
           end={start}
           timelineWindow={timelineWindow}
           className={`operations-day-booking-block is-early-check-in${
             isDragging ? ' is-dragging' : ''
           }`}
-          title={`${t('bookingsPlan.earlyCheckIn')} · ${booking.guestName}`}
+          title={earlyTitle}
+          style={
+            compact
+              ? {
+                  top: COMPACT_EARLY_TOP,
+                  height: earlyHeight,
+                  minHeight: earlyHeight,
+                }
+              : undefined
+          }
           onMovePointerDown={(event) => beginDrag(event, 'move', 'early')}
         >
           <span
@@ -1447,30 +1830,56 @@ function DayBookingBlock({
           />
         </DayBookingTimeBlock>
       ) : null}
-      <DayBookingTimeBlock
-        start={start}
-        end={end}
-        timelineWindow={timelineWindow}
-        className={`operations-day-booking-block is-check-in${
-          showEarlyCheckIn ? ' has-early-lead' : ''
-        }${isDragging ? ' is-dragging' : ''}`}
-        title={`${t('common.checkIn')} · ${booking.guestName}`}
-        onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
-        onClick={handleCheckInClick}
-      >
-        {showEarlyCheckIn ? null : (
-          <span
-            className="operations-day-resize-handle operations-day-resize-handle--start"
-            onPointerDown={(event) => {
-              event.stopPropagation()
-              beginDrag(event, 'resize-early', 'check-in')
-            }}
-            onClick={(event) => event.stopPropagation()}
-            aria-label={t('operations.addEarlyCheckIn')}
-          />
-        )}
-        <DayBookingIcon kind="check-in" />
-      </DayBookingTimeBlock>
+      {compact ? (
+        <CompactMilestone
+          minutes={start}
+          timelineWindow={timelineWindow}
+          className={`operations-day-booking-block is-check-in is-milestone${
+            showEarlyCheckIn ? ' has-early-lead' : ''
+          }${isDragging ? ' is-dragging' : ''}`}
+          title={checkInTitle}
+          onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
+          onClick={handleCheckInClick}
+        >
+          {showEarlyCheckIn ? null : (
+            <span
+              className="operations-day-resize-handle operations-day-resize-handle--start"
+              onPointerDown={(event) => {
+                event.stopPropagation()
+                beginDrag(event, 'resize-early', 'check-in')
+              }}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={t('operations.addEarlyCheckIn')}
+            />
+          )}
+          <DayBookingIcon kind="check-in" />
+        </CompactMilestone>
+      ) : (
+        <DayBookingTimeBlock
+          start={start}
+          end={end}
+          timelineWindow={timelineWindow}
+          className={`operations-day-booking-block is-check-in${
+            showEarlyCheckIn ? ' has-early-lead' : ''
+          }${isDragging ? ' is-dragging' : ''}`}
+          title={checkInTitle}
+          onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
+          onClick={handleCheckInClick}
+        >
+          {showEarlyCheckIn ? null : (
+            <span
+              className="operations-day-resize-handle operations-day-resize-handle--start"
+              onPointerDown={(event) => {
+                event.stopPropagation()
+                beginDrag(event, 'resize-early', 'check-in')
+              }}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={t('operations.addEarlyCheckIn')}
+            />
+          )}
+          <DayBookingIcon kind="check-in" />
+        </DayBookingTimeBlock>
+      )}
     </>
   )
 }
