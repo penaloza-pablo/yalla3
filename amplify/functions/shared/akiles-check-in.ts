@@ -242,10 +242,7 @@ export const resolveReservationFromAkilesEvent = (
   if (!resolvedMember) {
     return { ok: false, reason: 'member_not_expanded', memberId };
   }
-  if (!metadata || Object.keys(metadata).length === 0) {
-    return { ok: false, reason: 'staff_or_unmapped', memberId };
-  }
-  if (metadataLooksLikeStaff(metadata)) {
+  if (metadataLooksLikeStaff(metadata ?? {})) {
     return { ok: false, reason: 'staff_or_unmapped', memberId };
   }
   const reservationId = reservationIdFromMemberMetadata(metadata);
@@ -357,11 +354,141 @@ export const fetchAkilesMember = async (
   memberId: string,
   secrets: AkilesSecrets,
 ): Promise<Record<string, unknown>> => {
-  const request = async (accessToken: string) =>
-    fetch(`${AKILES_API_BASE}/members/${encodeURIComponent(memberId)}`, {
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
+  const payload = await akilesJson(
+    secrets,
+    `/members/${encodeURIComponent(memberId)}?expand=magic_links,emails`,
+  );
+  const member = asRecord(payload);
+  if (!member) {
+    throw new Error('Akiles get member returned an empty body.');
+  }
+  return member;
+};
 
+export const listAkilesMagicLinkIds = async (
+  memberId: string,
+  secrets: AkilesSecrets,
+) => {
+  const payload = await akilesJson(
+    secrets,
+    `/members/${encodeURIComponent(memberId)}/magic_links`,
+  );
+  const record = asRecord(payload);
+  const data = Array.isArray(record?.data) ? record.data : [];
+  return data
+    .map((entry) => asString(asRecord(entry)?.id))
+    .filter(Boolean);
+};
+
+export const revealAkilesMagicLink = async (
+  memberId: string,
+  magicLinkId: string,
+  secrets: AkilesSecrets,
+) => {
+  const payload = await akilesJson(
+    secrets,
+    `/members/${encodeURIComponent(memberId)}/magic_links/${encodeURIComponent(magicLinkId)}/reveal`,
+    { method: 'POST', body: '{}' },
+  );
+  return asString(asRecord(payload)?.link);
+};
+
+export const magicLinkIdsFromMember = (member: Record<string, unknown>) => {
+  const links = Array.isArray(member.magic_links) ? member.magic_links : [];
+  return links
+    .map((entry) => asString(asRecord(entry)?.id))
+    .filter(Boolean);
+};
+
+export const normalizeAkilesAccess = (value: unknown) => {
+  const text = asString(value).toLowerCase().replace(/#/g, '/').replace(/\/+$/, '');
+  if (!text.includes('akiles')) {
+    return '';
+  }
+  return text;
+};
+
+export const akilesAccessMatches = (stored: unknown, revealed: unknown) => {
+  const left = normalizeAkilesAccess(stored);
+  const right = normalizeAkilesAccess(revealed);
+  if (!left || !right) {
+    return false;
+  }
+  if (left === right) {
+    return true;
+  }
+  const token = (value: string) => value.match(/ml_[a-z0-9_]+/i)?.[0] ?? '';
+  const leftToken = token(left);
+  const rightToken = token(right);
+  return Boolean(leftToken && rightToken && leftToken === rightToken);
+};
+
+export const guestNamesMatch = (memberName: unknown, guestName: unknown) => {
+  const fold = (value: unknown) =>
+    asString(value)
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[^a-z0-9áéíóúüñ ]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const left = fold(memberName);
+  const right = fold(guestName);
+  if (!left || !right) {
+    return false;
+  }
+  return left === right || left.includes(right) || right.includes(left);
+};
+
+export const checkInDateFromMember = (member: Record<string, unknown>) => {
+  const raw = asString(member.starts_at);
+  if (!raw) {
+    return '';
+  }
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return raw.slice(0, 10);
+  }
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(date);
+};
+
+export const matchBookingToAkilesMember = ({
+  member,
+  bookings,
+  accessLink,
+}: {
+  member: Record<string, unknown>;
+  bookings: Record<string, unknown>[];
+  accessLink?: string;
+}) => {
+  const byAccess = bookings.filter((item) => akilesAccessMatches(item.Access, accessLink));
+  if (byAccess.length === 1) {
+    return asString(byAccess[0]?.ReservationID ?? byAccess[0]?.id);
+  }
+  const byName = bookings.filter((item) =>
+    guestNamesMatch(member.name, item.GuestName),
+  );
+  if (byName.length === 1) {
+    return asString(byName[0]?.ReservationID ?? byName[0]?.id);
+  }
+  return '';
+};
+
+export const CHECK_IN_DATE_INDEX = 'CheckInDate-index';
+
+const akilesJson = async (
+  secrets: AkilesSecrets,
+  path: string,
+  init?: RequestInit,
+) => {
+  const request = async (accessToken: string) =>
+    fetch(`${AKILES_API_BASE}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    });
   let accessToken = secrets.accessToken;
   if (!accessToken) {
     throw new Error('Akiles access token is not configured.');
@@ -373,14 +500,10 @@ export const fetchAkilesMember = async (
     response = await request(accessToken);
   }
   if (!response.ok) {
-    throw new Error(`Akiles get member failed (${response.status}).`);
+    throw new Error(`Akiles request failed (${response.status}) ${path}`);
   }
   const payload = (await response.json()) as unknown;
-  const member = asRecord(payload);
-  if (!member) {
-    throw new Error('Akiles get member returned an empty body.');
-  }
-  return member;
+  return payload;
 };
 
 export const canMarkAkilesCheckIn = (item: Record<string, unknown>) => {

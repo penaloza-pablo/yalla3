@@ -1,4 +1,4 @@
-import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import {
   LOG_FEATURES,
   quoted,
@@ -8,15 +8,21 @@ import {
   AKILES_ACTOR,
   buildAkilesGuestEnteredUpdate,
   canMarkAkilesCheckIn,
+  CHECK_IN_DATE_INDEX,
+  checkInDateFromMember,
   decodeHttpBody,
   eventOccurredAt,
   fetchAkilesMember,
   getHeader,
   isAkilesSignatureValid,
   isGadgetActionUse,
+  listAkilesMagicLinkIds,
   loadAkilesSecrets,
+  magicLinkIdsFromMember,
+  matchBookingToAkilesMember,
   memberIdFromEvent,
   parseAkilesEvent,
+  revealAkilesMagicLink,
   resolveReservationFromAkilesEvent,
 } from '../shared/akiles-check-in';
 import { buildHttpResponse, corsHeaders, isHttpRequest } from '../shared/dynamo-http';
@@ -27,6 +33,27 @@ type HttpEvent = {
   headers?: Record<string, string | string[] | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
+};
+
+const queryBookingsByCheckInDate = async (tableName: string, checkInDate: string) => {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: CHECK_IN_DATE_INDEX,
+        KeyConditionExpression: 'CheckInDate = :checkInDate',
+        ExpressionAttributeValues: { ':checkInDate': checkInDate },
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...((result.Items as Record<string, unknown>[]) ?? []));
+    exclusiveStartKey = result.LastEvaluatedKey as
+      | Record<string, unknown>
+      | undefined;
+  } while (exclusiveStartKey);
+  return items;
 };
 
 export const handler = async (event: HttpEvent) => {
@@ -68,20 +95,57 @@ export const handler = async (event: HttpEvent) => {
         const member = await fetchAkilesMember(memberId, secrets);
         resolved = resolveReservationFromAkilesEvent(akilesEvent, member);
         if (!resolved.ok) {
-          console.warn('Akiles member did not map to a Yalla booking', {
-            reason: resolved.reason,
-            memberId: resolved.memberId,
-            metadataKeys: Object.keys(
-              (member.metadata && typeof member.metadata === 'object'
-                ? member.metadata
-                : {}) as Record<string, unknown>,
-            ),
+          const bookingsTable = process.env.BOOKINGS_TABLE || 'yalla-bookings';
+          const checkInDate = checkInDateFromMember(member);
+          const bookings = checkInDate
+            ? await queryBookingsByCheckInDate(bookingsTable, checkInDate)
+            : [];
+          let linkIds = magicLinkIdsFromMember(member);
+          if (linkIds.length === 0) {
+            try {
+              linkIds = await listAkilesMagicLinkIds(memberId, secrets);
+            } catch (error) {
+              console.warn('Akiles magic link list failed', {
+                memberId,
+                status: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+          let accessLink = '';
+          for (const magicLinkId of linkIds) {
+            try {
+              accessLink = await revealAkilesMagicLink(memberId, magicLinkId, secrets);
+            } catch (error) {
+              console.warn('Akiles magic link reveal failed', {
+                memberId,
+                status: error instanceof Error ? error.message : String(error),
+              });
+            }
+            if (accessLink) {
+              break;
+            }
+          }
+          const reservationId = matchBookingToAkilesMember({
+            member,
+            bookings,
+            accessLink,
           });
-          return buildHttpResponse(200, {
-            ok: true,
-            ignored: true,
-            reason: resolved.reason,
-          });
+          if (reservationId) {
+            resolved = { ok: true, reservationId, memberId };
+          } else {
+            console.warn('Akiles member did not map to a Yalla booking', {
+              reason: resolved.reason,
+              memberId,
+              checkInDate,
+              bookingCount: bookings.length,
+              hadAccessLink: Boolean(accessLink),
+            });
+            return buildHttpResponse(200, {
+              ok: true,
+              ignored: true,
+              reason: 'unmapped_member',
+            });
+          }
         }
       } else {
         console.warn('Akiles event did not map to a Yalla booking', {

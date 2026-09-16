@@ -10,6 +10,7 @@ import {
   isGadgetActionUse,
   memberIdFromEvent,
   parseAkilesEvent,
+  matchBookingToAkilesMember,
   reservationIdFromMemberMetadata,
   resolveReservationFromAkilesEvent,
 } from './akiles-check-in';
@@ -71,7 +72,7 @@ test('ignores staff members and members without reservation metadata', () => {
   });
   assert.equal(empty.ok, false);
   if (!empty.ok) {
-    assert.equal(empty.reason, 'staff_or_unmapped');
+    assert.equal(empty.reason, 'missing_reservation_metadata');
   }
 
   const missing = resolveReservationFromAkilesEvent(gadgetUseEvent);
@@ -131,6 +132,38 @@ test('first lock use sets access granted and guest entered; later events are ide
     occurredAt: '2026-09-16T11:00:00.000Z',
   });
   assert.equal(again.alreadyEntered, true);
+});
+
+test('joins Guesty members by magic link Access or guest name on check-in day', () => {
+  const bookings = [
+    {
+      ReservationID: 'other',
+      GuestName: 'Someone Else',
+      Access: 'https://link.akiles.app/ml_other_aaa',
+    },
+    {
+      ReservationID: reservationId,
+      GuestName: 'Ada Lovelace',
+      Access: 'https://link.akiles.app/ml_43p4vhlnpyfd2gnn77th_db7bec0cda5abcedde7e60b3348dabe33108310c3479dae2',
+    },
+  ];
+  assert.equal(
+    matchBookingToAkilesMember({
+      member: { id: memberId, name: 'Ada Lovelace' },
+      bookings,
+      accessLink: 'https://link.akiles.app/#ml_43p4vhlnpyfd2gnn77th_db7bec0cda5abcedde7e60b3348dabe33108310c3479dae2',
+    }),
+    reservationId,
+  );
+  assert.equal(
+    matchBookingToAkilesMember({
+      member: { id: memberId, name: 'Ada Lovelace' },
+      bookings: [
+        { ReservationID: reservationId, GuestName: 'Ada Lovelace', Access: '' },
+      ],
+    }),
+    reservationId,
+  );
 });
 
 test('preserved booking fields cover tracker flags and Akiles ids', () => {

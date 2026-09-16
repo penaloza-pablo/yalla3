@@ -858,6 +858,12 @@ const receiveAkilesEventsFn = new NodejsFunction(
   },
 );
 bookingsTable.grantReadWriteData(receiveAkilesEventsFn);
+receiveAkilesEventsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${bookingsTable.tableArn}/index/CheckInDate-index`],
+  }),
+);
 activityLogsTable.grantWriteData(receiveAkilesEventsFn);
 akilesSecret.grantRead(receiveAkilesEventsFn);
 receiveAkilesEventsFn.addToRolePolicy(
