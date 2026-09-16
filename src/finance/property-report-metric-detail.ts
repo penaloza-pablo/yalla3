@@ -1,5 +1,6 @@
 import type { LineAllocation } from '../../amplify/functions/shared/property-report-allocations'
 import {
+  resolveMarketManagementFee,
   resolveMarkupPercent,
   type PropertyReportSettings,
 } from '../../amplify/functions/shared/property-report-settings'
@@ -11,6 +12,7 @@ export const METRICS_WITHOUT_DETAIL = new Set([
   'ourProfit',
   'netEarnings',
   'netProfit',
+  'marketManagementFee',
 ])
 
 export type MetricDetailRow = {
@@ -29,6 +31,7 @@ export type MetricDetailPayout = {
   id: string
   guestName: string
   guestPay: number
+  channelFee: number
   cleaningFee: number
   cleaningGross: number
   cleaningPayoutVat: number
@@ -120,6 +123,28 @@ export const buildMetricDetailSections = (
       return [
         section(payoutName, payoutName, payoutRows(sources.payouts, (row) => row.guestPay)),
       ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'channelFee':
+      return [
+        section(
+          payoutName,
+          payoutName,
+          payoutRows(sources.payouts, (row) => row.channelFee),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'marketManagementCommission': {
+      const rate = resolveMarketManagementFee(sources.settings) / 100
+      return [
+        section(
+          payoutName,
+          payoutName,
+          payoutRows(sources.payouts, (row) =>
+            roundMoney(
+              (row.guestPay - row.cleaningNet - row.channelFee) * rate,
+            ),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    }
     case 'bookingCount':
       return [
         section(payoutName, payoutName, payoutRows(sources.payouts, () => 1)),

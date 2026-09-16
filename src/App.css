@@ -750,6 +750,21 @@
   padding-left: 1.15rem;
 }
 
+.global-variables-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.global-variables-value input {
+  width: 6.5rem;
+}
+
+.global-variables-suffix {
+  color: #667085;
+  font-weight: 600;
+}
+
 .btn-icon {
   border: 0;
   background: #f2f4f7;

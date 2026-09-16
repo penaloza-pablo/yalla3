@@ -515,9 +515,10 @@
     "eyebrow": "Settings / Global variables",
     "subtitle": "Catalog of variables that widgets and other features can use, including finance reports.",
     "cardTitle": "Variables",
-    "cardSubtitle": "Expand each variable to see where it is used.",
+    "cardSubtitle": "Writable values can be edited here. Expand each variable to see where it is used.",
     "variable": "Variable",
     "description": "Description",
+    "value": "Value",
     "usages": "Usages",
     "usageCount": "{{count}} usages",
     "usageCount_one": "{{count}} usage",
@@ -528,7 +529,16 @@
     "empty": "No variables defined.",
     "formulaFromSettings": "the property formula",
     "catalogDescription": "Finance catalog variable: {{name}}.",
-    "unknownDescription": "Variable available for widgets and other features."
+    "unknownDescription": "Variable available for widgets and other features.",
+    "missingEndpoint": "Missing Property Reports endpoint. Redeploy the backend.",
+    "missingWrite": "Missing Property Reports write endpoint. Redeploy the backend.",
+    "loadError": "Unable to load global variables.",
+    "saveError": "Unable to save the variable.",
+    "saved": "Global variable saved.",
+    "invalidPercent": "Enter a percentage between 0 and 100.",
+    "descriptions": {
+      "marketManagementFee": "This is not the Knock Knock fee. It is a market-standard rate used to benchmark each property independently of the commercial agreement in place."
+    }
   },
   "pages": {
     "Alerts": "Alerts",
@@ -1508,6 +1518,7 @@
     "formulaRemoveToken": "Remove from formula",
     "formulaVars": {
       "paidByGuest": "Paid by guest",
+      "channelFee": "Channel Fee",
       "otherIncomesNet": "Other incomes (net)",
       "payoutCleaningNet": "Payouts Cleaning Net",
       "payoutCleaningGross": "Payouts Cleaning Gross",
@@ -1544,7 +1555,9 @@
       "managementFee": "Management Fee",
       "propertyContribution": "Property Performance",
       "ourProfit": "Our Profit",
-      "netEarnings": "Net earnings"
+      "netEarnings": "Net earnings",
+      "marketManagementFee": "Market Management Commission %",
+      "marketManagementCommission": "Market Management Commission €"
     },
     "conditions": "Conditions",
     "conditionsHelp": "Add cost rules such as Community Fee, Netflix, Internet, maintenance jobs, or other expenses.",
@@ -1605,6 +1618,8 @@
       "netEarningsEmptyHelp": "Define the Net earnings formula in Reports Settings or in this property's settings.",
       "paidByGuest": "Paid by guest",
       "paidByGuestHelp": "Total paid by guest across payouts in the month.",
+      "channelFee": "Channel Fee",
+      "channelFeeHelp": "Channel / host service fee from payouts in the month.",
       "otherIncomesNet": "Other incomes (net)",
       "otherIncomesNetHelp": "Other incomes recorded for the month, net of IVA.",
       "payoutCleaningNet": "Payouts Cleaning Net",
@@ -1668,7 +1683,11 @@
       "bookingCount": "Booking Count",
       "bookingCountHelp": "Number of payouts in the month.",
       "nights": "Nights",
-      "nightsHelp": "Total nights from payouts in the month."
+      "nightsHelp": "Total nights from payouts in the month.",
+      "marketManagementFee": "Market Management Commission %",
+      "marketManagementFeeHelp": "Market-standard management commission. This is not the Knock Knock fee; it is used to benchmark each property independently of the commercial agreement.",
+      "marketManagementCommission": "Market Management Commission €",
+      "marketManagementCommissionHelp": "(Paid by guest − Cleaning Net − Channel Fee) × Market Management Commission %."
     }
   },
   "reportsSettings": {

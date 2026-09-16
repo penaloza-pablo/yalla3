@@ -32,12 +32,22 @@ const TAB_ICONS: Record<ReportTabId, YlIconName> = {
 }
 
 const COUNT_IDS = new Set(['bookingCount', 'nights'])
+const PERCENT_IDS = new Set(['marketManagementFee'])
 
 const formatMetric = (
   key: string,
   value: number,
   money: Intl.NumberFormat,
-) => (COUNT_IDS.has(key) ? String(value) : money.format(value))
+  percent: Intl.NumberFormat,
+) => {
+  if (COUNT_IDS.has(key)) {
+    return String(value)
+  }
+  if (PERCENT_IDS.has(key)) {
+    return `${percent.format(value)}%`
+  }
+  return money.format(value)
+}
 
 const MetricHelp = ({ label, help }: { label: string; help: string }) => (
   <span className="metric-help-wrap">
@@ -77,6 +87,13 @@ export function PropertyClosedReportView({
       new Intl.NumberFormat(i18n.language.startsWith('es') ? 'es-ES' : 'en-GB', {
         style: 'currency',
         currency: 'EUR',
+      }),
+    [i18n.language],
+  )
+  const percent = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.language.startsWith('es') ? 'es-ES' : 'en-GB', {
+        maximumFractionDigits: 2,
       }),
     [i18n.language],
   )
@@ -247,7 +264,7 @@ export function PropertyClosedReportView({
               <p className="card-label">{label}</p>
               <div className="closed-report-kpi-value">
                 <p className="card-value">
-                  {formatMetric(key, metricValue(key), money)}
+                  {formatMetric(key, metricValue(key), money, percent)}
                 </p>
                 <MetricHelp label={label} help={help} />
               </div>
@@ -276,7 +293,7 @@ export function PropertyClosedReportView({
                   {metricLabel(detailId)}
                 </h3>
                 <p className="modal-subtitle">
-                  {formatMetric(detailId, metricValue(detailId), money)}
+                  {formatMetric(detailId, metricValue(detailId), money, percent)}
                 </p>
               </div>
               <button

@@ -5,6 +5,7 @@ import {
   type VisibilityMetricId,
 } from '../../amplify/functions/shared/property-report-formula'
 import {
+  resolveMarketManagementFee,
   resolveMarkupPercent,
   type BusinessModel,
   type PropertyReportSettings,
@@ -15,7 +16,7 @@ export type CostAllocation = 'bear' | 'ownerPlus12' | 'owner'
 export type IncomeAllocation = 'directToOwner' | 'applyMarkup' | 'doNotSend'
 export type ReportLineAllocation = LineAllocation
 
-export type PropertyReportMetricUnit = 'money' | 'count'
+export type PropertyReportMetricUnit = 'money' | 'count' | 'percent'
 
 export type PropertyReportFieldRole = 'source' | 'indicator'
 
@@ -27,6 +28,7 @@ export type AllocatedReportLine = {
 
 export type PropertyReportMetricInputs = {
   paidByGuest: number
+  channelFee: number
   otherIncomesNet: number
   payoutCleaningNet: number
   payoutCleaningGross: number
@@ -70,6 +72,11 @@ const roundMoney = (value: number) => Math.round(value * 100) / 100
 export const PROPERTY_REPORT_FIELD_CATALOG = [
   {
     id: 'paidByGuest',
+    unit: 'money',
+    role: 'source',
+  },
+  {
+    id: 'channelFee',
     unit: 'money',
     role: 'source',
   },
@@ -268,6 +275,18 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     formula:
       'income - incomesDoNotSend - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup',
   },
+  {
+    id: 'marketManagementFee',
+    unit: 'percent',
+    role: 'indicator',
+    formula: 'settings.marketManagementFee',
+  },
+  {
+    id: 'marketManagementCommission',
+    unit: 'money',
+    role: 'indicator',
+    formula: '(paidByGuest - payoutCleaningNet - channelFee) * marketManagementFee / 100',
+  },
 ] as const
 
 export type PropertyReportFieldId =
@@ -345,6 +364,14 @@ export const computePropertyReportMetrics = (
   settings?: PropertyReportSettings | null,
 ): PropertyReportMetricValues => {
   const income = roundMoney(inputs.paidByGuest + inputs.otherIncomesNet)
+  const channelFee = roundMoney(inputs.channelFee)
+  const marketManagementFee = resolveMarketManagementFee(settings)
+  const marketManagementCommission = roundMoney(
+    (roundMoney(inputs.paidByGuest) -
+      roundMoney(inputs.payoutCleaningNet) -
+      channelFee) *
+      (marketManagementFee / 100),
+  )
   const cleaningMargin = roundMoney(
     inputs.payoutCleaningNet - (inputs.cleaningNet + inputs.cleaningKit),
   )
@@ -390,6 +417,7 @@ export const computePropertyReportMetrics = (
   )
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
+    channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
@@ -420,6 +448,8 @@ export const computePropertyReportMetrics = (
     expensesAndServices,
     expensesAndServicesCoverByOwner,
     expensesAndServicesCoverByUs,
+    marketManagementFee,
+    marketManagementCommission,
   }
   const incomesDoNotSend = sumAllocated(
     inputs.allocatedLines,
@@ -458,6 +488,7 @@ export const computePropertyReportMetrics = (
 
   return {
     paidByGuest: roundMoney(inputs.paidByGuest),
+    channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
@@ -492,6 +523,8 @@ export const computePropertyReportMetrics = (
     expensesAndServicesCoverByOwner,
     expensesAndServicesCoverByUs,
     amountTransferred,
+    marketManagementFee,
+    marketManagementCommission,
     bookingCount: inputs.bookingCount,
     nights: inputs.nights,
   }

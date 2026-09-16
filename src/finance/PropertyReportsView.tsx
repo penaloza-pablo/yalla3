@@ -529,9 +529,11 @@ export function PropertyReportsView({
       accommodationGross: sumPayoutField(payoutRows, 'accommodationGross'),
       accommodationPayoutVat: sumPayoutField(payoutRows, 'accommodationPayoutVat'),
       accommodationNet: sumPayoutField(payoutRows, 'accommodationNet'),
-      serviceFee: bookings.reduce(
-        (sum, booking) => sum + (booking.hostServiceFee ?? 0),
-        0,
+      serviceFee: roundMoney(
+        bookings.reduce(
+          (sum, booking) => sum + (booking.hostServiceFee ?? 0),
+          0,
+        ),
       ),
     }),
     [bookings, payoutRows],
@@ -1137,6 +1139,7 @@ export function PropertyReportsView({
       computePropertyReportMetrics(
         {
         paidByGuest: bookingTotals.paidByGuest,
+        channelFee: bookingTotals.serviceFee,
         otherIncomesNet: incomeTotals.totalCost,
         payoutCleaningNet: bookingTotals.cleaningNet,
         payoutCleaningGross: bookingTotals.cleaningGross,
@@ -1755,6 +1758,7 @@ export function PropertyReportsView({
               id: row.booking.reservationId || row.booking.bookingId,
               guestName: row.booking.guestName || '—',
               guestPay: row.guestPay ?? 0,
+              channelFee: row.booking.hostServiceFee ?? 0,
               cleaningFee: row.cleaningFee ?? 0,
               cleaningGross: row.cleaningGross ?? 0,
               cleaningPayoutVat: row.cleaningPayoutVat ?? 0,

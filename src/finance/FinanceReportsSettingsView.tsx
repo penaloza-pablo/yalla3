@@ -38,6 +38,7 @@ type FormState = {
   accommodationVat: IvaRate
   airbnbFee: string
   visibility: ReportVisibility
+  marketManagementFee: number | null
 }
 
 const toForm = (settings: PropertyReportSettings): FormState => ({
@@ -53,6 +54,7 @@ const toForm = (settings: PropertyReportSettings): FormState => ({
       ? String(DEFAULT_AIRBNB_FEE_PERCENT)
       : String(settings.airbnbFeePercent),
   visibility: settings.visibility ?? defaultReportVisibility(),
+  marketManagementFee: settings.marketManagementFee,
 })
 
 export function FinanceReportsSettingsView({ getEndpoint }: Props) {
@@ -132,6 +134,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
           ? Number(form.airbnbFee)
           : null,
         visibility: form.visibility,
+        marketManagementFee: form.marketManagementFee,
       },
       { global: true },
     )
@@ -161,6 +164,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
           accommodationVat: parsed.settings.accommodationVat,
           airbnbFeePercent: parsed.settings.airbnbFeePercent,
           visibility: parsed.settings.visibility,
+          marketManagementFee: parsed.settings.marketManagementFee,
         }),
       })
       setMessage(t('reportsSettings.saved'))

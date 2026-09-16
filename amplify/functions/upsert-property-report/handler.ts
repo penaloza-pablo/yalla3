@@ -64,6 +64,7 @@ type Payload = {
   airbnbFeePercent?: number | string | null;
   visibility?: unknown;
   conditions?: unknown[];
+  marketManagementFee?: number | string | null;
 };
 
 const monthIsClosed = async (
@@ -148,6 +149,7 @@ export const handler = async (event: {
       cleaningVat: parsed.settings.cleaningVat,
       accommodationVat: parsed.settings.accommodationVat,
       airbnbFeePercent: parsed.settings.airbnbFeePercent,
+      marketManagementFee: parsed.settings.marketManagementFee,
       visibility: parsed.settings.visibility,
       conditions: parsed.settings.conditions,
       createdAt: asString(existingSettings?.createdAt) || timestamp,
@@ -165,17 +167,52 @@ export const handler = async (event: {
   };
 
   if (action === 'settings' && isGlobalReportSettingsId(propertyId)) {
+    const foundSettings = await docClient.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: {
+          propertyId: GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+          monthId: REPORT_SETTINGS_MONTH_ID,
+        },
+      }),
+    );
+    const existing = parseReportSettings(
+      foundSettings.Item as Record<string, unknown> | undefined,
+    );
+    const has = (key: keyof Payload) =>
+      Object.prototype.hasOwnProperty.call(payload, key) &&
+      payload[key] !== undefined;
     const parsed = validateReportSettings(
-      parseReportSettings({
-        formula: payload.formula,
-        propertyContributionFormula: payload.propertyContributionFormula,
-        ourProfitFormula: payload.ourProfitFormula,
-        netEarningsFormula: payload.netEarningsFormula,
-        cleaningVat: payload.cleaningVat,
-        accommodationVat: payload.accommodationVat,
-        airbnbFeePercent: payload.airbnbFeePercent,
-        visibility: payload.visibility,
-      } as Record<string, unknown>),
+      parseReportSettings(
+        {
+          formula: has('formula') ? payload.formula : existing.formula,
+          propertyContributionFormula: has('propertyContributionFormula')
+            ? payload.propertyContributionFormula
+            : existing.propertyContributionFormula,
+          ourProfitFormula: has('ourProfitFormula')
+            ? payload.ourProfitFormula
+            : existing.ourProfitFormula,
+          netEarningsFormula: has('netEarningsFormula')
+            ? payload.netEarningsFormula
+            : existing.netEarningsFormula,
+          cleaningVat: has('cleaningVat')
+            ? payload.cleaningVat
+            : existing.cleaningVat,
+          accommodationVat: has('accommodationVat')
+            ? payload.accommodationVat
+            : existing.accommodationVat,
+          airbnbFeePercent: has('airbnbFeePercent')
+            ? payload.airbnbFeePercent
+            : existing.airbnbFeePercent,
+          visibility: has('visibility')
+            ? payload.visibility
+            : existing.visibility,
+          marketManagementFee: has('marketManagementFee')
+            ? payload.marketManagementFee
+            : existing.marketManagementFee,
+        } as Record<string, unknown>,
+        { persistVisibility: true },
+      ),
       { global: true },
     );
     if (!parsed.ok) {
@@ -215,21 +252,24 @@ export const handler = async (event: {
 
   if (action === 'settings') {
     const parsed = validateReportSettings(
-      parseReportSettings({
-        businessModel: payload.businessModel,
-        commissionPercent: payload.commissionPercent,
-        fixedRent: payload.fixedRent,
-        markupPercent: payload.markupPercent,
-        formula: payload.formula,
-        propertyContributionFormula: payload.propertyContributionFormula,
-        ourProfitFormula: payload.ourProfitFormula,
-        netEarningsFormula: payload.netEarningsFormula,
-        cleaningVat: payload.cleaningVat,
-        accommodationVat: payload.accommodationVat,
-        airbnbFeePercent: payload.airbnbFeePercent,
-        visibility: payload.visibility,
-        conditions: payload.conditions,
-      } as Record<string, unknown>),
+      parseReportSettings(
+        {
+          businessModel: payload.businessModel,
+          commissionPercent: payload.commissionPercent,
+          fixedRent: payload.fixedRent,
+          markupPercent: payload.markupPercent,
+          formula: payload.formula,
+          propertyContributionFormula: payload.propertyContributionFormula,
+          ourProfitFormula: payload.ourProfitFormula,
+          netEarningsFormula: payload.netEarningsFormula,
+          cleaningVat: payload.cleaningVat,
+          accommodationVat: payload.accommodationVat,
+          airbnbFeePercent: payload.airbnbFeePercent,
+          visibility: payload.visibility,
+          conditions: payload.conditions,
+        } as Record<string, unknown>,
+        { persistVisibility: true },
+      ),
     );
     if (!parsed.ok) {
       return buildHttpResponse(400, { message: parsed.message });

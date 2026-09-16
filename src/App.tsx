@@ -8818,7 +8818,7 @@ function App() {
         ) : activePage === 'Slack' ? (
           <SlackPanel getEndpoint={getEndpoint} />
         ) : activePage === 'Global Variables' ? (
-          <GlobalVariablesView />
+          <GlobalVariablesView getEndpoint={getEndpoint} />
         ) : activePage === 'Property Reports' ? (
           <PropertyReportsView
             getEndpoint={getEndpoint}

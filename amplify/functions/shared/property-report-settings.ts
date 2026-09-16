@@ -34,21 +34,26 @@ export type ReportCondition = {
   bearFirstAmount: number | null;
 };
 
+export const VISIBILITY_METRICS_VERSION = 2;
+
 export type ReportTabVisibility = {
   visible: boolean;
   primary: string;
   metrics: string[];
+  metricsVersion?: number;
 };
 
 export type ReportVisibility = Record<ReportTabId, ReportTabVisibility>;
 
 export const DEFAULT_MARKUP_PERCENT = 12;
+export const DEFAULT_MARKET_MANAGEMENT_FEE = 20;
 
 export type PropertyReportSettings = {
   businessModel: BusinessModel | '';
   commissionPercent: number | null;
   fixedRent: number | null;
   markupPercent: number | null;
+  marketManagementFee: number | null;
   formula: string;
   propertyContributionFormula: string;
   ourProfitFormula: string;
@@ -84,8 +89,15 @@ export const isConditionRule = (value: unknown): value is ConditionRule =>
 
 const VISIBILITY_SET = new Set<string>(VISIBILITY_METRIC_IDS);
 
+const withVisibilityVersion = (
+  tab: Omit<ReportTabVisibility, 'metricsVersion'>,
+): ReportTabVisibility => ({
+  ...tab,
+  metricsVersion: VISIBILITY_METRICS_VERSION,
+});
+
 export const defaultReportVisibility = (): ReportVisibility => ({
-  property: {
+  property: withVisibilityVersion({
     visible: true,
     primary: 'propertyContribution',
     metrics: [
@@ -105,8 +117,8 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'bookingCount',
       'nights',
     ],
-  },
-  management: {
+  }),
+  management: withVisibilityVersion({
     visible: true,
     primary: 'ourProfit',
     metrics: [
@@ -119,8 +131,8 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'expensesAndServicesCoverByUs',
       'iva',
     ],
-  },
-  owner: {
+  }),
+  owner: withVisibilityVersion({
     visible: true,
     primary: 'netEarnings',
     metrics: [
@@ -133,7 +145,7 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'bookingCount',
       'nights',
     ],
-  },
+  }),
 });
 
 const NEW_DEFAULT_METRICS = [
@@ -168,40 +180,55 @@ const injectNewDefaultMetrics = (
 const parseTabVisibility = (
   value: unknown,
   fallback: ReportTabVisibility,
+  persist = false,
 ): ReportTabVisibility => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return fallback;
+    return persist ? withVisibilityVersion(fallback) : fallback;
   }
   const row = value as Record<string, unknown>;
-  const metrics = Array.isArray(row.metrics)
-    ? row.metrics
-        .map((item) => asString(item))
-        .filter((item) => VISIBILITY_SET.has(item))
-    : fallback.metrics;
-  const unique = injectNewDefaultMetrics(
-    [...new Set(metrics.length ? metrics : fallback.metrics)],
-    fallback.metrics,
-  );
+  const rawMetrics = Array.isArray(row.metrics) ? row.metrics : null;
+  let metrics = rawMetrics
+    ? [
+        ...new Set(
+          rawMetrics
+            .map((item) => asString(item))
+            .filter((item) => VISIBILITY_SET.has(item)),
+        ),
+      ]
+    : [...fallback.metrics];
+  const storedVersion = asNumber(row.metricsVersion) ?? 0;
+  if (!persist && rawMetrics && storedVersion < VISIBILITY_METRICS_VERSION) {
+    metrics = injectNewDefaultMetrics(metrics, fallback.metrics);
+  }
   const primary = asString(row.primary);
   return {
     visible: row.visible !== false,
-    primary: unique.includes(primary) ? primary : unique[0] ?? fallback.primary,
-    metrics: unique,
+    primary: metrics.includes(primary)
+      ? primary
+      : (metrics[0] ?? fallback.primary),
+    metrics,
+    metricsVersion: persist ? VISIBILITY_METRICS_VERSION : storedVersion,
   };
 };
 
 export const parseVisibility = (
   value: unknown,
+  options?: { persist?: boolean },
 ): ReportVisibility | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
+  const persist = Boolean(options?.persist);
   const row = value as Record<string, unknown>;
   const defaults = defaultReportVisibility();
   return {
-    property: parseTabVisibility(row.property, defaults.property),
-    management: parseTabVisibility(row.management, defaults.management),
-    owner: parseTabVisibility(row.owner, defaults.owner),
+    property: parseTabVisibility(row.property, defaults.property, persist),
+    management: parseTabVisibility(
+      row.management,
+      defaults.management,
+      persist,
+    ),
+    owner: parseTabVisibility(row.owner, defaults.owner, persist),
   };
 };
 
@@ -209,11 +236,21 @@ export const resolveMarkupPercent = (
   settings?: PropertyReportSettings | null,
 ) => settings?.markupPercent ?? DEFAULT_MARKUP_PERCENT;
 
+export const resolveMarketManagementFee = (
+  settings?: PropertyReportSettings | null,
+) => {
+  const value = settings?.marketManagementFee;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : DEFAULT_MARKET_MANAGEMENT_FEE;
+};
+
 export const emptyReportSettings = (): PropertyReportSettings => ({
   businessModel: '',
   commissionPercent: null,
   fixedRent: null,
   markupPercent: null,
+  marketManagementFee: null,
   formula: '',
   propertyContributionFormula: '',
   ourProfitFormula: '',
@@ -253,6 +290,7 @@ export const parseCondition = (value: unknown): ReportCondition | null => {
 
 export const parseReportSettings = (
   stored?: Record<string, unknown> | null,
+  options?: { persistVisibility?: boolean },
 ): PropertyReportSettings => {
   if (!stored || typeof stored !== 'object') {
     return emptyReportSettings();
@@ -268,6 +306,7 @@ export const parseReportSettings = (
     commissionPercent: asNumber(stored.commissionPercent),
     fixedRent: asNumber(stored.fixedRent),
     markupPercent: asNumber(stored.markupPercent),
+    marketManagementFee: asNumber(stored.marketManagementFee),
     formula: asString(stored.managementFeeFormula) || asString(stored.formula),
     propertyContributionFormula:
       asString(stored.propertyContributionFormula) ||
@@ -280,7 +319,9 @@ export const parseReportSettings = (
     accommodationVat: parseIvaRate(stored.accommodationVat),
     airbnbFeePercent:
       asNumber(stored.airbnbFeePercent) ?? asNumber(stored.airbnbFee),
-    visibility: parseVisibility(stored.visibility),
+    visibility: parseVisibility(stored.visibility, {
+      persist: options?.persistVisibility,
+    }),
     conditions,
   };
 };
@@ -350,7 +391,9 @@ export const validateReportSettings = (
     }
   }
 
-  const visibility = value.visibility ? parseVisibility(value.visibility) : null;
+  const visibility = value.visibility
+    ? parseVisibility(value.visibility, { persist: true })
+    : null;
 
   const cleaningVat =
     parseIvaRate(value.cleaningVat) ?? DEFAULT_PAYOUT_VAT;
@@ -381,6 +424,22 @@ export const validateReportSettings = (
   }
   const markupPercent =
     markupRaw === null ? DEFAULT_MARKUP_PERCENT : roundMoney(markupRaw);
+
+  const marketFeeRaw = asNumber(value.marketManagementFee);
+  if (
+    marketFeeRaw !== null &&
+    (!Number.isFinite(marketFeeRaw) || marketFeeRaw < 0 || marketFeeRaw > 100)
+  ) {
+    return {
+      ok: false,
+      message: 'marketManagementFee must be between 0 and 100.',
+    };
+  }
+  const marketManagementFee = global
+    ? marketFeeRaw === null
+      ? DEFAULT_MARKET_MANAGEMENT_FEE
+      : roundMoney(marketFeeRaw)
+    : null;
 
   const conditions: ReportCondition[] = [];
   for (const row of value.conditions) {
@@ -420,6 +479,7 @@ export const validateReportSettings = (
       commissionPercent,
       fixedRent,
       markupPercent,
+      marketManagementFee,
       formula,
       propertyContributionFormula,
       ourProfitFormula,
@@ -460,6 +520,7 @@ export const mergeReportSettings = (
       property.markupPercent ??
       fallback.markupPercent ??
       DEFAULT_MARKUP_PERCENT,
+    marketManagementFee: resolveMarketManagementFee(fallback),
     visibility: property.visibility ?? fallback.visibility ?? defaultReportVisibility(),
   };
 };

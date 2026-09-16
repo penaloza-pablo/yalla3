@@ -1,14 +1,15 @@
 import {
-  FORMULA_CATALOG_VARIABLES,
-  FORMULA_RESULT_VARIABLES,
+  VISIBILITY_METRIC_IDS,
 } from '../../amplify/functions/shared/property-report-formula'
+import { DEFAULT_MARKET_MANAGEMENT_FEE } from '../../amplify/functions/shared/property-report-settings'
 import { listDashboardWidgets } from '../dashboard/widget-store'
 
 const HANDLEBARS_VAR = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g
 
+export const WRITABLE_GLOBAL_VARIABLE_IDS = ['marketManagementFee'] as const
+
 export const FINANCE_VARIABLE_IDS = [
-  ...FORMULA_CATALOG_VARIABLES,
-  ...FORMULA_RESULT_VARIABLES,
+  ...VISIBILITY_METRIC_IDS,
   'commission',
   'fixedRent',
 ] as const
@@ -32,6 +33,16 @@ const idsInMarkup = (markup: string | undefined) => {
   return ids
 }
 
+export const isWritableGlobalVariable = (variableId: string) =>
+  (WRITABLE_GLOBAL_VARIABLE_IDS as readonly string[]).includes(variableId)
+
+export const defaultWritableGlobalValue = (variableId: string) => {
+  if (variableId === 'marketManagementFee') {
+    return DEFAULT_MARKET_MANAGEMENT_FEE
+  }
+  return null
+}
+
 export const listGlobalVariableIds = () => {
   const ids = new Set<string>(FINANCE_VARIABLE_IDS)
   for (const widget of listDashboardWidgets()) {
@@ -41,7 +52,14 @@ export const listGlobalVariableIds = () => {
       }
     }
   }
-  return [...ids].sort((left, right) => left.localeCompare(right))
+  return [...ids].sort((left, right) => {
+    const leftWritable = isWritableGlobalVariable(left) ? 0 : 1
+    const rightWritable = isWritableGlobalVariable(right) ? 0 : 1
+    if (leftWritable !== rightWritable) {
+      return leftWritable - rightWritable
+    }
+    return left.localeCompare(right)
+  })
 }
 
 export const usagesForVariable = (variableId: string): GlobalVariableUsage[] => {

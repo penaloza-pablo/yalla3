@@ -285,6 +285,7 @@ export function PropertyReportSettingsView({
       accommodationVat: parseIvaRate(form.accommodationVat) ?? 0,
       airbnbFeePercent: parseAmount(form.airbnbFee),
       visibility: form.visibility,
+      marketManagementFee: null,
       conditions,
     })
     if (!parsed.ok) {

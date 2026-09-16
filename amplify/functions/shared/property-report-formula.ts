@@ -14,6 +14,7 @@ export type FormulaTarget =
 
 export const FORMULA_CATALOG_VARIABLES = [
   'paidByGuest',
+  'channelFee',
   'otherIncomesNet',
   'payoutCleaningNet',
   'payoutCleaningGross',
@@ -56,22 +57,41 @@ export const FORMULA_RESULT_VARIABLES = [
   'amountTransferred',
 ] as const;
 
+export const VISIBILITY_EXTRA_METRIC_IDS = [
+  'marketManagementFee',
+  'marketManagementCommission',
+] as const;
+
 export const VISIBILITY_METRIC_IDS = [
   ...FORMULA_CATALOG_VARIABLES,
   ...FORMULA_RESULT_VARIABLES,
+  ...VISIBILITY_EXTRA_METRIC_IDS,
 ] as const;
 
 export type VisibilityMetricId = (typeof VISIBILITY_METRIC_IDS)[number];
 
 const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
-  managementFee: [],
-  propertyContribution: ['managementFee', 'amountTransferred'],
-  ourProfit: ['managementFee', 'propertyContribution', 'amountTransferred'],
+  managementFee: ['marketManagementFee', 'marketManagementCommission'],
+  propertyContribution: [
+    'managementFee',
+    'amountTransferred',
+    'marketManagementFee',
+    'marketManagementCommission',
+  ],
+  ourProfit: [
+    'managementFee',
+    'propertyContribution',
+    'amountTransferred',
+    'marketManagementFee',
+    'marketManagementCommission',
+  ],
   netEarnings: [
     'managementFee',
     'propertyContribution',
     'ourProfit',
     'amountTransferred',
+    'marketManagementFee',
+    'marketManagementCommission',
   ],
 };
 
