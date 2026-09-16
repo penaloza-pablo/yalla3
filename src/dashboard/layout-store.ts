@@ -14,7 +14,7 @@ import type {
   DashboardWidgetPlacement,
 } from './types'
 
-const STORAGE_KEY = 'yalla.dashboard.layouts.v1'
+const STORAGE_KEY = 'yalla.dashboard.layouts.v2'
 
 type StoredFile = {
   layouts?: unknown
@@ -148,6 +148,9 @@ export const listDashboardLayouts = (): DashboardLayout[] => {
     DASHBOARD_SEED_LAYOUTS.map((layout) => [layout.id, cloneLayout(layout)]),
   )
   for (const layout of stored.layouts) {
+    if (layout.id === DEFAULT_DASHBOARD_LAYOUT_ID) {
+      continue
+    }
     byId.set(layout.id, cloneLayout(layout))
   }
   return [...byId.values()].sort(

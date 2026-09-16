@@ -49,6 +49,7 @@ import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-p
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
 import { isTodayVisitView, type TodayViewMode } from '../nav/todayViews'
+import type { DashboardNavigateOptions } from '../dashboard/dashboard-navigation'
 import {
   linkedPersonById,
   yallaUserLabel,
@@ -102,7 +103,7 @@ type Props = {
   getCurrentUserEmail: () => Promise<string>
   propertyOptions: PropertyOption[]
   mode?: OpsMode
-  onNavigate?: (page: string, options?: { inventoryStatuses?: string[] }) => void
+  onNavigate?: (page: string, options?: DashboardNavigateOptions) => void
   searchQuery?: string
   onSearchQueryChange?: (value: string) => void
   isMobileSearchOpen?: boolean

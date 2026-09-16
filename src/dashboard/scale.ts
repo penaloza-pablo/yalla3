@@ -116,12 +116,50 @@ export const packRows = (
   return occupied.length
 }
 
+const hasFixedPlacement = (layout: DashboardLayout) =>
+  layout.widgets.length > 0 &&
+  layout.widgets.every((widget) => widget.colStart && widget.rowStart)
+
+const scaleForPlacement = (
+  definition: DashboardWidgetDefinition,
+  placement: DashboardWidgetPlacement,
+): DashboardWidgetScale => {
+  const exact = definition.scales.find(
+    (scale) =>
+      scale.colSpan === placement.colSpan &&
+      scale.rowSpan === placement.rowSpan,
+  )
+  if (exact) {
+    return exact
+  }
+  const fallback = largestScale(definition.scales)
+  return {
+    colSpan: placement.colSpan,
+    rowSpan: placement.rowSpan,
+    swatch: fallback?.swatch ?? 'var(--yl-surface-2)',
+    ...(fallback?.markup ? { markup: fallback.markup } : {}),
+  }
+}
+
 export const resolveVisibleWidgets = (
   layout: DashboardLayout,
   widgetsById: Map<string, DashboardWidgetDefinition>,
   availableWidth: number,
   availableHeight: number,
 ): { widgets: ResolvedWidget[]; columns: number } => {
+  if (hasFixedPlacement(layout)) {
+    return {
+      columns: DASHBOARD_COLUMNS,
+      widgets: layout.widgets.flatMap((placement) => {
+        const definition = widgetsById.get(placement.widgetId)
+        if (!definition) {
+          return []
+        }
+        return [{ placement, scale: scaleForPlacement(definition, placement) }]
+      }),
+    }
+  }
+
   const maxCols = Math.min(
     DASHBOARD_COLUMNS,
     fitTracks(availableWidth, DASHBOARD_CELL_PX, DASHBOARD_GAP_PX),

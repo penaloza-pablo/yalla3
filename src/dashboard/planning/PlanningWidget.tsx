@@ -27,6 +27,7 @@ export interface PlanningWidgetProps {
   error?: string
   className?: string
   style?: CSSProperties
+  onArcClick?: (key: 'maintenance' | 'cleaning' | 'bookings') => void
 }
 
 export function PlanningWidget({
@@ -37,6 +38,7 @@ export function PlanningWidget({
   error,
   className = '',
   style,
+  onArcClick,
 }: PlanningWidgetProps) {
   const copy = planningCopy(locale)
   let rows: ReturnType<typeof planningRows> | null = null
@@ -85,9 +87,6 @@ export function PlanningWidget({
           >
             {variant === 'rings' ? (
               <>
-                <text x="19" y="28" className="kp-main" fontSize="12" fontWeight="600">
-                  {copy.title}
-                </text>
                 {rows.map((row, index) => {
                   const geometry = radarGeometry(index)
                   const detail = `${row.label} ${row.completed}/${row.total}${
@@ -96,16 +95,23 @@ export function PlanningWidget({
                   return (
                     <g
                       key={row.key}
-                      className={`kp-arc kp-area-${row.key}`}
+                      className={`kp-arc kp-area-${row.key}${onArcClick ? ' is-link' : ''}`}
                       tabIndex={0}
-                      role="graphics-symbol"
+                      role="link"
                       aria-label={`${detail}. ${
                         row.key === 'bookings'
                           ? copy.recordsWithoutAlarms
                           : copy.plansTodayTomorrow
                       }`}
-                      onClick={(event) => event.currentTarget.focus()}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        onArcClick?.(row.key)
+                      }}
                       onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onArcClick?.(row.key)
+                        }
                         if (event.key === 'Escape') {
                           event.currentTarget.blur()
                         }

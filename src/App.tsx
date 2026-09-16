@@ -73,6 +73,10 @@ import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
 import { GlobalVariablesView } from './settings/GlobalVariablesView'
 import { usePermissions } from './rbac/PermissionsProvider'
+import {
+  DashboardNavContext,
+  type DashboardNavigateOptions,
+} from './dashboard/dashboard-navigation'
 import { useConfirm } from './design/ConfirmDialog'
 import { ACTION_KEYS, CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
 import {
@@ -1757,6 +1761,7 @@ function App() {
     deliveryDateFrom: '',
     deliveryDateTo: '',
   })
+  const [purchasesInvoiceOff, setPurchasesInvoiceOff] = useState(false)
   const [subtractionRows, setSubtractionRows] = useState<SubtractionRow[]>([])
   const [isSubtractionsLoading, setIsSubtractionsLoading] = useState(false)
   const [isSubtractionsExporting, setIsSubtractionsExporting] = useState(false)
@@ -2031,8 +2036,12 @@ function App() {
         const statusMatch =
           purchasesFilters.statuses.length === 0 ||
           purchasesFilters.statuses.includes(row.status)
+        const invoiceMatch = purchasesInvoiceOff && !row.invoice
+        const purchaseMatch = purchasesInvoiceOff
+          ? statusMatch || invoiceMatch
+          : statusMatch
 
-        if (!locationMatch || !statusMatch) {
+        if (!locationMatch || !purchaseMatch) {
           return false
         }
 
@@ -2078,6 +2087,7 @@ function App() {
     purchasesFilters.deliveryDateTo,
     purchasesFilters.locations,
     purchasesFilters.statuses,
+    purchasesInvoiceOff,
     tableSearchQuery,
   ])
 
@@ -2115,6 +2125,7 @@ function App() {
   }, [purchasesFilters.statuses])
 
   const toggleWaitingQuickFilter = () => {
+    setPurchasesInvoiceOff(false)
     if (isWaitingQuickFilterActive) {
       setPurchasesFilters((current) => ({ ...current, statuses: [] }))
       setPurchasesFilterDraft((current) => ({ ...current, statuses: [] }))
@@ -2131,6 +2142,7 @@ function App() {
   }
 
   const togglePurchaseWarningsQuickFilter = () => {
+    setPurchasesInvoiceOff(false)
     if (isPurchaseWarningsQuickFilterActive) {
       setPurchasesFilters((current) => ({ ...current, statuses: [] }))
       setPurchasesFilterDraft((current) => ({ ...current, statuses: [] }))
@@ -3977,7 +3989,10 @@ function App() {
   ])
 
   const reviewsPendingUnderFiveCount = useMemo(() => {
-    return reviewRows.filter((row) => row.status.toLowerCase() === 'pending' && row.rating < 5).length
+    return reviewRows.filter((row) => {
+      const status = row.status.toLowerCase()
+      return (status === 'pending' || status === 'working') && row.rating < 5
+    }).length
   }, [reviewRows])
 
   const goToRestockStep = () => {
@@ -4844,11 +4859,7 @@ function App() {
 
   const navigateToPage = (
     page: string,
-    options?: {
-      inventoryStatuses?: string[]
-      purchaseStatuses?: string[]
-      billingMonth?: string
-    },
+    options?: DashboardNavigateOptions & { billingMonth?: string },
   ) => {
     setActivePage(page)
     persistPage(page)
@@ -4864,18 +4875,24 @@ function App() {
       setFilters((current) => ({ ...current, statuses }))
       setFilterDraft((current) => ({ ...current, statuses }))
     }
-    if (page === 'Purchases' && options?.purchaseStatuses?.length) {
-      const statuses = [...options.purchaseStatuses]
-      setPurchasesFilters((current) => ({
-        ...current,
-        locations: [],
-        statuses,
-      }))
-      setPurchasesFilterDraft((current) => ({
-        ...current,
-        locations: [],
-        statuses,
-      }))
+    if (page === 'Purchases') {
+      setPurchasesInvoiceOff(Boolean(options?.purchaseInvoiceOff))
+      if (options?.purchaseStatuses?.length) {
+        const statuses = [...options.purchaseStatuses]
+        setPurchasesFilters((current) => ({
+          ...current,
+          locations: [],
+          statuses,
+        }))
+        setPurchasesFilterDraft((current) => ({
+          ...current,
+          locations: [],
+          statuses,
+        }))
+      }
+    }
+    if (page === 'Reviews' && options?.reviewsCreatedPreset) {
+      setReviewsCreatedPreset(options.reviewsCreatedPreset)
     }
   }
 
@@ -4907,6 +4924,18 @@ function App() {
     setTodayView(fallback)
     writePageToUrl('Daily Operations', 'replace', { view: fallback })
   }, [activePage, canTodayView, permissionsReady, todayView, todayViews])
+
+  useEffect(() => {
+    if (activePage !== 'Daily Operations') {
+      return
+    }
+    setIsSidebarCollapsed(true)
+    try {
+      window.localStorage.setItem('yalla.sidebar.hidden.v1', '1')
+    } catch {
+      // Ignore storage failures (private mode, quota, etc.).
+    }
+  }, [activePage])
 
   const clearDeepLinkPlanDate = useCallback(() => {
     setDeepLinkPlanDate('')
@@ -6210,6 +6239,7 @@ function App() {
                         className="btn-primary"
                         type="button"
                         onClick={() => {
+                          setPurchasesInvoiceOff(false)
                           setPurchasesFilters({
                             locations: [...purchasesFilterDraft.locations],
                             statuses: [...purchasesFilterDraft.statuses],
@@ -8594,15 +8624,22 @@ function App() {
             </section>
           </>
         ) : activePage === 'Daily Operations' ? (
-          <DailyOperationsView
-            mode="dashboard"
-            dashboardViewMode={todayView}
-            onDashboardViewModeChange={navigateToTodayView}
-            getEndpoint={getEndpoint}
-            getCurrentUserEmail={getCurrentUserEmail}
-            propertyOptions={activeManagedPropertyOptions}
-            onNavigate={navigateToPage}
-          />
+          <DashboardNavContext.Provider
+            value={{
+              toPage: navigateToPage,
+              toTodayView: navigateToTodayView,
+            }}
+          >
+            <DailyOperationsView
+              mode="dashboard"
+              dashboardViewMode={todayView}
+              onDashboardViewModeChange={navigateToTodayView}
+              getEndpoint={getEndpoint}
+              getCurrentUserEmail={getCurrentUserEmail}
+              propertyOptions={activeManagedPropertyOptions}
+              onNavigate={navigateToPage}
+            />
+          </DashboardNavContext.Provider>
         ) : activePage === 'Unassigned tasks' ? (
           <DailyOperationsView
             mode="unassigned"

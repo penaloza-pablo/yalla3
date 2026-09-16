@@ -3,6 +3,7 @@ import { PLANNER_WINDOW_DAYS } from '../../../amplify/functions/shared/bookings-
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
 import { fetchJson } from '../../operations/api'
 import { addDaysToDateString, getTodayMadrid } from '../../operations/dateHelpers'
+import { withLiveRetry } from '../live-retry'
 import {
   bookingsPlanWithoutWarningCounts,
   isConfirmedPlannerStatus,
@@ -129,10 +130,13 @@ export const loadPlanningSnapshot = (force = false) => {
     }
     setState({ loading: true, error: '' })
     try {
-      const [summary, rows] = await Promise.all([
-        fetchJson<TodaySummaryPayload>(todayEndpoint),
-        loadBookingsPlanRows(bookingsEndpoint),
-      ])
+      const { summary, rows } = await withLiveRetry(async () => {
+        const [nextSummary, nextRows] = await Promise.all([
+          fetchJson<TodaySummaryPayload>(todayEndpoint),
+          loadBookingsPlanRows(bookingsEndpoint),
+        ])
+        return { summary: nextSummary, rows: nextRows }
+      })
       loadedAt = Date.now()
       setState({
         loading: false,
@@ -144,7 +148,12 @@ export const loadPlanningSnapshot = (force = false) => {
         },
       })
     } catch {
-      setState({ loading: false, data: null, error: 'loadError' })
+      const previous = getPlanningLiveState()
+      setState({
+        loading: false,
+        data: previous.data,
+        error: previous.data ? '' : 'loadError',
+      })
     }
   })().finally(() => {
     inflight = null

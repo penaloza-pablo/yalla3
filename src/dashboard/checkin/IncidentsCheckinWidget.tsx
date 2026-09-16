@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DashboardColSpan, DashboardRowSpan } from '../types'
 import { useDashboardDate } from '../dashboard-date-store'
+import { usePermissions } from '../../rbac/PermissionsProvider'
 import { CheckinWidget, type CheckinAction } from './CheckinWidget'
 import {
   loadUpcomingCheckins,
@@ -44,11 +45,15 @@ export function IncidentsCheckinWidget({
   rowSpan = 2,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { ready } = usePermissions()
   const selectedDate = useDashboardDate()
   const { guests, loading, busy, error, rows, from } = useCheckinLive()
   useEffect(() => {
+    if (!ready) {
+      return
+    }
     void loadUpcomingCheckins(false, selectedDate)
-  }, [selectedDate])
+  }, [ready, selectedDate])
   const awaiting = loading || from !== selectedDate
 
   const handleAction = useCallback(

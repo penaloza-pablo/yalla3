@@ -25,6 +25,7 @@ export interface ActivityWidgetProps {
   error?: string
   className?: string
   style?: CSSProperties & Record<`--kk-${string}`, string>
+  onOpen?: () => void
 }
 
 const clock = (
@@ -52,6 +53,7 @@ export function ActivityWidget({
   error,
   className = '',
   style,
+  onOpen,
 }: ActivityWidgetProps) {
   const copy = activityCopy(locale)
   const resolvedDate = dateLabel || copy.today
@@ -67,10 +69,23 @@ export function ActivityWidget({
 
   return (
     <section
-      className={`kk-activity ${className}`}
+      className={`kk-activity ${onOpen ? 'is-link' : ''} ${className}`.trim()}
       style={style}
       aria-label={`${copy.activity} · ${resolvedDate}`}
       aria-busy={data === null && !error}
+      role={onOpen ? 'link' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={
+        onOpen
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onOpen()
+              }
+            }
+          : undefined
+      }
     >
       <div
         className={`ka-card ${
@@ -112,7 +127,6 @@ export function ActivityWidget({
                     </svg>
                     <div className="ka-center" aria-hidden="true">
                       <span className="ka-total">{row.total}</span>
-                      <span className="ka-unit">{copy.inDay}</span>
                     </div>
                   </div>
                   <p className="ka-caption">{orbitCaption(row, locale)}</p>

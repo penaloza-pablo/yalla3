@@ -13,6 +13,7 @@ const DATE_SCALES = (swatch: string): DashboardWidgetScale[] => [
 const ORBIT_SCALES: DashboardWidgetScale[] = [
   { colSpan: 4, rowSpan: 2, swatch: ACTIVITY_SWATCH },
   { colSpan: 2, rowSpan: 2, swatch: ACTIVITY_SWATCH },
+  { colSpan: 3, rowSpan: 1, swatch: ACTIVITY_SWATCH },
   { colSpan: 1, rowSpan: 1, swatch: '#f4e4e1' },
 ]
 const PLANNING_SCALES = (swatch: string): DashboardWidgetScale[] => [
@@ -75,6 +76,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     scales: [
       { colSpan: 4, rowSpan: 2, swatch: 'var(--yl-energy)' },
       { colSpan: 2, rowSpan: 2, swatch: 'var(--yl-energy)' },
+      { colSpan: 3, rowSpan: 1, swatch: 'var(--yl-energy)' },
       { colSpan: 2, rowSpan: 1, swatch: 'var(--yl-energy)' },
       { colSpan: 1, rowSpan: 1, swatch: '#de8a7f' },
     ],

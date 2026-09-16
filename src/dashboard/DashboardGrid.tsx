@@ -121,6 +121,8 @@ export function DashboardGrid({
                 name={widgetLabel(definition, t)}
                 kind={definition.kind}
                 scale={scale}
+                colStart={placement.colStart}
+                rowStart={placement.rowStart}
                 activity={definition.activity}
                 planning={definition.planning}
                 reviews={definition.reviews}

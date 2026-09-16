@@ -113,13 +113,26 @@ const writeOverrides = (current: Map<string, WidgetOverride>) => {
   notify()
 }
 
+const mergeScales = (
+  catalog: DashboardWidgetScale[],
+  override?: DashboardWidgetScale[],
+) => {
+  const byKey = new Map(
+    catalog.map((scale) => [scaleKey(scale.colSpan, scale.rowSpan), { ...scale }]),
+  )
+  for (const scale of override ?? []) {
+    byKey.set(scaleKey(scale.colSpan, scale.rowSpan), { ...scale })
+  }
+  return [...byKey.values()]
+}
+
 const cloneWidget = (
   widget: DashboardWidgetDefinition,
   override?: WidgetOverride,
 ): DashboardWidgetDefinition => ({
   ...widget,
   title: override?.title,
-  scales: (override?.scales ?? widget.scales).map((scale) => ({ ...scale })),
+  scales: mergeScales(widget.scales, override?.scales),
 })
 
 export const subscribeDashboardWidgets = (listener: () => void) => {

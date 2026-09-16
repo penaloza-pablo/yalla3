@@ -20,6 +20,8 @@ export interface SuppliesWidgetProps {
   error?: string
   className?: string
   style?: CSSProperties
+  onInventoryOpen?: () => void
+  onPurchasesOpen?: () => void
 }
 
 function Icon({ name }: { name: keyof typeof SUPPLY_ICONS }) {
@@ -37,6 +39,8 @@ export function SuppliesWidget({
   error,
   className = '',
   style,
+  onInventoryOpen,
+  onPurchasesOpen,
 }: SuppliesWidgetProps) {
   const copy = suppliesCopy(locale)
   let state: ReturnType<typeof suppliesState> | null = null
@@ -54,15 +58,17 @@ export function SuppliesWidget({
 
   return (
     <section
-      className={`kk-supplies ${variant === 'grid' ? 'ks-grid' : ''} ${className}`.trim()}
+      className={`kk-supplies ${variant === 'grid' ? 'ks-grid is-untitled' : ''} ${className}`.trim()}
       style={style}
       aria-label={copy.ariaLabel}
       aria-busy={loading}
     >
+      {variant === 'grid' ? null : (
       <header className="ks-head">
         <h2 className="ks-title">{copy.title}</h2>
         {ready ? <span className="ks-ok">{copy.allSet}</span> : <Icon name="box" />}
       </header>
+      )}
       {loading || problem ? (
         <p className="ks-message" role={problem ? 'alert' : 'status'}>
           {problem || copy.loading}
@@ -118,13 +124,31 @@ export function SuppliesWidget({
               </>
             ) : (
               <div className="ks-grid-body">
-                {SUPPLY_ROWS.map((row) => (
+                {SUPPLY_ROWS.map((row) => {
+                  const open =
+                    row.key === 'stockAlerts' ? onInventoryOpen : onPurchasesOpen
+                  return (
                   <div
                     className={`ks-tile ${
                       row.key === 'stockAlerts' && data.stockAlerts > 0 ? 'is-stock' : ''
-                    } ${row.key === 'overdue' && data.overdue > 0 ? 'is-late' : ''}`}
+                    } ${row.key === 'overdue' && data.overdue > 0 ? 'is-late' : ''} ${
+                      open ? 'is-link' : ''
+                    }`}
                     key={row.key}
+                    role={open ? 'link' : undefined}
+                    tabIndex={open ? 0 : undefined}
                     aria-label={`${row.detail}: ${data[row.key]}`}
+                    onClick={open}
+                    onKeyDown={
+                      open
+                        ? (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              open()
+                            }
+                          }
+                        : undefined
+                    }
                   >
                     <div className="ks-tile-top">
                       <Icon name={row.icon} />
@@ -142,7 +166,8 @@ export function SuppliesWidget({
                     </div>
                     <span className="ks-tile-label">{row.label}</span>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
             <span className="ks-sr" role="status" aria-live="polite">

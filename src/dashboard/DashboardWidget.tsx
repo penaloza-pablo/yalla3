@@ -9,6 +9,8 @@ import { SuppliesDayWidget } from './supplies/SuppliesDayWidget'
 import { colorNeedsInk } from './color'
 import type {
   ActivityPresentation,
+  DashboardColSpan,
+  DashboardRowSpan,
   DashboardWidgetKind,
   DashboardWidgetScale,
   DatePresentation,
@@ -22,6 +24,8 @@ type Props = {
   name: string
   kind: DashboardWidgetKind
   scale: DashboardWidgetScale
+  colStart?: DashboardColSpan
+  rowStart?: DashboardRowSpan
   activity?: ActivityPresentation
   planning?: PlanningPresentation
   reviews?: ReviewsPresentation
@@ -34,6 +38,8 @@ export function DashboardWidget({
   name,
   kind,
   scale,
+  colStart,
+  rowStart,
   activity,
   planning,
   reviews,
@@ -64,8 +70,12 @@ export function DashboardWidget({
         isSupplies ? ' is-supplies' : ''
       }${isDate ? ' is-date' : ''}${ink ? ' is-ink' : ''}`}
       style={{
-        gridColumn: `span ${scale.colSpan}`,
-        gridRow: `span ${scale.rowSpan}`,
+        gridColumn: colStart
+          ? `${colStart} / span ${scale.colSpan}`
+          : `span ${scale.colSpan}`,
+        gridRow: rowStart
+          ? `${rowStart} / span ${scale.rowSpan}`
+          : `span ${scale.rowSpan}`,
         ...(isLive
           ? {}
           : {

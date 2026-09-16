@@ -9,6 +9,7 @@ import {
 } from '../../../amplify/functions/shared/purchase-status'
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
 import { fetchJson } from '../../operations/api'
+import { withLiveRetry } from '../live-retry'
 import { countInventoryStockAlerts } from './supplies-model.mjs'
 import type { SuppliesData } from './SuppliesWidget'
 
@@ -113,10 +114,13 @@ export const loadSuppliesSnapshot = (force = false) => {
     }
     setState({ loading: true, error: '' })
     try {
-      const [inventory, purchases] = await Promise.all([
-        fetchJson<ListResponse>(inventoryEndpoint),
-        fetchJson<ListResponse>(purchasesEndpoint),
-      ])
+      const { inventory, purchases } = await withLiveRetry(async () => {
+        const [nextInventory, nextPurchases] = await Promise.all([
+          fetchJson<ListResponse>(inventoryEndpoint),
+          fetchJson<ListResponse>(purchasesEndpoint),
+        ])
+        return { inventory: nextInventory, purchases: nextPurchases }
+      })
       loadedAt = Date.now()
       setState({
         loading: false,
@@ -127,7 +131,12 @@ export const loadSuppliesSnapshot = (force = false) => {
         },
       })
     } catch {
-      setState({ loading: false, data: null, error: 'loadError' })
+      const previous = getSuppliesLiveState()
+      setState({
+        loading: false,
+        data: previous.data,
+        error: previous.data ? '' : 'loadError',
+      })
     }
   })().finally(() => {
     inflight = null

@@ -13,6 +13,7 @@ export interface ReviewsWidgetProps {
   error?: string
   className?: string
   style?: CSSProperties
+  onOpen?: () => void
 }
 
 export function ReviewsWidget({
@@ -23,6 +24,7 @@ export function ReviewsWidget({
   error,
   className = '',
   style,
+  onOpen,
 }: ReviewsWidgetProps) {
   const copy = reviewsCopy(locale)
   let state: ReturnType<typeof reviewState> | null = null
@@ -40,10 +42,23 @@ export function ReviewsWidget({
     <section
       className={`kk-reviews ${variant === 'postcard' ? 'kr-postcard' : ''} ${
         clear && !problem ? 'kr-clear' : ''
-      } ${className}`.trim()}
+      } ${onOpen ? 'is-link' : ''} ${className}`.trim()}
       style={style}
       aria-label={copy.ariaLabel}
       aria-busy={pending}
+      role={onOpen ? 'link' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={
+        onOpen
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onOpen()
+              }
+            }
+          : undefined
+      }
     >
       <img className="kr-photo" src={imageSrc} alt="" />
       <div className="kr-shade" aria-hidden="true" />

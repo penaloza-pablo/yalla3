@@ -5,7 +5,9 @@ import type {
   DashboardRowSpan,
   PlanningPresentation,
 } from '../types'
+import { usePermissions } from '../../rbac/PermissionsProvider'
 import { loadPlanningSnapshot, usePlanningLive } from './planning-live-store'
+import { useDashboardNav } from '../dashboard-navigation'
 import { PlanningWidget } from './PlanningWidget'
 import '../dashboard.css'
 
@@ -40,10 +42,15 @@ export function PlanningDayWidget({
   tone = 'slate',
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { ready } = usePermissions()
+  const nav = useDashboardNav()
   const { data, loading, error } = usePlanningLive()
   useEffect(() => {
+    if (!ready) {
+      return
+    }
     void loadPlanningSnapshot()
-  }, [])
+  }, [ready])
 
   const message = resolveError(error, t)
   const locale = i18n.resolvedLanguage || i18n.language || 'en'
@@ -57,6 +64,21 @@ export function PlanningDayWidget({
         tone={tone}
         locale={locale}
         error={message && !data ? message : ''}
+        onArcClick={
+          nav
+            ? (key) => {
+                if (key === 'maintenance') {
+                  nav.toPage('Maintenance Plan')
+                  return
+                }
+                if (key === 'cleaning') {
+                  nav.toPage('Cleaning Plan')
+                  return
+                }
+                nav.toPage('Bookings')
+              }
+            : undefined
+        }
       />
     </div>
   )

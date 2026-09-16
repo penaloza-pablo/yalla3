@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
 import { fetchJson } from '../../operations/api'
+import { withLiveRetry } from '../live-retry'
 import { countPendingReviewsUnderFive } from './reviews-model.mjs'
 
 type LiveState = {
@@ -72,7 +73,9 @@ export const loadReviewsSnapshot = (force = false) => {
     }
     setState({ loading: true, error: '' })
     try {
-      const payload = await fetchJson<ReviewsApiResponse>(endpoint)
+      const payload = await withLiveRetry(() =>
+        fetchJson<ReviewsApiResponse>(endpoint),
+      )
       loadedAt = Date.now()
       setState({
         loading: false,
@@ -80,7 +83,12 @@ export const loadReviewsSnapshot = (force = false) => {
         activeCount: countPendingReviewsUnderFive(payload.items ?? []),
       })
     } catch {
-      setState({ loading: false, activeCount: null, error: 'loadError' })
+      const previous = getReviewsLiveState()
+      setState({
+        loading: false,
+        activeCount: previous.activeCount,
+        error: previous.activeCount === null ? 'loadError' : '',
+      })
     }
   })().finally(() => {
     inflight = null

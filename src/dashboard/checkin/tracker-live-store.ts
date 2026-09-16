@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getAmplifyEndpoint } from '../../lib/amplify-endpoint'
 import { fetchJson, getVisitsByDate } from '../../operations/api'
 import { addDaysToDateString } from '../../operations/dateHelpers'
+import { withLiveRetry } from '../live-retry'
 import { getDashboardDate } from '../dashboard-date-store'
 import {
   asTrackerRow,
@@ -312,11 +313,9 @@ export const loadUpcomingCheckins = (
     }
     setState({ loading: true, error: '' })
     try {
-      const loaded = await loadRangeWithFallback(
-        endpoint,
-        from,
-        to,
-        controller.signal,
+      const loaded = await withLiveRetry(
+        () => loadRangeWithFallback(endpoint, from, to, controller.signal),
+        { signal: controller.signal },
       )
       if (generation !== loadGeneration || controller.signal.aborted) {
         return
@@ -344,14 +343,17 @@ export const loadUpcomingCheckins = (
       ) {
         return
       }
+      const previous = getCheckinLiveState()
+      const keep = previous.from === from && previous.rows.length > 0
       setState({
         loading: false,
-        rows: [],
-        activity: null,
+        rows: keep ? previous.rows : [],
+        activity: keep ? previous.activity : null,
         from,
         to,
-        error:
-          loadError instanceof Error && loadError.message
+        error: keep
+          ? ''
+          : loadError instanceof Error && loadError.message
             ? loadError.message
             : 'loadError',
       })

@@ -7,8 +7,10 @@ import type {
 } from '../types'
 import { getTodayMadrid } from '../../operations/dateHelpers'
 import { useDashboardDate } from '../dashboard-date-store'
+import { usePermissions } from '../../rbac/PermissionsProvider'
 import { loadUpcomingCheckins, useCheckinLive } from '../checkin/tracker-live-store'
 import { dateParts } from '../date/date-model.mjs'
+import { useDashboardNav } from '../dashboard-navigation'
 import { ActivityWidget, type ActivityData } from './ActivityWidget'
 import '../dashboard.css'
 
@@ -53,11 +55,16 @@ export function ActivityDayWidget({
   tone = 'original',
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { ready } = usePermissions()
+  const nav = useDashboardNav()
   const selectedDate = useDashboardDate()
   const { activity, loading, error, from } = useCheckinLive()
   useEffect(() => {
+    if (!ready) {
+      return
+    }
     void loadUpcomingCheckins(false, selectedDate)
-  }, [selectedDate])
+  }, [ready, selectedDate])
 
   const compact = colSpan === 1 && rowSpan === 1
   const message = resolveError(error, t)
@@ -69,7 +76,22 @@ export function ActivityDayWidget({
   if (compact) {
     const checkins = awaiting ? undefined : activity?.checkins
     return (
-      <div className="yl-dashboard-checkin-mini">
+      <div
+        className={`yl-dashboard-checkin-mini${nav ? ' is-link' : ''}`}
+        role={nav ? 'link' : undefined}
+        tabIndex={nav ? 0 : undefined}
+        onClick={nav ? () => nav.toTodayView('agenda') : undefined}
+        onKeyDown={
+          nav
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  nav.toTodayView('agenda')
+                }
+              }
+            : undefined
+        }
+      >
         <p className="yl-dashboard-widget-name">{title}</p>
         {awaiting ? (
           <p className="yl-dashboard-checkin-status">{t('checkInTracker.loading')}</p>
@@ -103,6 +125,7 @@ export function ActivityDayWidget({
         locale={locale}
         dateLabel={dateLabel}
         error={message && !activity ? message : ''}
+        onOpen={nav ? () => nav.toTodayView('agenda') : undefined}
         style={{
           '--kk-radius': 'var(--yl-radius-card)',
           '--kk-font': 'inherit',

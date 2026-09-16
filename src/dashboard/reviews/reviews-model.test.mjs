@@ -57,7 +57,9 @@ test('pending reviews under five match the Reviews table filter', () => {
       { id: 'c', status: 'closed', rating: 2 },
       { id: 'd', status: 'pending', rating: 5 },
       { id: 'e', status: 'pending', rating: 0 },
+      { id: 'f', status: 'Working', rating: 3 },
+      { id: 'g', status: 'working', rating: 5 },
     ]),
-    3,
+    4,
   )
 })

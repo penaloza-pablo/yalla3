@@ -106,7 +106,11 @@ export function countPendingReviewsUnderFive(records) {
     const status = String(row?.status ?? row?.Status ?? '')
       .trim()
       .toLowerCase()
-    if (status === 'pending' && Number.isFinite(rating) && rating < 5) {
+    if (
+      (status === 'pending' || status === 'working') &&
+      Number.isFinite(rating) &&
+      rating < 5
+    ) {
       count += 1
     }
   }

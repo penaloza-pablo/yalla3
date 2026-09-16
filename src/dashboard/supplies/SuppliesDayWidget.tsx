@@ -5,6 +5,9 @@ import type {
   DashboardRowSpan,
   SuppliesPresentation,
 } from '../types'
+import { PURCHASE_OVERDUE, PURCHASE_WAITING_DELIVERY } from '../../../amplify/functions/shared/purchase-status'
+import { useDashboardNav } from '../dashboard-navigation'
+import { usePermissions } from '../../rbac/PermissionsProvider'
 import { loadSuppliesSnapshot, useSuppliesLive } from './supplies-live-store'
 import { SuppliesWidget } from './SuppliesWidget'
 import '../dashboard.css'
@@ -38,10 +41,15 @@ export function SuppliesDayWidget({
   variant = 'focus',
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { ready } = usePermissions()
+  const nav = useDashboardNav()
   const { data, loading, error } = useSuppliesLive()
   useEffect(() => {
+    if (!ready) {
+      return
+    }
     void loadSuppliesSnapshot()
-  }, [])
+  }, [ready])
 
   const message = resolveError(error, t)
   const locale = i18n.resolvedLanguage || i18n.language || 'en'
@@ -54,6 +62,19 @@ export function SuppliesDayWidget({
         variant={variant}
         locale={locale}
         error={message && !data ? message : ''}
+        onInventoryOpen={nav ? () => nav.toPage('Inventory') : undefined}
+        onPurchasesOpen={
+          nav
+            ? () =>
+                nav.toPage('Purchases', {
+                  purchaseStatuses: [
+                    PURCHASE_WAITING_DELIVERY,
+                    PURCHASE_OVERDUE,
+                  ],
+                  purchaseInvoiceOff: true,
+                })
+            : undefined
+        }
       />
     </div>
   )
