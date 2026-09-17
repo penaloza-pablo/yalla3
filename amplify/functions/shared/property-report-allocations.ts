@@ -7,6 +7,7 @@ export const INCOME_ALLOCATIONS = [
 export const LINE_ALLOCATIONS = [
   ...COST_ALLOCATIONS,
   ...INCOME_ALLOCATIONS,
+  'directToUs',
 ] as const;
 
 export type CostAllocation = (typeof COST_ALLOCATIONS)[number];
@@ -34,7 +35,7 @@ export const toIncomeAllocation = (
   if (value === 'ownerPlus12') {
     return 'applyMarkup';
   }
-  if (value === 'bear') {
+  if (value === 'bear' || value === 'directToUs') {
     return 'doNotSend';
   }
   return '';

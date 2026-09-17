@@ -356,7 +356,7 @@ const AllocationChip = ({
             {t('propertyReports.allocationApplyMarkup')}
           </option>
           <option value="doNotSend">
-            {t('propertyReports.allocationDoNotSend')}
+            {t('propertyReports.allocationDirectToUs')}
           </option>
         </>
       ) : (
@@ -1163,7 +1163,7 @@ export function PropertyReportsView({
         allocatedLines: [
           ...cleaningLines.map((line) => ({
             section: 'cleaning' as const,
-            net: (line.price ?? 0) + (line.kitCost || 0),
+            net: line.price ?? 0,
             allocation: lineAllocations[`cleaning:${line.id}`] ?? '',
           })),
           ...maintenanceLines.map((line) => ({

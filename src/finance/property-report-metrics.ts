@@ -14,7 +14,7 @@ import {
 import type { LineAllocation } from '../../amplify/functions/shared/property-report-allocations'
 
 export type CostAllocation = 'bear' | 'ownerPlus12' | 'owner'
-export type IncomeAllocation = 'directToOwner' | 'applyMarkup' | 'doNotSend'
+export type IncomeAllocation = 'directToOwner' | 'applyMarkup' | 'doNotSend' | 'directToUs'
 export type ReportLineAllocation = LineAllocation
 
 export type PropertyReportMetricUnit = 'money' | 'count' | 'percent'
@@ -56,13 +56,14 @@ export type PropertyReportMetricInputs = {
 export const MARKUP_RATE = 0.12
 export const MANAGEMENT_FEE_VAT_RATE = 0.21
 
-const isIncomeApplyMarkup = (line: AllocatedReportLine) =>
-  line.section === 'income' &&
-  (line.allocation === 'applyMarkup' || line.allocation === 'ownerPlus12')
+const isMarkupCharge = (line: AllocatedReportLine) =>
+  line.allocation === 'ownerPlus12' || line.allocation === 'applyMarkup'
 
-const isIncomeDoNotSend = (line: AllocatedReportLine) =>
+const isIncomeDirectToUs = (line: AllocatedReportLine) =>
   line.section === 'income' &&
-  (line.allocation === 'doNotSend' || line.allocation === 'bear')
+  (line.allocation === 'directToUs' ||
+    line.allocation === 'doNotSend' ||
+    line.allocation === 'bear')
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
@@ -86,6 +87,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'otherIncomesNet',
     unit: 'money',
     role: 'source',
+  },
+  {
+    id: 'otherIncomesDirectToUs',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum(income.net where allocation = directToUs)',
   },
   {
     id: 'payoutCleaningNet',
@@ -242,7 +249,13 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     unit: 'money',
     role: 'indicator',
     formula:
-      'markupPercent / 100 * (sum(net where allocation = bear and section != income) + sum(income.net where allocation = applyMarkup))',
+      'markupPercent / 100 * sum(net where allocation in [ownerPlus12, applyMarkup])',
+  },
+  {
+    id: 'markupVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'markup * 0.21',
   },
   {
     id: 'iva',
@@ -392,14 +405,10 @@ export const computePropertyReportMetrics = (
     inputs.allocatedLines,
     (line) => line.section === 'maintenance' && line.allocation === 'bear',
   )
-  const markupBase = sumAllocated(
-    inputs.allocatedLines,
-    (line) =>
-      (line.section !== 'income' && line.allocation === 'bear') ||
-      isIncomeApplyMarkup(line),
-  )
+  const markupBase = sumAllocated(inputs.allocatedLines, isMarkupCharge)
   const markupRate = resolveMarkupPercent(settings) / 100
   const markup = roundMoney(markupBase * markupRate)
+  const markupVat = roundMoney(markup * MANAGEMENT_FEE_VAT_RATE)
   const iva = roundMoney(
     inputs.cleaningIva +
       inputs.maintenanceIva +
@@ -422,10 +431,15 @@ export const computePropertyReportMetrics = (
       (line.section === 'service' || line.section === 'expense') &&
       line.allocation === 'bear',
   )
+  const otherIncomesDirectToUs = sumAllocated(
+    inputs.allocatedLines,
+    isIncomeDirectToUs,
+  )
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
     channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
+    otherIncomesDirectToUs,
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
     cleaningFee: roundMoney(inputs.cleaningFee),
@@ -451,6 +465,7 @@ export const computePropertyReportMetrics = (
     maintenanceCoverByOwner,
     maintenanceCoverByUs,
     markup,
+    markupVat,
     iva,
     expensesAndServices,
     expensesAndServicesCoverByOwner,
@@ -458,15 +473,10 @@ export const computePropertyReportMetrics = (
     marketManagementFee,
     marketManagementCommission,
   }
-  const incomesDoNotSend = sumAllocated(
-    inputs.allocatedLines,
-    isIncomeDoNotSend,
-  )
   const managementFee = resolveManagementFee(formulaValues, settings)
   const managementFeeVat = roundMoney(managementFee * MANAGEMENT_FEE_VAT_RATE)
   const withBase = {
     ...formulaValues,
-    incomesDoNotSend,
     managementFee,
     managementFeeVat,
     commission: settings?.commissionPercent ?? 0,
@@ -500,6 +510,7 @@ export const computePropertyReportMetrics = (
     paidByGuest: roundMoney(inputs.paidByGuest),
     channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
+    otherIncomesDirectToUs,
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
     cleaningFee: roundMoney(inputs.cleaningFee),
@@ -529,6 +540,7 @@ export const computePropertyReportMetrics = (
     maintenanceCoverByOwner,
     maintenanceCoverByUs,
     markup,
+    markupVat,
     iva,
     expensesAndServices,
     expensesAndServicesCoverByOwner,

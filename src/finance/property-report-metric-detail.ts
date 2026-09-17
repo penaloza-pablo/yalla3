@@ -68,11 +68,13 @@ const isOwnerAlloc = (allocation: LineAllocation | '') =>
 
 const isBearAlloc = (allocation: LineAllocation | '') => allocation === 'bear'
 
-const isIncomeApplyMarkup = (allocation: LineAllocation | '') =>
-  allocation === 'applyMarkup' || allocation === 'ownerPlus12'
+const isMarkupCharge = (allocation: LineAllocation | '') =>
+  allocation === 'ownerPlus12' || allocation === 'applyMarkup'
 
-const isIncomeDoNotSend = (allocation: LineAllocation | '') =>
-  allocation === 'doNotSend' || allocation === 'bear'
+const isIncomeDirectToUs = (allocation: LineAllocation | '') =>
+  allocation === 'directToUs' ||
+  allocation === 'doNotSend' ||
+  allocation === 'bear'
 
 const payoutRows = (
   payouts: MetricDetailPayout[],
@@ -208,6 +210,18 @@ export const buildMetricDetailSections = (
           incomesName,
           incomesName,
           allocatedRows(sources.incomes, (line) => line.net),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'otherIncomesDirectToUs':
+      return [
+        section(
+          incomesName,
+          incomesName,
+          allocatedRows(
+            sources.incomes,
+            (line) => line.net,
+            (line) => isIncomeDirectToUs(line.allocation),
+          ),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'otherIncomesIva':
@@ -401,14 +415,17 @@ export const buildMetricDetailSections = (
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'markup':
+    case 'markupVat': {
+      const factor = metricId === 'markupVat' ? 0.21 : 1
+      const amount = (net: number) => roundMoney(markupAmount(net) * factor)
       return [
         section(
           cleaningName,
           cleaningName,
           allocatedRows(
             sources.cleaning,
-            (line) => markupAmount(line.net + (line.kit ?? 0)),
-            (line) => isBearAlloc(line.allocation),
+            (line) => amount(line.net),
+            (line) => isMarkupCharge(line.allocation),
           ),
         ),
         section(
@@ -416,8 +433,8 @@ export const buildMetricDetailSections = (
           maintenanceName,
           allocatedRows(
             sources.maintenance,
-            (line) => markupAmount(line.net),
-            (line) => isBearAlloc(line.allocation),
+            (line) => amount(line.net),
+            (line) => isMarkupCharge(line.allocation),
           ),
         ),
         section(
@@ -425,8 +442,8 @@ export const buildMetricDetailSections = (
           servicesName,
           allocatedRows(
             sources.services,
-            (line) => markupAmount(line.net),
-            (line) => isBearAlloc(line.allocation),
+            (line) => amount(line.net),
+            (line) => isMarkupCharge(line.allocation),
           ),
         ),
         section(
@@ -434,8 +451,8 @@ export const buildMetricDetailSections = (
           expensesName,
           allocatedRows(
             sources.expenses,
-            (line) => markupAmount(line.net),
-            (line) => isBearAlloc(line.allocation),
+            (line) => amount(line.net),
+            (line) => isMarkupCharge(line.allocation),
           ),
         ),
         section(
@@ -443,11 +460,12 @@ export const buildMetricDetailSections = (
           incomesName,
           allocatedRows(
             sources.incomes,
-            (line) => markupAmount(line.net),
-            (line) => isIncomeApplyMarkup(line.allocation),
+            (line) => amount(line.net),
+            (line) => isMarkupCharge(line.allocation),
           ),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
+    }
     case 'iva':
       return [
         section(
@@ -489,7 +507,7 @@ export const buildMetricDetailSections = (
           allocatedRows(
             sources.incomes,
             (line) => line.net,
-            (line) => !isIncomeDoNotSend(line.allocation),
+            (line) => !isIncomeDirectToUs(line.allocation),
           ),
         ),
         section(

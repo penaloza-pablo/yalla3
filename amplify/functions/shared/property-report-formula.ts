@@ -7,7 +7,7 @@ export const DEFAULT_PROPERTY_CONTRIBUTION_FORMULA =
   '(income - payoutCleaningNet) - (cleaningNet + cleaningKit) - maintenanceNet - managementFee - markup - expensesAndServices';
 
 export const DEFAULT_AMOUNT_TRANSFERRED_FORMULA =
-  'income - incomesDoNotSend - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup';
+  'income - otherIncomesDirectToUs - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup';
 
 export type FormulaTarget =
   | 'managementFee'
@@ -20,6 +20,7 @@ export const FORMULA_CATALOG_VARIABLES = [
   'paidByGuest',
   'channelFee',
   'otherIncomesNet',
+  'otherIncomesDirectToUs',
   'payoutCleaningNet',
   'payoutCleaningGross',
   'cleaningFee',
@@ -45,6 +46,7 @@ export const FORMULA_CATALOG_VARIABLES = [
   'maintenanceCoverByOwner',
   'maintenanceCoverByUs',
   'markup',
+  'markupVat',
   'iva',
   'expensesAndServices',
   'expensesAndServicesCoverByOwner',
@@ -75,17 +77,19 @@ export const VISIBILITY_METRIC_IDS = [
 
 export type VisibilityMetricId = (typeof VISIBILITY_METRIC_IDS)[number];
 
+export const FORMULA_VARIABLE_ALIASES: Record<string, string> = {
+  incomesDoNotSend: 'otherIncomesDirectToUs',
+};
+
 const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
   managementFee: [
     'marketManagementFee',
     'marketManagementCommission',
-    'incomesDoNotSend',
   ],
   propertyContribution: [
     'managementFee',
     'managementFeeVat',
     'amountTransferred',
-    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
@@ -94,7 +98,6 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
     'managementFeeVat',
     'propertyContribution',
     'amountTransferred',
-    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
@@ -104,14 +107,12 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
     'propertyContribution',
     'ourProfit',
     'amountTransferred',
-    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
   amountTransferred: [
     'managementFee',
     'managementFeeVat',
-    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
@@ -340,8 +341,12 @@ export const validateFormula = (
   }
   const allowed = new Set(allowedFormulaVariables(model, target));
   for (const token of tokenized.tokens) {
-    if (token.kind === 'ident' && !allowed.has(token.raw)) {
-      if (token.raw === target || token.raw === 'netProfit') {
+    const ident =
+      token.kind === 'ident'
+        ? (FORMULA_VARIABLE_ALIASES[token.raw] ?? token.raw)
+        : token.raw;
+    if (token.kind === 'ident' && !allowed.has(ident)) {
+      if (ident === target || ident === 'netProfit') {
         return {
           ok: false,
           message: `"${token.raw}" cannot be used inside its own formula.`,
@@ -360,6 +365,11 @@ export const validateFormula = (
   for (const name of allowed) {
     sample[name] = 1;
   }
+  for (const [alias, canonical] of Object.entries(FORMULA_VARIABLE_ALIASES)) {
+    if (allowed.has(canonical)) {
+      sample[alias] = 1;
+    }
+  }
   const parsed = parseExpression(tokenized.tokens, sample);
   if (!parsed.ok) {
     return parsed;
@@ -375,5 +385,14 @@ export const evaluateFormula = (
   if (!tokenized.ok) {
     return tokenized;
   }
-  return parseExpression(tokenized.tokens, values);
+  const resolved: Record<string, number> = { ...values };
+  for (const [alias, canonical] of Object.entries(FORMULA_VARIABLE_ALIASES)) {
+    if (
+      !Object.prototype.hasOwnProperty.call(resolved, alias) &&
+      Object.prototype.hasOwnProperty.call(resolved, canonical)
+    ) {
+      resolved[alias] = resolved[canonical];
+    }
+  }
+  return parseExpression(tokenized.tokens, resolved);
 };
