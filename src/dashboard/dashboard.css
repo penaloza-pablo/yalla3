@@ -85,9 +85,9 @@
   display: grid;
   grid-template-columns: repeat(
     var(--yl-dashboard-columns, 4),
-    var(--yl-dashboard-track, var(--yl-dashboard-cell, 156px))
+    var(--yl-dashboard-cell, 187.2px)
   );
-  grid-auto-rows: var(--yl-dashboard-track, var(--yl-dashboard-cell, 156px));
+  grid-auto-rows: var(--yl-dashboard-cell, 187.2px);
   grid-auto-flow: dense;
   gap: var(--yl-dashboard-gap, 12px);
   width: max-content;
@@ -160,19 +160,6 @@
   color: var(--yl-ink);
 }
 
-.yl-dashboard-widget.is-activity > :not(.yl-dashboard-widget-config),
-.yl-dashboard-widget.is-checkin > :not(.yl-dashboard-widget-config),
-.yl-dashboard-widget.is-date > :not(.yl-dashboard-widget-config),
-.yl-dashboard-widget.is-planning > :not(.yl-dashboard-widget-config),
-.yl-dashboard-widget.is-reviews > :not(.yl-dashboard-widget-config),
-.yl-dashboard-widget.is-supplies > :not(.yl-dashboard-widget-config) {
-  flex: none;
-  width: calc(100% / var(--yl-dashboard-widget-scale, 1));
-  height: calc(100% / var(--yl-dashboard-widget-scale, 1));
-  transform: scale(var(--yl-dashboard-widget-scale, 1));
-  transform-origin: 0 0;
-}
-
 .yl-dashboard-planning,
 .yl-dashboard-reviews,
 .yl-dashboard-supplies,
@@ -199,7 +186,7 @@
   height: 100%;
 }
 
-/* Native knock-knock canvas is 220×220; 1×1 dashboard cells are 156×156. */
+/* Native knock-knock canvas is 220×220; 1×1 dashboard cells are 187.2×187.2. */
 .yl-dashboard-planning.is-cell,
 .yl-dashboard-reviews.is-cell,
 .yl-dashboard-supplies.is-cell {
@@ -217,8 +204,8 @@
   width: 220px;
   height: 220px;
   max-width: none;
-  transform: scale(0.709090909);
-  transform: scale(calc(var(--yl-dashboard-cell, 156px) / 220px));
+  transform: scale(0.850909091);
+  transform: scale(calc(var(--yl-dashboard-cell, 187.2px) / 220px));
   transform-origin: 0 0;
 }
 

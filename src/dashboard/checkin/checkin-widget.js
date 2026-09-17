@@ -82,30 +82,30 @@ const css = `
   @media(pointer:coarse){.nav button{width:44px;height:44px}.btn,.undo{min-height:44px}.pager{gap:5px}}
 
   /* Trayecto: identity + interactive timeline + compact guest navigation. */
-  .journey .content{padding:16px 20px 10px;min-height:0}
-  .journey .identity{margin-top:0;gap:14px}
-  .journey .name{font-size:22px;line-height:1.12;letter-spacing:-.7px}
-  .journey .property{font-size:19px;line-height:1.2;letter-spacing:-.5px}
-  .journey .person small,.journey .property small{font-size:8px;letter-spacing:1.5px;margin-bottom:3px}
-  .journey .avatar{width:34px;height:34px;font-size:14px}
-  .journey .steps{margin:12px 0 0}
-  .journey .dot{width:24px;height:24px}
-  .journey .step:not(:last-child):before{left:12px;right:-12px;top:11px}
-  .journey .step-label{font-size:10px;line-height:14px;margin-top:5px;min-height:28px}
-  .journey .step-control{display:block;width:100%;min-height:57px;padding:0;border:0;background:transparent;text-align:left;color:inherit;border-radius:6px;position:relative}
+  .journey .content{padding:10px 16px;min-height:0;flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
+  .journey .identity{margin-top:0;gap:12px}
+  .journey .name{font-size:26px;line-height:1.12;letter-spacing:-.7px}
+  .journey .property{font-size:23px;line-height:1.2;letter-spacing:-.5px}
+  .journey .person small,.journey .property small{font-size:10px;letter-spacing:1.5px;margin-bottom:3px}
+  .journey .avatar{width:41px;height:41px;font-size:17px}
+  .journey .steps{margin:10px 0 0}
+  .journey .dot{width:29px;height:29px}
+  .journey .dot svg{width:13px;height:13px}
+  .journey .step:not(:last-child):before{left:14px;right:-14px;top:13px}
+  .journey .step-label{font-size:13px;line-height:16px;margin-top:5px;min-height:0}
+  .journey .step-control{display:block;width:100%;min-height:56px;padding:0;border:0;background:transparent;text-align:left;color:inherit;border-radius:6px;position:relative}
   .journey .step-control[aria-disabled="true"]{cursor:default}
   .journey .actionable .dot{color:var(--kk-green);background:var(--kk-paper);box-shadow:0 0 0 1px var(--kk-green)}
   .journey .actionable .step-label{color:var(--kk-green);text-decoration:underline;text-underline-offset:3px}
   .journey .actionable .step-control:hover .dot{background:var(--kk-green);color:var(--kk-paper)}
-  .journey .nav{padding:5px 17px;gap:10px}
+  .journey .nav{padding:4px 16px;gap:10px;margin-top:0;flex:0 0 auto}
+  .journey .count{font-size:13px}
   .journey .nav-note{display:none}
   .journey .overview{max-width:45%}
   .journey .error{padding:8px 20px}
-  @container(max-width:359px){.journey .content{padding:14px 15px 8px}.journey .identity{gap:9px}.journey .name{font-size:21px}.journey .property{font-size:18px}}
+  @container(max-width:359px){.journey .content{padding:8px 12px}.journey .identity{gap:9px}.journey .name{font-size:24px}.journey .property{font-size:21px}}
   @media(prefers-reduced-motion:reduce){.leaf{transition:none}}
-  .journey .content{flex:1 1 auto}
-  .journey .nav{margin-top:auto}
-  @container(max-height:170px){.journey .content{padding:10px 14px 4px}.journey .identity{gap:8px}.journey .avatar{width:28px;height:28px;font-size:12px}.journey .name{font-size:18px}.journey .property{font-size:16px}.journey .steps{margin-top:8px}.journey .step-label{min-height:0;font-size:9px;line-height:12px}.journey .step-control{min-height:44px}.journey .nav{padding:2px 12px}}
+  @container(max-height:210px){.journey .content{padding:8px 14px}.journey .identity{gap:10px}.journey .avatar{width:41px;height:41px;font-size:17px}.journey .name{font-size:26px}.journey .property{font-size:23px}.journey .person small,.journey .property small{font-size:10px}.journey .steps{margin-top:8px}.journey .step-label{min-height:0;font-size:13px;line-height:16px}.journey .step-control{min-height:52px}.journey .nav{padding:3px 12px}.journey .count{font-size:13px}}
 `;
 
 export class KnockKnockCheckin extends HTMLElement {

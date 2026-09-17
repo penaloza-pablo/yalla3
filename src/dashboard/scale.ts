@@ -7,9 +7,9 @@ import type {
   DashboardWidgetScale,
 } from './types'
 import {
+  DASHBOARD_CELL_PX,
   DASHBOARD_COLUMNS,
-  DASHBOARD_TRACK_GAP_PX,
-  DASHBOARD_TRACK_PX,
+  DASHBOARD_GAP_PX,
   scaleKey,
 } from './types'
 
@@ -20,8 +20,8 @@ export type ResolvedWidget = {
 
 export const fitTracks = (
   available: number,
-  cell = DASHBOARD_TRACK_PX,
-  gap = DASHBOARD_TRACK_GAP_PX,
+  cell = DASHBOARD_CELL_PX,
+  gap = DASHBOARD_GAP_PX,
 ) => {
   if (available < cell) {
     return 0
@@ -166,10 +166,10 @@ export const resolveVisibleWidgets = (
 
   const maxCols = Math.min(
     DASHBOARD_COLUMNS,
-    fitTracks(availableWidth, DASHBOARD_TRACK_PX, DASHBOARD_TRACK_GAP_PX),
+    fitTracks(availableWidth, DASHBOARD_CELL_PX, DASHBOARD_GAP_PX),
   )
   const maxRows = Number.isFinite(availableHeight)
-    ? fitTracks(availableHeight, DASHBOARD_TRACK_PX, DASHBOARD_TRACK_GAP_PX)
+    ? fitTracks(availableHeight, DASHBOARD_CELL_PX, DASHBOARD_GAP_PX)
     : Number.POSITIVE_INFINITY
   if (maxCols < 1 || maxRows < 1) {
     return { widgets: [], columns: Math.max(1, maxCols) }

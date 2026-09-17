@@ -151,20 +151,18 @@ export function SuppliesWidget({
                         : undefined
                     }
                   >
-                    <div className="ks-tile-top">
-                      <Icon name={row.icon} />
-                      {data[row.key] > 0 ? (
-                        <strong
-                          className={`ks-tile-value ${data[row.key] >= 1000 ? 'ks-long' : ''}`}
-                        >
-                          {data[row.key]}
-                        </strong>
-                      ) : (
-                        <span className="ks-tile-check" aria-label={copy.nonePending}>
-                          ✓
-                        </span>
-                      )}
-                    </div>
+                    <Icon name={row.icon} />
+                    {data[row.key] > 0 ? (
+                      <strong
+                        className={`ks-tile-value ${data[row.key] >= 1000 ? 'ks-long' : ''}`}
+                      >
+                        {data[row.key]}
+                      </strong>
+                    ) : (
+                      <span className="ks-tile-check" aria-label={copy.nonePending}>
+                        ✓
+                      </span>
+                    )}
                     <span className="ks-tile-label">{row.label}</span>
                   </div>
                   )

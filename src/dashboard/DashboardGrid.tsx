@@ -6,11 +6,9 @@ import { resolveVisibleWidgets } from './scale'
 import {
   DASHBOARD_CELL_PX,
   DASHBOARD_COLUMNS,
+  DASHBOARD_GAP_PX,
   DASHBOARD_INSET_PX,
   DASHBOARD_SIDEBAR_PX,
-  DASHBOARD_TRACK_GAP_PX,
-  DASHBOARD_TRACK_PX,
-  DASHBOARD_WIDGET_SCALE,
 } from './types'
 import type { DashboardLayout, DashboardWidgetPlacement } from './types'
 import { widgetLabel } from './labels'
@@ -112,9 +110,7 @@ export function DashboardGrid({
           style={
             {
               '--yl-dashboard-cell': `${DASHBOARD_CELL_PX}px`,
-              '--yl-dashboard-track': `${DASHBOARD_TRACK_PX}px`,
-              '--yl-dashboard-widget-scale': String(DASHBOARD_WIDGET_SCALE),
-              '--yl-dashboard-gap': `${DASHBOARD_TRACK_GAP_PX}px`,
+              '--yl-dashboard-gap': `${DASHBOARD_GAP_PX}px`,
               '--yl-dashboard-columns': String(
                 resolved.columns || DASHBOARD_COLUMNS,
               ),

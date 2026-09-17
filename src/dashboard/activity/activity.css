@@ -32,14 +32,17 @@
 .kk-activity .ka-orbit .ka-caption{white-space:normal;text-wrap:balance}
 .kk-activity .ka-orbit .ka-early{background:var(--ka-badge);color:var(--ka-badge-ink)}
 .kk-activity .ka-orbit .ka-done{color:var(--ka-ink)}
-@container(max-height:170px){
-  .kk-activity .ka-orbit{padding-top:8px;padding-bottom:4px}
-  .kk-activity .ka-caption{margin-top:4px;font-size:8px}
-  .kk-activity .ka-meta{height:18px;margin-top:4px}
-  .kk-activity .ka-frequency{padding:8px 12px 4px}
-  .kk-activity .ka-row{padding:4px 0;gap:8px}
-  .kk-activity .ka-row-total{font-size:20px}
+@container(max-height:210px){
+  .kk-activity .ka-orbit{padding-top:10px;padding-bottom:5px}
+  .kk-activity .ka-label{font-size:13px}
+  .kk-activity .ka-caption{margin-top:5px;font-size:10px}
+  .kk-activity .ka-meta{height:22px;margin-top:5px}
+  .kk-activity .ka-early{font-size:11px}
+  .kk-activity .ka-done{font-size:12px}
+  .kk-activity .ka-frequency{padding:10px 14px 5px}
+  .kk-activity .ka-row{padding:5px 0;gap:10px}
+  .kk-activity .ka-row-total{font-size:24px}
   .kk-activity .ka-row-meta{display:none}
   .kk-activity .ka-header{display:none}
-  .kk-activity .ka-bars{height:12px}
+  .kk-activity .ka-bars{height:14px}
 }
