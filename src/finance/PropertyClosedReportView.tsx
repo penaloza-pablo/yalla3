@@ -23,6 +23,7 @@ type Props = {
   contributionFormula?: string
   ourProfitFormula?: string
   netEarningsFormula?: string
+  amountTransferredFormula?: string
 }
 
 const TAB_ICONS: Record<ReportTabId, YlIconName> = {
@@ -74,6 +75,7 @@ export function PropertyClosedReportView({
   contributionFormula,
   ourProfitFormula,
   netEarningsFormula,
+  amountTransferredFormula,
 }: Props) {
   const { t, i18n } = useTranslation()
   const resolved = visibility ?? defaultReportVisibility()
@@ -171,6 +173,13 @@ export function PropertyClosedReportView({
       return netEarningsFormula
         ? t('propertyReports.metrics.netEarningsHelp', { formula: netEarningsFormula })
         : t('propertyReports.metrics.netEarningsEmptyHelp')
+    }
+    if (key === 'amountTransferred') {
+      return amountTransferredFormula
+        ? t('propertyReports.metrics.amountTransferredHelp', {
+            formula: amountTransferredFormula,
+          })
+        : t('propertyReports.metrics.amountTransferredEmptyHelp')
     }
     return t(`propertyReports.metrics.${key}Help`, { defaultValue: metricLabel(key) })
   }

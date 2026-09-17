@@ -1,6 +1,7 @@
 import {
   DEFAULT_COMMISSION_FORMULA,
   DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
+  DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   evaluateFormula,
   type VisibilityMetricId,
 } from '../../amplify/functions/shared/property-report-formula'
@@ -273,8 +274,7 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'amountTransferred',
     unit: 'money',
     role: 'indicator',
-    formula:
-      'income - incomesDoNotSend - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup',
+    formula: 'settings.amountTransferredFormula',
   },
   {
     id: 'marketManagementFee',
@@ -464,21 +464,22 @@ export const computePropertyReportMetrics = (
   )
   const managementFee = resolveManagementFee(formulaValues, settings)
   const managementFeeVat = roundMoney(managementFee * MANAGEMENT_FEE_VAT_RATE)
-  const amountTransferred = roundMoney(
-    income -
-      incomesDoNotSend -
-      expensesAndServicesCoverByOwner -
-      maintenanceCoverByOwner -
-      managementFee -
-      markup,
-  )
-  const withFee = {
+  const withBase = {
     ...formulaValues,
+    incomesDoNotSend,
     managementFee,
     managementFeeVat,
-    amountTransferred,
     commission: settings?.commissionPercent ?? 0,
     fixedRent: settings?.fixedRent ?? 0,
+  }
+  const amountTransferred = evaluateNamedFormula(
+    settings?.amountTransferredFormula?.trim() ||
+      DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
+    withBase,
+  )
+  const withFee = {
+    ...withBase,
+    amountTransferred,
   }
   const propertyContribution = evaluateNamedFormula(
     settings?.propertyContributionFormula?.trim() ||

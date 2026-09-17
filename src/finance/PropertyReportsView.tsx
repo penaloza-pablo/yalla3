@@ -31,7 +31,7 @@ import {
   resolveMarkupPercent,
   type PropertyReportSettings,
 } from '../../amplify/functions/shared/property-report-settings'
-import { DEFAULT_COMMISSION_FORMULA } from '../../amplify/functions/shared/property-report-formula'
+import { DEFAULT_AMOUNT_TRANSFERRED_FORMULA, DEFAULT_COMMISSION_FORMULA } from '../../amplify/functions/shared/property-report-formula'
 import {
   isCostAllocation,
   isIncomeAllocation,
@@ -1752,6 +1752,10 @@ export function PropertyReportsView({
           ourProfitFormula={reportSettings.ourProfitFormula.trim() || undefined}
           netEarningsFormula={
             reportSettings.netEarningsFormula.trim() || undefined
+          }
+          amountTransferredFormula={
+            reportSettings.amountTransferredFormula.trim() ||
+            DEFAULT_AMOUNT_TRANSFERRED_FORMULA
           }
           detailSources={{
             payouts: payoutRows.map((row) => ({

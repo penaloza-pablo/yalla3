@@ -145,6 +145,7 @@ export function GlobalVariablesView({ getEndpoint }: Props) {
             parsed.settings.propertyContributionFormula,
           ourProfitFormula: parsed.settings.ourProfitFormula,
           netEarningsFormula: parsed.settings.netEarningsFormula,
+          amountTransferredFormula: parsed.settings.amountTransferredFormula,
           cleaningVat: parsed.settings.cleaningVat,
           accommodationVat: parsed.settings.accommodationVat,
           airbnbFeePercent: parsed.settings.airbnbFeePercent,

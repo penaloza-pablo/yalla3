@@ -4,6 +4,7 @@ import {
   DEFAULT_PAYOUT_VAT,
 } from './property-report-payouts';
 import {
+  DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
   VISIBILITY_METRIC_IDS,
   validateFormula,
@@ -58,6 +59,7 @@ export type PropertyReportSettings = {
   propertyContributionFormula: string;
   ourProfitFormula: string;
   netEarningsFormula: string;
+  amountTransferredFormula: string;
   cleaningVat: IvaRate | null;
   accommodationVat: IvaRate | null;
   airbnbFeePercent: number | null;
@@ -255,6 +257,7 @@ export const emptyReportSettings = (): PropertyReportSettings => ({
   propertyContributionFormula: '',
   ourProfitFormula: '',
   netEarningsFormula: '',
+  amountTransferredFormula: '',
   cleaningVat: null,
   accommodationVat: null,
   airbnbFeePercent: null,
@@ -313,6 +316,7 @@ export const parseReportSettings = (
       asString(stored.propertyNetProfitFormula),
     ourProfitFormula: asString(stored.ourProfitFormula),
     netEarningsFormula: asString(stored.netEarningsFormula),
+    amountTransferredFormula: asString(stored.amountTransferredFormula),
     cleaningVat: parseIvaRate(
       stored.cleaningVat ?? stored.cleaningFeeVat,
     ),
@@ -380,10 +384,12 @@ export const validateReportSettings = (
   const propertyContributionFormula = asString(value.propertyContributionFormula);
   const ourProfitFormula = asString(value.ourProfitFormula);
   const netEarningsFormula = asString(value.netEarningsFormula);
+  const amountTransferredFormula = asString(value.amountTransferredFormula);
   for (const [source, target] of [
     [propertyContributionFormula, 'propertyContribution'],
     [ourProfitFormula, 'ourProfit'],
     [netEarningsFormula, 'netEarnings'],
+    [amountTransferredFormula, 'amountTransferred'],
   ] as const) {
     const checked = checkOptionalFormula(source, model || 'commission', target);
     if (!checked.ok) {
@@ -484,6 +490,7 @@ export const validateReportSettings = (
       propertyContributionFormula,
       ourProfitFormula,
       netEarningsFormula,
+      amountTransferredFormula,
       cleaningVat,
       accommodationVat,
       airbnbFeePercent,
@@ -507,6 +514,10 @@ export const mergeReportSettings = (
       DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
     ourProfitFormula: property.ourProfitFormula || fallback.ourProfitFormula,
     netEarningsFormula: property.netEarningsFormula || fallback.netEarningsFormula,
+    amountTransferredFormula:
+      property.amountTransferredFormula ||
+      fallback.amountTransferredFormula ||
+      DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
     cleaningVat: property.cleaningVat ?? fallback.cleaningVat ?? DEFAULT_PAYOUT_VAT,
     accommodationVat:
       property.accommodationVat ??

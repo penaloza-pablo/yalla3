@@ -6,11 +6,15 @@ export const DEFAULT_COMMISSION_FORMULA =
 export const DEFAULT_PROPERTY_CONTRIBUTION_FORMULA =
   '(income - payoutCleaningNet) - (cleaningNet + cleaningKit) - maintenanceNet - managementFee - markup - expensesAndServices';
 
+export const DEFAULT_AMOUNT_TRANSFERRED_FORMULA =
+  'income - incomesDoNotSend - expensesAndServicesCoverByOwner - maintenanceCoverByOwner - managementFee - markup';
+
 export type FormulaTarget =
   | 'managementFee'
   | 'propertyContribution'
   | 'ourProfit'
-  | 'netEarnings';
+  | 'netEarnings'
+  | 'amountTransferred';
 
 export const FORMULA_CATALOG_VARIABLES = [
   'paidByGuest',
@@ -72,11 +76,16 @@ export const VISIBILITY_METRIC_IDS = [
 export type VisibilityMetricId = (typeof VISIBILITY_METRIC_IDS)[number];
 
 const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
-  managementFee: ['marketManagementFee', 'marketManagementCommission'],
+  managementFee: [
+    'marketManagementFee',
+    'marketManagementCommission',
+    'incomesDoNotSend',
+  ],
   propertyContribution: [
     'managementFee',
     'managementFeeVat',
     'amountTransferred',
+    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
@@ -85,6 +94,7 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
     'managementFeeVat',
     'propertyContribution',
     'amountTransferred',
+    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],
@@ -94,6 +104,14 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
     'propertyContribution',
     'ourProfit',
     'amountTransferred',
+    'incomesDoNotSend',
+    'marketManagementFee',
+    'marketManagementCommission',
+  ],
+  amountTransferred: [
+    'managementFee',
+    'managementFeeVat',
+    'incomesDoNotSend',
     'marketManagementFee',
     'marketManagementCommission',
   ],

@@ -59,6 +59,7 @@ type Payload = {
   propertyContributionFormula?: string | null;
   ourProfitFormula?: string | null;
   netEarningsFormula?: string | null;
+  amountTransferredFormula?: string | null;
   cleaningVat?: number | string | null;
   accommodationVat?: number | string | null;
   airbnbFeePercent?: number | string | null;
@@ -146,6 +147,7 @@ export const handler = async (event: {
       propertyContributionFormula: parsed.settings.propertyContributionFormula,
       ourProfitFormula: parsed.settings.ourProfitFormula,
       netEarningsFormula: parsed.settings.netEarningsFormula,
+      amountTransferredFormula: parsed.settings.amountTransferredFormula,
       cleaningVat: parsed.settings.cleaningVat,
       accommodationVat: parsed.settings.accommodationVat,
       airbnbFeePercent: parsed.settings.airbnbFeePercent,
@@ -195,6 +197,9 @@ export const handler = async (event: {
           netEarningsFormula: has('netEarningsFormula')
             ? payload.netEarningsFormula
             : existing.netEarningsFormula,
+          amountTransferredFormula: has('amountTransferredFormula')
+            ? payload.amountTransferredFormula
+            : existing.amountTransferredFormula,
           cleaningVat: has('cleaningVat')
             ? payload.cleaningVat
             : existing.cleaningVat,
@@ -262,6 +267,7 @@ export const handler = async (event: {
           propertyContributionFormula: payload.propertyContributionFormula,
           ourProfitFormula: payload.ourProfitFormula,
           netEarningsFormula: payload.netEarningsFormula,
+          amountTransferredFormula: payload.amountTransferredFormula,
           cleaningVat: payload.cleaningVat,
           accommodationVat: payload.accommodationVat,
           airbnbFeePercent: payload.airbnbFeePercent,

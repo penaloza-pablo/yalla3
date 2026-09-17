@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_COMMISSION_FORMULA,
   DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
+  DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   allowedFormulaVariables,
   validateFormula,
   type FormulaTarget,
@@ -34,6 +35,7 @@ type FormState = {
   propertyContributionFormula: string
   ourProfitFormula: string
   netEarningsFormula: string
+  amountTransferredFormula: string
   cleaningVat: IvaRate
   accommodationVat: IvaRate
   airbnbFee: string
@@ -47,6 +49,8 @@ const toForm = (settings: PropertyReportSettings): FormState => ({
     settings.propertyContributionFormula || DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
   ourProfitFormula: settings.ourProfitFormula,
   netEarningsFormula: settings.netEarningsFormula,
+  amountTransferredFormula:
+    settings.amountTransferredFormula || DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   cleaningVat: settings.cleaningVat ?? 0,
   accommodationVat: settings.accommodationVat ?? 0,
   airbnbFee:
@@ -110,6 +114,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
       [form.propertyContributionFormula, 'propertyContribution'],
       [form.ourProfitFormula, 'ourProfit'],
       [form.netEarningsFormula, 'netEarnings'],
+      [form.amountTransferredFormula, 'amountTransferred'],
     ]
     for (const [source, target] of formulas) {
       if (!source.trim()) {
@@ -128,6 +133,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
         propertyContributionFormula: form.propertyContributionFormula.trim(),
         ourProfitFormula: form.ourProfitFormula.trim(),
         netEarningsFormula: form.netEarningsFormula.trim(),
+        amountTransferredFormula: form.amountTransferredFormula.trim(),
         cleaningVat: parseIvaRate(form.cleaningVat) ?? 0,
         accommodationVat: parseIvaRate(form.accommodationVat) ?? 0,
         airbnbFeePercent: form.airbnbFee.trim()
@@ -160,6 +166,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
           propertyContributionFormula: parsed.settings.propertyContributionFormula,
           ourProfitFormula: parsed.settings.ourProfitFormula,
           netEarningsFormula: parsed.settings.netEarningsFormula,
+          amountTransferredFormula: parsed.settings.amountTransferredFormula,
           cleaningVat: parsed.settings.cleaningVat,
           accommodationVat: parsed.settings.accommodationVat,
           airbnbFeePercent: parsed.settings.airbnbFeePercent,
@@ -188,6 +195,7 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
       | 'propertyContributionFormula'
       | 'ourProfitFormula'
       | 'netEarningsFormula'
+      | 'amountTransferredFormula'
     >,
     target: FormulaTarget,
   ) => (
@@ -249,6 +257,12 @@ export function FinanceReportsSettingsView({ getEndpoint }: Props) {
               'propertyReports.ourProfitFormulaHelp',
               'ourProfitFormula',
               'ourProfit',
+            )}
+            {renderFormula(
+              'propertyReports.amountTransferredFormula',
+              'propertyReports.amountTransferredFormulaHelp',
+              'amountTransferredFormula',
+              'amountTransferred',
             )}
             {renderFormula(
               'propertyReports.netEarningsFormula',
