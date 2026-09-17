@@ -7,6 +7,7 @@ import {
   DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
   VISIBILITY_METRIC_IDS,
+  sanitizeManagementFeeFormula,
   validateFormula,
   type FormulaTarget,
 } from './property-report-formula';
@@ -373,8 +374,16 @@ export const validateReportSettings = (
     fixedRent = asNumber(value.fixedRent);
   }
 
-  const formula = asString(value.formula);
-  if ((!global && model === 'commission') || formula) {
+  let formula = asString(value.formula);
+  if (!global && model === 'fixedRent') {
+    formula = sanitizeManagementFeeFormula('fixedRent', formula);
+  } else if (!global && model === 'commission') {
+    formula = sanitizeManagementFeeFormula('commission', formula);
+    const checked = validateFormula(formula, 'commission', 'managementFee');
+    if (!checked.ok) {
+      return checked;
+    }
+  } else if (formula) {
     const checked = validateFormula(formula, model || 'commission', 'managementFee');
     if (!checked.ok) {
       return checked;
@@ -507,7 +516,10 @@ export const mergeReportSettings = (
   const fallback = global ?? emptyReportSettings();
   return {
     ...property,
-    formula: property.formula || fallback.formula,
+    formula:
+      property.businessModel === 'fixedRent'
+        ? sanitizeManagementFeeFormula('fixedRent', property.formula)
+        : property.formula || fallback.formula,
     propertyContributionFormula:
       property.propertyContributionFormula ||
       fallback.propertyContributionFormula ||

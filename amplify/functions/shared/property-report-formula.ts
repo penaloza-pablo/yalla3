@@ -67,6 +67,7 @@ export const VISIBILITY_EXTRA_METRIC_IDS = [
   'marketManagementFee',
   'marketManagementCommission',
   'managementFeeVat',
+  'fixedRent',
 ] as const;
 
 export const VISIBILITY_METRIC_IDS = [
@@ -375,6 +376,25 @@ export const validateFormula = (
     return parsed;
   }
   return { ok: true, tokens: tokenized.tokens };
+};
+
+export const sanitizeManagementFeeFormula = (
+  model: BusinessModel | '',
+  source: string,
+) => {
+  const trimmed = source.trim();
+  if (model === 'commission') {
+    return trimmed || DEFAULT_COMMISSION_FORMULA;
+  }
+  if (model === 'fixedRent') {
+    if (!trimmed) {
+      return '';
+    }
+    return validateFormula(trimmed, 'fixedRent', 'managementFee').ok
+      ? trimmed
+      : '';
+  }
+  return trimmed;
 };
 
 export const evaluateFormula = (

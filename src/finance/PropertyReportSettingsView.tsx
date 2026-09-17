@@ -16,10 +16,10 @@ import {
   type ReportVisibility,
 } from '../../amplify/functions/shared/property-report-settings'
 import {
-  DEFAULT_COMMISSION_FORMULA,
   DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
   DEFAULT_AMOUNT_TRANSFERRED_FORMULA,
   allowedFormulaVariables,
+  sanitizeManagementFeeFormula,
   validateFormula,
   type FormulaTarget,
 } from '../../amplify/functions/shared/property-report-formula'
@@ -91,10 +91,10 @@ const toForm = (settings: PropertyReportSettings): SettingsForm => ({
     settings.markupPercent === null
       ? String(DEFAULT_MARKUP_PERCENT)
       : String(settings.markupPercent),
-  formula:
-    settings.businessModel === 'commission' && !settings.formula
-      ? DEFAULT_COMMISSION_FORMULA
-      : settings.formula,
+  formula: sanitizeManagementFeeFormula(
+    settings.businessModel,
+    settings.formula,
+  ),
   propertyContributionFormula:
     settings.propertyContributionFormula || DEFAULT_PROPERTY_CONTRIBUTION_FORMULA,
   ourProfitFormula: settings.ourProfitFormula,
@@ -232,7 +232,11 @@ export function PropertyReportSettingsView({
       }
     }
     const formulaChecks: Array<[string, FormulaTarget, boolean]> = [
-      [form.formula, 'managementFee', form.businessModel === 'commission'],
+      [
+        sanitizeManagementFeeFormula(form.businessModel, form.formula),
+        'managementFee',
+        form.businessModel === 'commission',
+      ],
       [form.propertyContributionFormula, 'propertyContribution', false],
       [form.ourProfitFormula, 'ourProfit', false],
       [form.netEarningsFormula, 'netEarnings', false],
@@ -282,7 +286,10 @@ export function PropertyReportSettingsView({
       commissionPercent: parseAmount(form.commissionPercent),
       fixedRent: parseAmount(form.fixedRent),
       markupPercent: parseAmount(form.markupPercent),
-      formula: form.formula.trim(),
+      formula: sanitizeManagementFeeFormula(
+        form.businessModel,
+        form.formula,
+      ).trim(),
       propertyContributionFormula: form.propertyContributionFormula.trim(),
       ourProfitFormula: form.ourProfitFormula.trim(),
       netEarningsFormula: form.netEarningsFormula.trim(),
@@ -446,17 +453,14 @@ export function PropertyReportSettingsView({
                   onChange={(event) =>
                     setForm((current) => {
                       const businessModel = event.target.value as BusinessModel | ''
-                      let formula = current.formula
-                      if (businessModel === 'commission' && !formula.trim()) {
-                        formula = DEFAULT_COMMISSION_FORMULA
+                      return {
+                        ...current,
+                        businessModel,
+                        formula: sanitizeManagementFeeFormula(
+                          businessModel,
+                          businessModel === 'fixedRent' ? '' : current.formula,
+                        ),
                       }
-                      if (
-                        businessModel === 'fixedRent' &&
-                        formula.includes('commission')
-                      ) {
-                        formula = ''
-                      }
-                      return { ...current, businessModel, formula }
                     })
                   }
                 >
@@ -523,12 +527,14 @@ export function PropertyReportSettingsView({
             </div>
             {form.businessModel ? (
               <>
-                {renderFormula(
-                  'propertyReports.managementFeeFormula',
-                  'propertyReports.managementFeeFormulaHelp',
-                  'formula',
-                  'managementFee',
-                )}
+                {form.businessModel === 'commission'
+                  ? renderFormula(
+                      'propertyReports.managementFeeFormula',
+                      'propertyReports.managementFeeFormulaHelp',
+                      'formula',
+                      'managementFee',
+                    )
+                  : null}
                 {renderFormula(
                   'propertyReports.propertyContributionFormula',
                   'propertyReports.propertyContributionFormulaHelp',

@@ -11,7 +11,6 @@ export const WRITABLE_GLOBAL_VARIABLE_IDS = ['marketManagementFee'] as const
 export const FINANCE_VARIABLE_IDS = [
   ...VISIBILITY_METRIC_IDS,
   'commission',
-  'fixedRent',
 ] as const
 
 export type GlobalVariableUsage = {

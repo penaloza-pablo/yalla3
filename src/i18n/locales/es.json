@@ -1702,7 +1702,9 @@
       "marketManagementCommission": "Market Management Commission €",
       "marketManagementCommissionHelp": "(Paid by guest − Cleaning payout net − Channel Fee) × Market Management Commission %.",
       "managementFeeVat": "Management Fee VAT",
-      "managementFeeVatHelp": "Management Fee × 21%."
+      "managementFeeVatHelp": "Management Fee × 21%.",
+      "fixedRent": "Fixed rent",
+      "fixedRentHelp": "Importe de renta fija definido en Report Settings cuando el modelo de negocio es Fixed rent."
     }
   },
   "reportsSettings": {

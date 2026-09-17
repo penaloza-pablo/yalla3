@@ -307,6 +307,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'indicator',
     formula: 'managementFee * 0.21',
   },
+  {
+    id: 'fixedRent',
+    unit: 'money',
+    role: 'source',
+    formula: 'settings.fixedRent',
+  },
 ] as const
 
 export type PropertyReportFieldId =
@@ -472,6 +478,7 @@ export const computePropertyReportMetrics = (
     expensesAndServicesCoverByUs,
     marketManagementFee,
     marketManagementCommission,
+    fixedRent: roundMoney(settings?.fixedRent ?? 0),
   }
   const managementFee = resolveManagementFee(formulaValues, settings)
   const managementFeeVat = roundMoney(managementFee * MANAGEMENT_FEE_VAT_RATE)
@@ -550,6 +557,7 @@ export const computePropertyReportMetrics = (
     marketManagementCommission,
     bookingCount: inputs.bookingCount,
     nights: inputs.nights,
+    fixedRent: roundMoney(settings?.fixedRent ?? 0),
   }
 }
 

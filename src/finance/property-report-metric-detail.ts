@@ -14,6 +14,7 @@ export const METRICS_WITHOUT_DETAIL = new Set([
   'netProfit',
   'marketManagementFee',
   'managementFeeVat',
+  'fixedRent',
 ])
 
 export type MetricDetailRow = {
