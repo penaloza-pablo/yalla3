@@ -29,7 +29,8 @@ import { DismissibleNotice } from './operations/DismissibleNotice'
 import {
   canonicalizeLinenValue,
   isCanonicalLinenValue,
-  isEarlyCheckInEnabled,
+  resolveEarlyCheckInMode,
+  type EarlyCheckInMode,
 } from '../amplify/functions/shared/bookings-planner'
 import { TemplateAutoAssignView } from './operations/TemplateAutoAssignView'
 import { JobSchedulerView } from './operations/JobSchedulerView'
@@ -60,6 +61,7 @@ import { BookingsPlanView } from './bookings/BookingsPlanView'
 import { CheckInTrackerView } from './bookings/CheckInTrackerView'
 import { BookingsSettingsView } from './bookings/BookingsSettingsView'
 import { LinenBadgeSelect } from './bookings/LinenBadgeSelect'
+import { EarlyCheckInBadgeSelect } from './bookings/EarlyCheckInBadgeSelect'
 import { YallaSwitch } from './bookings/YallaSwitch'
 import { MaintenanceIncidentsView } from './maintenance/MaintenanceIncidentsView'
 import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
@@ -344,6 +346,7 @@ type BookingRow = {
   guestCount: string
   earlyCheckIn: string
   earlyCheckInOn: boolean
+  earlyCheckInMode: EarlyCheckInMode
   access: string
 }
 
@@ -1487,10 +1490,14 @@ const mapBookingRow = (item: Record<string, unknown>): BookingRow => {
       getItemValue(item, bookingFieldMap.earlyCheckIn),
     ),
     earlyCheckInOn:
-      getBooleanValue(getItemValue(item, ['EarlyCheckInOn', 'earlyCheckInOn'])) ||
-      isEarlyCheckInEnabled(
+      resolveEarlyCheckInMode(
         getItemValue(item, bookingFieldMap.earlyCheckIn),
-      ),
+        getBooleanValue(getItemValue(item, ['EarlyCheckInOn', 'earlyCheckInOn'])),
+      ) === 'early',
+    earlyCheckInMode: resolveEarlyCheckInMode(
+      getItemValue(item, bookingFieldMap.earlyCheckIn),
+      getBooleanValue(getItemValue(item, ['EarlyCheckInOn', 'earlyCheckInOn'])),
+    ),
     access: getStringValue(getItemValue(item, bookingFieldMap.access)),
   }
 }
@@ -1879,6 +1886,9 @@ function App() {
   const [openBookingLinenId, setOpenBookingLinenId] = useState<string | null>(
     null,
   )
+  const [openBookingEarlyCheckInId, setOpenBookingEarlyCheckInId] = useState<
+    string | null
+  >(null)
   const [savingBookingId, setSavingBookingId] = useState<string | null>(null)
   const [bookingsAvailableStatuses, setBookingsAvailableStatuses] = useState<
     string[]
@@ -3219,18 +3229,19 @@ function App() {
   ])
 
   useEffect(() => {
-    if (!openBookingLinenId) {
+    if (!openBookingLinenId && !openBookingEarlyCheckInId) {
       return
     }
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
       if (!target?.closest('.linen-badge-wrap')) {
         setOpenBookingLinenId(null)
+        setOpenBookingEarlyCheckInId(null)
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [openBookingLinenId])
+  }, [openBookingLinenId, openBookingEarlyCheckInId])
 
   useEffect(() => {
     const needsProperties =
@@ -3525,7 +3536,7 @@ function App() {
 
   const saveBookingPlannerFields = async (
     row: BookingRow,
-    patch: { linen?: string; earlyCheckInOn?: boolean },
+    patch: { linen?: string; earlyCheckInOn?: boolean; earlyCheckInMode?: EarlyCheckInMode },
   ) => {
     const endpoint = getEndpoint(
       'upsertBookingPlannerFieldsUrl',
@@ -7903,11 +7914,12 @@ function App() {
                                   listingId={row.listingId}
                                   disabled={!canEditBooking || isSavingBooking}
                                   open={openBookingLinenId === row.id}
-                                  onToggle={() =>
+                                  onToggle={() => {
+                                    setOpenBookingEarlyCheckInId(null)
                                     setOpenBookingLinenId((current) =>
                                       current === row.id ? null : row.id,
                                     )
-                                  }
+                                  }}
                                   onSelect={(linen) => {
                                     setOpenBookingLinenId(null)
                                     void saveBookingPlannerFields(row, { linen })
@@ -7915,15 +7927,22 @@ function App() {
                                 />
                               </td>
                               <td data-label={t('bookingsPlan.earlyCheckIn')}>
-                                <YallaSwitch
-                                  on={row.earlyCheckInOn}
+                                <EarlyCheckInBadgeSelect
+                                  value={row.earlyCheckInMode}
                                   disabled={!canEditBooking || isSavingBooking}
-                                  label={t('bookingsPlan.earlyCheckIn')}
-                                  onToggle={() =>
+                                  open={openBookingEarlyCheckInId === row.id}
+                                  onToggle={() => {
+                                    setOpenBookingLinenId(null)
+                                    setOpenBookingEarlyCheckInId((current) =>
+                                      current === row.id ? null : row.id,
+                                    )
+                                  }}
+                                  onSelect={(earlyCheckInMode) => {
+                                    setOpenBookingEarlyCheckInId(null)
                                     void saveBookingPlannerFields(row, {
-                                      earlyCheckInOn: !row.earlyCheckInOn,
+                                      earlyCheckInMode,
                                     })
-                                  }
+                                  }}
                                 />
                               </td>
                               <td data-label={t('common.actions')}>
@@ -7979,13 +7998,14 @@ function App() {
                                         listingId={row.listingId}
                                         disabled={!canEditBooking || isSavingBooking}
                                         open={openBookingLinenId === `${row.id}-detail`}
-                                        onToggle={() =>
+                                        onToggle={() => {
+                                          setOpenBookingEarlyCheckInId(null)
                                           setOpenBookingLinenId((current) =>
                                             current === `${row.id}-detail`
                                               ? null
                                               : `${row.id}-detail`,
                                           )
-                                        }
+                                        }}
                                         onSelect={(linen) => {
                                           setOpenBookingLinenId(null)
                                           void saveBookingPlannerFields(row, {
@@ -8006,15 +8026,27 @@ function App() {
                                       <p className="detail-label">
                                         {t('common.earlyCheckIn')}
                                       </p>
-                                      <YallaSwitch
-                                        on={row.earlyCheckInOn}
+                                      <EarlyCheckInBadgeSelect
+                                        value={row.earlyCheckInMode}
                                         disabled={!canEditBooking || isSavingBooking}
-                                        label={t('bookingsPlan.earlyCheckIn')}
-                                        onToggle={() =>
-                                          void saveBookingPlannerFields(row, {
-                                            earlyCheckInOn: !row.earlyCheckInOn,
-                                          })
+                                        open={
+                                          openBookingEarlyCheckInId ===
+                                          `${row.id}-detail`
                                         }
+                                        onToggle={() => {
+                                          setOpenBookingLinenId(null)
+                                          setOpenBookingEarlyCheckInId((current) =>
+                                            current === `${row.id}-detail`
+                                              ? null
+                                              : `${row.id}-detail`,
+                                          )
+                                        }}
+                                        onSelect={(earlyCheckInMode) => {
+                                          setOpenBookingEarlyCheckInId(null)
+                                          void saveBookingPlannerFields(row, {
+                                            earlyCheckInMode,
+                                          })
+                                        }}
                                       />
                                     </div>
                                     <div>

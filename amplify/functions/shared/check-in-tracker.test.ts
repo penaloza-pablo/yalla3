@@ -10,6 +10,7 @@ import {
   shouldIncludeBooking,
   summarizeDayActivity,
   bookingHasEarlyCheckIn,
+  bookingHasDoNotEarlyCheckIn,
 } from './check-in-tracker';
 
 const booking = {
@@ -266,4 +267,23 @@ test('early check-in follows EarlyCheckInOn and Early check-in text', () => {
     true,
   );
   assert.equal(bookingHasEarlyCheckIn({ EarlyCheckInOn: false }), false);
+});
+
+test('do not early check-in is not counted as early check-in', () => {
+  const item = { EarlyCheckIn: 'Do not early check-in', EarlyCheckInOn: false };
+  assert.equal(bookingHasDoNotEarlyCheckIn(item), true);
+  assert.equal(bookingHasEarlyCheckIn(item), false);
+  assert.equal(
+    bookingHasEarlyCheckIn({
+      EarlyCheckIn: 'Do not early check-in',
+      EarlyCheckInOn: true,
+    }),
+    false,
+  );
+  const row = mapCheckInTrackerRow(
+    { ...booking, ...item },
+    [],
+  );
+  assert.equal(row.earlyCheckIn, false);
+  assert.equal(row.doNotEarlyCheckIn, true);
 });

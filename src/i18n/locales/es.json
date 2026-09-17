@@ -165,6 +165,8 @@
     "giftCard": "Gift Card",
     "access": "Access",
     "earlyCheckIn": "Early Check-in",
+    "doNotEarlyCheckIn": "Do not early check-in",
+    "earlyCheckInNone": "No need",
     "nights": "Noches",
     "warnings": "Advertencias",
     "chooseLinen": "Seleccionar",

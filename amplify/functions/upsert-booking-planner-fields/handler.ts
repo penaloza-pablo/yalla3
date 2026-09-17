@@ -9,7 +9,12 @@ import {
   persistPlannedArrival,
   syncPlannedArrivalToGuesty,
 } from '../shared/bookings-planner-apply';
-import { isAllowedPlannerLinenValue, isDismissablePlannerWarning } from '../shared/bookings-planner';
+import {
+  isAllowedEarlyCheckInMode,
+  isAllowedPlannerLinenValue,
+  isDismissablePlannerWarning,
+  type EarlyCheckInMode,
+} from '../shared/bookings-planner';
 import { normalizePlannedArrival } from '../shared/check-in-time';
 import {
   buildHttpResponse,
@@ -24,6 +29,7 @@ type FieldsPayload = {
   linen?: string;
   giftCardOn?: boolean;
   earlyCheckInOn?: boolean;
+  earlyCheckInMode?: EarlyCheckInMode;
   access?: string;
   plannedArrival?: string;
   dismissWarning?: string;
@@ -71,11 +77,18 @@ export const handler = async (event: {
   ) {
     return buildHttpResponse(400, { message: 'Invalid warning to dismiss.' });
   }
+  if (
+    payload.earlyCheckInMode !== undefined &&
+    !isAllowedEarlyCheckInMode(payload.earlyCheckInMode)
+  ) {
+    return buildHttpResponse(400, { message: 'Invalid early check-in value.' });
+  }
 
   const hasGuestyFields =
     payload.linen !== undefined ||
     payload.giftCardOn !== undefined ||
     payload.earlyCheckInOn !== undefined ||
+    payload.earlyCheckInMode !== undefined ||
     payload.access !== undefined;
   const plannedArrival =
     payload.plannedArrival === undefined
@@ -135,9 +148,11 @@ export const handler = async (event: {
         ...(payload.giftCardOn !== undefined
           ? { giftCardOn: payload.giftCardOn === true }
           : {}),
-        ...(payload.earlyCheckInOn !== undefined
-          ? { earlyCheckInOn: payload.earlyCheckInOn === true }
-          : {}),
+        ...(payload.earlyCheckInMode !== undefined
+          ? { earlyCheckInMode: payload.earlyCheckInMode }
+          : payload.earlyCheckInOn !== undefined
+            ? { earlyCheckInOn: payload.earlyCheckInOn === true }
+            : {}),
         ...(payload.access !== undefined ? { access: payload.access } : {}),
         ...(isDismissablePlannerWarning(payload.dismissWarning)
           ? { dismissWarning: payload.dismissWarning }

@@ -15,6 +15,7 @@ export interface CheckinGuest {
   checkInDate: string
   accessGranted: boolean
   entered: boolean
+  doNotEarlyCheckIn?: boolean
   visits: Visit[]
 }
 export type CheckinAction =

@@ -47,7 +47,7 @@ import { VisitTaskList } from './VisitTaskList'
 import { isManagementTeam } from './teamColors'
 import { displayTaskTitle } from './taskTitleDisplay'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
-import { isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
+import { isDoNotEarlyCheckIn, isEarlyCheckInEnabled } from '../../amplify/functions/shared/bookings-planner'
 import { usePermissions } from '../rbac/PermissionsProvider'
 import { useConfirm } from '../design/ConfirmDialog'
 import {
@@ -975,10 +975,16 @@ export function DailyOperationsView({
             giftCard: asRecordDisplay(record, ['GiftCard', 'giftCard']),
             linen: asRecordDisplay(record, ['Linen', 'linen']),
             earlyCheckIn:
-              asRecordBoolean(record, ['EarlyCheckInOn', 'earlyCheckInOn']) ||
-              isEarlyCheckInEnabled(
+              !isDoNotEarlyCheckIn(
                 asRecordString(record, ['EarlyCheckIn', 'earlyCheckIn']),
-              ),
+              ) &&
+              (asRecordBoolean(record, ['EarlyCheckInOn', 'earlyCheckInOn']) ||
+                isEarlyCheckInEnabled(
+                  asRecordString(record, ['EarlyCheckIn', 'earlyCheckIn']),
+                )),
+            doNotEarlyCheckIn: isDoNotEarlyCheckIn(
+              asRecordString(record, ['EarlyCheckIn', 'earlyCheckIn']),
+            ),
             checkInStartMinutes: plannedArrivalToMinutes(
               asRecordString(record, ['PlannedArrival', 'plannedArrival']),
             ),
@@ -1023,7 +1029,13 @@ export function DailyOperationsView({
       }
       setDayBookings((current) =>
         current.map((entry) =>
-          entry.id === booking.id ? { ...entry, earlyCheckIn: enabled } : entry,
+          entry.id === booking.id
+            ? {
+                ...entry,
+                earlyCheckIn: enabled,
+                doNotEarlyCheckIn: enabled ? false : entry.doNotEarlyCheckIn,
+              }
+            : entry,
         ),
       )
       try {
@@ -1039,7 +1051,11 @@ export function DailyOperationsView({
         setDayBookings((current) =>
           current.map((entry) =>
             entry.id === booking.id
-              ? { ...entry, earlyCheckIn: booking.earlyCheckIn }
+              ? {
+                  ...entry,
+                  earlyCheckIn: booking.earlyCheckIn,
+                  doNotEarlyCheckIn: booking.doNotEarlyCheckIn,
+                }
               : entry,
           ),
         )

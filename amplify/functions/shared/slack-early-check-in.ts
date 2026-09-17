@@ -1,5 +1,5 @@
 import { BatchGetCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { isEarlyCheckInEnabled } from './bookings-planner';
+import { isDoNotEarlyCheckIn, isEarlyCheckInEnabled } from './bookings-planner';
 import { queryVisitsForScheduledDate } from './cleaning-plan';
 import { yallaAliasForListingId } from './property-identity';
 import { loadSlackSecrets, slackApi } from './slack';
@@ -16,6 +16,7 @@ import {
 
 export const EARLY_CHECK_IN_READY_FIELD = 'EarlyCheckInReadyNotified';
 export const EARLY_CHECK_IN_ACCESS_FIELD = 'EarlyCheckInAccessNotified';
+export const DO_NOT_EARLY_CHECK_IN_READY_FIELD = 'DoNotEarlyCheckInReadyNotified';
 export const EARLY_CHECK_IN_NOTIFY_TIME = '11:00';
 
 const asString = (value: unknown) =>
@@ -25,9 +26,15 @@ const isConfirmedBooking = (item: Record<string, unknown>) =>
   asString(item.Status).toLowerCase() === 'confirmed';
 
 const isEarlyCheckInOn = (item: Record<string, unknown>) =>
-  item.EarlyCheckInOn === true ||
-  item.earlyCheckInOn === true ||
-  isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn);
+  !isDoNotEarlyCheckIn(item.EarlyCheckIn ?? item.earlyCheckIn) &&
+  (item.EarlyCheckInOn === true ||
+    item.earlyCheckInOn === true ||
+    isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn));
+
+const isDoNotEarlyCheckInOn = (item: Record<string, unknown>) =>
+  isDoNotEarlyCheckIn(item.EarlyCheckIn ?? item.earlyCheckIn);
+
+type EarlyNotifyKind = 'early' | 'do_not';
 
 type PropertyOption = {
   id: string;
@@ -169,13 +176,14 @@ const markNotified = async (
   bookingsTable: string,
   reservationId: string,
   today: string,
+  field: string,
 ) => {
   await docClient.send(
     new UpdateCommand({
       TableName: bookingsTable,
       Key: { ReservationID: reservationId },
       UpdateExpression: 'SET #field = :today',
-      ExpressionAttributeNames: { '#field': EARLY_CHECK_IN_READY_FIELD },
+      ExpressionAttributeNames: { '#field': field },
       ExpressionAttributeValues: { ':today': today },
     }),
   );
@@ -183,6 +191,9 @@ const markNotified = async (
 
 const earlyCheckInReadyMessage = (label: string, guestName: string) =>
   `${escapeMrkdwn(label)} lista para Early check-in. Guest: ${escapeMrkdwn(guestName)}`;
+
+export const doNotEarlyCheckInReadyMessage = (label: string, guestName: string) =>
+  `${escapeMrkdwn(label)} lista pero indicada con *DO NOT* Early check-in. Guest: ${escapeMrkdwn(guestName)}`;
 
 export const earlyCheckInAccessEnabledMessage = (
   guestName: string,
@@ -239,12 +250,43 @@ export type EarlyCheckInReadyResult = {
     propertyId: string;
     guestName: string;
     reason: 'visits_completed' | 'no_visits';
+    kind: EarlyNotifyKind;
   }>;
   pending: Array<{
     reservationId: string;
     propertyId: string;
     reason: string;
+    kind: EarlyNotifyKind;
   }>;
+};
+
+const readyFieldForKind = (kind: EarlyNotifyKind) =>
+  kind === 'do_not'
+    ? DO_NOT_EARLY_CHECK_IN_READY_FIELD
+    : EARLY_CHECK_IN_READY_FIELD;
+
+const readyMessageForKind = (
+  kind: EarlyNotifyKind,
+  label: string,
+  guestName: string,
+) =>
+  kind === 'do_not'
+    ? doNotEarlyCheckInReadyMessage(label, guestName)
+    : earlyCheckInReadyMessage(label, guestName);
+
+const classifyReadyBooking = (
+  item: Record<string, unknown>,
+): EarlyNotifyKind | null => {
+  if (!isConfirmedBooking(item)) {
+    return null;
+  }
+  if (isDoNotEarlyCheckInOn(item)) {
+    return 'do_not';
+  }
+  if (isEarlyCheckInOn(item)) {
+    return 'early';
+  }
+  return null;
 };
 
 export const notifyEarlyCheckInReady = async (options?: {
@@ -276,21 +318,24 @@ export const notifyEarlyCheckInReady = async (options?: {
 
   const today = getTodayInMadrid();
   const nowTime = getNowTimeInMadrid();
-  const bookings = (await queryBookingsForCheckInDate(bookingsTable, today)).filter(
-    (item) => isConfirmedBooking(item) && isEarlyCheckInOn(item),
-  );
+  const bookings = (await queryBookingsForCheckInDate(bookingsTable, today))
+    .map((item) => ({ item, kind: classifyReadyBooking(item) }))
+    .filter(
+      (entry): entry is { item: Record<string, unknown>; kind: EarlyNotifyKind } =>
+        Boolean(entry.kind),
+    );
   const visits = await queryVisitsForScheduledDate(visitsTable, today);
   const properties = await listProperties(propertiesTable);
   const sent: EarlyCheckInReadyResult['sent'] = [];
   const pending: EarlyCheckInReadyResult['pending'] = [];
 
-  for (const booking of bookings) {
+  for (const { item: booking, kind } of bookings) {
     const reservationId = asString(booking.ReservationID);
     const listingId = asString(booking.ListingID);
     if (!reservationId || !listingId) {
       continue;
     }
-    if (asString(booking[EARLY_CHECK_IN_READY_FIELD]) === today) {
+    if (asString(booking[readyFieldForKind(kind)]) === today) {
       continue;
     }
     const propertyId = resolveBookingPropertyId(
@@ -309,20 +354,21 @@ export const notifyEarlyCheckInReady = async (options?: {
           reservationId,
           propertyId,
           reason: `waiting_until_${EARLY_CHECK_IN_NOTIFY_TIME}`,
+          kind,
         });
         continue;
       }
-      const text = earlyCheckInReadyMessage(label, guestName);
       await slackApi('chat.postMessage', {
         channel: warningsChannelId,
-        text,
+        text: readyMessageForKind(kind, label, guestName),
       });
-      await markNotified(bookingsTable, reservationId, today);
+      await markNotified(bookingsTable, reservationId, today, readyFieldForKind(kind));
       sent.push({
         reservationId,
         propertyId,
         guestName,
         reason: 'no_visits',
+        kind,
       });
       continue;
     }
@@ -332,21 +378,22 @@ export const notifyEarlyCheckInReady = async (options?: {
         reservationId,
         propertyId,
         reason: 'open_visits',
+        kind,
       });
       continue;
     }
 
-    const text = earlyCheckInReadyMessage(label, guestName);
     await slackApi('chat.postMessage', {
       channel: warningsChannelId,
-      text,
+      text: readyMessageForKind(kind, label, guestName),
     });
-    await markNotified(bookingsTable, reservationId, today);
+    await markNotified(bookingsTable, reservationId, today, readyFieldForKind(kind));
     sent.push({
       reservationId,
       propertyId,
       guestName,
       reason: 'visits_completed',
+      kind,
     });
   }
 

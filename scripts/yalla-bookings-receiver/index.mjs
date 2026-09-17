@@ -950,6 +950,7 @@ export const handler = async (event) => {
     copyExistingAttribute(item, existing, "AkilesCheckedInEventId");
     copyExistingAttribute(item, existing, "EarlyCheckInReadyNotified");
     copyExistingAttribute(item, existing, "EarlyCheckInAccessNotified");
+    copyExistingAttribute(item, existing, "DoNotEarlyCheckInReadyNotified");
 
     const incomingLinen = getNestedOptionalText(reservation?.notes, "cleaning");
     if (incomingLinen === undefined || String(incomingLinen).trim() === "") {

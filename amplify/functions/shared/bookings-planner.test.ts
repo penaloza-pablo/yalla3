@@ -5,15 +5,20 @@ import {
   computePlannerFields,
   defaultPlannerSettings,
   describePlannerBookingChanges,
+  DO_NOT_EARLY_CHECK_IN,
+  EARLY_CHECK_IN_ON,
   formatGiftCardValue,
   getReservationGuestCount,
   GIFT_CARD_OFF,
   guestyReservationMatchesPlannerPatch,
+  isDoNotEarlyCheckIn,
+  isEarlyCheckInEnabled,
   isGiftCardFrozen,
   LINEN_VALUES,
   plannerFieldsChanged,
   plannerStateChanged,
   plannerWarningsChanged,
+  resolveEarlyCheckInMode,
   shouldWritePlannerToGuesty,
 } from './bookings-planner';
 
@@ -323,4 +328,53 @@ test('syncs Guesty when Dynamo already has the calculation', () => {
     ),
     false,
   );
+});
+
+test('do not early check-in is distinct from early check-in', () => {
+  assert.equal(isEarlyCheckInEnabled('Early check-in'), true);
+  assert.equal(isEarlyCheckInEnabled(DO_NOT_EARLY_CHECK_IN), false);
+  assert.equal(isDoNotEarlyCheckIn(DO_NOT_EARLY_CHECK_IN), true);
+  assert.equal(isDoNotEarlyCheckIn('Early check-in'), false);
+  assert.equal(resolveEarlyCheckInMode(DO_NOT_EARLY_CHECK_IN, true), 'do_not');
+  assert.equal(resolveEarlyCheckInMode(EARLY_CHECK_IN_ON, false), 'early');
+  assert.equal(resolveEarlyCheckInMode('', false), 'none');
+});
+
+test('planner keeps do not early check-in unless agenda turns early on', () => {
+  const kept = computePlannerFields({
+    item: {
+      ...baseItem,
+      EarlyCheckIn: DO_NOT_EARLY_CHECK_IN,
+      EarlyCheckInOn: false,
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(kept.earlyCheckIn, DO_NOT_EARLY_CHECK_IN);
+  assert.equal(kept.earlyCheckInOn, false);
+
+  const fromMode = computePlannerFields({
+    item: baseItem,
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+    overrides: { earlyCheckInMode: 'do_not' },
+  });
+  assert.equal(fromMode.earlyCheckIn, DO_NOT_EARLY_CHECK_IN);
+  assert.equal(fromMode.earlyCheckInOn, false);
+
+  const fromAgenda = computePlannerFields({
+    item: {
+      ...baseItem,
+      EarlyCheckIn: DO_NOT_EARLY_CHECK_IN,
+      EarlyCheckInOn: false,
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+    overrides: { earlyCheckInOn: true },
+  });
+  assert.equal(fromAgenda.earlyCheckIn, EARLY_CHECK_IN_ON);
+  assert.equal(fromAgenda.earlyCheckInOn, true);
 });

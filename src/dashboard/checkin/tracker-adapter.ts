@@ -11,6 +11,7 @@ export const trackerRowToGuest = (row: TrackerRow): CheckinGuest => ({
   checkInDate: row.checkInDate,
   accessGranted: row.accessGranted,
   entered: row.guestEntered,
+  doNotEarlyCheckIn: row.doNotEarlyCheckIn,
   visits: row.openVisits.map((visit) => ({
     id: visit.id,
     type: visit.kind,

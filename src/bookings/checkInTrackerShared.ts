@@ -1,4 +1,5 @@
 import {
+  bookingHasDoNotEarlyCheckIn,
   bookingHasEarlyCheckIn,
   CHECK_IN_TRACKER_STATUSES,
   type CheckInTrackerStatus,
@@ -23,6 +24,7 @@ export type TrackerRow = {
   accessGranted: boolean
   guestEntered: boolean
   earlyCheckIn: boolean
+  doNotEarlyCheckIn: boolean
   openVisits: TrackerOpenVisit[]
 }
 
@@ -59,6 +61,7 @@ export const asTrackerRow = (item: Record<string, unknown>): TrackerRow => ({
   accessGranted: item.accessGranted === true,
   guestEntered: item.guestEntered === true,
   earlyCheckIn: bookingHasEarlyCheckIn(item),
+  doNotEarlyCheckIn: bookingHasDoNotEarlyCheckIn(item),
   openVisits: Array.isArray(item.openVisits)
     ? item.openVisits
         .map((entry) => {

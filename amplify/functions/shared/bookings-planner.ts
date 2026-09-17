@@ -41,6 +41,9 @@ export const ALL_LINEN_VALUES = [
 
 export const GIFT_CARD_OFF = 'Sin tarjeta';
 export const EARLY_CHECK_IN_ON = 'Early check-in';
+export const DO_NOT_EARLY_CHECK_IN = 'Do not early check-in';
+export const EARLY_CHECK_IN_MODES = ['early', 'do_not', 'none'] as const;
+export type EarlyCheckInMode = (typeof EARLY_CHECK_IN_MODES)[number];
 
 export type PlannerWarningCode =
   | 'linen_ask_guest'
@@ -77,6 +80,7 @@ export type PlannerOverrides = {
   linen?: string;
   giftCardOn?: boolean;
   earlyCheckInOn?: boolean;
+  earlyCheckInMode?: EarlyCheckInMode;
   access?: string;
   dismissWarning?: PlannerWarningCode;
 };
@@ -418,6 +422,11 @@ export const isCanonicalLinenValue = (value: string, listingId?: string) => {
 export const isAllowedPlannerLinenValue = (value: string) =>
   ALLOWED_LINEN.has(value.trim());
 
+export const isAllowedEarlyCheckInMode = (
+  value: unknown,
+): value is EarlyCheckInMode =>
+  value === 'early' || value === 'do_not' || value === 'none';
+
 const foldPlannerText = (value: unknown) =>
   asString(value)
     .normalize('NFD')
@@ -546,8 +555,37 @@ const normalizeEarlyCheckInText = (value: unknown) =>
     .trim()
     .toLowerCase();
 
+export const isDoNotEarlyCheckIn = (value: unknown) =>
+  /^do[\s-]*not[\s-]*early[\s-]*check[\s-]*in\b/.test(
+    normalizeEarlyCheckInText(value),
+  );
+
 export const isEarlyCheckInEnabled = (value: unknown) =>
+  !isDoNotEarlyCheckIn(value) &&
   /^early[\s-]*check[\s-]*in\b/.test(normalizeEarlyCheckInText(value));
+
+export const resolveEarlyCheckInMode = (
+  text: unknown,
+  on?: boolean,
+): EarlyCheckInMode => {
+  if (isDoNotEarlyCheckIn(text)) {
+    return 'do_not';
+  }
+  if (on === true || isEarlyCheckInEnabled(text)) {
+    return 'early';
+  }
+  return 'none';
+};
+
+export const earlyCheckInValueForMode = (mode: EarlyCheckInMode) => {
+  if (mode === 'early') {
+    return EARLY_CHECK_IN_ON;
+  }
+  if (mode === 'do_not') {
+    return DO_NOT_EARLY_CHECK_IN;
+  }
+  return '';
+};
 
 export const computePlannerFields = ({
   item,
@@ -592,7 +630,18 @@ export const computePlannerFields = ({
     earlyCheckInOn = true;
   }
 
-  if (overrides?.earlyCheckInOn !== undefined) {
+  if (
+    isDoNotEarlyCheckIn(earlyCheckIn) &&
+    overrides?.earlyCheckInOn === undefined &&
+    overrides?.earlyCheckInMode === undefined
+  ) {
+    earlyCheckInOn = false;
+  }
+
+  if (overrides?.earlyCheckInMode !== undefined) {
+    earlyCheckIn = earlyCheckInValueForMode(overrides.earlyCheckInMode);
+    earlyCheckInOn = overrides.earlyCheckInMode === 'early';
+  } else if (overrides?.earlyCheckInOn !== undefined) {
     earlyCheckIn = overrides.earlyCheckInOn ? EARLY_CHECK_IN_ON : '';
   }
 

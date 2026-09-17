@@ -4,6 +4,7 @@ import {
   LINEN_VALUES,
   canonicalizeLinenValue,
   isActivePlannerStatus,
+  isDoNotEarlyCheckIn,
   isEarlyCheckInEnabled,
   toDateOnly,
   toGuestCount,
@@ -512,7 +513,8 @@ const isSofaBedYes = (item: Record<string, unknown>) =>
   LINEN_VALUES.YES;
 
 const isEarlyCheckInOn = (item: Record<string, unknown>) =>
-  asBoolean(item.EarlyCheckInOn) || isEarlyCheckInEnabled(item.EarlyCheckIn);
+  !isDoNotEarlyCheckIn(item.EarlyCheckIn) &&
+  (asBoolean(item.EarlyCheckInOn) || isEarlyCheckInEnabled(item.EarlyCheckIn));
 
 const giftCardValue = (item: Record<string, unknown>) => asString(item.GiftCard);
 

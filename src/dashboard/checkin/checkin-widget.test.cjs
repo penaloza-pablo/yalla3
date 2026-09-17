@@ -61,3 +61,10 @@ states.forEach((g, stage) => {
  assert.equal(actions.length,count);w.busy=false;
 });
 console.log('PASS: compact markup, accessible step buttons, prerequisites in all four states, forward-only actions and save lock.');
+
+w.guests=[{...data[0], doNotEarlyCheckIn:true}];
+assert.match(w.shadowRoot.innerHTML,/class="do-not-early"/);
+assert.match(w.shadowRoot.innerHTML,/Do not early check-in/);
+w.guests=[data[0]];
+assert.ok(!w.shadowRoot.innerHTML.includes('class="do-not-early"'));
+console.log('PASS: Property ready asterisk appears only for do not early check-in.');

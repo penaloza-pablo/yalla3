@@ -17,6 +17,7 @@ import {
 import type { PropertyOption } from '../operations/types'
 import {
   PLANNER_WINDOW_DAYS,
+  type EarlyCheckInMode,
   type PlannerWarningCode,
   isCanonicalLinenValue,
   isDismissablePlannerWarning,
@@ -30,6 +31,7 @@ import {
 } from './planner-plan-row'
 import { YallaSwitch } from './YallaSwitch'
 import { LinenBadgeSelect } from './LinenBadgeSelect'
+import { EarlyCheckInBadgeSelect } from './EarlyCheckInBadgeSelect'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type Props = {
@@ -148,6 +150,9 @@ export function BookingsPlanView({
   const [accessDrafts, setAccessDrafts] = useState<Record<string, string>>({})
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [openLinenId, setOpenLinenId] = useState<string | null>(null)
+  const [openEarlyCheckInId, setOpenEarlyCheckInId] = useState<string | null>(
+    null,
+  )
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
@@ -245,18 +250,19 @@ export function BookingsPlanView({
   }, [load])
 
   useEffect(() => {
-    if (!openLinenId) {
+    if (!openLinenId && !openEarlyCheckInId) {
       return
     }
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
       if (!target?.closest('.linen-badge-wrap')) {
         setOpenLinenId(null)
+        setOpenEarlyCheckInId(null)
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [openLinenId])
+  }, [openLinenId, openEarlyCheckInId])
 
   const saveFields = async (
     row: PlanRow,
@@ -264,6 +270,7 @@ export function BookingsPlanView({
       linen?: string
       giftCardOn?: boolean
       earlyCheckInOn?: boolean
+      earlyCheckInMode?: EarlyCheckInMode
       access?: string
       dismissWarning?: PlannerWarningCode
     },
@@ -567,15 +574,20 @@ export function BookingsPlanView({
                           />
                         </td>
                         <td>
-                          <YallaSwitch
-                            on={row.earlyCheckInOn}
+                          <EarlyCheckInBadgeSelect
+                            value={row.earlyCheckInMode}
                             disabled={!canEdit || isSaving}
-                            label={t('bookingsPlan.earlyCheckIn')}
-                            onToggle={() =>
-                              void saveFields(row, {
-                                earlyCheckInOn: !row.earlyCheckInOn,
-                              })
-                            }
+                            open={openEarlyCheckInId === row.id}
+                            onToggle={() => {
+                              setOpenLinenId(null)
+                              setOpenEarlyCheckInId((current) =>
+                                current === row.id ? null : row.id,
+                              )
+                            }}
+                            onSelect={(earlyCheckInMode) => {
+                              setOpenEarlyCheckInId(null)
+                              void saveFields(row, { earlyCheckInMode })
+                            }}
                           />
                         </td>
                         <td>
@@ -629,11 +641,12 @@ export function BookingsPlanView({
                                   listingId={row.listingId}
                                   disabled={!canEdit || isSaving}
                                   open={openLinenId === row.id}
-                                  onToggle={() =>
+                                  onToggle={() => {
+                                    setOpenEarlyCheckInId(null)
                                     setOpenLinenId((current) =>
                                       current === row.id ? null : row.id,
                                     )
-                                  }
+                                  }}
                                   onSelect={(linen) => {
                                     setOpenLinenId(null)
                                     void saveFields(row, { linen })

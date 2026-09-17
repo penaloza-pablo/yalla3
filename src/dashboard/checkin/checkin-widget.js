@@ -34,6 +34,7 @@ const EN = {
   needsAccess: 'Requires access granted',
   process: 'Check-in process',
   ariaCheckin: (name) => `Check-in for ${name}`,
+  doNotEarly: 'Do not early check-in',
   prev: 'Previous guest',
   next: 'Next guest',
   swipe: 'Swipe to change guest',
@@ -61,6 +62,7 @@ const ES = {
   needsAccess: 'Requiere acceso concedido',
   process: 'Proceso de check-in',
   ariaCheckin: (name) => `Check-in de ${name}`,
+  doNotEarly: 'Do not early check-in',
   prev: 'Huésped anterior',
   next: 'Siguiente huésped',
   swipe: 'Desliza para cambiar de huésped',
@@ -95,6 +97,9 @@ const css = `
   .journey .step-label{font-size:13px;line-height:16px;margin-top:5px;min-height:0}
   .journey .step-control{display:block;width:100%;min-height:56px;padding:0;border:0;background:transparent;text-align:left;color:inherit;border-radius:6px;position:relative}
   .journey .step-control[aria-disabled="true"]{cursor:default}
+  .do-not-early{position:relative;display:inline;margin-left:3px;color:#c62828;font-weight:800;cursor:help}
+  .do-not-early:hover::after,.do-not-early:focus-visible::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);background:#31424F;color:#F6F1E8;font:500 11px var(--kk-font);letter-spacing:0;text-transform:none;padding:5px 8px;border-radius:6px;white-space:nowrap;z-index:4;box-shadow:0 8px 18px -12px #243632aa}
+  .threshold .do-not-early:hover::after,.threshold .do-not-early:focus-visible::after{background:#F6F1E8;color:#31424F}
   .journey .actionable .dot{color:var(--kk-green);background:var(--kk-paper);box-shadow:0 0 0 1px var(--kk-green)}
   .journey .actionable .step-label{color:var(--kk-green);text-decoration:underline;text-underline-offset:3px}
   .journey .actionable .step-control:hover .dot{background:var(--kk-green);color:var(--kk-paper)}
@@ -195,12 +200,16 @@ export class KnockKnockCheckin extends HTMLElement {
     const steps = STAGES.map((s, i) => {
       const cls = i < stage ? 'past' : i === stage ? 'current' : 'future';
       const stageLabel = copy.stages[i] || s;
-      if (threshold) return `<li class="door-step ${cls}" ${i === stage ? 'aria-current="step"' : ''}><div class="portal" aria-hidden="true"><span class="door-icon">${icon(i < stage ? 'check' : names[i])}</span><div class="leaf"><span class="door-num">0${i + 1}</span></div></div><span class="step-label">${stageLabel}</span></li>`;
+      const doNotMark = i === 1 && g.doNotEarlyCheckIn
+        ? `<span class="do-not-early" tabindex="0" data-tip="${escape(copy.doNotEarly)}" title="${escape(copy.doNotEarly)}" aria-label="${escape(copy.doNotEarly)}">*</span>`
+        : '';
+      const labeled = `${stageLabel}${doNotMark}`;
+      if (threshold) return `<li class="door-step ${cls}" ${i === stage ? 'aria-current="step"' : ''}><div class="portal" aria-hidden="true"><span class="door-icon">${icon(i < stage ? 'check' : names[i])}</span><div class="leaf"><span class="door-num">0${i + 1}</span></div></div><span class="step-label">${labeled}</span></li>`;
       const stepAction = i === 2 ? 'grant-access' : i === 3 ? 'mark-entered' : '';
       const enabled = !this.#busy && (i === 2 && stage === 1 || i === 3 && stage === 2);
       const actionLabel = i === 2 ? copy.grant : copy.enter;
       const reason = this.#busy ? copy.saving : i <= stage ? copy.alreadyDone : i === 2 ? copy.needsReady : copy.needsAccess;
-      const inner = `<span class="dot" aria-hidden="true">${i <= stage ? icon(i < stage ? 'check' : names[i]) : i + 1}</span><span class="step-label">${stageLabel}</span>`;
+      const inner = `<span class="dot" aria-hidden="true">${i <= stage ? icon(i < stage ? 'check' : names[i]) : i + 1}</span><span class="step-label">${labeled}</span>`;
       return `<li class="step ${cls} ${enabled ? 'actionable' : ''}" ${i === stage ? 'aria-current="step"' : ''}>${stepAction ? `<button type="button" class="step-control" data-action="${stepAction}" aria-disabled="${!enabled}" aria-label="${actionLabel}${enabled ? '' : '. ' + reason}">${inner}</button>` : inner}</li>`;
     }).join('');
     this.shadowRoot.innerHTML = `<style>${css}</style><section class="shell ${threshold ? 'threshold' : 'journey'} ${stage === 0 ? 'pending-stage' : ''}" aria-label="${copy.ariaCheckin(escape(g.name))}" aria-busy="${this.#busy}">

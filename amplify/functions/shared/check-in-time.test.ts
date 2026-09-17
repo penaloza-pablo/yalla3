@@ -8,7 +8,10 @@ import {
   plannedArrivalFromGuestyReservation,
 } from './check-in-time';
 import { shouldAutoGrantAccess } from './grant-check-in-access';
-import { earlyCheckInAccessEnabledMessage } from './slack-early-check-in';
+import {
+  doNotEarlyCheckInReadyMessage,
+  earlyCheckInAccessEnabledMessage,
+} from './slack-early-check-in';
 
 test('planned arrival normalizes Guesty times and defaults to 15:00', () => {
   assert.equal(normalizePlannedArrival('9:00'), '09:00');
@@ -85,5 +88,12 @@ test('early access Slack copy names the guest without repeating the property rea
   assert.equal(
     earlyCheckInAccessEnabledMessage('Filippo Paloschi'),
     'Acceso de early check-in habilitado. Guest: Filippo Paloschi',
+  );
+});
+
+test('do not early check-in Slack copy bolds DO NOT', () => {
+  assert.equal(
+    doNotEarlyCheckInReadyMessage('San Marcos C', 'Caio Ferreira'),
+    'San Marcos C lista pero indicada con *DO NOT* Early check-in. Guest: Caio Ferreira',
   );
 });

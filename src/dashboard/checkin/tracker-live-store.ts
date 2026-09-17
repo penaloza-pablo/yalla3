@@ -11,6 +11,7 @@ import {
   type TrackerRow,
 } from '../../bookings/checkInTrackerShared'
 import {
+  bookingHasDoNotEarlyCheckIn,
   bookingHasEarlyCheckIn,
   isCompletedVisitStatus,
   trackerVisitKind,
@@ -254,10 +255,15 @@ const loadVisitActivity = async (date: string, signal?: AbortSignal) => {
   }
 }
 
+type EarlyFlags = {
+  early: boolean
+  doNot: boolean
+}
+
 const loadEarlyFlagsForDate = async (
   date: string,
   signal?: AbortSignal,
-): Promise<Map<string, boolean> | null> => {
+): Promise<Map<string, EarlyFlags> | null> => {
   const endpoint = getAmplifyEndpoint(
     'getBookingsUrl',
     import.meta.env.VITE_GET_BOOKINGS_URL,
@@ -288,7 +294,17 @@ const loadEarlyFlagsForDate = async (
     return new Map(
       items.flatMap((item) => {
         const id = String(item.ReservationID ?? item.id ?? '').trim()
-        return id ? [[id, bookingHasEarlyCheckIn(item)] as const] : []
+        return id
+          ? [
+              [
+                id,
+                {
+                  early: bookingHasEarlyCheckIn(item),
+                  doNot: bookingHasDoNotEarlyCheckIn(item),
+                } satisfies EarlyFlags,
+              ] as const,
+            ]
+          : []
       }),
     )
   } catch (error) {
@@ -381,10 +397,14 @@ export const loadUpcomingCheckins = (
         loaded.rows.filter((row) => Boolean(row.id)),
       )
       if (earlyById) {
-        rows = rows.map((row) => ({
-          ...row,
-          earlyCheckIn: earlyById.get(row.id) ?? row.earlyCheckIn,
-        }))
+        rows = rows.map((row) => {
+          const flags = earlyById.get(row.id)
+          return {
+            ...row,
+            earlyCheckIn: flags?.early ?? row.earlyCheckIn,
+            doNotEarlyCheckIn: flags?.doNot ?? row.doNotEarlyCheckIn,
+          }
+        })
       }
       let activity = mergeActivity(rows, loaded.activity)
       if (!loaded.activity) {

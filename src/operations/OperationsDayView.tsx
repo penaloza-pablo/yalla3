@@ -89,6 +89,7 @@ export type DayBookingEvent = {
   giftCard?: string
   linen?: string
   earlyCheckIn?: boolean
+  doNotEarlyCheckIn?: boolean
   checkInStartMinutes?: number
   earlyLeadMinutes?: number
 }
@@ -1804,10 +1805,18 @@ function DayBookingBlock({
   const start = display.checkInStartMinutes
   const end = start + BOOKING_DURATION_MINUTES
   const showEarlyCheckIn = display.earlyLeadMinutes > 0
-  const earlyStart = start - display.earlyLeadMinutes
+  const showDoNotEarlyCheckIn =
+    Boolean(booking.doNotEarlyCheckIn) && !showEarlyCheckIn
+  const indicatorLeadMinutes = showEarlyCheckIn
+    ? display.earlyLeadMinutes
+    : showDoNotEarlyCheckIn
+      ? EARLY_CHECK_IN_DURATION_MINUTES
+      : 0
+  const earlyStart = start - indicatorLeadMinutes
   const earlyTitle = compact && showEarlyCheckIn
     ? `${t('bookingsPlan.earlyCheckIn')} · ${formatMinutesAsTime(earlyStart)}–${formatMinutesAsTime(start)} · ${t('operations.earlyRequestNoGuarantee')} · ${booking.guestName}`
     : `${t('bookingsPlan.earlyCheckIn')} · ${booking.guestName}`
+  const doNotTitle = `${t('bookingsPlan.doNotEarlyCheckIn')} · ${booking.guestName}`
   const checkInTitle =
     compact && showEarlyCheckIn
       ? `${t('common.checkIn')} · ${booking.guestName} · ${t('operations.earlyRequestNoGuarantee')}`
@@ -1816,9 +1825,29 @@ function DayBookingBlock({
     channelHeight > COMPACT_ROW_HEIGHT
       ? channelHeight - COMPACT_EARLY_TOP - COMPACT_EARLY_BOTTOM_INSET
       : COMPACT_EARLY_HEIGHT
+  const hasLead = showEarlyCheckIn || showDoNotEarlyCheckIn
 
   return (
     <>
+      {showDoNotEarlyCheckIn ? (
+        <DayBookingTimeBlock
+          start={earlyStart}
+          end={start}
+          timelineWindow={timelineWindow}
+          className="operations-day-booking-block is-do-not-early-check-in"
+          title={doNotTitle}
+          style={
+            compact
+              ? {
+                  top: COMPACT_EARLY_TOP,
+                  height: earlyHeight,
+                  minHeight: earlyHeight,
+                }
+              : undefined
+          }
+          onClick={() => onBookingClick(booking)}
+        />
+      ) : null}
       {showEarlyCheckIn ? (
         <DayBookingTimeBlock
           start={earlyStart}
@@ -1855,7 +1884,7 @@ function DayBookingBlock({
           minutes={start}
           timelineWindow={timelineWindow}
           className={`operations-day-booking-block is-check-in is-milestone${
-            showEarlyCheckIn ? ' has-early-lead' : ''
+            hasLead ? ' has-early-lead' : ''
           }${isDragging ? ' is-dragging' : ''}`}
           title={checkInTitle}
           onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}
@@ -1880,7 +1909,7 @@ function DayBookingBlock({
           end={end}
           timelineWindow={timelineWindow}
           className={`operations-day-booking-block is-check-in${
-            showEarlyCheckIn ? ' has-early-lead' : ''
+            hasLead ? ' has-early-lead' : ''
           }${isDragging ? ' is-dragging' : ''}`}
           title={checkInTitle}
           onMovePointerDown={(event) => beginDrag(event, 'move', 'check-in')}

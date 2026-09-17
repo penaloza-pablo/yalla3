@@ -2,8 +2,9 @@ import {
   type PlannerWarningCode,
   canonicalizeLinenValue,
   isCanonicalLinenValue,
-  isEarlyCheckInEnabled,
   isVerdejoBedListing,
+  resolveEarlyCheckInMode,
+  type EarlyCheckInMode,
 } from '../../amplify/functions/shared/bookings-planner'
 import { resolveYallaPropertyLabel } from '../../amplify/functions/shared/property-identity'
 
@@ -22,6 +23,7 @@ export type PlannerPlanRow = {
   giftCardOn: boolean
   access: string
   earlyCheckInOn: boolean
+  earlyCheckInMode: EarlyCheckInMode
   warnings: PlannerWarningCode[]
 }
 
@@ -51,6 +53,10 @@ export const mapPlannerPlanRow = (
   const giftCard = asString(item.GiftCard ?? item.giftCard)
   const early = asString(item.EarlyCheckIn ?? item.earlyCheckIn)
   const listingId = asString(item.ListingID ?? item.listingId)
+  const earlyCheckInMode = resolveEarlyCheckInMode(
+    early,
+    asBoolean(item.EarlyCheckInOn ?? item.earlyCheckInOn),
+  )
   return {
     id: asString(item.ReservationID ?? item.id),
     listingId,
@@ -73,9 +79,8 @@ export const mapPlannerPlanRow = (
       Boolean(giftCard) && giftCard !== 'Sin tarjeta',
     ),
     access: asString(item.Access ?? item.access),
-    earlyCheckInOn:
-      asBoolean(item.EarlyCheckInOn ?? item.earlyCheckInOn, false) ||
-      isEarlyCheckInEnabled(early),
+    earlyCheckInOn: earlyCheckInMode === 'early',
+    earlyCheckInMode,
     warnings: asWarnings(item.PlannerWarnings ?? item.warnings),
   }
 }

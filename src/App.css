@@ -4495,6 +4495,24 @@ th {
   overflow: visible;
 }
 
+.operations-day-booking-block.is-do-not-early-check-in {
+  background-color: rgba(180, 35, 24, 0.12);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(180, 35, 24, 0.2) 8px,
+    rgba(180, 35, 24, 0.2) 16px
+  );
+  color: #b42318;
+  border-radius: 999px 0 0 999px;
+  z-index: 1;
+  pointer-events: auto;
+  cursor: default;
+  user-select: none;
+  overflow: visible;
+}
+
 .operations-day-booking-block.is-check-out {
   background: rgba(108, 114, 127, 0.2);
   color: #6c727f;
@@ -4984,6 +5002,7 @@ th {
   --agenda2-green: #3d5b58;
   --agenda2-done: #edf0e9;
   --agenda2-early: #d9be79;
+  --agenda2-do-not-early: #c45c4a;
   --agenda2-name: 182px;
   background: var(--agenda2-cream);
   color: var(--agenda2-slate);
@@ -5272,6 +5291,24 @@ th {
   );
   z-index: 0;
   color: transparent;
+}
+
+.operations-day-card.is-compact .operations-day-booking-block.is-do-not-early-check-in {
+  top: 6px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 6px;
+  border-top: 2px solid rgb(196 92 74 / 40%);
+  border-bottom: 2px solid var(--agenda2-do-not-early);
+  background-color: rgb(196 92 74 / 12%);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(196 92 74 / 16%) 0 4px,
+    rgb(196 92 74 / 4%) 4px 9px
+  );
+  z-index: 0;
+  color: transparent;
+  cursor: default;
 }
 
 .operations-day-card.is-compact .operations-day-booking-block.is-milestone {
@@ -7774,6 +7811,10 @@ th {
 
 .linen-badge-menu .linen-badge.is-selected {
   box-shadow: 0 0 0 1px currentColor;
+}
+
+.early-check-in-badge-menu {
+  min-width: 180px;
 }
 
 .job-scheduler-property-cell {

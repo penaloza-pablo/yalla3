@@ -1,5 +1,6 @@
 import {
   isActivePlannerStatus,
+  isDoNotEarlyCheckIn,
   isEarlyCheckInEnabled,
   PLANNER_WINDOW_DAYS,
 } from './bookings-planner';
@@ -229,11 +230,16 @@ export const blockingVisitsForListing = (
 export const shouldIncludeBooking = (item: Record<string, unknown>) =>
   isActivePlannerStatus(item.Status ?? item.status);
 
+export const bookingHasDoNotEarlyCheckIn = (item: Record<string, unknown>) =>
+  item.doNotEarlyCheckIn === true ||
+  isDoNotEarlyCheckIn(item.EarlyCheckIn ?? item.earlyCheckIn);
+
 export const bookingHasEarlyCheckIn = (item: Record<string, unknown>) =>
-  item.EarlyCheckInOn === true ||
-  item.earlyCheckInOn === true ||
-  item.earlyCheckIn === true ||
-  isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn);
+  !bookingHasDoNotEarlyCheckIn(item) &&
+  (item.EarlyCheckInOn === true ||
+    item.earlyCheckInOn === true ||
+    item.earlyCheckIn === true ||
+    isEarlyCheckInEnabled(item.EarlyCheckIn ?? item.earlyCheckIn));
 
 export const isCompletedVisitStatus = (status: unknown) =>
   asString(status).toUpperCase() === 'COMPLETED';
@@ -312,6 +318,7 @@ export const mapCheckInTrackerRow = (
     accessGranted: flags.accessGranted,
     guestEntered: flags.guestEntered,
     earlyCheckIn: bookingHasEarlyCheckIn(item),
+    doNotEarlyCheckIn: bookingHasDoNotEarlyCheckIn(item),
     openVisits,
   };
 };

@@ -247,14 +247,17 @@ export const getDayTimelineHourMarks = (window: DayTimelineWindow) => {
 export const getBookingEventTimeRange = (booking: {
   kind: 'check-in' | 'check-out'
   earlyCheckIn?: boolean
+  doNotEarlyCheckIn?: boolean
   checkInStartMinutes?: number
   earlyLeadMinutes?: number
 }) => {
   if (booking.kind === 'check-in') {
     const start = booking.checkInStartMinutes ?? BOOKING_CHECK_IN_START
-    const lead =
-      booking.earlyLeadMinutes ??
-      (booking.earlyCheckIn ? EARLY_CHECK_IN_DURATION_MINUTES : 0)
+    const lead = booking.earlyCheckIn
+      ? (booking.earlyLeadMinutes || EARLY_CHECK_IN_DURATION_MINUTES)
+      : booking.doNotEarlyCheckIn
+        ? EARLY_CHECK_IN_DURATION_MINUTES
+        : (booking.earlyLeadMinutes ?? 0)
     return {
       start: start - lead,
       end: start + BOOKING_DURATION_MINUTES,
@@ -326,6 +329,7 @@ export const getDayWindowOverflow = (
   bookings: Array<{
     kind: 'check-in' | 'check-out'
     earlyCheckIn?: boolean
+    doNotEarlyCheckIn?: boolean
     checkInStartMinutes?: number
     earlyLeadMinutes?: number
   }> = [],
