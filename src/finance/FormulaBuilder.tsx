@@ -21,15 +21,26 @@ export function FormulaBuilder({
   variableLabel,
   onChange,
 }: Props) {
-  const { t } = useTranslation()
-  const [selectedVariable, setSelectedVariable] = useState(variableIds[0] ?? '')
+  const { t, i18n } = useTranslation()
+  const sortedVariableIds = useMemo(
+    () =>
+      [...variableIds].sort((left, right) =>
+        variableLabel(left).localeCompare(variableLabel(right), i18n.language, {
+          sensitivity: 'base',
+        }),
+      ),
+    [i18n.language, variableIds, variableLabel],
+  )
+  const [selectedVariable, setSelectedVariable] = useState(
+    sortedVariableIds[0] ?? '',
+  )
   const [numberDraft, setNumberDraft] = useState('')
 
   useEffect(() => {
-    if (!variableIds.includes(selectedVariable)) {
-      setSelectedVariable(variableIds[0] ?? '')
+    if (!sortedVariableIds.includes(selectedVariable)) {
+      setSelectedVariable(sortedVariableIds[0] ?? '')
     }
-  }, [selectedVariable, variableIds])
+  }, [selectedVariable, sortedVariableIds])
 
   const tokens = useMemo(() => {
     if (!value.trim()) {
@@ -91,7 +102,7 @@ export function FormulaBuilder({
             value={selectedVariable}
             onChange={(event) => setSelectedVariable(event.target.value)}
           >
-            {variableIds.map((id) => (
+            {sortedVariableIds.map((id) => (
               <option key={id} value={id}>
                 {variableLabel(id)}
               </option>

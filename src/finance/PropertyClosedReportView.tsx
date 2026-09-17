@@ -192,7 +192,11 @@ export function PropertyClosedReportView({
 
   const row = resolved[tab]
   const metricIds = row.metrics.filter(
-    (id) => !(hideManagementFee && id === 'managementFee'),
+    (id) =>
+      !(
+        hideManagementFee &&
+        (id === 'managementFee' || id === 'managementFeeVat')
+      ),
   )
   const detailSections = detailId
     ? buildMetricDetailSections(detailId, detailSources)

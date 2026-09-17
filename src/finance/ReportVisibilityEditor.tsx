@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   REPORT_TABS,
@@ -12,8 +13,23 @@ type Props = {
   metricLabel: (id: string) => string
 }
 
+const sortByLabel = (
+  ids: readonly string[],
+  metricLabel: (id: string) => string,
+  locale: string,
+) =>
+  [...ids].sort((left, right) =>
+    metricLabel(left).localeCompare(metricLabel(right), locale, {
+      sensitivity: 'base',
+    }),
+  )
+
 export function ReportVisibilityEditor({ value, onChange, metricLabel }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const catalogIds = useMemo(
+    () => sortByLabel(VISIBILITY_METRIC_IDS, metricLabel, i18n.language),
+    [i18n.language, metricLabel],
+  )
 
   const updateTab = (
     tab: ReportTabId,
@@ -68,17 +84,18 @@ export function ReportVisibilityEditor({ value, onChange, metricLabel }: Props) 
                   updateTab(tab, { primary: event.target.value })
                 }
               >
-                {(row.metrics.length ? row.metrics : VISIBILITY_METRIC_IDS).map(
-                  (id) => (
+                {(row.metrics.length
+                  ? sortByLabel(row.metrics, metricLabel, i18n.language)
+                  : catalogIds
+                ).map((id) => (
                     <option key={id} value={id}>
                       {metricLabel(id)}
                     </option>
-                  ),
-                )}
+                  ))}
               </select>
             </label>
             <div className="report-visibility-metrics">
-              {VISIBILITY_METRIC_IDS.map((id) => (
+              {catalogIds.map((id) => (
                 <label key={id} className="report-visibility-metric">
                   <input
                     type="checkbox"

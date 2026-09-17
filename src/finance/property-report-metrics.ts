@@ -53,6 +53,7 @@ export type PropertyReportMetricInputs = {
 }
 
 export const MARKUP_RATE = 0.12
+export const MANAGEMENT_FEE_VAT_RATE = 0.21
 
 const isIncomeApplyMarkup = (line: AllocatedReportLine) =>
   line.section === 'income' &&
@@ -287,6 +288,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'indicator',
     formula: '(paidByGuest - payoutCleaningNet - channelFee) * marketManagementFee / 100',
   },
+  {
+    id: 'managementFeeVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'managementFee * 0.21',
+  },
 ] as const
 
 export type PropertyReportFieldId =
@@ -456,6 +463,7 @@ export const computePropertyReportMetrics = (
     isIncomeDoNotSend,
   )
   const managementFee = resolveManagementFee(formulaValues, settings)
+  const managementFeeVat = roundMoney(managementFee * MANAGEMENT_FEE_VAT_RATE)
   const amountTransferred = roundMoney(
     income -
       incomesDoNotSend -
@@ -467,6 +475,7 @@ export const computePropertyReportMetrics = (
   const withFee = {
     ...formulaValues,
     managementFee,
+    managementFeeVat,
     amountTransferred,
     commission: settings?.commissionPercent ?? 0,
     fixedRent: settings?.fixedRent ?? 0,
@@ -514,6 +523,7 @@ export const computePropertyReportMetrics = (
     income,
     cleaningMargin,
     managementFee,
+    managementFeeVat,
     maintenance: roundMoney(inputs.maintenanceNet),
     maintenanceCoverByOwner,
     maintenanceCoverByUs,

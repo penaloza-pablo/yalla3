@@ -60,6 +60,7 @@ export const FORMULA_RESULT_VARIABLES = [
 export const VISIBILITY_EXTRA_METRIC_IDS = [
   'marketManagementFee',
   'marketManagementCommission',
+  'managementFeeVat',
 ] as const;
 
 export const VISIBILITY_METRIC_IDS = [
@@ -74,12 +75,14 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
   managementFee: ['marketManagementFee', 'marketManagementCommission'],
   propertyContribution: [
     'managementFee',
+    'managementFeeVat',
     'amountTransferred',
     'marketManagementFee',
     'marketManagementCommission',
   ],
   ourProfit: [
     'managementFee',
+    'managementFeeVat',
     'propertyContribution',
     'amountTransferred',
     'marketManagementFee',
@@ -87,6 +90,7 @@ const TARGET_EXTRA_VARIABLES: Record<FormulaTarget, readonly string[]> = {
   ],
   netEarnings: [
     'managementFee',
+    'managementFeeVat',
     'propertyContribution',
     'ourProfit',
     'amountTransferred',
