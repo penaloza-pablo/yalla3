@@ -41,6 +41,14 @@ export const toIncomeAllocation = (
   return '';
 };
 
+export const parseCostDefaultAllocation = (
+  value: unknown,
+): CostAllocation | '' => (isCostAllocation(value) ? value : '');
+
+export const parseIncomeDefaultAllocation = (
+  value: unknown,
+): IncomeAllocation | '' => (isIncomeAllocation(value) ? value : '');
+
 export const parseLineAllocations = (value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {} as Record<string, LineAllocation>;
@@ -54,6 +62,21 @@ export const parseLineAllocations = (value: unknown) => {
       continue;
     }
     next[id] = allocation;
+  }
+  return next;
+};
+
+export const mergeDefaultLineAllocations = (
+  stored: Record<string, LineAllocation>,
+  lines: { rowId: string; allocation?: string }[],
+) => {
+  const next = { ...stored };
+  for (const line of lines) {
+    const rowId = line.rowId.trim();
+    if (!rowId || next[rowId] || !isLineAllocation(line.allocation)) {
+      continue;
+    }
+    next[rowId] = line.allocation;
   }
   return next;
 };

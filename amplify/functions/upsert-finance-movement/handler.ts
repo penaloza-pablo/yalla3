@@ -13,20 +13,37 @@ import {
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
 import {
-  docClient,
-  getNextSequentialId,
-  putItem,
-} from '../shared/visit-task-utils';
-import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
+  asNumber,
+  asString,
+  isDateOnly,
+  isMovementScheduleRecord,
+  normalizeCustomUnit,
+  normalizeRecurrence,
+  parseScheduleEnabled,
+  parseScheduleEndDate,
+} from '../shared/finance-services';
+import { materializeCurrentMovementMonth } from '../shared/finance-movements-store';
+import {
+  parseCostDefaultAllocation,
+  parseIncomeDefaultAllocation,
+} from '../shared/property-report-allocations';
 import {
   occurrencePriceWithIva,
   persistIvaFields,
   resolveIvaRateFromInput,
   roundMoney,
 } from '../shared/iva';
+import {
+  docClient,
+  getNextSequentialId,
+  putItem,
+} from '../shared/visit-task-utils';
+import { resolveYallaPropertyLabelFromRecord } from '../shared/property-identity';
 
 type MovementPayload = {
   id?: string;
+  recordType?: string;
+  scheduleId?: string;
   propertyId?: string;
   propertyName?: string;
   description?: string;
@@ -36,27 +53,19 @@ type MovementPayload = {
   totalAmount?: number | string;
   kind?: string;
   date?: string;
+  startDate?: string;
+  recurrence?: string;
+  customInterval?: number | string;
+  customUnit?: string;
   status?: string;
+  enabled?: boolean | string;
+  endDate?: string;
+  defaultAllocation?: string;
+  allocation?: string;
   action?: string;
 };
 
 const MOVEMENT_STATUSES = ['Pending Billing', 'Billed', 'Not Billable'] as const;
-
-const asString = (value: unknown) =>
-  typeof value === 'string' ? value.trim() : '';
-
-const asNumber = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-
-const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 const normalizeKind = (value: string) => {
   const kind = value.trim().toLowerCase();
@@ -72,6 +81,11 @@ const normalizeStatus = (value: string) => {
     ? status
     : '';
 };
+
+const parseDefaultAllocation = (kind: string, value: unknown) =>
+  kind === 'income'
+    ? parseIncomeDefaultAllocation(value)
+    : parseCostDefaultAllocation(value);
 
 const resolvePropertyName = async (propertyId: string, fallback: string) => {
   if (fallback) {
@@ -147,17 +161,26 @@ export const handler = async (event: {
         action: 'delete',
         entityId: asString(existing.id),
         entityName:
-          asString(existing.propertyName) || asString(existing.propertyId),
-        summary: `deleted movement ${quoted(asString(existing.id))}`,
+          asString(existing.propertyName) ||
+          asString(existing.description) ||
+          asString(existing.propertyId),
+        summary: `deleted ${
+          isMovementScheduleRecord(existing)
+            ? 'scheduled movement'
+            : 'movement'
+        } ${quoted(asString(existing.id))}`,
       });
       return buildHttpResponse(200, { deleted: true, id: existing.id });
     }
+
+    const isScheduleWrite =
+      asString(payload.recordType) === 'schedule' ||
+      (existing ? isMovementScheduleRecord(existing) : false);
 
     const propertyId =
       asString(payload.propertyId) || asString(existing?.propertyId);
     const description =
       asString(payload.description) || asString(existing?.description);
-    const date = asString(payload.date) || asString(existing?.date);
     const amount = asNumber(payload.amount) ?? asNumber(existing?.amount);
     const kind =
       normalizeKind(asString(payload.kind) || asString(existing?.kind));
@@ -172,9 +195,6 @@ export const handler = async (event: {
     }
     if (!description) {
       return buildHttpResponse(400, { message: 'description is required.' });
-    }
-    if (!date || !isDateOnly(date)) {
-      return buildHttpResponse(400, { message: 'date is required.' });
     }
     if (amount === null || amount < 0) {
       return buildHttpResponse(400, { message: 'amount must be 0 or greater.' });
@@ -195,8 +215,107 @@ export const handler = async (event: {
         ? roundMoney(payloadTotal)
         : occurrencePriceWithIva(roundMoney(amount), ivaRate);
     const timestamp = nowIso();
+
+    if (isScheduleWrite) {
+      const recurrence = normalizeRecurrence(
+        asString(payload.recurrence) || asString(existing?.recurrence),
+      );
+      const startDate =
+        asString(payload.startDate) || asString(existing?.startDate);
+      const customInterval = Math.max(
+        1,
+        Math.floor(
+          asNumber(payload.customInterval) ??
+            asNumber(existing?.customInterval) ??
+            1,
+        ),
+      );
+      const customUnit =
+        normalizeCustomUnit(
+          asString(payload.customUnit) || asString(existing?.customUnit),
+        ) || 'months';
+      if (!recurrence || recurrence === 'oneoff') {
+        return buildHttpResponse(400, { message: 'recurrence is required.' });
+      }
+      if (recurrence === 'other' && customInterval < 1) {
+        return buildHttpResponse(400, {
+          message: 'customInterval is required for Other recurrence.',
+        });
+      }
+      if (!startDate || !isDateOnly(startDate)) {
+        return buildHttpResponse(400, { message: 'startDate is required.' });
+      }
+      const enabled = parseScheduleEnabled(
+        payload.enabled !== undefined ? payload.enabled : existing?.enabled,
+        true,
+      );
+      const endDate = parseScheduleEndDate(
+        payload.endDate !== undefined ? payload.endDate : existing?.endDate,
+      );
+      if (endDate && endDate < startDate) {
+        return buildHttpResponse(400, {
+          message: 'endDate must be on or after startDate.',
+        });
+      }
+      const defaultAllocation = parseDefaultAllocation(
+        kind,
+        payload.defaultAllocation !== undefined
+          ? payload.defaultAllocation
+          : payload.allocation !== undefined
+            ? payload.allocation
+            : existing?.defaultAllocation ?? existing?.allocation,
+      );
+      const item = {
+        id:
+          asString(existing?.id) ||
+          (await getNextSequentialId(tableName, 'MVS')),
+        recordType: 'schedule',
+        propertyId,
+        propertyName,
+        description,
+        amount: roundMoney(amount),
+        ivaRate,
+        appliesIva,
+        totalAmount,
+        kind,
+        status,
+        recurrence,
+        startDate,
+        customInterval: recurrence === 'other' ? customInterval : undefined,
+        customUnit: recurrence === 'other' ? customUnit : undefined,
+        enabled,
+        ...(endDate ? { endDate } : {}),
+        ...(defaultAllocation ? { defaultAllocation } : {}),
+        createdAt: asString(existing?.createdAt) || timestamp,
+        updatedAt: timestamp,
+      };
+      await putItem(tableName, item);
+      await materializeCurrentMovementMonth(tableName, item.id);
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.MOVEMENTS,
+        action: isUpdate ? 'update' : 'create',
+        entityId: item.id,
+        entityName: item.description || item.propertyName,
+        summary: `${isUpdate ? 'updated' : 'created'} scheduled movement ${quoted(item.id)}`,
+      });
+      return buildHttpResponse(200, { item });
+    }
+
+    const date = asString(payload.date) || asString(existing?.date);
+    if (!date || !isDateOnly(date)) {
+      return buildHttpResponse(400, { message: 'date is required.' });
+    }
+    const existingAllocation = parseDefaultAllocation(
+      kind,
+      existing?.allocation,
+    );
     const item = {
       id: asString(existing?.id) || (await getNextSequentialId(tableName, 'MOV')),
+      recordType: 'item',
+      scheduleId:
+        asString(payload.scheduleId) ||
+        asString(existing?.scheduleId) ||
+        undefined,
       propertyId,
       propertyName,
       description,
@@ -207,6 +326,7 @@ export const handler = async (event: {
       kind,
       status,
       date,
+      ...(existingAllocation ? { allocation: existingAllocation } : {}),
       createdAt: asString(existing?.createdAt) || timestamp,
       updatedAt: timestamp,
     };

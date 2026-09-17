@@ -14,10 +14,13 @@ import {
   normalizeRecurrence,
   normalizeServiceType,
   occurrencePriceWithIva,
+  parseScheduleEnabled,
+  parseScheduleEndDate,
   persistIvaFields,
   resolveIvaRateFromInput,
   roundMoney,
 } from '../shared/finance-services';
+import { parseCostDefaultAllocation } from '../shared/property-report-allocations';
 import {
   deleteFinanceRecord,
   materializeCurrentMonth,
@@ -55,6 +58,10 @@ type ServicePayload = {
   appliesIva?: boolean;
   priceWithIva?: number | string;
   billingDate?: string;
+  enabled?: boolean | string;
+  endDate?: string;
+  defaultAllocation?: string;
+  allocation?: string;
   action?: string;
 };
 
@@ -298,6 +305,26 @@ export const handler = async (event: {
       });
     }
 
+    const enabled = parseScheduleEnabled(
+      payload.enabled !== undefined ? payload.enabled : existing?.enabled,
+      true,
+    );
+    const endDate = parseScheduleEndDate(
+      payload.endDate !== undefined ? payload.endDate : existing?.endDate,
+    );
+    if (endDate && endDate < startDate) {
+      return buildHttpResponse(400, {
+        message: 'endDate must be on or after startDate.',
+      });
+    }
+    const defaultAllocation = parseCostDefaultAllocation(
+      payload.defaultAllocation !== undefined
+        ? payload.defaultAllocation
+        : payload.allocation !== undefined
+          ? payload.allocation
+          : existing?.defaultAllocation ?? existing?.allocation,
+    );
+
     const timestamp = nowIso();
     const id =
       asString(existing?.id) || (await getNextSequentialId(tableName, 'SVC'));
@@ -324,6 +351,9 @@ export const handler = async (event: {
       ivaRate,
       appliesIva,
       priceWithIva,
+      enabled,
+      ...(endDate ? { endDate } : {}),
+      ...(defaultAllocation ? { defaultAllocation } : {}),
       items: [],
       createdAt: asString(existing?.createdAt) || timestamp,
       updatedAt: timestamp,

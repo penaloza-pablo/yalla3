@@ -1752,7 +1752,19 @@
     "validation": "La propiedad, la descripción y la fecha son obligatorias.",
     "validationAmount": "Introduce un importe de 0 o mayor.",
     "saved": "Movement guardado.",
-    "deleted": "Movement eliminado."
+    "deleted": "Movement eliminado.",
+    "addSchedule": "Añadir movimiento programado",
+    "templatesTitle": "Movimientos programados",
+    "templatesSubtitle": "Si cambias el importe, solo afecta a los movimientos que se creen a partir de ahora.",
+    "formScheduleTitle": "Añadir movimiento programado",
+    "editScheduleTitle": "Editar movimiento programado",
+    "formScheduleSubtitle": "Al guardar se crea el movimiento del mes en curso si la programación está activa.",
+    "emptySchedules": "Aún no hay movimientos programados.",
+    "validationSchedule": "La propiedad, la descripción y la fecha de inicio son obligatorias.",
+    "validationCustom": "Indica cada cuántos días, semanas o meses se repite.",
+    "scheduleSaved": "Movimiento programado guardado.",
+    "scheduleDeleted": "Movimiento programado eliminado.",
+    "chargeTo": "Charge to"
   },
   "services": {
     "eyebrow": "Finanzas / Servicios y suscripciones",
@@ -1829,11 +1841,20 @@
     "validationPrice": "Introduce un precio de 0 o mayor para los servicios fijos.",
     "validationItem": "El título, la fecha de facturación y un precio de 0 o mayor son obligatorios.",
     "validationCustom": "Indica cada cuántos días, semanas o meses se repite.",
+    "validationEndDate": "Introduce una fecha de finalización igual o posterior a la fecha de inicio.",
     "saved": "Servicio guardado.",
     "itemSaved": "Ítem de facturación guardado.",
     "occurrencesSaved": "Ítems de facturación guardados.",
     "deleted": "Servicio eliminado.",
-    "itemDeleted": "Ítem de facturación eliminado."
+    "itemDeleted": "Ítem de facturación eliminado.",
+    "enabled": "Activo",
+    "disabled": "Deshabilitado",
+    "ended": "Finalizado",
+    "endDate": "Fecha de finalización",
+    "endDateHelp": "Opcional. El servicio deja de crear ítems de facturación después de esta fecha.",
+    "setEndDate": "Definir fecha de finalización",
+    "chargeTo": "Charge to",
+    "chargeToUnset": "Elegir en el reporte de propiedad"
   },
   "reviewWorkflow": {
     "progress": "Progreso del flujo de reseña",

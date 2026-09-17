@@ -170,6 +170,58 @@ export const isBillingItemRecord = (item: Record<string, unknown>) =>
 export const isScheduleRecord = (item: Record<string, unknown>) =>
   !isBillingItemRecord(item);
 
+export const isMovementScheduleRecord = (item: Record<string, unknown>) =>
+  asString(item.recordType) === 'schedule';
+
+export const isMovementItemRecord = (item: Record<string, unknown>) =>
+  !isMovementScheduleRecord(item);
+
+export const parseScheduleEnabled = (
+  value: unknown,
+  fallback = true,
+): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (value === 0 || value === '0' || value === 'false') {
+    return false;
+  }
+  if (value === 1 || value === '1' || value === 'true') {
+    return true;
+  }
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  return fallback;
+};
+
+export const parseScheduleEndDate = (value: unknown) => {
+  const endDate = asString(value).slice(0, 10);
+  return isDateOnly(endDate) ? endDate : '';
+};
+
+export const isScheduleEnabled = (item: Record<string, unknown>) =>
+  parseScheduleEnabled(item.enabled, true);
+
+export const shouldCreateBillingOnDate = (
+  item: Record<string, unknown>,
+  billingDate: string,
+) => {
+  if (!isDateOnly(billingDate) || !isScheduleEnabled(item)) {
+    return false;
+  }
+  const endDate = parseScheduleEndDate(item.endDate);
+  return !endDate || billingDate <= endDate;
+};
+
+export const shouldAutoDisableSchedule = (
+  item: Record<string, unknown>,
+  today: string,
+) => {
+  const endDate = parseScheduleEndDate(item.endDate);
+  return Boolean(endDate) && isDateOnly(today) && today > endDate && isScheduleEnabled(item);
+};
+
 export type ScheduleDueInput = {
   startDate: string;
   recurrence: FinanceRecurrence;

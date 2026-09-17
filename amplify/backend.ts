@@ -1782,7 +1782,9 @@ backend.getPropertyReport.resources.lambda.addToRolePolicy(
     ],
   }),
 );
-financeMovementsTable.grantReadData(backend.getFinanceMovements.resources.lambda);
+financeMovementsTable.grantReadWriteData(
+  backend.getFinanceMovements.resources.lambda,
+);
 financeMovementsTable.grantReadWriteData(
   backend.upsertFinanceMovement.resources.lambda,
 );

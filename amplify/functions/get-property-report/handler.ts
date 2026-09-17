@@ -23,6 +23,7 @@ import {
   loadFinanceServices,
   loadPendingBillingExpenses,
   mapReportBooking,
+  mergeDefaultLineAllocations,
   parseLineAllocations,
   queryBookingsByCheckInDate,
   reportMonthSummary,
@@ -216,7 +217,7 @@ export const handler = async (event: HttpEvent) => {
 
     const stored = await getReportRecord(reportsTable, propertyId, monthId);
     const report = reportMonthSummary(monthId, stored);
-    const lineAllocations = parseLineAllocations(stored?.lineAllocations);
+    const storedLineAllocations = parseLineAllocations(stored?.lineAllocations);
 
     const [
       bookings,
@@ -267,6 +268,20 @@ export const handler = async (event: HttpEvent) => {
       },
     );
     const incomes = financeMovements.incomes;
+    const lineAllocations = mergeDefaultLineAllocations(storedLineAllocations, [
+      ...serviceLines.map((line) => ({
+        rowId: `service:${line.id}`,
+        allocation: line.allocation,
+      })),
+      ...expenses.map((line) => ({
+        rowId: `expense:${line.id}`,
+        allocation: line.allocation,
+      })),
+      ...incomes.map((line) => ({
+        rowId: `income:${line.id}`,
+        allocation: line.allocation,
+      })),
+    ]);
 
     const cleaningClosed = cleaningDetail.month.status === 'CLOSED';
     const maintenanceClosed = maintenanceDetail.month.status === 'CLOSED';

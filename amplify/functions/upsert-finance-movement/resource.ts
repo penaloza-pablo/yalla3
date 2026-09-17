@@ -7,5 +7,5 @@ export const upsertFinanceMovement = defineFunction({
   environment: {
     PROPERTIES_TABLE: 'yalla-properties',
   },
-  timeoutSeconds: 20,
+  timeoutSeconds: 30,
 });

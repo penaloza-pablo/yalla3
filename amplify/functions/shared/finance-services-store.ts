@@ -6,16 +6,19 @@ import {
   dueBillingDatesInMonth,
   generatedBillingItemId,
   isBillingItemRecord,
-  isDateOnly,
+  isScheduleEnabled,
   isScheduleRecord,
   occurrencePriceWithIva,
   persistIvaFields,
   resolveIvaRate,
   roundMoney,
+  shouldAutoDisableSchedule,
+  shouldCreateBillingOnDate,
   type FinanceCustomUnit,
   type FinanceRecurrence,
   type FinanceServiceType,
 } from './finance-services';
+import { parseCostDefaultAllocation } from './property-report-allocations';
 import { nowIso } from './dynamo-http';
 import { docClient, getTodayInMadrid, putItem } from './visit-task-utils';
 
@@ -47,6 +50,9 @@ export const billingItemFromSchedule = (
   const price = parsed.priceMode === 'fixed' ? parsed.price : 0;
   const ivaRate = parsed.priceMode === 'fixed' ? parsed.ivaRate : 0;
   const timestamp = nowIso();
+  const allocation = parseCostDefaultAllocation(
+    schedule.defaultAllocation ?? schedule.allocation,
+  );
   return {
     id: generatedBillingItemId(parsed.id, billingDate),
     recordType: 'item' as const,
@@ -63,6 +69,7 @@ export const billingItemFromSchedule = (
     price,
     ...persistIvaFields(ivaRate),
     priceWithIva: occurrencePriceWithIva(price, ivaRate),
+    ...(allocation ? { allocation } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -106,7 +113,19 @@ export const materializeMonth = async (
       (!scheduleId || asString(item.id) === scheduleId),
   );
   let created = 0;
+  const today = getTodayInMadrid();
   for (const schedule of schedules) {
+    if (shouldAutoDisableSchedule(schedule, today)) {
+      await putItem(tableName, {
+        ...schedule,
+        enabled: false,
+        updatedAt: nowIso(),
+      });
+      continue;
+    }
+    if (!isScheduleEnabled(schedule)) {
+      continue;
+    }
     const dates = dueBillingDatesInMonth(
       {
         startDate: asString(schedule.startDate).slice(0, 10),
@@ -117,7 +136,7 @@ export const materializeMonth = async (
       monthId,
     );
     for (const billingDate of dates) {
-      if (!isDateOnly(billingDate)) {
+      if (!shouldCreateBillingOnDate(schedule, billingDate)) {
         continue;
       }
       const id = generatedBillingItemId(asString(schedule.id), billingDate);

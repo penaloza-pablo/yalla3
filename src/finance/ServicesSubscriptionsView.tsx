@@ -24,7 +24,9 @@ import {
 } from '../operations/propertyHelpers'
 import type { PropertyOption } from '../operations/types'
 import { FinancePropertySelectOptions } from './FinancePropertySelectOptions'
+import { FinanceChargeToSelect } from './FinanceChargeToSelect'
 import { YlIcon } from '../design/icons'
+import { parseCostDefaultAllocation } from '../../amplify/functions/shared/property-report-allocations'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -49,6 +51,9 @@ type ServiceRow = {
   price: number
   ivaRate: IvaRate
   priceWithIva: number
+  enabled: boolean
+  endDate: string
+  defaultAllocation: string
 }
 
 type BillingItem = {
@@ -77,6 +82,10 @@ type ScheduleFormState = {
   price: string
   ivaRate: IvaRate
   priceWithIva: string
+  enabled: boolean
+  hasEndDate: boolean
+  endDate: string
+  defaultAllocation: string
 }
 
 type ItemFormState = {
@@ -130,6 +139,10 @@ const emptyScheduleForm = (): ScheduleFormState => ({
   price: '',
   ivaRate: 0,
   priceWithIva: '',
+  enabled: true,
+  hasEndDate: false,
+  endDate: '',
+  defaultAllocation: '',
 })
 
 const emptyItemForm = (): ItemFormState => ({
@@ -198,6 +211,11 @@ const mapSchedule = (item: Record<string, unknown>): ServiceRow => {
     priceWithIva: Number.isFinite(storedWithIva)
       ? storedWithIva
       : occurrencePriceWithIva(price, ivaRate),
+    enabled: item.enabled !== false,
+    endDate: String(item.endDate ?? '').slice(0, 10),
+    defaultAllocation: parseCostDefaultAllocation(
+      item.defaultAllocation ?? item.allocation,
+    ),
   }
 }
 
@@ -439,6 +457,10 @@ export function ServicesSubscriptionsView({
       ivaRate: row.ivaRate,
       priceWithIva:
         row.priceMode === 'fixed' ? String(row.priceWithIva) : '',
+      enabled: row.enabled,
+      hasEndDate: Boolean(row.endDate),
+      endDate: row.endDate,
+      defaultAllocation: row.defaultAllocation,
     })
     setIsSchedulesOpen(true)
     setMessage(null)
@@ -473,6 +495,13 @@ export function ServicesSubscriptionsView({
     }
     if (!scheduleForm.title.trim() || !scheduleForm.startDate) {
       setError(t('services.validation'))
+      return
+    }
+    if (
+      scheduleForm.hasEndDate &&
+      (!scheduleForm.endDate || scheduleForm.endDate < scheduleForm.startDate)
+    ) {
+      setError(t('services.validationEndDate'))
       return
     }
     if (scheduleForm.type === 'apartment' && !scheduleForm.propertyId) {
@@ -535,6 +564,9 @@ export function ServicesSubscriptionsView({
               ? Number(scheduleForm.priceWithIva) ||
                 occurrencePriceWithIva(price, scheduleForm.ivaRate)
               : 0,
+          enabled: scheduleForm.enabled,
+          endDate: scheduleForm.hasEndDate ? scheduleForm.endDate : '',
+          defaultAllocation: scheduleForm.defaultAllocation,
         }),
       })
       setScheduleForm(null)
@@ -596,6 +628,52 @@ export function ServicesSubscriptionsView({
       })
       setItemForm(null)
       setMessage(t('services.itemSaved'))
+      await loadRows()
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : t('services.saveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const toggleScheduleEnabled = async (row: ServiceRow) => {
+    if (!endpoints.upsert) {
+      setError(t('services.missingWrite'))
+      return
+    }
+    if (row.endDate && getTodayMadrid() > row.endDate) {
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await fetchJson(endpoints.upsert, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          recordType: 'schedule',
+          id: row.id,
+          type: row.type,
+          propertyId: row.type === 'apartment' ? row.propertyId : '',
+          propertyName: row.propertyName,
+          title: row.title,
+          recurrence: row.recurrence,
+          startDate: row.startDate,
+          customInterval: row.customInterval,
+          customUnit: row.customUnit,
+          priceMode: row.priceMode,
+          price: row.price,
+          ivaRate: row.ivaRate,
+          appliesIva: persistIvaFields(row.ivaRate).appliesIva,
+          priceWithIva: row.priceWithIva,
+          enabled: !row.enabled,
+          endDate: row.endDate,
+          defaultAllocation: row.defaultAllocation,
+        }),
+      })
       await loadRows()
     } catch (saveError) {
       setError(
@@ -870,19 +948,28 @@ export function ServicesSubscriptionsView({
                   <th>{t('services.property')}</th>
                   <th>{t('services.title')}</th>
                   <th>{t('services.recurrence')}</th>
+                  <th>{t('services.enabled')}</th>
+                  <th>{t('services.endDate')}</th>
+                  <th>{t('services.chargeTo')}</th>
                   <th>{t('services.priceMode')}</th>
                   <th>{t('services.price')}</th>
-                  <th>{t('services.appliesIva')}</th>
                   <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {schedules.length === 0 && !isLoading ? (
                   <tr>
-                    <td colSpan={8}>{t('services.empty')}</td>
+                    <td colSpan={10}>{t('services.empty')}</td>
                   </tr>
                 ) : (
-                  schedules.map((row) => (
+                  schedules.map((row) => {
+                    const ended = Boolean(row.endDate) && getTodayMadrid() > row.endDate
+                    const statusKey = ended
+                      ? 'services.ended'
+                      : row.enabled
+                        ? 'services.enabled'
+                        : 'services.disabled'
+                    return (
                     <tr key={row.id}>
                       <td>
                         <span
@@ -907,6 +994,43 @@ export function ServicesSubscriptionsView({
                       <td>{row.title}</td>
                       <td>{recurrenceLabel(row)}</td>
                       <td>
+                        <div className="planner-switch compact">
+                          <YallaSwitch
+                            on={row.enabled && !ended}
+                            disabled={isSaving || ended}
+                            label={t(statusKey)}
+                            onToggle={() => void toggleScheduleEnabled(row)}
+                          />
+                          <span
+                            className={`status ${
+                              ended
+                                ? 'status-neutral'
+                                : row.enabled
+                                  ? 'status-success'
+                                  : 'status-warning'
+                            }`}
+                          >
+                            {t(statusKey)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        {row.endDate
+                          ? formatDateOnlyLabel(row.endDate, i18n.language)
+                          : '—'}
+                      </td>
+                      <td>
+                        {row.defaultAllocation === 'bear'
+                          ? t('propertyReports.allocationBear')
+                          : row.defaultAllocation === 'ownerPlus12'
+                            ? t('propertyReports.allocationOwnerPlus12', {
+                                percent: 12,
+                              })
+                            : row.defaultAllocation === 'owner'
+                              ? t('propertyReports.allocationOwner')
+                              : t('services.chargeToUnset')}
+                      </td>
+                      <td>
                         {row.priceMode === 'fixed'
                           ? t('services.priceFixed')
                           : t('services.priceVariable')}
@@ -914,15 +1038,6 @@ export function ServicesSubscriptionsView({
                       <td>
                         {row.priceMode === 'fixed'
                           ? money.format(row.price)
-                          : '—'}
-                      </td>
-                      <td>
-                        {row.priceMode === 'fixed'
-                          ? row.ivaRate === 10
-                            ? t('common.iva10')
-                            : row.ivaRate === 21
-                              ? t('common.iva21')
-                              : t('common.ivaNone')
                           : '—'}
                       </td>
                       <td>
@@ -945,7 +1060,8 @@ export function ServicesSubscriptionsView({
                         </div>
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -1189,7 +1305,7 @@ export function ServicesSubscriptionsView({
 
       {scheduleForm ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal">
+          <div className="modal modal-scrollable">
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
@@ -1299,6 +1415,62 @@ export function ServicesSubscriptionsView({
                     }
                   />
                 </label>
+                <div className="planner-switch form-field-span">
+                  <span>{t('services.disabled')}</span>
+                  <YallaSwitch
+                    on={scheduleForm.enabled}
+                    label={
+                      scheduleForm.enabled
+                        ? t('services.enabled')
+                        : t('services.disabled')
+                    }
+                    onToggle={() =>
+                      setScheduleForm((current) =>
+                        current
+                          ? { ...current, enabled: !current.enabled }
+                          : current,
+                      )
+                    }
+                  />
+                  <span>{t('services.enabled')}</span>
+                </div>
+                <div className="planner-switch form-field-span">
+                  <span>{t('services.setEndDate')}</span>
+                  <YallaSwitch
+                    on={scheduleForm.hasEndDate}
+                    label={t('services.setEndDate')}
+                    onToggle={() =>
+                      setScheduleForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              hasEndDate: !current.hasEndDate,
+                              endDate: !current.hasEndDate
+                                ? current.endDate || current.startDate
+                                : current.endDate,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                </div>
+                {scheduleForm.hasEndDate ? (
+                  <label>
+                    {t('services.endDate')}
+                    <input
+                      type="date"
+                      min={scheduleForm.startDate}
+                      value={scheduleForm.endDate}
+                      onChange={(event) =>
+                        setScheduleForm((current) =>
+                          current
+                            ? { ...current, endDate: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                ) : null}
                 {scheduleForm.recurrence === 'other' ? (
                   <>
                     <label>
@@ -1379,6 +1551,19 @@ export function ServicesSubscriptionsView({
                     {t('services.variableHelp')}
                   </p>
                 )}
+                <div className="form-field-span">
+                  <FinanceChargeToSelect
+                    kind="cost"
+                    value={scheduleForm.defaultAllocation}
+                    onChange={(value) =>
+                      setScheduleForm((current) =>
+                        current
+                          ? { ...current, defaultAllocation: value }
+                          : current,
+                      )
+                    }
+                  />
+                </div>
               </div>
             </div>
             <div className="modal-footer">

@@ -35,6 +35,7 @@ import { DEFAULT_AMOUNT_TRANSFERRED_FORMULA, DEFAULT_COMMISSION_FORMULA } from '
 import {
   isCostAllocation,
   isIncomeAllocation,
+  mergeDefaultLineAllocations,
   parseLineAllocations,
   toIncomeAllocation,
   type LineAllocation,
@@ -111,6 +112,7 @@ type ExpenseLine = {
   amountExclIva: number
   amountInclIva: number
   ivaRate: IvaRate
+  allocation?: string
 }
 
 type MovementKind = 'income' | 'outcome'
@@ -182,6 +184,7 @@ type ServiceLine = {
   price: number
   priceWithIva: number
   ivaRate: IvaRate
+  allocation?: string
 }
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
@@ -773,17 +776,36 @@ export function PropertyReportsView({
           parseIvaRate(item.ivaRate) ??
           inferIvaRate(item.amountExclIva, item.amountInclIva, 0),
       })
-      setExpenses((payload.expenses?.lines ?? []).map(mapMoneyLine))
-      setIncomes((payload.incomes?.lines ?? []).map(mapMoneyLine))
-      setServiceLines(
-        (payload.services?.lines ?? []).map((item) => ({
-          ...item,
-          ivaRate:
-            parseIvaRate((item as ServiceLine).ivaRate) ??
-            inferIvaRate(item.price, item.priceWithIva, 0),
-        })),
+      const nextServiceLines = (payload.services?.lines ?? []).map((item) => ({
+        ...item,
+        ivaRate:
+          parseIvaRate((item as ServiceLine).ivaRate) ??
+          inferIvaRate(item.price, item.priceWithIva, 0),
+      }))
+      setServiceLines(nextServiceLines)
+      const mappedExpenses = (payload.expenses?.lines ?? []).map(mapMoneyLine)
+      const mappedIncomes = (payload.incomes?.lines ?? []).map(mapMoneyLine)
+      setExpenses(mappedExpenses)
+      setIncomes(mappedIncomes)
+      setLineAllocations(
+        mergeDefaultLineAllocations(
+          parseLineAllocations(payload.lineAllocations),
+          [
+            ...nextServiceLines.map((line) => ({
+              rowId: `service:${line.id}`,
+              allocation: line.allocation,
+            })),
+            ...mappedExpenses.map((line) => ({
+              rowId: `expense:${line.id}`,
+              allocation: line.allocation,
+            })),
+            ...mappedIncomes.map((line) => ({
+              rowId: `income:${line.id}`,
+              allocation: line.allocation,
+            })),
+          ],
+        ),
       )
-      setLineAllocations(parseLineAllocations(payload.lineAllocations))
       if (payload.settings) {
         setReportSettings(
           mergeReportSettings(

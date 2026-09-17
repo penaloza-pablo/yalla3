@@ -4,5 +4,6 @@ export const getFinanceMovements = defineFunction({
   runtime: 22,
   name: 'GetFinanceMovements',
   entry: './handler.ts',
-  timeoutSeconds: 20,
+  schedule: '15 0 * * ? *',
+  timeoutSeconds: 60,
 });

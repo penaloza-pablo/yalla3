@@ -1752,7 +1752,19 @@
     "validation": "Property, description, and date are required.",
     "validationAmount": "Enter an amount of 0 or greater.",
     "saved": "Movement saved.",
-    "deleted": "Movement deleted."
+    "deleted": "Movement deleted.",
+    "addSchedule": "Add scheduled movement",
+    "templatesTitle": "Scheduled movements",
+    "templatesSubtitle": "If you change the amount, only movements created from now on are affected.",
+    "formScheduleTitle": "Add scheduled movement",
+    "editScheduleTitle": "Edit scheduled movement",
+    "formScheduleSubtitle": "Saving creates the movement for the current month when the schedule is enabled.",
+    "emptySchedules": "No scheduled movements yet.",
+    "validationSchedule": "Property, description, and start date are required.",
+    "validationCustom": "Enter how often this repeats, in days, weeks, or months.",
+    "scheduleSaved": "Scheduled movement saved.",
+    "scheduleDeleted": "Scheduled movement deleted.",
+    "chargeTo": "Charge to"
   },
   "services": {
     "eyebrow": "Finance / Services & Subscriptions",
@@ -1829,11 +1841,20 @@
     "validationPrice": "Enter a price of 0 or greater for fixed services.",
     "validationItem": "Title, billing date, and a price of 0 or greater are required.",
     "validationCustom": "Enter how often this repeats, in days, weeks, or months.",
+    "validationEndDate": "Enter an end date on or after the start date.",
     "saved": "Service saved.",
     "itemSaved": "Billing item saved.",
     "occurrencesSaved": "Billing items saved.",
     "deleted": "Service deleted.",
-    "itemDeleted": "Billing item deleted."
+    "itemDeleted": "Billing item deleted.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "ended": "Ended",
+    "endDate": "End date",
+    "endDateHelp": "Optional. After this date the schedule stops creating billing items.",
+    "setEndDate": "Set an end date",
+    "chargeTo": "Charge to",
+    "chargeToUnset": "Select in the property report"
   },
   "reviewWorkflow": {
     "progress": "Review workflow progress",

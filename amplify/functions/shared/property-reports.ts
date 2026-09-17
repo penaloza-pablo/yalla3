@@ -36,6 +36,10 @@ import {
 } from './iva';
 import { docClient } from './visit-task-utils';
 import {
+  isCostAllocation,
+  toIncomeAllocation,
+} from './property-report-allocations';
+import {
   REPORT_WORKFLOW_STATUSES,
   deriveReportStatus,
   isPropertyReportStatus,
@@ -53,6 +57,7 @@ export {
   isIncomeAllocation,
   isLineAllocation,
   parseLineAllocations,
+  mergeDefaultLineAllocations,
   toIncomeAllocation,
   type CostAllocation,
   type IncomeAllocation,
@@ -97,6 +102,7 @@ export type PropertyReportExpense = {
   amountExclIva: number;
   amountInclIva: number;
   ivaRate?: number;
+  allocation?: string;
 };
 
 const sortExpenseLines = (lines: PropertyReportExpense[]) =>
@@ -510,6 +516,9 @@ export const loadFinanceMovements = async (
   const expenses: PropertyReportExpense[] = [];
   const incomes: PropertyReportExpense[] = [];
   for (const item of items) {
+    if (asString(item.recordType) === 'schedule') {
+      continue;
+    }
     const date = asString(item.date).slice(0, 10);
     if (!date || date.slice(0, 7) !== monthId) {
       continue;
@@ -523,6 +532,12 @@ export const loadFinanceMovements = async (
     const storedTotal = asNumber(item.totalAmount);
     const totalAmount =
       storedTotal ?? occurrencePriceWithIva(amount, ivaRate);
+    const isIncome = asString(item.kind).toLowerCase() === 'income';
+    const allocation = isIncome
+      ? toIncomeAllocation(item.allocation ?? item.defaultAllocation)
+      : isCostAllocation(item.allocation ?? item.defaultAllocation)
+        ? String(item.allocation ?? item.defaultAllocation)
+        : '';
     const line: PropertyReportExpense = {
       id: asString(item.id) || `${date}-${asString(item.description)}`,
       origin: 'movement',
@@ -531,8 +546,9 @@ export const loadFinanceMovements = async (
       amountExclIva: roundMoney(amount),
       amountInclIva: roundMoney(Math.abs(totalAmount)),
       ivaRate,
+      ...(allocation ? { allocation } : {}),
     };
-    if (asString(item.kind).toLowerCase() === 'income') {
+    if (isIncome) {
       incomes.push(line);
     } else {
       expenses.push(line);
@@ -638,6 +654,7 @@ export type PropertyReportServiceLine = {
   date: string;
   price: number;
   priceWithIva: number;
+  allocation?: string;
 };
 
 export const loadFinanceServices = async (
@@ -685,6 +702,11 @@ export const loadFinanceServices = async (
     const price = Math.max(0, asNumber(service.price) ?? 0);
     const ivaRate = resolveIvaRate(service);
     const storedWithIva = asNumber(service.priceWithIva);
+    const allocation = isCostAllocation(
+      service.allocation ?? service.defaultAllocation,
+    )
+      ? String(service.allocation ?? service.defaultAllocation)
+      : '';
     lines.push({
       id: asString(service.id) || `${asString(service.scheduleId)}-${date}`,
       title: asString(service.title),
@@ -693,6 +715,7 @@ export const loadFinanceServices = async (
       price,
       priceWithIva:
         storedWithIva ?? occurrencePriceWithIva(price, ivaRate),
+      ...(allocation ? { allocation } : {}),
     });
   }
 
