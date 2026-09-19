@@ -553,7 +553,9 @@ export function CleaningBillingView({
             {selectedMonthId ? (
               <button
                 type="button"
-                className="btn-ghost"
+                className="btn-icon btn-icon-ghost"
+                aria-label={t('common.back')}
+                title={t('common.back')}
                 onClick={() => {
                   setSelectedMonthId('')
                   setMonth(null)
@@ -564,7 +566,7 @@ export function CleaningBillingView({
                   void refreshList()
                 }}
               >
-                {t('common.back')}
+                <YlIcon name="chevron.left" size={18} />
               </button>
             ) : null}
             <h1 className="page-title">
