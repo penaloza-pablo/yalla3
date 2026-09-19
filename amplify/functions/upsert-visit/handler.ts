@@ -18,6 +18,7 @@ import {
   getNextSequentialId,
   mergeUserEditResponseItem,
   durationMinutesFromSchedule,
+  getTodayInMadrid,
   patchUserOriginatedRecord,
   putItem,
   cancelVisitTasksOnVisitCancel,
@@ -54,7 +55,7 @@ type VisitPayload = {
   startedAt?: string;
   closedAt?: string;
   closedBy?: string;
-  cancelTaskAction?: 'release' | 'cancel';
+  cancelTaskAction?: 'release' | 'cancel' | 'delete';
   syncTaskDueDates?: boolean;
   appendTasks?: boolean;
   sourceTemplateId?: string;
@@ -261,6 +262,16 @@ export const handler = async (event: {
     return buildHttpResponse(400, { message: 'scheduledDate is required.' });
   }
 
+  if (
+    status === 'COMPLETED' &&
+    previousStatus !== 'COMPLETED' &&
+    mergedScheduledDate > getTodayInMadrid()
+  ) {
+    return buildHttpResponse(400, {
+      message: 'Visits scheduled for a future date cannot be completed.',
+    });
+  }
+
   if (!TERMINAL_VISIT_STATUSES.has(status)) {
     status = resolveVisitStatus({
       status,
@@ -406,7 +417,7 @@ export const handler = async (event: {
 
     if (status === 'CANCELLED' && tasksTable && typeof item.id === 'string') {
       const cancelTaskAction = payload.cancelTaskAction?.trim().toLowerCase();
-      if (cancelTaskAction === 'cancel') {
+      if (cancelTaskAction === 'cancel' || cancelTaskAction === 'delete') {
         cancelledTasks = await cancelVisitTasksOnVisitCancel(tasksTable, item.id);
       } else {
         releasedTasks = await releaseVisitTasksOnCancel(tasksTable, item.id);

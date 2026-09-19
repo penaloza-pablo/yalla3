@@ -153,14 +153,9 @@ export function TodayDashboardView() {
           className="modal-overlay yl-confirm-overlay yl-dashboard-still-there"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="yl-dashboard-still-there-title"
+          aria-label={t('dashboard.stillThere')}
         >
           <div className="modal yl-confirm">
-            <div className="modal-header">
-              <h3 className="modal-title" id="yl-dashboard-still-there-title">
-                {t('today.dashboard')}
-              </h3>
-            </div>
             <div className="modal-body">
               <p className="yl-confirm-message">{t('dashboard.stillThere')}</p>
             </div>

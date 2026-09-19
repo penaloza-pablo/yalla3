@@ -36,3 +36,44 @@ export const displayInventoryName = (
   name: string,
   nameEs?: string | null,
 ) => displayLocalizedText(language, name, nameEs)
+
+export const displayStorageLocation = (
+  language: string | undefined,
+  value: string,
+) => {
+  if (!value || !isSpanishLocale(language)) {
+    return value
+  }
+  return value
+    .replace(/\bJCL Storage\b/gi, 'JCL Almacén')
+    .replace(/\bP2 Storage\b/gi, 'P2 Almacén')
+}
+
+const INVENTORY_CATEGORY_I18N: Record<string, string> = {
+  keys: 'inventory.categoryLabels.keys',
+  cleaning: 'inventory.categoryLabels.cleaning',
+  'welcome kit': 'inventory.categoryLabels.welcomeKit',
+  maintenance: 'inventory.categoryLabels.maintenance',
+  linens: 'inventory.categoryLabels.linens',
+  consumables: 'inventory.categoryLabels.consumables',
+  amenities: 'inventory.categoryLabels.amenities',
+  hardware: 'inventory.categoryLabels.hardware',
+  tools: 'inventory.categoryLabels.tools',
+  gifts: 'inventory.categoryLabels.gifts',
+  gift: 'inventory.categoryLabels.gifts',
+  'back up items': 'inventory.categoryLabels.backupItems',
+  'backup items': 'inventory.categoryLabels.backupItems',
+  other: 'inventory.categoryLabels.other',
+}
+
+export const displayInventoryCategory = (
+  t: TFunction,
+  category: string,
+) => {
+  const normalized = category.trim().toLowerCase().replace(/\s+/g, ' ')
+  const key = INVENTORY_CATEGORY_I18N[normalized]
+  if (!key) {
+    return category
+  }
+  return t(key, { defaultValue: category })
+}

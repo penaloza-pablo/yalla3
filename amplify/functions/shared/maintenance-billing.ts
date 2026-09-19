@@ -394,8 +394,11 @@ export const loadMaintenanceVisitsForMonth = async (
   visitsTable: string,
   monthId: string,
 ) => {
+  const today = getTodayInMadrid();
   const perDay = await Promise.all(
-    datesInMonth(monthId).map((date) => queryVisitsForDate(visitsTable, date)),
+    datesInMonth(monthId)
+      .filter((date) => date <= today)
+      .map((date) => queryVisitsForDate(visitsTable, date)),
   );
   return perDay.flat().filter((visit) => {
     return asString(visit.status).toUpperCase() !== 'CANCELLED';
@@ -807,7 +810,7 @@ export const assembleMaintenanceLines = (
   return [
     ...visitLines.filter((line) => !groupedVisitIds.has(line.visitId)),
     ...manualLines.filter((line) => !groupedManualIds.has(line.id)),
-    ...groupLines,
+    ...groupLines.filter((line) => (line.members?.length ?? 0) > 0),
   ].sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);

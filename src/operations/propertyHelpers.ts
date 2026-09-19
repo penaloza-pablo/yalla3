@@ -15,19 +15,33 @@ import {
   isReportGroupType,
   resolveReportGroups,
 } from '../../amplify/functions/shared/property-groups'
+import i18n from '../i18n'
+import { displayStorageLocation } from '../i18n/display'
 
 export { isP2RoomNickname }
 
 export const getPropertyLabel = (property: PropertyOption) =>
-  resolveYallaPropertyLabel({
-    id: property.id,
-    nickname: property.nickname,
-    listingNickname: property.listingNickname,
-    title: property.title,
-  })
+  displayStorageLocation(
+    i18n.language,
+    resolveYallaPropertyLabel({
+      id: property.id,
+      nickname: property.nickname,
+      listingNickname: property.listingNickname,
+      title: property.title,
+    }),
+  )
 
 export const getListingNicknameLabel = (property: PropertyOption) =>
-  property.listingNickname.trim() || getPropertyLabel(property)
+  displayStorageLocation(
+    i18n.language,
+    property.listingNickname.trim() ||
+      resolveYallaPropertyLabel({
+        id: property.id,
+        nickname: property.nickname,
+        listingNickname: property.listingNickname,
+        title: property.title,
+      }),
+  )
 
 export const isOtherProperty = (property: PropertyOption) =>
   property.id.trim().toLowerCase() === 'other'

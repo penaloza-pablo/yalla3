@@ -7,6 +7,8 @@ import {
   isP2RoomListingId,
   yallaAliasForProperty,
 } from '../../amplify/functions/shared/property-identity'
+import i18n from '../i18n'
+import { displayStorageLocation } from '../i18n/display'
 import type { PropertyOption, VisitRecord } from './types'
 
 export type VisitOverlapUnit = {
@@ -541,7 +543,7 @@ export const formatVisitBarTitle = (
     listingNickname: property?.listingNickname ?? options?.listingNickname,
   })
   if (alias) {
-    return alias
+    return displayStorageLocation(i18n.language, alias)
   }
 
   if (
@@ -550,7 +552,7 @@ export const formatVisitBarTitle = (
   ) {
     const title = visit.title.trim()
     if (title) {
-      return title
+      return displayStorageLocation(i18n.language, title)
     }
   }
 
@@ -562,7 +564,7 @@ export const formatVisitBarTitle = (
   const name = listingNickname || visit.title.trim()
   const roomSuffix =
     !listingNickname && options?.roomLabel ? ` (${options.roomLabel})` : ''
-  return `${name}${roomSuffix}`
+  return displayStorageLocation(i18n.language, `${name}${roomSuffix}`)
 }
 
 export const formatVisitSummaryLine = (

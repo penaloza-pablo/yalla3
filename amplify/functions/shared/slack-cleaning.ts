@@ -17,6 +17,7 @@ import { hasGuestyTaskId, invokeGuestyTaskSync } from './guesty-sync';
 import {
   docClient,
   getNowTimeInMadrid,
+  getTodayInMadrid,
   patchUserOriginatedRecord,
   reassertVisitSchedule,
   TERMINAL_VISIT_STATUSES,
@@ -330,6 +331,13 @@ export const completeCleaningFromSlack = async (options: {
   }
   if (!isOpenCleaningVisit(visit)) {
     return { ok: false, message: 'La visita ya no está abierta.' };
+  }
+  const scheduledDate = asString(visit.scheduledDate).slice(0, 10);
+  if (scheduledDate && scheduledDate > getTodayInMadrid()) {
+    return {
+      ok: false,
+      message: 'No se puede completar una visita de un día futuro.',
+    };
   }
   if (options.tasksTable) {
     const hasOpenTasks = await visitHasOpenTasks(

@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
+  DeleteCommand,
   DynamoDBDocumentClient,
   PutCommand,
   QueryCommand,
@@ -262,7 +263,7 @@ export const cancelVisitTasksOnVisitCancel = async (
   visitId: string,
 ) => {
   let lastEvaluatedKey: Record<string, unknown> | undefined;
-  const cancelled: Record<string, unknown>[] = [];
+  const deleted: Record<string, unknown>[] = [];
 
   do {
     const result = await docClient.send(
@@ -286,27 +287,15 @@ export const cancelVisitTasksOnVisitCancel = async (
       if (status !== 'PENDING' && status !== 'BLOCKED') {
         continue;
       }
-      const updatedAt = nowIso();
       await docClient.send(
-        new UpdateCommand({
+        new DeleteCommand({
           TableName: tasksTable,
           Key: { id: taskId },
-          UpdateExpression:
-            'SET #status = :status, #updatedAt = :updatedAt',
-          ExpressionAttributeNames: {
-            '#status': 'status',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':status': 'CANCELLED',
-            ':updatedAt': updatedAt,
-          },
         }),
       );
-      cancelled.push({
+      deleted.push({
         ...task,
-        status: 'CANCELLED',
-        updatedAt,
+        status: 'DELETED',
       });
     }
     lastEvaluatedKey = result.LastEvaluatedKey as
@@ -314,7 +303,7 @@ export const cancelVisitTasksOnVisitCancel = async (
       | undefined;
   } while (lastEvaluatedKey);
 
-  return cancelled;
+  return deleted;
 };
 
 /** Task totals for a visit (same set as the visit detail task list). */

@@ -17,7 +17,7 @@ import {
   canRefreshVisitFromGuesty,
 } from './api'
 import { visitScheduleWriteFields } from './operationsViewHelpers'
-import { formatDayMonthLabel } from './dateHelpers'
+import { formatDayMonthLabel, isFutureMadridDate } from './dateHelpers'
 import { getPropertyLabel, sortPropertyOptions } from './propertyHelpers'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { CollapsibleVisitTasks } from './CollapsibleVisitTasks'
@@ -319,11 +319,11 @@ export function VisitDetailModal({
       new Map(
         propertyOptions.map((property) => [property.id, getPropertyLabel(property)]),
       ),
-    [propertyOptions],
+    [i18n.language, propertyOptions],
   )
   const sortedProperties = useMemo(
     () => sortPropertyOptions(propertyOptions),
-    [propertyOptions],
+    [i18n.language, propertyOptions],
   )
   const teamById = useMemo(
     () => new Map(teams.map((team) => [team.id, team.name])),
@@ -343,6 +343,8 @@ export function VisitDetailModal({
   )
   const canChangeStatus =
     visit && visit.status !== 'COMPLETED' && visit.status !== 'CANCELLED'
+  const isFutureVisit = Boolean(visit && isFutureMadridDate(visit.scheduledDate))
+  const canCompleteVisit = Boolean(canChangeStatus && !isFutureVisit)
   const canRefreshFromGuesty = visit ? canRefreshVisitFromGuesty(visit) : false
 
   const statusLabel = (status: VisitStatus) => {
@@ -1025,6 +1027,10 @@ export function VisitDetailModal({
     if (!visit) {
       return false
     }
+    if (isFutureMadridDate(visit.scheduledDate)) {
+      setError(t('operations.cannotCompleteFutureVisit'))
+      return false
+    }
     let comments = commentsDraft
     if (visitHasOpenTasks) {
       if (!completeAnyway) {
@@ -1055,6 +1061,10 @@ export function VisitDetailModal({
 
   const openComplete = () => {
     if (!visit) {
+      return
+    }
+    if (isFutureMadridDate(visit.scheduledDate)) {
+      setError(t('operations.cannotCompleteFutureVisit'))
       return
     }
     setCompleteAnyway(false)
@@ -1243,7 +1253,7 @@ export function VisitDetailModal({
                 >
                   <YlIcon name="pencil" size={16} />
                 </button>
-                {canChangeStatus ? (
+                {canCompleteVisit ? (
                   <button
                     type="button"
                     className="btn-icon btn-icon-ghost operations-complete-visit-btn"
@@ -1251,6 +1261,16 @@ export function VisitDetailModal({
                     aria-label={t('operations.completeVisit')}
                     title={t('operations.completeVisit')}
                     onClick={openComplete}
+                  >
+                    <YlIcon name="checkmark" size={16} />
+                  </button>
+                ) : canChangeStatus && isFutureVisit ? (
+                  <button
+                    type="button"
+                    className="btn-icon btn-icon-ghost operations-complete-visit-btn"
+                    disabled
+                    aria-label={t('operations.cannotCompleteFutureVisit')}
+                    title={t('operations.cannotCompleteFutureVisit')}
                   >
                     <YlIcon name="checkmark" size={16} />
                   </button>

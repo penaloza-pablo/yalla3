@@ -20,6 +20,7 @@ import {
 import {
   getNowTimeInMadrid,
   getTodayInMadrid,
+  putItem,
   TERMINAL_VISIT_STATUSES,
 } from './visit-task-utils';
 import {
@@ -171,11 +172,13 @@ const sendMaintenanceEod = async (options: {
   const tomorrowPlan = plansTable
     ? await getPlanByDate(plansTable, options.tomorrow)
     : undefined;
-  const planReady = isPlanReady(tomorrowPlan);
+  let planReady = isPlanReady(tomorrowPlan);
 
   let todayVisits: Record<string, unknown>[] = [];
+  let tomorrowVisits: Record<string, unknown>[] = [];
+  let teamId = '';
   if (options.visitsTable && teamsTable) {
-    const teamId = await resolveMaintenanceTeamId(teamsTable);
+    teamId = await resolveMaintenanceTeamId(teamsTable);
     todayVisits = (
       await queryMaintenanceTeamVisitsForDate(
         options.visitsTable,
@@ -183,9 +186,33 @@ const sendMaintenanceEod = async (options: {
         teamId,
       )
     ).filter(isOpenVisit);
+    tomorrowVisits = await queryMaintenanceTeamVisitsForDate(
+      options.visitsTable,
+      options.tomorrow,
+      teamId,
+    );
   }
 
-  if (planReady && todayVisits.length === 0) {
+  let autoMarkedEmptyPlan = false;
+  if (!planReady && teamId && tomorrowVisits.length === 0 && plansTable) {
+    const timestamp = new Date().toISOString();
+    await putItem(plansTable, {
+      id: options.tomorrow,
+      plannedDate: options.tomorrow,
+      status: 'READY',
+      items: Array.isArray(tomorrowPlan?.items) ? tomorrowPlan.items : [],
+      createdAt:
+        (typeof tomorrowPlan?.createdAt === 'string'
+          ? tomorrowPlan.createdAt
+          : undefined) ?? timestamp,
+      updatedAt: timestamp,
+      readyAt: timestamp,
+    });
+    planReady = true;
+    autoMarkedEmptyPlan = true;
+  }
+
+  if (planReady && todayVisits.length === 0 && !autoMarkedEmptyPlan) {
     return { sent: false, skipped: 'nothing_to_report' as const };
   }
 
@@ -199,7 +226,11 @@ const sendMaintenanceEod = async (options: {
 
   const planUrl = appPageUrl('Maintenance Plan', { planDate: options.tomorrow });
   const lines: string[] = [];
-  if (!planReady) {
+  if (autoMarkedEmptyPlan) {
+    lines.push(
+      `El <${planUrl}|plan de mantenimiento de mañana (${escapeMrkdwn(formatDayMonth(options.tomorrow))})> se ha marcado listo automáticamente por no tener visitas programadas.`,
+    );
+  } else if (!planReady) {
     lines.push(
       `El <${planUrl}|plan de mantenimiento de mañana (${escapeMrkdwn(formatDayMonth(options.tomorrow))})> no está listo.`,
     );

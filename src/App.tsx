@@ -10,7 +10,9 @@ import {
 import { useTranslation } from 'react-i18next'
 import { SettingsPanel } from './SettingsPanel'
 import {
+  displayInventoryCategory,
   displayInventoryName,
+  displayStorageLocation,
   translatePage,
   translateSection,
   translateStatus,
@@ -5516,7 +5518,12 @@ function App() {
                                       })
                                     }}
                                   />
-                                  <span>{option}</span>
+                                  <span>
+                                    {displayStorageLocation(
+                                      i18n.language,
+                                      option,
+                                    )}
+                                  </span>
                                 </label>
                               )
                             })}
@@ -5554,7 +5561,9 @@ function App() {
                                       })
                                     }}
                                   />
-                                  <span>{option}</span>
+                                  <span>
+                                    {displayInventoryCategory(t, option)}
+                                  </span>
                                 </label>
                               )
                             })}
@@ -5740,7 +5749,9 @@ function App() {
                         <Fragment key={row.id}>
                         <tr>
                           <td data-label={t('common.name')}>{itemDisplayName(row)}</td>
-                          <td data-label={t('common.location')}>{row.location}</td>
+                          <td data-label={t('common.location')}>
+                            {displayStorageLocation(i18n.language, row.location)}
+                          </td>
                           <td data-label={t('common.status')}>
                             <span className={getStatusClassName(row.status)}>
                               {statusLabel(row.status)}
@@ -5838,7 +5849,10 @@ function App() {
                                 <div>
                                   <p className="detail-label">{t('common.category')}</p>
                                   <p className="detail-value">
-                                    {row.category || '—'}
+                                    {displayInventoryCategory(
+                                      t,
+                                      row.category || '—',
+                                    )}
                                   </p>
                                 </div>
                                 <div>
@@ -6159,7 +6173,10 @@ function App() {
                                     <span>
                                       {option === DIRECT_PURCHASE_FILTER
                                         ? t('purchases.directPurchaseFilter')
-                                        : option}
+                                        : displayStorageLocation(
+                                            i18n.language,
+                                            option,
+                                          )}
                                     </span>
                                   </label>
                                 )
@@ -6370,7 +6387,12 @@ function App() {
                                   ) : null}
                                 </div>
                               </td>
-                              <td data-label={t('common.location')}>{row.location}</td>
+                              <td data-label={t('common.location')}>
+                                {displayStorageLocation(
+                                  i18n.language,
+                                  row.location,
+                                )}
+                              </td>
                               <td data-label={t('common.status')}>
                                 <span className={getStatusClassName(row.status)}>
                                   {statusLabel(row.status)}
@@ -6783,7 +6805,12 @@ function App() {
                                         })
                                       }}
                                     />
-                                    <span>{option}</span>
+                                    <span>
+                                      {displayStorageLocation(
+                                        i18n.language,
+                                        option,
+                                      )}
+                                    </span>
                                   </label>
                                 )
                               })
@@ -7013,7 +7040,12 @@ function App() {
                           <Fragment key={row.id}>
                             <tr>
                               <td data-label={t('common.itemName')}>{row.itemName}</td>
-                              <td data-label={t('common.location')}>{row.location}</td>
+                              <td data-label={t('common.location')}>
+                                {displayStorageLocation(
+                                  i18n.language,
+                                  row.location,
+                                )}
+                              </td>
                               <td data-label={t('common.status')}>
                                 <span className={getStatusClassName(row.status)}>
                                   {statusLabel(row.status)}
@@ -7494,7 +7526,9 @@ function App() {
                     ) : (
                       sortedPropertiesRows.map((row) => (
                         <tr key={row.id}>
-                          <td data-label={t('properties.nickname')}>{row.nickname}</td>
+                          <td data-label={t('properties.nickname')}>
+                            {displayStorageLocation(i18n.language, row.nickname)}
+                          </td>
                           <td data-label={t('common.title')}>{row.title}</td>
                           <td data-label={t('common.type')}>{row.type}</td>
                           <td data-label={t('common.roomType')}>{row.roomType}</td>
@@ -7732,7 +7766,10 @@ function App() {
                                 <option value="">{t('common.allProperties')}</option>
                                 {activeManagedPropertyOptions.map((property) => (
                                   <option key={property.id} value={property.id}>
-                                    {property.nickname || property.title}
+                                    {displayStorageLocation(
+                                      i18n.language,
+                                      property.nickname || property.title,
+                                    )}
                                   </option>
                                 ))}
                               </select>
@@ -9061,7 +9098,7 @@ function App() {
                         <option value="">{t('common.select')}</option>
                         {categoryOptions.map((option) => (
                           <option value={option} key={option}>
-                            {option}
+                            {displayInventoryCategory(t, option)}
                           </option>
                         ))}
                         <option value={OTHER_OPTION}>{t('common.other')}</option>
@@ -9101,7 +9138,7 @@ function App() {
                         <option value="">{t('common.select')}</option>
                         {locationOptions.map((option) => (
                           <option value={option} key={option}>
-                            {option}
+                            {displayStorageLocation(i18n.language, option)}
                           </option>
                         ))}
                         <option value={OTHER_OPTION}>{t('common.other')}</option>
@@ -9336,7 +9373,10 @@ function App() {
                           <option value="">{t('common.selectProperty')}</option>
                           {activePropertyOptions.map((property) => (
                             <option key={property.id} value={property.id}>
-                              {property.nickname}
+                              {displayStorageLocation(
+                                i18n.language,
+                                property.nickname,
+                              )}
                             </option>
                           ))}
                         </select>
@@ -9670,7 +9710,10 @@ function App() {
                       <option value="">{t('common.selectProperty')}</option>
                       {activePropertyOptions.map((property) => (
                         <option key={property.id} value={property.id}>
-                          {property.nickname}
+                          {displayStorageLocation(
+                            i18n.language,
+                            property.nickname,
+                          )}
                         </option>
                       ))}
                     </select>

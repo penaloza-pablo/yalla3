@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from './rbac/PermissionsProvider'
 import { useConfirm } from './design/ConfirmDialog'
-import { displayInventoryName, translatePage } from './i18n/display'
+import { displayInventoryCategory, displayInventoryName, displayStorageLocation, translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { YlIcon, YlSortIcon } from './design/icons'
@@ -642,7 +642,9 @@ export function SpotCheckPanel({
                 <p className="spot-check-item-name">
                   {displayInventoryName(i18n.language, item.name, item.nameEs)}
                 </p>
-                <p className="spot-check-item-meta">{item.category}</p>
+                <p className="spot-check-item-meta">
+                  {displayInventoryCategory(t, item.category)}
+                </p>
               </div>
               <div className="spot-check-qty-row">
                 <button
@@ -829,7 +831,9 @@ export function SpotCheckPanel({
                           {formatSpotCheckDate(row.createdAt, i18n.language)}
                         </td>
                         <td data-label={t('common.email')}>{row.userEmail || '—'}</td>
-                        <td data-label={t('common.location')}>{row.location}</td>
+                        <td data-label={t('common.location')}>
+                          {displayStorageLocation(i18n.language, row.location)}
+                        </td>
                         <td className="mobile-quick-filter-col" />
                         <td className="mobile-quick-filter-col" />
                       </tr>
@@ -888,7 +892,9 @@ export function SpotCheckPanel({
                               })
                             }}
                           />
-                          <span>{option}</span>
+                          <span>
+                            {displayStorageLocation(i18n.language, option)}
+                          </span>
                         </label>
                       )
                     })}
@@ -921,7 +927,7 @@ export function SpotCheckPanel({
                               })
                             }}
                           />
-                          <span>{option}</span>
+                          <span>{displayInventoryCategory(t, option)}</span>
                         </label>
                       )
                     })}
@@ -1001,7 +1007,9 @@ export function SpotCheckPanel({
                           setSelectedCategories([])
                         }}
                       />
-                      <span>{location}</span>
+                      <span>
+                        {displayStorageLocation(i18n.language, location)}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -1024,7 +1032,7 @@ export function SpotCheckPanel({
                             )
                           }}
                         />
-                        <span>{category}</span>
+                        <span>{displayInventoryCategory(t, category)}</span>
                       </label>
                     )
                   })}

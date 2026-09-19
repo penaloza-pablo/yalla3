@@ -8,6 +8,7 @@ import {
 } from './teamColors'
 import { formatAgendaDayLabel } from './operationsViewHelpers'
 import { formatVisitBarTitle } from './visitOverlapLayout'
+import { isFutureMadridDate } from './dateHelpers'
 import type { PropertyOption, VisitRecord } from './types'
 import { YlIcon } from '../design/icons'
 
@@ -112,7 +113,11 @@ export function OperationsKanbanView({
             const isCancelled = visit.status === 'CANCELLED'
             const isBusy =
               completingVisitIds.has(visit.id) || syncingVisitIds.has(visit.id)
-            const canToggleComplete = !isCompleted && !isCancelled && !isBusy
+            const canToggleComplete =
+              !isCompleted &&
+              !isCancelled &&
+              !isBusy &&
+              !isFutureMadridDate(visit.scheduledDate)
 
             return (
               <li key={visit.id}>
@@ -157,11 +162,19 @@ export function OperationsKanbanView({
                     aria-pressed={isCompleted}
                     aria-busy={isBusy}
                     disabled={!canToggleComplete}
-                    aria-label={t('operations.completeVisit')}
+                    aria-label={
+                      isCompleted
+                        ? t('operations.completed')
+                        : isFutureMadridDate(visit.scheduledDate)
+                          ? t('operations.cannotCompleteFutureVisit')
+                          : t('operations.completeVisit')
+                    }
                     title={
                       isCompleted
                         ? t('operations.completed')
-                        : t('operations.completeVisit')
+                        : isFutureMadridDate(visit.scheduledDate)
+                          ? t('operations.cannotCompleteFutureVisit')
+                          : t('operations.completeVisit')
                     }
                     onClick={(event) => {
                       event.stopPropagation()

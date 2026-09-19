@@ -72,6 +72,7 @@ import {
   formatDayMonthLabel,
   formatTaskCreatedDate,
   getTodayMadrid,
+  isFutureMadridDate,
 } from './dateHelpers'
 import type {
   PropertyOption,
@@ -639,7 +640,7 @@ export function DailyOperationsView({
       new Map(
         propertyOptions.map((property) => [property.id, getPropertyLabel(property)]),
       ),
-    [propertyOptions],
+    [i18n.language, propertyOptions],
   )
   const propertiesById = useMemo(
     () => new Map(propertyOptions.map((property) => [property.id, property])),
@@ -1798,6 +1799,10 @@ export function DailyOperationsView({
     if (!selectedVisit) {
       return false
     }
+    if (isFutureMadridDate(selectedVisit.scheduledDate)) {
+      setError(t('operations.cannotCompleteFutureVisit'))
+      return false
+    }
     if (!endpoints.upsertVisit) {
       setError(t('operations.unableUpdateVisit'))
       return false
@@ -1833,6 +1838,10 @@ export function DailyOperationsView({
 
   const openCompleteVisitModal = () => {
     if (!selectedVisit) return
+    if (isFutureMadridDate(selectedVisit.scheduledDate)) {
+      setError(t('operations.cannotCompleteFutureVisit'))
+      return
+    }
     setCompleteAnyway(false)
     setError(null)
     if (
@@ -1932,6 +1941,10 @@ export function DailyOperationsView({
 
   const completeVisitFromKanban = async (visit: VisitRecord) => {
     if (visit.status === 'COMPLETED' || visit.status === 'CANCELLED') {
+      return
+    }
+    if (isFutureMadridDate(visit.scheduledDate)) {
+      setError(t('operations.cannotCompleteFutureVisit'))
       return
     }
     if (!endpoints.tasks || !endpoints.upsertVisit) {
@@ -2954,8 +2967,17 @@ export function DailyOperationsView({
                     <button
                       type="button"
                       className="btn-icon btn-icon-ghost operations-complete-visit-btn"
-                      aria-label={t('operations.completeVisit')}
-                      title={t('operations.completeVisit')}
+                      aria-label={
+                        isFutureMadridDate(selectedVisit.scheduledDate)
+                          ? t('operations.cannotCompleteFutureVisit')
+                          : t('operations.completeVisit')
+                      }
+                      title={
+                        isFutureMadridDate(selectedVisit.scheduledDate)
+                          ? t('operations.cannotCompleteFutureVisit')
+                          : t('operations.completeVisit')
+                      }
+                      disabled={isFutureMadridDate(selectedVisit.scheduledDate)}
                       onClick={openCompleteVisitModal}
                     >
                       <YlIcon name="checkmark" size={16} />
