@@ -64,6 +64,10 @@ export type PropertyIdentityInput = {
   title?: string | null;
 };
 
+/** Compact Agenda code: up to 3 letters or digits. */
+export const normalizePropertyAbbreviation = (value?: string | null) =>
+  (value ?? '').replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+
 export const resolveYallaPropertyLabel = (input: PropertyIdentityInput) => {
   const id = (input.id ?? '').trim();
   const alias = yallaAliasForListingId(id);

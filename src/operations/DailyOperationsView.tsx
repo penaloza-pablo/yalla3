@@ -247,6 +247,8 @@ const mapProperty = (item: Record<string, unknown>): PropertyOption => {
     title,
     listingNickname,
     type: String(item.type ?? item.Type ?? '').trim() || undefined,
+    abbreviation:
+      String(item.abbreviation ?? '').trim() || undefined,
     mtlPrincipalId: mtlPrincipalId || undefined,
   }
 }
@@ -1133,6 +1135,7 @@ export function DailyOperationsView({
       const next = propertyOptionsProp.map((property) => ({
         ...property,
         nickname: resolveYallaPropertyLabel(property),
+        abbreviation: property.abbreviation?.trim() || undefined,
         mtlPrincipalId:
           property.mtlPrincipalId?.trim() ||
           previousById.get(property.id)?.mtlPrincipalId,
@@ -1144,6 +1147,7 @@ export function DailyOperationsView({
             item.id === next[index]?.id &&
             item.nickname === next[index]?.nickname &&
             item.listingNickname === next[index]?.listingNickname &&
+            item.abbreviation === next[index]?.abbreviation &&
             item.mtlPrincipalId === next[index]?.mtlPrincipalId,
         )
       ) {

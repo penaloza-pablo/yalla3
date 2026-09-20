@@ -2180,6 +2180,13 @@ th {
   color: #667085;
 }
 
+.property-abbreviation-input {
+  width: 4.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
 .purchase-history {
   margin-top: 4px;
   overflow-x: auto;
@@ -4013,10 +4020,22 @@ th {
   left: 0;
   z-index: 2;
   background: #ffffff;
-  min-width: 160px;
-  max-width: 200px;
+  width: 3.25rem;
+  min-width: 3.25rem;
+  max-width: 3.25rem;
   font-weight: 600;
-  text-align: left;
+  text-align: center;
+  padding: 6px 4px;
+  vertical-align: middle;
+}
+
+.operations-agenda-abbr {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .operations-range-nav {
@@ -4119,7 +4138,6 @@ th {
 }
 
 .operations-agenda-property-cell.is-child {
-  padding-left: 28px;
   font-weight: 500;
 }
 
@@ -4133,14 +4151,13 @@ th {
   justify-content: center;
   width: 22px;
   height: 22px;
-  margin-right: 6px;
+  margin: 0 auto 4px;
   border: 1px solid #d0d5dd;
   border-radius: 6px;
   background: #ffffff;
   color: #344054;
   font-size: 0.82rem;
   cursor: pointer;
-  vertical-align: middle;
 }
 
 .operations-mtl-toggle:hover {
@@ -4584,7 +4601,6 @@ th {
 }
 
 .operations-day-property-cell.is-child {
-  padding-left: 28px;
   font-weight: 500;
   background: #f9fafb;
 }
@@ -5003,7 +5019,7 @@ th {
   --agenda2-done: #edf0e9;
   --agenda2-early: #d9be79;
   --agenda2-do-not-early: #c45c4a;
-  --agenda2-name: 182px;
+  --agenda2-name: 3.25rem;
   background: var(--agenda2-cream);
   color: var(--agenda2-slate);
   border-radius: 23px;
@@ -5055,7 +5071,7 @@ th {
 
 .operations-day-card.is-compact .operations-day-property-header {
   z-index: 7;
-  padding: 12px 14px;
+  padding: 8px 4px;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5071,10 +5087,12 @@ th {
 
 .operations-day-card.is-compact .operations-day-property-inner {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-height: 52px;
-  padding: 12px 14px;
+  padding: 8px 4px;
 }
 
 .operations-day-card.is-compact .operations-day-row-child .operations-day-property-cell,
@@ -5088,21 +5106,22 @@ th {
 }
 
 .operations-day-card.is-compact .operations-day-property-name {
-  flex: 1;
+  flex: none;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
 }
 
 .operations-day-card.is-compact .operations-day-overlap-toggle {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   margin: 0;
   padding: 0;
   border: 1px solid rgb(65 83 100 / 15%);
@@ -6199,10 +6218,9 @@ th {
 
   .data-table-properties td:nth-child(1)::before { content: 'Nickname'; }
   .data-table-properties td:nth-child(2)::before { content: 'Title'; }
-  .data-table-properties td:nth-child(3)::before { content: 'Type'; }
-  .data-table-properties td:nth-child(4)::before { content: 'Room'; }
-  .data-table-properties td:nth-child(5)::before { content: 'Area'; }
-  .data-table-properties td:nth-child(6)::before { content: 'Status'; }
+  .data-table-properties td:nth-child(3)::before { content: 'Room'; }
+  .data-table-properties td:nth-child(4)::before { content: 'Status'; }
+  .data-table-properties td:nth-child(5)::before { content: 'Actions'; }
 
   .data-table-bookings td:nth-child(1)::before { content: 'Guest'; }
   .data-table-bookings td:nth-child(2)::before { content: 'Property'; }
@@ -6352,6 +6370,7 @@ th {
   .data-table-inventory td:nth-child(5),
   .data-table-purchases td:nth-child(6),
   .data-table-subtractions td:nth-child(5),
+  .data-table-properties td:nth-child(5),
   .data-table-bookings td:nth-child(8),
   .data-table-reviews td:nth-child(6),
   .data-table-alerts td:nth-child(5),
@@ -6370,6 +6389,7 @@ th {
   .data-table-inventory td:nth-child(5)::before,
   .data-table-purchases td:nth-child(6)::before,
   .data-table-subtractions td:nth-child(5)::before,
+  .data-table-properties td:nth-child(5)::before,
   .data-table-bookings td:nth-child(8)::before,
   .data-table-reviews td:nth-child(6)::before,
   .data-table-alerts td:nth-child(5)::before,
@@ -6732,7 +6752,7 @@ th {
     padding: 10px;
   }
 
-  /* Agenda → property cards with day sections */
+  /* Agenda → compact table with 3-letter property codes */
   .operations-agenda-card {
     border: 0;
     background: transparent;
@@ -6740,126 +6760,78 @@ th {
   }
 
   .operations-agenda-scroll {
-    overflow: visible;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .operations-agenda-table {
     min-width: 0;
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
+    table-layout: fixed;
+    border-collapse: collapse;
   }
 
   .operations-agenda-table thead {
-    display: block;
     position: sticky;
     top: 56px;
     z-index: 5;
     background: #ffffff;
-    padding: 4px 0 10px;
-  }
-
-  .operations-agenda-table thead tr {
-    display: block;
   }
 
   .operations-agenda-table thead th {
-    display: block;
-    border: 0;
-    padding: 0;
+    border: 1px solid #e4e7ec;
+    padding: 6px 4px;
+    background: #ffffff;
   }
 
-  .operations-agenda-property-header {
-    display: none !important;
+  .operations-agenda-property-header,
+  .operations-agenda-property-cell {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    width: 3.25rem;
+    min-width: 3.25rem;
+    max-width: 3.25rem;
+    padding: 6px 2px;
   }
 
   .operations-agenda-dates-header {
-    padding: 0 !important;
+    padding: 6px 4px !important;
   }
 
   .operations-agenda-dates-nav {
     background: #ffffff;
-    border: 1px solid #e4e7ec;
-    border-radius: 12px;
-    padding: 8px;
-    gap: 4px;
+    padding: 0;
+    gap: 2px;
   }
 
   .operations-agenda-day-labels {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    min-width: 0;
   }
 
   .operations-agenda-day-header {
-    min-width: 72px;
-    flex: 0 0 auto;
+    min-width: 0;
+    flex: 1 1 0;
   }
 
   .operations-agenda-day-button {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     text-decoration: none;
-    padding: 6px 4px;
+    padding: 6px 2px;
   }
 
   .operations-range-nav {
-    width: 36px;
-    height: 36px;
-  }
-
-  .operations-agenda-table tbody {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .operations-agenda-table tbody tr {
-    display: block;
-    background: #ffffff;
-    border: 1px solid #e4e7ec;
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .operations-agenda-property-cell {
-    position: static;
-    display: block;
-    min-width: 0;
-    max-width: none;
-    width: 100%;
-    padding: 12px 14px;
-    border: 0;
-    border-bottom: 1px solid #eaecf0;
-    background: #f9fafb;
+    width: 28px;
+    height: 28px;
   }
 
   .operations-agenda-cell {
-    display: block;
     min-width: 0;
-    min-height: 0;
-    width: 100%;
-    border: 0;
-    border-bottom: 1px solid #f2f4f7;
-    padding: 10px 14px !important;
-  }
-
-  .operations-agenda-cell::before {
-    content: attr(data-day-label);
-    display: block;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #667085;
-    margin-bottom: 6px;
-  }
-
-  /* Hide empty day slots on mobile to keep the agenda scannable */
-  .operations-agenda-cell:has(> .operations-agenda-empty-cell) {
-    display: none;
+    padding: 6px 4px !important;
   }
 
   .operations-agenda-empty-cell {
-    min-height: 36px;
+    min-height: 28px;
   }
 
   /* Day timeline → property cards with contained horizontal scroll */
@@ -7908,6 +7880,4 @@ th {
     vertical-align: middle;
   }
 }
-
-
 

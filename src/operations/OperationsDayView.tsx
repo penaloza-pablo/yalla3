@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { getPropertyLabel, isYallaP2Property } from './propertyHelpers'
+import { getPropertyAbbreviation, getPropertyLabel, isYallaP2Property } from './propertyHelpers'
 import { OperationsDayListHeader } from './OperationsDayListHeader'
 import {
   getMtlGroupLabel,
@@ -127,6 +127,7 @@ type Props = {
 type DayTableRow = {
   key: string
   propertyLabel: string
+  propertyAbbreviation: string
   propertyVisits: VisitRecord[]
   propertyBookings: DayBookingEvent[]
   showRoomLabel: boolean
@@ -264,6 +265,7 @@ export function OperationsDayView({
         rows.push({
           key: row.property.id,
           propertyLabel: getPropertyLabel(row.property),
+          propertyAbbreviation: getPropertyAbbreviation(row.property),
           propertyVisits: getVisitsForPropertyIds(visits, row.propertyIds).sort(
             (a, b) => a.scheduledStartTime.localeCompare(b.scheduledStartTime),
           ),
@@ -301,6 +303,7 @@ export function OperationsDayView({
           propertyLabel: compact
             ? getPropertyLabel(row.principal)
             : getMtlGroupLabel(row),
+          propertyAbbreviation: getPropertyAbbreviation(row.principal),
           propertyVisits: isExpanded
             ? principalVisits
             : getVisitsForPropertyIds(visits, row.propertyIds).sort((a, b) =>
@@ -334,6 +337,7 @@ export function OperationsDayView({
           rows.push({
             key: `${row.principal.id}:${child.id}`,
             propertyLabel: getPropertyLabel(child),
+            propertyAbbreviation: getPropertyAbbreviation(child),
             propertyVisits: childVisits,
             propertyBookings: childBookings,
             showRoomLabel: false,
@@ -418,9 +422,11 @@ export function OperationsDayView({
           <thead>
             <tr>
               {compact ? (
-                <th className="operations-day-property-header" scope="col">
-                  {t('operations.property')}
-                </th>
+                <th
+                  className="operations-day-property-header"
+                  scope="col"
+                  aria-label={t('operations.property')}
+                />
               ) : null}
               <th className="operations-day-timeline-header">
                 <div className="operations-day-hours-wrap">
@@ -669,7 +675,7 @@ function DayPropertyRow({
               title={row.propertyLabel}
               tabIndex={0}
             >
-              {row.propertyLabel}
+              {row.propertyAbbreviation || row.propertyLabel}
             </span>
             {hasOverlapGroups ? (
               <button

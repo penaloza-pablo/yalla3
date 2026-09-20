@@ -90,6 +90,7 @@ import { useConfirm } from './design/ConfirmDialog'
 import { ACTION_KEYS, CORE_PAGES, NAVIGATION } from '../amplify/functions/shared/rbac-catalog'
 import {
   collectGuestyNicknameMismatches,
+  normalizePropertyAbbreviation,
   resolveYallaPropertyLabel,
   yallaAliasForListingId,
 } from '../amplify/functions/shared/property-identity'
@@ -293,6 +294,7 @@ type PropertyRow = {
   title: string
   nickname: string
   listingNickname: string
+  abbreviation: string
   active: boolean
   type: string
   mtlPrincipalId?: string
@@ -529,6 +531,7 @@ const propertyFieldMap = {
   bathrooms: ['bathrooms', 'Bathrooms'],
   city: ['city', 'City'],
   neighborhood: ['neighborhood', 'Neighborhood'],
+  abbreviation: ['abbreviation', 'Abbreviation'],
 }
 
 const bookingFieldMap = {
@@ -1346,6 +1349,9 @@ const mapPropertyRow = (item: Record<string, unknown>): PropertyRow => {
         title,
       }) || '—',
     listingNickname,
+    abbreviation: normalizePropertyAbbreviation(
+      getStringValue(getItemValue(item, propertyFieldMap.abbreviation)),
+    ),
     active: resolvePropertyActive(item),
     type: getStringValue(getItemValue(item, propertyFieldMap.type)) || '—',
     mtlPrincipalId:
@@ -1971,6 +1977,14 @@ function App() {
     readTodayViewFromLocation,
   )
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
+  const [expandedPropertyIds, setExpandedPropertyIds] = useState<Set<string>>(
+    new Set(),
+  )
+  const [propertyAbbreviationDrafts, setPropertyAbbreviationDrafts] = useState<
+    Record<string, string>
+  >({})
+  const [savingPropertyAbbreviationIds, setSavingPropertyAbbreviationIds] =
+    useState<Set<string>>(new Set())
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem('yalla.sidebar.hidden.v1') === '1'
@@ -2206,6 +2220,7 @@ function App() {
           nickname: row.nickname,
           title: row.title,
           listingNickname: row.listingNickname || row.nickname,
+          abbreviation: row.abbreviation,
           type: row.type && row.type !== '—' ? row.type : undefined,
           mtlPrincipalId: row.mtlPrincipalId,
           memberIds: row.memberIds,
@@ -3498,6 +3513,91 @@ function App() {
       }
       return next
     })
+  }
+
+  const togglePropertyRow = (row: PropertyRow) => {
+    setExpandedPropertyIds((current) => {
+      const next = new Set(current)
+      if (next.has(row.id)) {
+        next.delete(row.id)
+      } else {
+        next.add(row.id)
+        setPropertyAbbreviationDrafts((drafts) => ({
+          ...drafts,
+          [row.id]: row.abbreviation,
+        }))
+      }
+      return next
+    })
+  }
+
+  const savePropertyAbbreviation = async (row: PropertyRow, nextValue: string) => {
+    const abbreviation = normalizePropertyAbbreviation(nextValue)
+    setPropertyAbbreviationDrafts((current) => ({
+      ...current,
+      [row.id]: abbreviation,
+    }))
+    if (abbreviation === row.abbreviation) {
+      return
+    }
+    const upsertEndpoint = getEndpoint(
+      'upsertPropertyUrl',
+      import.meta.env.VITE_UPSERT_PROPERTY_URL,
+    )
+    if (!upsertEndpoint) {
+      setPropertiesError(t('properties.missingWrite'))
+      return
+    }
+    const blank = (value: string) => (value === '—' ? '' : value)
+    setSavingPropertyAbbreviationIds((current) => {
+      const next = new Set(current)
+      next.add(row.id)
+      return next
+    })
+    setPropertiesError(null)
+    try {
+      const response = await authFetch(upsertEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: row.id,
+          title: blank(row.title),
+          nickname: blank(row.nickname),
+          listingNickname: row.listingNickname,
+          active: row.active,
+          type: blank(row.type),
+          roomType: blank(row.roomType),
+          accommodates: row.accommodates,
+          bedrooms: row.bedrooms,
+          bathrooms: row.bathrooms,
+          city: blank(row.city),
+          neighborhood: blank(row.neighborhood),
+          abbreviation,
+          memberIds: row.memberIds,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to save property abbreviation.')
+      }
+      setPropertyRows((current) =>
+        current.map((entry) =>
+          entry.id === row.id ? { ...entry, abbreviation } : entry,
+        ),
+      )
+      toast(t('properties.abbreviationSaved'))
+    } catch {
+      setPropertyAbbreviationDrafts((current) => ({
+        ...current,
+        [row.id]: row.abbreviation,
+      }))
+      toast(t('properties.abbreviationSaveError'), 'error')
+    } finally {
+      setSavingPropertyAbbreviationIds((current) => {
+        const next = new Set(current)
+        next.delete(row.id)
+        return next
+      })
+    }
   }
 
   const togglePurchaseRow = (rowId: string) => {
@@ -7504,46 +7604,133 @@ function App() {
                         </button>
                       </th>
                       <th scope="col">{t('common.title')}</th>
-                      <th scope="col">{t('common.type')}</th>
                       <th scope="col">{t('common.roomType')}</th>
-                      <th scope="col">{t('common.neighborhood')}</th>
                       <th scope="col">{t('common.status')}</th>
+                      <th scope="col">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isPropertiesLoading ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={5}>
                           {t('properties.loading')}
                         </td>
                       </tr>
                     ) : propertiesFilteredRows.length === 0 ? (
                       <tr>
-                        <td className="table-empty" colSpan={6}>
+                        <td className="table-empty" colSpan={5}>
                           {t('properties.empty')}
                         </td>
                       </tr>
                     ) : (
-                      sortedPropertiesRows.map((row) => (
-                        <tr key={row.id}>
-                          <td data-label={t('properties.nickname')}>
-                            {displayStorageLocation(i18n.language, row.nickname)}
-                          </td>
-                          <td data-label={t('common.title')}>{row.title}</td>
-                          <td data-label={t('common.type')}>{row.type}</td>
-                          <td data-label={t('common.roomType')}>{row.roomType}</td>
-                          <td data-label={t('common.neighborhood')}>{row.neighborhood}</td>
-                          <td data-label={t('common.status')}>
-                            <span
-                              className={`status ${
-                                row.active ? 'status-success' : 'status-neutral'
-                              }`}
-                            >
-                              {row.active ? t('common.active') : t('common.inactive')}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                      sortedPropertiesRows.map((row) => {
+                        const isExpanded = expandedPropertyIds.has(row.id)
+                        const abbreviationDraft =
+                          propertyAbbreviationDrafts[row.id] ?? row.abbreviation
+                        const isSavingAbbreviation =
+                          savingPropertyAbbreviationIds.has(row.id)
+                        return (
+                          <Fragment key={row.id}>
+                            <tr>
+                              <td data-label={t('properties.nickname')}>
+                                {displayStorageLocation(
+                                  i18n.language,
+                                  row.nickname,
+                                )}
+                              </td>
+                              <td data-label={t('common.title')}>{row.title}</td>
+                              <td data-label={t('common.roomType')}>
+                                {row.roomType}
+                              </td>
+                              <td data-label={t('common.status')}>
+                                <span
+                                  className={`status ${
+                                    row.active
+                                      ? 'status-success'
+                                      : 'status-neutral'
+                                  }`}
+                                >
+                                  {row.active
+                                    ? t('common.active')
+                                    : t('common.inactive')}
+                                </span>
+                              </td>
+                              <td data-label={t('common.actions')}>
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => togglePropertyRow(row)}
+                                    aria-expanded={isExpanded}
+                                    aria-label={t('common.toggleDetails')}
+                                  >
+                                    <YlDisclosureIcon open={isExpanded} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded ? (
+                              <tr className="detail-row">
+                                <td colSpan={5}>
+                                  <div className="detail-grid">
+                                    <label className="form-field">
+                                      <span>{t('properties.abbreviation')}</span>
+                                      <input
+                                        className="property-abbreviation-input"
+                                        type="text"
+                                        maxLength={3}
+                                        autoCapitalize="characters"
+                                        spellCheck={false}
+                                        value={abbreviationDraft}
+                                        disabled={isSavingAbbreviation}
+                                        onChange={(event) => {
+                                          const next =
+                                            normalizePropertyAbbreviation(
+                                              event.target.value,
+                                            )
+                                          setPropertyAbbreviationDrafts(
+                                            (current) => ({
+                                              ...current,
+                                              [row.id]: next,
+                                            }),
+                                          )
+                                        }}
+                                        onBlur={() =>
+                                          void savePropertyAbbreviation(
+                                            row,
+                                            abbreviationDraft,
+                                          )
+                                        }
+                                        aria-describedby={`property-abbr-hint-${row.id}`}
+                                      />
+                                      <p
+                                        className="detail-muted"
+                                        id={`property-abbr-hint-${row.id}`}
+                                      >
+                                        {t('properties.abbreviationHint')}
+                                      </p>
+                                    </label>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.type')}
+                                      </p>
+                                      <p className="detail-value">{row.type}</p>
+                                    </div>
+                                    <div>
+                                      <p className="detail-label">
+                                        {t('common.neighborhood')}
+                                      </p>
+                                      <p className="detail-value">
+                                        {row.neighborhood}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>

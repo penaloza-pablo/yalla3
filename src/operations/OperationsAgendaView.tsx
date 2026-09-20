@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getPropertyLabel } from './propertyHelpers'
+import { getPropertyAbbreviation, getPropertyLabel } from './propertyHelpers'
 import {
   getMtlGroupLabel,
   isPropertyIdInScope,
@@ -48,6 +48,7 @@ type AgendaTableRow = {
   key: string
   property: PropertyOption
   propertyLabel: string
+  propertyAbbreviation: string
   propertyIds: string[]
   createPropertyId: string
   isChildRow: boolean
@@ -85,6 +86,7 @@ export function OperationsAgendaView({
           key: row.property.id,
           property: row.property,
           propertyLabel: getPropertyLabel(row.property),
+          propertyAbbreviation: getPropertyAbbreviation(row.property),
           propertyIds: row.propertyIds,
           createPropertyId: row.property.id,
           isChildRow: false,
@@ -99,6 +101,7 @@ export function OperationsAgendaView({
         key: row.principal.id,
         property: row.principal,
         propertyLabel: getMtlGroupLabel(row),
+        propertyAbbreviation: getPropertyAbbreviation(row.principal),
         propertyIds: isExpanded ? [row.principal.id] : row.propertyIds,
         createPropertyId: row.principal.id,
         isChildRow: false,
@@ -115,6 +118,7 @@ export function OperationsAgendaView({
             key: `${row.principal.id}:${child.id}`,
             property: child,
             propertyLabel: getPropertyLabel(child),
+            propertyAbbreviation: getPropertyAbbreviation(child),
             propertyIds: [child.id],
             createPropertyId: child.id,
             isChildRow: true,
@@ -207,7 +211,10 @@ export function OperationsAgendaView({
         <table className="operations-agenda-table">
           <thead>
             <tr>
-              <th className="operations-agenda-property-header">Property</th>
+              <th
+                className="operations-agenda-property-header"
+                aria-label={t('common.property')}
+              />
               <th
                 colSpan={dates.length}
                 className="operations-agenda-dates-header"
@@ -281,7 +288,12 @@ export function OperationsAgendaView({
                       <YlDisclosureIcon open={row.isExpanded} />
                     </button>
                   ) : null}
-                  <span>{row.propertyLabel}</span>
+                  <span
+                    className="operations-agenda-abbr"
+                    title={row.propertyLabel}
+                  >
+                    {row.propertyAbbreviation || '—'}
+                  </span>
                 </th>
                 {dates.map((date) => {
                   const cellKey = `${row.key}|${date}`

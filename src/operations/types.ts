@@ -80,6 +80,7 @@ export type PropertyOption = {
   nickname: string
   title: string
   listingNickname: string
+  abbreviation?: string
   type?: string
   mtlPrincipalId?: string
   memberIds?: string[]

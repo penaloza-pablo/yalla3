@@ -4,6 +4,7 @@ import {
   isP2BuildingId,
   isP2RoomListingId,
   isP2RoomNickname,
+  normalizePropertyAbbreviation,
   P2_BUILDING_ID,
   PLANTA_2_REPORT_NAME,
   PROPERTY_REPORTS_START_MONTH,
@@ -30,6 +31,14 @@ export const getPropertyLabel = (property: PropertyOption) =>
       title: property.title,
     }),
   )
+
+export const getPropertyAbbreviation = (property: PropertyOption) => {
+  const stored = normalizePropertyAbbreviation(property.abbreviation)
+  if (stored) {
+    return stored
+  }
+  return normalizePropertyAbbreviation(getPropertyLabel(property))
+}
 
 export const getListingNicknameLabel = (property: PropertyOption) =>
   displayStorageLocation(

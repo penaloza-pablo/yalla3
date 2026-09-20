@@ -16,6 +16,7 @@ import {
   yallaAliasForListingId,
   isP2BuildingId,
   isP2RoomListingId,
+  normalizePropertyAbbreviation,
 } from '../shared/property-identity';
 import {
   asStringList,
@@ -44,6 +45,7 @@ type PropertyPayload = {
   bathrooms?: number;
   city?: string;
   neighborhood?: string;
+  abbreviation?: string;
   memberIds?: unknown;
   system?: boolean;
 };
@@ -208,6 +210,14 @@ export const handler = async (event: {
     const item = {
       ...previous,
       ...propertyFields,
+      abbreviation:
+        payload.abbreviation !== undefined
+          ? normalizePropertyAbbreviation(payload.abbreviation)
+          : normalizePropertyAbbreviation(
+              typeof previous.abbreviation === 'string'
+                ? previous.abbreviation
+                : '',
+            ),
       ListingID:
         typeof previous.ListingID === 'string' && previous.ListingID.length > 0
           ? previous.ListingID
