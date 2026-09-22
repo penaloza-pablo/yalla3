@@ -252,11 +252,12 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
       const payload = (await response.json()) as {
         item?: AgentRecord
         message?: string
+        details?: string
         tools?: AgentToolInfo[]
         models?: string[]
       }
       if (!response.ok || !payload.item) {
-        throw new Error(payload.message || 'save')
+        throw new Error(payload.details || payload.message || 'save')
       }
       applyResources(payload)
       isCreatingRef.current = false
@@ -266,8 +267,12 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
       setSelectedId(payload.item.id)
       setMessage(t('agents.saveSuccess'))
       await loadAgents()
-    } catch {
-      setError(t('agents.saveError'))
+    } catch (caught) {
+      const detail =
+        caught instanceof Error && caught.message && caught.message !== 'save'
+          ? ` ${caught.message}`
+          : ''
+      setError(`${t('agents.saveError')}${detail}`)
     } finally {
       setIsSaving(false)
     }

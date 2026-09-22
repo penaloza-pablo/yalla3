@@ -182,6 +182,7 @@ export const handler = async (event: HttpEvent) => {
       ...resourcesPayload(),
     });
   } catch (error) {
+    console.error('agents handler failed', error);
     return buildHttpResponse(500, {
       message: 'Failed to process agents request.',
       details: error instanceof Error ? error.message : String(error),

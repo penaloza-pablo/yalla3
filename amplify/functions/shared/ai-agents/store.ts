@@ -189,22 +189,47 @@ export const allocateAgentId = async (name: string) => {
   return crypto.randomUUID();
 };
 
+const withoutUndefined = (value: unknown): unknown => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map(withoutUndefined)
+      .filter((entry) => entry !== undefined);
+  }
+  if (value && typeof value === 'object') {
+    const next: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
+      const cleaned = withoutUndefined(entry);
+      if (cleaned !== undefined) {
+        next[key] = cleaned;
+      }
+    }
+    return next;
+  }
+  return value;
+};
+
 export const putAgent = async (agent: AgentDefinition) => {
   const tableName = agentsTable();
   if (!tableName) {
     throw new Error('AGENTS_TABLE is not configured.');
   }
   const previous = await getAgentRecord(agent.id);
+  const item = withoutUndefined({
+    ...agent,
+    lastRunAt: previous?.lastRunAt,
+    lastRunStatus: previous?.lastRunStatus,
+    lastRunError: previous?.lastRunError,
+    updatedAt: nowIso(),
+  });
   await docClient.send(
     new PutCommand({
       TableName: tableName,
-      Item: {
-        ...agent,
-        lastRunAt: previous?.lastRunAt,
-        lastRunStatus: previous?.lastRunStatus,
-        lastRunError: previous?.lastRunError,
-        updatedAt: nowIso(),
-      },
+      Item: item as Record<string, unknown>,
     }),
   );
 };
