@@ -31,7 +31,10 @@ import {
   withUserEditSyncMetadata,
 } from '../shared/visit-task-utils';
 import { appendUrgentTaskTitles } from '../shared/visit-title';
-import { notifyVisitClosedWithComments } from '../shared/slack-cleaning';
+import {
+  markOverdueSlackMessageCompletedInYalla,
+  notifyVisitClosedWithComments,
+} from '../shared/slack-cleaning';
 import { applyVisitTemplateAutoAssign } from '../shared/visit-template-auto-assign';
 
 type VisitPayload = {
@@ -163,6 +166,17 @@ export const handler = async (event: {
         await recordCleaningCompletion({ ...item, status: 'COMPLETED' });
       } catch (error) {
         console.error('Failed to record cleaning completion', error);
+      }
+      try {
+        await markOverdueSlackMessageCompletedInYalla({
+          ...item,
+          status: 'COMPLETED',
+        });
+      } catch (error) {
+        console.error(
+          'Failed to mark overdue Slack message completed in Yalla',
+          error,
+        );
       }
     }
     return buildHttpResponse(200, {
@@ -501,6 +515,14 @@ export const handler = async (event: {
         await notifyVisitClosedWithComments(item);
       } catch (error) {
         console.error('Failed to notify visit comments on Slack', error);
+      }
+      try {
+        await markOverdueSlackMessageCompletedInYalla(item);
+      } catch (error) {
+        console.error(
+          'Failed to mark overdue Slack message completed in Yalla',
+          error,
+        );
       }
     }
 

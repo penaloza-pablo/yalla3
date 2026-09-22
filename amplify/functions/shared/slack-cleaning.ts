@@ -23,8 +23,24 @@ import {
   TERMINAL_VISIT_STATUSES,
   visitHasOpenTasks,
 } from './visit-task-utils';
+import {
+  overdueCompletedInYallaText,
+  SLACK_OVERDUE_CHANNEL_FIELD,
+  SLACK_OVERDUE_FIELD,
+  SLACK_OVERDUE_TS_FIELD,
+} from './slack-overdue';
 
-export const SLACK_OVERDUE_FIELD = 'slackOverdueNotifiedFor';
+export {
+  isPastOverdueGrace,
+  overdueCompletedInYallaText,
+  overdueLookbackDates,
+  overdueNotifyKey,
+  OVERDUE_GRACE_MINUTES,
+  SLACK_OVERDUE_CHANNEL_FIELD,
+  SLACK_OVERDUE_FIELD,
+  SLACK_OVERDUE_TS_FIELD,
+} from './slack-overdue';
+
 export const SNOOZE_ACTION_ID = 'cleaning_snooze';
 export const DONE_ACTION_ID = 'cleaning_done';
 export const SNOOZE_MODAL_CALLBACK = 'cleaning_snooze_modal';
@@ -32,8 +48,10 @@ export const SNOOZE_MODAL_CALLBACK = 'cleaning_snooze_modal';
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
-export const overdueNotifyKey = (scheduledDate: string, endTime: string) =>
-  `${scheduledDate}|${endTime}`;
+const asRecord = (value: unknown) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 
 export const escapeMrkdwn = (value: string) =>
   value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -230,7 +248,7 @@ export const overdueCleaningBlocks = (visitId: string, nickname: string) => [
   },
   {
     type: 'actions',
-    block_id: 'cleaning_overdue_actions',
+    block_id: `cleaning_overdue_actions:${visitId}`.slice(0, 255),
     elements: [
       {
         type: 'button',
@@ -302,6 +320,123 @@ const replaceMessage = async (
       },
     ],
   });
+};
+
+const messageMentionsVisit = (
+  message: Record<string, unknown>,
+  visitId: string,
+  title: string,
+) => {
+  const serialized = JSON.stringify(message);
+  if (visitId && serialized.includes(visitId)) {
+    return true;
+  }
+  return Boolean(title) && asString(message.text).includes(title);
+};
+
+const isOverdueSlackMessage = (message: Record<string, unknown>) => {
+  const text = asString(message.text);
+  if (text.includes('debería haber terminado')) {
+    return true;
+  }
+  const blocks = Array.isArray(message.blocks) ? message.blocks : [];
+  return blocks.some((block) => {
+    const record = asRecord(block);
+    const elements = Array.isArray(record?.elements) ? record.elements : [];
+    return elements.some((element) => {
+      const actionId = asString(asRecord(element)?.action_id);
+      return actionId === DONE_ACTION_ID || actionId === SNOOZE_ACTION_ID;
+    });
+  });
+};
+
+const findOverdueSlackMessage = async (visit: Record<string, unknown>) => {
+  const visitId = asString(visit.id);
+  const title = asString(visit.title);
+  if (!visitId) {
+    return null;
+  }
+  let channelId = asString(visit[SLACK_OVERDUE_CHANNEL_FIELD]);
+  if (!channelId) {
+    const secrets = await loadSlackSecrets();
+    const nickname = await loadPropertyNickname(
+      process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+      visit,
+    );
+    const teamKind = classifyOverdueTeam(
+      asString(visit.teamId),
+      asString(visit.team),
+    );
+    const channel = resolveOverdueChannel({
+      teamKind,
+      nickname,
+      propertyId: asString(visit.propertyId),
+      title: title || nickname,
+      secrets,
+    });
+    channelId = channel?.channelId ?? '';
+  }
+  if (!channelId) {
+    return null;
+  }
+  try {
+    const history = (await slackApi('conversations.history', {
+      channel: channelId,
+      limit: 100,
+    })) as { messages?: unknown[] };
+    const messages = Array.isArray(history.messages) ? history.messages : [];
+    for (const raw of messages) {
+      const message = asRecord(raw);
+      if (!message) {
+        continue;
+      }
+      const ts = asString(message.ts);
+      if (
+        ts &&
+        isOverdueSlackMessage(message) &&
+        messageMentionsVisit(message, visitId, title)
+      ) {
+        return { channelId, messageTs: ts };
+      }
+    }
+  } catch (error) {
+    console.error(
+      `Failed to search overdue Slack message for visit ${visitId}`,
+      error,
+    );
+  }
+  return null;
+};
+
+export const markOverdueSlackMessageCompletedInYalla = async (
+  visit: Record<string, unknown>,
+) => {
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.cleaningOverdue,
+    ))
+  ) {
+    return;
+  }
+  if (!asString(visit[SLACK_OVERDUE_FIELD]) && !asString(visit[SLACK_OVERDUE_TS_FIELD])) {
+    return;
+  }
+  const title = asString(visit.title) || 'Visita';
+  let channelId = asString(visit[SLACK_OVERDUE_CHANNEL_FIELD]);
+  let messageTs = asString(visit[SLACK_OVERDUE_TS_FIELD]);
+  if (!channelId || !messageTs) {
+    const found = await findOverdueSlackMessage(visit);
+    if (!found) {
+      return;
+    }
+    channelId = found.channelId;
+    messageTs = found.messageTs;
+  }
+  await replaceMessage(
+    channelId,
+    messageTs,
+    overdueCompletedInYallaText(escapeMrkdwn(title)),
+  );
 };
 
 export const completeCleaningFromSlack = async (options: {

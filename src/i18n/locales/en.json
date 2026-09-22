@@ -2012,7 +2012,7 @@
     "items": {
       "notify_cleaning_overdue": {
         "name": "Notify Cleanings Overdue",
-        "description": "Posts in Slack when a cleaning visit is overdue."
+        "description": "Posts in Slack 15 minutes after the scheduled end if the visit is still open. Completing the visit in Yalla marks that Slack message as done."
       },
       "notify_visit_closed_with_comments": {
         "name": "Notify visit closed with comments",

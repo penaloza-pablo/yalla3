@@ -5,14 +5,18 @@ import {
 } from '../shared/cleaning-plan';
 import {
   classifyOverdueTeam,
+  isPastOverdueGrace,
   loadPropertyNickname,
   overdueCleaningBlocks,
   overdueCleaningMessage,
+  overdueLookbackDates,
   overdueMaintenanceBlocks,
   overdueMaintenanceMessage,
   overdueNotifyKey,
   resolveOverdueChannel,
+  SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
+  SLACK_OVERDUE_TS_FIELD,
 } from '../shared/slack-cleaning';
 import { loadSlackSecrets, slackApi } from '../shared/slack';
 import { grantDueCheckInAccess } from '../shared/grant-check-in-access';
@@ -178,19 +182,39 @@ export const handler = async (event?: unknown) => {
   const today = getTodayInMadrid();
   const nowTime = getNowTimeInMadrid();
   const teamNames = await loadTeamNames();
-  const visits = await queryVisitsForScheduledDate(visitsTable, today);
+  const visits: Record<string, unknown>[] = [];
+  const seenVisitIds = new Set<string>();
+  for (const date of overdueLookbackDates(today)) {
+    const datedVisits = await queryVisitsForScheduledDate(visitsTable, date);
+    for (const visit of datedVisits) {
+      const visitId = asString(visit.id);
+      if (!visitId || seenVisitIds.has(visitId)) {
+        continue;
+      }
+      seenVisitIds.add(visitId);
+      visits.push(visit);
+    }
+  }
 
   for (const visit of visits) {
     const visitId = asString(visit.id);
     const status = asString(visit.status).toUpperCase();
     const endTime = normalizeStartTime(asString(visit.scheduledEndTime));
+    const scheduledDate = asString(visit.scheduledDate).slice(0, 10) || today;
     if (!visitId || !endTime || TERMINAL_VISIT_STATUSES.has(status)) {
       continue;
     }
-    if (endTime > nowTime) {
+    if (
+      !isPastOverdueGrace({
+        scheduledDate,
+        endTime,
+        today,
+        nowTime,
+      })
+    ) {
       continue;
     }
-    const notifyKey = overdueNotifyKey(today, endTime);
+    const notifyKey = overdueNotifyKey(scheduledDate, endTime);
     if (asString(visit[SLACK_OVERDUE_FIELD]) === notifyKey) {
       continue;
     }
@@ -231,13 +255,20 @@ export const handler = async (event?: unknown) => {
       console.log(
         `Posting overdue ${visitId} to Slack secret key ${channel.key}`,
       );
-      await slackApi('chat.postMessage', {
+      const posted = await slackApi('chat.postMessage', {
         channel: channel.channelId,
         text,
         blocks,
       });
+      const setFields: Record<string, string> = {
+        [SLACK_OVERDUE_FIELD]: notifyKey,
+        [SLACK_OVERDUE_CHANNEL_FIELD]: posted.channel || channel.channelId,
+      };
+      if (posted.ts) {
+        setFields[SLACK_OVERDUE_TS_FIELD] = posted.ts;
+      }
       await patchUserOriginatedRecord(visitsTable, visitId, {
-        set: { [SLACK_OVERDUE_FIELD]: notifyKey },
+        set: setFields,
       });
     } catch (error) {
       console.error(`Failed to notify overdue visit ${visitId}`, error);
