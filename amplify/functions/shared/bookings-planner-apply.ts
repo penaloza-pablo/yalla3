@@ -566,6 +566,8 @@ export const applyPlannerToReservation = async ({
         await notifyReadyCleaningPlanBookingChanges({
           checkInDates,
           listingLabel,
+          listingId: String(current.ListingID ?? '').trim(),
+          listingNickname: String(current.ListingNickname ?? '').trim(),
           confirmationCode: String(current.ConfirmationCode ?? '').trim(),
           guestName: String(current.GuestName ?? '').trim(),
           changes,

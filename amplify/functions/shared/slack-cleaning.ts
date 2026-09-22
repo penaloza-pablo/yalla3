@@ -2,6 +2,10 @@ import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { recordCleaningCompletion } from './cleaner-stats';
 import { getPlanByDate, isCleaningVisitType, normalizeStartTime } from './cleaning-plan';
 import { canReopenCleaningPlanForBookingChange } from './cleaning-plan-booking-change-format';
+import {
+  listingIdentityKeys,
+  visitMatchesListingKeys,
+} from './cleaning-plan-booking-context';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
@@ -726,12 +730,16 @@ export const notifyCleaningPlanChanges = async (
 export const notifyReadyCleaningPlanBookingChanges = async ({
   checkInDates,
   listingLabel,
+  listingId,
+  listingNickname,
   confirmationCode,
   guestName,
   changes,
 }: {
   checkInDates: string[];
   listingLabel: string;
+  listingId?: string;
+  listingNickname?: string;
   confirmationCode?: string;
   guestName?: string;
   changes: string[];
@@ -761,6 +769,11 @@ export const notifyReadyCleaningPlanBookingChanges = async ({
   ];
   const today = getTodayInMadrid();
   const nowTime = getNowTimeInMadrid();
+  const listingKeys = listingIdentityKeys(
+    listingId,
+    listingNickname,
+    listingLabel,
+  );
   const readyDates: string[] = [];
   for (const date of uniqueDates) {
     if (!canReopenCleaningPlanForBookingChange({ plannedDate: date, today, nowTime })) {
@@ -769,9 +782,22 @@ export const notifyReadyCleaningPlanBookingChanges = async ({
     const plan = await getPlanByDate(plansTable, date);
     const status =
       typeof plan?.status === 'string' ? plan.status.toUpperCase() : '';
-    if (status === 'READY') {
-      readyDates.push(date);
+    if (status !== 'READY') {
+      continue;
     }
+    const planItems = Array.isArray(plan?.items) ? plan.items : [];
+    const onPlan = planItems.some((item) =>
+      visitMatchesListingKeys(
+        item && typeof item === 'object'
+          ? (item as Record<string, unknown>)
+          : {},
+        listingKeys,
+      ),
+    );
+    if (!onPlan) {
+      continue;
+    }
+    readyDates.push(date);
   }
   if (readyDates.length === 0) {
     return;

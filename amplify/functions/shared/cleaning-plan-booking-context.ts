@@ -509,7 +509,11 @@ const parseAccommodates = (value: unknown) => {
 };
 
 const isSofaBedYes = (item: Record<string, unknown>) =>
-  canonicalizeLinenValue(item.Linen, asString(item.ListingID)) ===
+  canonicalizeLinenValue(
+    item.Linen,
+    asString(item.ListingID),
+    asString(item.ListingNickname),
+  ) ===
   LINEN_VALUES.YES;
 
 const isEarlyCheckInOn = (item: Record<string, unknown>) =>

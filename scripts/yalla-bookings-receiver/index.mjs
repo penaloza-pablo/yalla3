@@ -508,7 +508,50 @@ function foldPlannerText(value) {
     .replace(/\s+/g, " ");
 }
 
-function canonicalizeLinenValue(value, listingId) {
+const P2_ROOM_IDS = new Set([
+  "693c3fa8937d490014b5bceb",
+  "6928222e394afb00100cf038",
+  "693c58109994960014f586d7",
+  "693c58109994960014f58732",
+  "693c5b7bb122320015236bcc",
+  "6928222e394afb00100cf048",
+  "693c59b29430f10014539e64",
+  "693c58109994960014f5878d",
+  "693c5b7bb122320015236bee",
+  "6928222e394afb00100cf040",
+  "693c3ad20c4f0500133cd017",
+  "693c3ad20c4f0500133ccfc3"
+]);
+const P2_ROOM_NICKNAMES = new Set([
+  "201", "202", "203", "204", "205", "206",
+  "207", "208", "209", "210", "211", "212"
+]);
+const SOFA_BED_NA_NICKNAMES = new Set([
+  "aguila",
+  "rioja",
+  "arenal rioja",
+  "baranda",
+  "esperanza 9",
+  "fe",
+  "jerte",
+  "mendizabal",
+  "meson de paredes",
+  "rodas",
+  "san joaquin",
+  "san marcos c",
+  "san marcos d"
+]);
+
+function isAlwaysSofaBedNa(listingId, listingNickname) {
+  if (P2_ROOM_IDS.has(String(listingId || "").trim())) return true;
+  const nickname = String(listingNickname || "").trim();
+  if (P2_ROOM_NICKNAMES.has(nickname)) return true;
+  const folded = foldPlannerText(nickname);
+  return Boolean(folded) && SOFA_BED_NA_NICKNAMES.has(folded);
+}
+
+function canonicalizeLinenValue(value, listingId, listingNickname) {
+  if (isAlwaysSofaBedNa(listingId, listingNickname)) return LINEN_NA;
   const original = String(value || "").trim();
   if (!original) return "";
   const compact = foldPlannerText(original).replace(/ /g, "");
@@ -593,6 +636,7 @@ async function applyPlannerInline(item) {
   }
 
   const listingId = String(item.ListingID?.S || "");
+  const listingNickname = String(item.ListingNickname?.S || "");
   const guests = Number(item.Guests?.N || 0);
   const nights = Number(item.Nights?.N || 0);
   const linenRule = ruleById.linen || { enabled: true, excluded: [] };
@@ -604,7 +648,7 @@ async function applyPlannerInline(item) {
     listingId === VERDEJO_LISTING_ID &&
     !doubleRule.excluded.includes(listingId);
 
-  let linen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
+  let linen = canonicalizeLinenValue(item.Linen?.S || "", listingId, listingNickname);
   const linenManual = Boolean(item.LinenManual?.BOOL);
   let giftCard = String(item.GiftCard?.S || "");
   let giftCardOn = item.GiftCardOn?.BOOL;
@@ -621,7 +665,7 @@ async function applyPlannerInline(item) {
       warnings.push("double_or_two_singles_ask");
     }
   } else if (linenRule.enabled) {
-    if (linenRule.excluded.includes(listingId) && linen !== LINEN_NA && linen !== LINEN_YES && linen !== LINEN_NO) {
+    if (isAlwaysSofaBedNa(listingId, listingNickname) || linenRule.excluded.includes(listingId)) {
       linen = LINEN_NA;
     } else if (!notesFrozen && !linenManual && linen !== LINEN_YES) {
       if (guests === 1) linen = LINEN_NO;
@@ -683,7 +727,11 @@ async function applyPlannerInline(item) {
   }
 
   const currentGiftCard = String(item.GiftCard?.S || "");
-  const currentLinen = canonicalizeLinenValue(item.Linen?.S || "", listingId);
+  const currentLinen = canonicalizeLinenValue(
+    item.Linen?.S || "",
+    listingId,
+    listingNickname
+  );
   const currentWarnings = (item.PlannerWarnings?.L || [])
     .map((value) => value?.S)
     .filter(Boolean)
@@ -887,7 +935,8 @@ export const handler = async (event) => {
             existing,
             "Linen"
           ),
-          listingId
+          listingId,
+          listingNickname
         )
       ),
       EarlyCheckIn: s(

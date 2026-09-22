@@ -14,6 +14,7 @@ import {
   isDoNotEarlyCheckIn,
   isEarlyCheckInEnabled,
   isGiftCardFrozen,
+  isAlwaysSofaBedNa,
   LINEN_VALUES,
   plannerFieldsChanged,
   plannerStateChanged,
@@ -179,6 +180,48 @@ test('describePlannerBookingChanges lists guest and card diffs', () => {
   const lines = describePlannerBookingChanges(baseItem, after, patch);
   assert.ok(lines.some((line) => line.includes('Huéspedes: 1 -> 2')));
   assert.ok(lines.some((line) => line.includes('Tarjeta:')));
+});
+
+test('P2 rooms and listed apartments always use sofa n/a', () => {
+  assert.equal(isAlwaysSofaBedNa('693c58109994960014f586d7', '203'), true);
+  assert.equal(isAlwaysSofaBedNa('', 'Baranda'), true);
+  assert.equal(isAlwaysSofaBedNa('', 'San Marcos C'), true);
+  const patch = computePlannerFields({
+    item: {
+      ...baseItem,
+      ListingID: '693c58109994960014f586d7',
+      ListingNickname: '203',
+      Guests: 1,
+      Linen: LINEN_VALUES.NO,
+    },
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(patch.linen, LINEN_VALUES.NA);
+});
+
+test('does not slack planner initialization of empty gift and sofa', () => {
+  const before = {
+    ...baseItem,
+    ListingID: '693c58109994960014f586d7',
+    ListingNickname: '203',
+    GiftCard: '',
+    Linen: '',
+    Nights: 2,
+    CheckOutDate: '2026-09-18',
+  };
+  const patch = computePlannerFields({
+    item: before,
+    settings: enabledSettings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  const lines = describePlannerBookingChanges(before, before, patch);
+  assert.equal(
+    lines.some((line) => line.startsWith('Tarjeta:') || line.startsWith('Sofá:')),
+    false,
+  );
 });
 
 test('does not warn about access when the code is already set', () => {

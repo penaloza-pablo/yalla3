@@ -1,4 +1,9 @@
 import { addDaysToDateString, calendarDaysBetween } from './date-range';
+import {
+  isP2RoomListingId,
+  isP2RoomNickname,
+  yallaAliasForListingId,
+} from './property-identity';
 
 export const PLANNER_SETTINGS_ID = 'GLOBAL';
 export const PLANNER_WINDOW_DAYS = 7;
@@ -439,6 +444,39 @@ const foldPlannerText = (value: unknown) =>
 const compactPlannerText = (value: unknown) =>
   foldPlannerText(value).replace(/ /g, '');
 
+const SOFA_BED_NA_NICKNAMES = new Set(
+  [
+    'aguila',
+    'rioja',
+    'arenal rioja',
+    'baranda',
+    'esperanza 9',
+    'fe',
+    'jerte',
+    'mendizabal',
+    'meson de paredes',
+    'rodas',
+    'san joaquin',
+    'san marcos c',
+    'san marcos d',
+  ].map((value) => foldPlannerText(value)),
+);
+
+export const isAlwaysSofaBedNa = (
+  listingId = '',
+  listingNickname = '',
+) => {
+  if (isP2RoomListingId(listingId) || isP2RoomNickname(listingNickname)) {
+    return true;
+  }
+  const foldedNickname = foldPlannerText(listingNickname);
+  if (foldedNickname && SOFA_BED_NA_NICKNAMES.has(foldedNickname)) {
+    return true;
+  }
+  const alias = yallaAliasForListingId(listingId);
+  return Boolean(alias) && SOFA_BED_NA_NICKNAMES.has(foldPlannerText(alias));
+};
+
 const mapSofaLinenFromGuesty = (original: string) => {
   const trimmed = original.trim();
   if (isSofaLinenValue(trimmed)) {
@@ -494,7 +532,14 @@ const mapVerdejoLinenFromGuesty = (original: string) => {
   return trimmed;
 };
 
-export const canonicalizeLinenValue = (value: unknown, listingId = '') => {
+export const canonicalizeLinenValue = (
+  value: unknown,
+  listingId = '',
+  listingNickname = '',
+) => {
+  if (isAlwaysSofaBedNa(listingId, listingNickname)) {
+    return LINEN_VALUES.NA;
+  }
   const original = asString(value);
   if (!original) {
     return '';
@@ -601,12 +646,16 @@ export const computePlannerFields = ({
   overrides?: PlannerOverrides;
 }): PlannerFieldPatch => {
   const listingId = asString(item.ListingID);
+  const listingNickname = asString(item.ListingNickname);
+  const sofaBedNa = isAlwaysSofaBedNa(listingId, listingNickname);
   const linenManual =
     overrides?.linen !== undefined || asBoolean(item.LinenManual) === true;
   let linen =
-    overrides?.linen !== undefined
-      ? asString(overrides.linen)
-      : canonicalizeLinenValue(item.Linen, listingId);
+    sofaBedNa
+      ? LINEN_VALUES.NA
+      : overrides?.linen !== undefined
+        ? asString(overrides.linen)
+        : canonicalizeLinenValue(item.Linen, listingId, listingNickname);
   let giftCard = asString(item.GiftCard);
   let earlyCheckIn = asString(item.EarlyCheckIn);
   let access =
@@ -700,7 +749,7 @@ export const computePlannerFields = ({
       warnings.push('double_or_two_singles_ask');
     }
   } else if (linenRule.enabled) {
-    if (isPropertyExcluded(linenRule, listingId) && !isSofaLinenValue(linen)) {
+    if (sofaBedNa || isPropertyExcluded(linenRule, listingId)) {
       linen = LINEN_VALUES.NA;
     } else if (!notesFrozen && !linenManual && linen !== LINEN_VALUES.YES) {
       if (guests === 1) {
@@ -877,14 +926,36 @@ export const describePlannerBookingChanges = (
       `Check-out: ${checkOutBefore || '-'} -> ${checkOutAfter || '-'}`,
     );
   }
+  const listingId = asString(after.ListingID) || asString(before.ListingID);
+  const listingNickname =
+    asString(after.ListingNickname) || asString(before.ListingNickname);
   const giftBefore = asString(before.GiftCard);
   if (giftBefore !== patch.giftCard) {
-    lines.push(`Tarjeta: ${giftBefore || '-'} -> ${patch.giftCard || '-'}`);
+    const isGiftInit = !giftBefore && patch.giftCard === GIFT_CARD_OFF;
+    if (!isGiftInit) {
+      lines.push(`Tarjeta: ${giftBefore || '-'} -> ${patch.giftCard || '-'}`);
+    }
   }
-  const listingId = asString(after.ListingID) || asString(before.ListingID);
-  const linenBefore = canonicalizeLinenValue(before.Linen, listingId);
+  const linenBefore = canonicalizeLinenValue(
+    before.Linen,
+    listingId,
+    listingNickname,
+  );
   if (linenBefore !== patch.linen) {
-    lines.push(`Sofá: ${linenBefore || '-'} -> ${patch.linen || '-'}`);
+    const isLinenInit =
+      !asString(before.Linen) &&
+      (patch.linen === LINEN_VALUES.NA ||
+        patch.linen === LINEN_VALUES.NO ||
+        patch.linen === LINEN_VALUES.YES);
+    const isSofaNaNoise =
+      isAlwaysSofaBedNa(listingId, listingNickname) &&
+      (linenBefore === LINEN_VALUES.NA || !linenBefore) &&
+      (patch.linen === LINEN_VALUES.NA ||
+        patch.linen === LINEN_VALUES.NO ||
+        !patch.linen);
+    if (!isLinenInit && !isSofaNaNoise) {
+      lines.push(`Sofá: ${linenBefore || '-'} -> ${patch.linen || '-'}`);
+    }
   }
   return lines;
 };
