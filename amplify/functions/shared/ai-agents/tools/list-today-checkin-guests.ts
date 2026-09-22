@@ -39,7 +39,7 @@ export const listTodayCheckinGuestsTool: AgentTool = {
           KeyConditionExpression: 'CheckInDate = :checkInDate',
           ExpressionAttributeValues: { ':checkInDate': dateIso },
           ProjectionExpression:
-            'ReservationID, GuestName, ListingNickname, #status, ConfirmationCode',
+            'ReservationID, GuestName, ListingNickname, #status',
           ExpressionAttributeNames: { '#status': 'Status' },
           ExclusiveStartKey: exclusiveStartKey,
         }),

@@ -209,6 +209,7 @@ export const listRuns = async (agentId: string, limit = 40) => {
       KeyConditionExpression: 'agentId = :agentId',
       ExpressionAttributeValues: { ':agentId': agentId },
       ScanIndexForward: false,
+      ConsistentRead: true,
       Limit: Math.min(Math.max(limit, 1), 100),
     }),
   );

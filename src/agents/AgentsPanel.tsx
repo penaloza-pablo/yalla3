@@ -126,7 +126,11 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
         }
         const nextRuns = runsPayload.items ?? detailPayload.recentRuns ?? []
         setRuns(nextRuns)
-        setSelectedRunId(nextRuns[0]?.runId ?? null)
+        setSelectedRunId((current) =>
+          current && nextRuns.some((run) => run.runId === current)
+            ? current
+            : (nextRuns[0]?.runId ?? null),
+        )
       } catch {
         setError(t('agents.loadError'))
       } finally {
@@ -152,6 +156,9 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
   const runSelected = async () => {
     if (!endpoint || !selectedId) {
       setError(t('agents.missingEndpoint'))
+      return
+    }
+    if (isRunning) {
       return
     }
     setIsRunning(true)
@@ -205,7 +212,12 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
               <button
                 className="btn-secondary"
                 type="button"
-                onClick={() => void loadAgents()}
+                onClick={() => {
+                  void loadAgents()
+                  if (selectedId) {
+                    void loadDetail(selectedId)
+                  }
+                }}
                 disabled={isLoading}
                 aria-label={t('common.refresh')}
               >
