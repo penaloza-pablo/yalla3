@@ -9,7 +9,7 @@ import {
   ProjectionType,
   Table,
 } from 'aws-cdk-lib/aws-dynamodb';
-import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Policy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { CfnSchedule } from 'aws-cdk-lib/aws-scheduler';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
@@ -551,9 +551,18 @@ const yallaBookingsReceiverRole = Role.fromRoleArn(
   'YallaBookingsReceiverRole',
   'arn:aws:iam::471112597523:role/service-role/yalla-bookingsReceiver-role-ab8jrarq',
 );
-backend.applyBookingsPlanner.resources.lambda.grantInvoke(
-  yallaBookingsReceiverRole,
-);
+new Policy(plannerScheduleStack, 'BookingsReceiverInvokePlanner', {
+  roles: [yallaBookingsReceiverRole],
+  statements: [
+    new PolicyStatement({
+      actions: ['lambda:InvokeFunction'],
+      resources: [
+        backend.applyBookingsPlanner.resources.lambda.functionArn,
+        `${backend.applyBookingsPlanner.resources.lambda.functionArn}:*`,
+      ],
+    }),
+  ],
+});
 bookingsPlannerSettingsTable.grantReadData(
   backend.upsertBookingPlannerFields.resources.lambda,
 );
