@@ -128,7 +128,11 @@ export const runAgent = async (options: {
       invoked.toolCoverage,
       invoked.text,
     );
-    const findings = findingsFromCoverage(coverage, invoked.text);
+    const findings = findingsFromCoverage(
+      coverage,
+      invoked.text,
+      agent.coveragePolicy,
+    );
     const finishedAt = nowIso();
     const succeeded: AgentRunRecord = {
       ...running,

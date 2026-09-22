@@ -7,6 +7,15 @@ const TOOLS: Record<string, AgentTool> = {
 
 export const listRegisteredTools = () => Object.values(TOOLS);
 
+export const listPublicTools = () =>
+  listRegisteredTools().map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    outputDescription: tool.outputDescription,
+  }));
+
+export const registeredToolNames = () => new Set(Object.keys(TOOLS));
+
 export const resolveAllowedTools = (allowedTools: string[]) => {
   const resolved: AgentTool[] = [];
   const missing: string[] = [];

@@ -9,6 +9,7 @@ export type AgentSchedule = {
 
 export type CoveragePolicy = {
   type: 'tool_declared' | 'mention_in_output';
+  expectedParagraphs?: number;
 };
 
 export type AgentDefinition = {
@@ -97,9 +98,13 @@ export type ToolResult = {
   coverage?: ToolCoverageHint;
 };
 
-export type AgentTool = {
+export type AgentToolPublic = {
   name: string;
   description: string;
+  outputDescription: string;
+};
+
+export type AgentTool = AgentToolPublic & {
   parameters: Record<string, unknown>;
   execute: (args: Record<string, unknown>) => Promise<ToolResult>;
 };

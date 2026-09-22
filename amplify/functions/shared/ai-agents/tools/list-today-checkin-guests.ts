@@ -21,6 +21,8 @@ export const listTodayCheckinGuestsTool: AgentTool = {
   name: 'list_today_checkin_guests',
   description:
     'Lists guests with a check-in date equal to today in Europe/Madrid. Returns names and booking ids. Skips inquiry and cancelled reservations.',
+  outputDescription:
+    'JSON with businessDate (Europe/Madrid ISO date), timezone, guests[{guestName, reservationId}], and skippedCount for excluded bookings.',
   parameters: {
     type: 'object',
     properties: {},

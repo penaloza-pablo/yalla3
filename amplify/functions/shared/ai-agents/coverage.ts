@@ -94,6 +94,7 @@ export const applyCoveragePolicy = (
 export const findingsFromCoverage = (
   coverage: AgentCoverage,
   outputText: string,
+  policy?: CoveragePolicy,
 ): AgentFinding[] => {
   const findings: AgentFinding[] = [];
   if (coverage.planned.length === 0) {
@@ -110,26 +111,29 @@ export const findingsFromCoverage = (
   if (unnamed.length > 0) {
     findings.push({
       severity: 'warning',
-      title: 'Guests missing from the story',
+      title: 'Planned items missing from the output',
       detail: unnamed.map((item) => item.label).join(', '),
     });
   } else if (coverage.reviewed.length > 0) {
     findings.push({
       severity: 'info',
-      title: 'All planned guests were named',
-      detail: `${coverage.reviewed.length} guest(s) mentioned in the output.`,
+      title: 'All planned items were named',
+      detail: `${coverage.reviewed.length} item(s) mentioned in the output.`,
     });
   }
-  const paragraphs = outputText
-    .split(/\n\s*\n/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (outputText.trim() && paragraphs.length !== 3) {
-    findings.push({
-      severity: 'warning',
-      title: 'Story is not three paragraphs',
-      detail: `The output has ${paragraphs.length} paragraph(s).`,
-    });
+  const expected = policy?.expectedParagraphs;
+  if (expected && outputText.trim()) {
+    const paragraphs = outputText
+      .split(/\n\s*\n/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (paragraphs.length !== expected) {
+      findings.push({
+        severity: 'warning',
+        title: 'Unexpected paragraph count',
+        detail: `The output has ${paragraphs.length} paragraph(s); expected ${expected}.`,
+      });
+    }
   }
   return findings;
 };

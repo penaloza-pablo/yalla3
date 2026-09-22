@@ -39,9 +39,12 @@ test('findings warn when the story is not three paragraphs', () => {
     [{ planned: [{ id: '1', label: 'Ana' }], unchecked: [] }],
     'Ana walked into Madrid and the city turned gold.',
   );
-  const findings = findingsFromCoverage(coverage, 'Ana walked into Madrid and the city turned gold.');
+  const findings = findingsFromCoverage(coverage, 'Ana walked into Madrid and the city turned gold.', {
+    type: 'mention_in_output',
+    expectedParagraphs: 3,
+  });
   assert.equal(
-    findings.some((item) => item.title === 'Story is not three paragraphs'),
+    findings.some((item) => item.title === 'Unexpected paragraph count'),
     true,
   );
 });

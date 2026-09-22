@@ -7,6 +7,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { nowIso } from '../dynamo-http';
 import { docClient } from '../visit-task-utils';
+import { slugifyAgentId } from './agent-config';
 import { AGENT_CATALOG } from './catalog';
 import type {
   AgentDefinition,
@@ -59,14 +60,21 @@ const fromStoredAgent = (item: Record<string, unknown>): AgentDefinition => ({
       (item.schedule as { description?: string } | undefined)?.description,
     ),
   },
-  coveragePolicy: {
-    type:
+  coveragePolicy: (() => {
+    const type =
       asString(
         (item.coveragePolicy as { type?: string } | undefined)?.type,
       ) === 'mention_in_output'
         ? 'mention_in_output'
-        : 'tool_declared',
-  },
+        : 'tool_declared';
+    const parsed = Number(
+      (item.coveragePolicy as { expectedParagraphs?: unknown } | undefined)
+        ?.expectedParagraphs,
+    );
+    return Number.isInteger(parsed) && parsed > 0
+      ? { type, expectedParagraphs: parsed }
+      : { type };
+  })(),
   enabled: item.enabled !== false,
   catalogVersion: Number(item.catalogVersion) || 0,
 });
@@ -83,15 +91,14 @@ export const seedAgents = async () => {
         Key: { id: agent.id },
       }),
     );
-    const previous = existing.Item as Record<string, unknown> | undefined;
+    if (existing.Item) {
+      continue;
+    }
     await docClient.send(
       new PutCommand({
         TableName: tableName,
         Item: {
           ...agent,
-          lastRunAt: previous?.lastRunAt,
-          lastRunStatus: previous?.lastRunStatus,
-          lastRunError: previous?.lastRunError,
           updatedAt: nowIso(),
         },
       }),
@@ -153,6 +160,53 @@ export const getAgent = async (id: string) => {
     lastRunStatus: asRunStatus(item.lastRunStatus),
     lastRunError: asString(item.lastRunError) || undefined,
   };
+};
+
+const getAgentRecord = async (id: string) => {
+  const tableName = agentsTable();
+  if (!tableName) {
+    throw new Error('AGENTS_TABLE is not configured.');
+  }
+  const result = await docClient.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { id },
+    }),
+  );
+  return (result.Item as Record<string, unknown> | undefined) ?? null;
+};
+
+export const allocateAgentId = async (name: string) => {
+  const base = slugifyAgentId(name);
+  let candidate = base;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const existing = await getAgentRecord(candidate);
+    if (!existing) {
+      return candidate;
+    }
+    candidate = `${base}-${crypto.randomUUID().slice(0, 8)}`;
+  }
+  return crypto.randomUUID();
+};
+
+export const putAgent = async (agent: AgentDefinition) => {
+  const tableName = agentsTable();
+  if (!tableName) {
+    throw new Error('AGENTS_TABLE is not configured.');
+  }
+  const previous = await getAgentRecord(agent.id);
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: {
+        ...agent,
+        lastRunAt: previous?.lastRunAt,
+        lastRunStatus: previous?.lastRunStatus,
+        lastRunError: previous?.lastRunError,
+        updatedAt: nowIso(),
+      },
+    }),
+  );
 };
 
 export const putRun = async (run: AgentRunRecord) => {

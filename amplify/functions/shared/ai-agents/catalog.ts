@@ -36,7 +36,7 @@ Process:
       kind: 'manual',
       description: 'On demand from the Agents section.',
     },
-    coveragePolicy: { type: 'mention_in_output' },
+    coveragePolicy: { type: 'mention_in_output', expectedParagraphs: 3 },
     enabled: true,
     catalogVersion: AI_AGENTS_CATALOG_VERSION,
   },

@@ -59,6 +59,17 @@ export type AgentRun = {
   triggeredBy?: string
 }
 
+export type AgentCoveragePolicy = {
+  type: 'tool_declared' | 'mention_in_output'
+  expectedParagraphs?: number
+}
+
+export type AgentToolInfo = {
+  name: string
+  description: string
+  outputDescription: string
+}
+
 export type AgentRecord = {
   id: string
   name: string
@@ -69,6 +80,7 @@ export type AgentRecord = {
   provider: string
   model: string
   schedule: AgentSchedule
+  coveragePolicy?: AgentCoveragePolicy
   enabled: boolean
   providerStatus: AgentProviderStatus
   lastRunAt?: string

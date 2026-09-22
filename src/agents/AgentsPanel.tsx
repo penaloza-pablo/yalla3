@@ -1,14 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { authFetch } from '../lib/auth-fetch'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { EmptyState, TableSkeleton } from '../design/Feedback'
 import { YlIcon } from '../design/icons'
-import type { AgentRecord, AgentRun, CoverageItem } from './types'
+import { AgentConfigForm } from './AgentConfigForm'
+import { draftFromAgent, emptyAgentDraft, type AgentDraft } from './form'
+import type { AgentRecord, AgentRun, AgentToolInfo, CoverageItem } from './types'
 
 type AgentsPanelProps = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
 }
+
+const FALLBACK_MODELS = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'o4-mini',
+]
 
 const formatWhen = (value: string | undefined, locale: string) => {
   if (!value) {
@@ -58,15 +68,21 @@ const CoverageList = ({
 export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
   const { t, i18n } = useTranslation()
   const [agents, setAgents] = useState<AgentRecord[]>([])
+  const [tools, setTools] = useState<AgentToolInfo[]>([])
+  const [models, setModels] = useState<string[]>(FALLBACK_MODELS)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<AgentRecord | null>(null)
+  const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft(FALLBACK_MODELS[0]))
+  const [isCreating, setIsCreating] = useState(false)
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const isCreatingRef = useRef(false)
 
   const endpoint = getEndpoint(
     'aiAgentsUrl',
@@ -77,6 +93,18 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
     () => runs.find((run) => run.runId === selectedRunId) ?? null,
     [runs, selectedRunId],
   )
+
+  const applyResources = (payload: {
+    tools?: AgentToolInfo[]
+    models?: string[]
+  }) => {
+    if (payload.tools && payload.tools.length > 0) {
+      setTools(payload.tools)
+    }
+    if (payload.models && payload.models.length > 0) {
+      setModels(payload.models)
+    }
+  }
 
   const loadAgents = useCallback(async () => {
     if (!endpoint) {
@@ -90,10 +118,20 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
       if (!response.ok) {
         throw new Error(await response.text())
       }
-      const payload = (await response.json()) as { items?: AgentRecord[] }
+      const payload = (await response.json()) as {
+        items?: AgentRecord[]
+        tools?: AgentToolInfo[]
+        models?: string[]
+      }
       const items = payload.items ?? []
       setAgents(items)
-      setSelectedId((current) => current ?? items[0]?.id ?? null)
+      applyResources(payload)
+      setSelectedId((current) => {
+        if (isCreatingRef.current) {
+          return current
+        }
+        return current ?? items[0]?.id ?? null
+      })
     } catch {
       setError(t('agents.loadError'))
     } finally {
@@ -119,10 +157,14 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
         const detailPayload = (await detailResponse.json()) as {
           item?: AgentRecord
           recentRuns?: AgentRun[]
+          tools?: AgentToolInfo[]
+          models?: string[]
         }
         const runsPayload = (await runsResponse.json()) as { items?: AgentRun[] }
+        applyResources(detailPayload)
         if (detailPayload.item) {
           setSelected(detailPayload.item)
+          setDraft(draftFromAgent(detailPayload.item))
         }
         const nextRuns = runsPayload.items ?? detailPayload.recentRuns ?? []
         setRuns(nextRuns)
@@ -145,20 +187,98 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
   }, [loadAgents])
 
   useEffect(() => {
+    if (isCreating) {
+      return
+    }
     if (!selectedId) {
       setSelected(null)
       setRuns([])
       return
     }
     void loadDetail(selectedId)
-  }, [loadDetail, selectedId])
+  }, [isCreating, loadDetail, selectedId])
+
+  const startCreate = () => {
+    isCreatingRef.current = true
+    setIsCreating(true)
+    setSelectedId(null)
+    setSelected(null)
+    setRuns([])
+    setSelectedRunId(null)
+    setDraft(emptyAgentDraft(models[0] ?? FALLBACK_MODELS[0]))
+    setMessage(null)
+    setError(null)
+  }
+
+  const cancelCreate = () => {
+    isCreatingRef.current = false
+    setIsCreating(false)
+    setSelectedId(agents[0]?.id ?? null)
+  }
+
+  const saveDraft = async () => {
+    if (!endpoint) {
+      setError(t('agents.missingEndpoint'))
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    setMessage(null)
+    const paragraphs = Number(draft.expectedParagraphs)
+    try {
+      const response = await authFetch(endpoint, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: isCreating ? undefined : draft.id,
+          name: draft.name,
+          purpose: draft.purpose,
+          instructions: draft.instructions,
+          rules: draft.rules,
+          allowedTools: draft.allowedTools,
+          model: draft.model,
+          enabled: draft.enabled,
+          coveragePolicy: {
+            type: draft.coverageType,
+            expectedParagraphs:
+              draft.coverageType === 'mention_in_output' &&
+              Number.isInteger(paragraphs) &&
+              paragraphs > 0
+                ? paragraphs
+                : undefined,
+          },
+        }),
+      })
+      const payload = (await response.json()) as {
+        item?: AgentRecord
+        message?: string
+        tools?: AgentToolInfo[]
+        models?: string[]
+      }
+      if (!response.ok || !payload.item) {
+        throw new Error(payload.message || 'save')
+      }
+      applyResources(payload)
+      isCreatingRef.current = false
+      setIsCreating(false)
+      setSelected(payload.item)
+      setDraft(draftFromAgent(payload.item))
+      setSelectedId(payload.item.id)
+      setMessage(t('agents.saveSuccess'))
+      await loadAgents()
+    } catch {
+      setError(t('agents.saveError'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const runSelected = async () => {
     if (!endpoint || !selectedId) {
       setError(t('agents.missingEndpoint'))
       return
     }
-    if (isRunning) {
+    if (isRunning || isCreating) {
       return
     }
     setIsRunning(true)
@@ -196,6 +316,37 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
     }
   }
 
+  const formLabels = {
+    name: t('common.name'),
+    purpose: t('agents.purpose'),
+    purposeHelp: t('agents.purposeHelp'),
+    enabled: t('agents.enabled'),
+    enabledOn: t('agents.enabledOn'),
+    enabledOff: t('agents.enabledOff'),
+    model: t('agents.model'),
+    modelHelp: t('agents.modelHelp'),
+    coverage: t('agents.coverage'),
+    coverageHelp: t('agents.coverageHelp'),
+    coverageTool: t('agents.coverageTool'),
+    coverageMention: t('agents.coverageMention'),
+    paragraphs: t('agents.paragraphs'),
+    paragraphsHelp: t('agents.paragraphsHelp'),
+    instructions: t('agents.instructions'),
+    instructionsHelp: t('agents.instructionsHelp'),
+    rules: t('agents.rules'),
+    rulesHelp: t('agents.rulesHelp'),
+    addRule: t('agents.addRule'),
+    removeRule: t('agents.removeRule'),
+    tools: t('agents.tools'),
+    toolsHelp: t('agents.toolsHelp'),
+    noTools: t('agents.noRegisteredTools'),
+    save: t('common.save'),
+    saving: t('common.saving'),
+    cancel: t('common.cancel'),
+  }
+
+  const showDetail = isCreating || selected || isDetailLoading
+
   return (
     <>
       <header className="page-header">
@@ -214,7 +365,7 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
                 type="button"
                 onClick={() => {
                   void loadAgents()
-                  if (selectedId) {
+                  if (selectedId && !isCreating) {
                     void loadDetail(selectedId)
                   }
                 }}
@@ -224,10 +375,23 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
                 <YlIcon name="arrow.clockwise" size={16} />
               </button>
               <button
+                className="btn-secondary"
+                type="button"
+                onClick={startCreate}
+                disabled={isCreating}
+              >
+                {t('agents.newAgent')}
+              </button>
+              <button
                 className="btn-primary"
                 type="button"
                 onClick={() => void runSelected()}
-                disabled={!selectedId || isRunning || selected?.enabled === false}
+                disabled={
+                  !selectedId ||
+                  isRunning ||
+                  isCreating ||
+                  selected?.enabled === false
+                }
               >
                 {isRunning ? t('agents.running') : t('agents.runNow')}
               </button>
@@ -239,12 +403,47 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
       {message ? <p className="notice success">{message}</p> : null}
       {error ? <p className="notice error">{error}</p> : null}
 
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">{t('agents.toolsCatalogTitle')}</h2>
+            <p className="card-subtitle">{t('agents.toolsCatalogSubtitle')}</p>
+          </div>
+        </div>
+        {tools.length === 0 ? (
+          <p className="card-subtitle">{t('agents.noRegisteredTools')}</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('agents.toolName')}</th>
+                  <th>{t('agents.toolDescription')}</th>
+                  <th>{t('agents.toolOutput')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tools.map((tool) => (
+                  <tr key={tool.name}>
+                    <td>
+                      <code>{tool.name}</code>
+                    </td>
+                    <td>{tool.description}</td>
+                    <td>{tool.outputDescription}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {isLoading ? <TableSkeleton rows={4} label={t('agents.catalogTitle')} /> : null}
-      {!isLoading && agents.length === 0 && !error ? (
+      {!isLoading && agents.length === 0 && !isCreating && !error ? (
         <EmptyState message={t('agents.emptyBody')} />
       ) : null}
 
-      {agents.length > 0 ? (
+      {agents.length > 0 || isCreating ? (
         <div className="agents-layout">
           <section className="card agents-list-card">
             <div className="card-header">
@@ -253,155 +452,159 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
                 <p className="card-subtitle">{t('agents.catalogSubtitle')}</p>
               </div>
             </div>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t('agents.name')}</th>
-                    <th>{t('agents.provider')}</th>
-                    <th>{t('common.status')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map((agent) => (
-                    <tr
-                      key={agent.id}
-                      className={agent.id === selectedId ? 'is-selected' : ''}
-                    >
-                      <td>
-                        <button
-                          type="button"
-                          className="btn-link"
-                          onClick={() => setSelectedId(agent.id)}
-                        >
-                          {agent.name}
-                        </button>
-                        <div className="card-subtitle">{agent.purpose}</div>
-                      </td>
-                      <td>
-                        {agent.provider} · {agent.model}
-                      </td>
-                      <td>{t(`agents.status.${agent.providerStatus}`)}</td>
+            {agents.length === 0 ? (
+              <p className="card-subtitle">{t('agents.emptyBody')}</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('agents.name')}</th>
+                      <th>{t('agents.provider')}</th>
+                      <th>{t('common.status')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {agents.map((agent) => (
+                      <tr
+                        key={agent.id}
+                        className={
+                          !isCreating && agent.id === selectedId ? 'is-selected' : ''
+                        }
+                      >
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-link"
+                            onClick={() => {
+                              isCreatingRef.current = false
+                              setIsCreating(false)
+                              setSelectedId(agent.id)
+                            }}
+                          >
+                            {agent.name}
+                          </button>
+                          <div className="card-subtitle">{agent.purpose}</div>
+                        </td>
+                        <td>
+                          {agent.provider} · {agent.model}
+                        </td>
+                        <td>{t(`agents.status.${agent.providerStatus}`)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <div className="agents-detail">
-            {isDetailLoading && !selected ? (
+            {isDetailLoading && !selected && !isCreating ? (
               <TableSkeleton rows={6} label={t('agents.configTitle')} />
             ) : null}
-            {selected ? (
+            {showDetail && (isCreating || selected) ? (
               <>
                 <section className="card">
                   <div className="card-header">
                     <div>
-                      <h2 className="card-title">{selected.name}</h2>
-                      <p className="card-subtitle">{selected.purpose}</p>
-                    </div>
-                  </div>
-                  <dl className="agents-meta">
-                    <div>
-                      <dt>{t('agents.provider')}</dt>
-                      <dd>
-                        {selected.provider} · {selected.model}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t('common.status')}</dt>
-                      <dd>{t(`agents.status.${selected.providerStatus}`)}</dd>
-                    </div>
-                    <div>
-                      <dt>{t('agents.schedule')}</dt>
-                      <dd>
-                        {selected.schedule.kind === 'cron'
-                          ? selected.schedule.expression
-                          : t('agents.scheduleManual')}
-                        {selected.schedule.description
-                          ? ` · ${selected.schedule.description}`
-                          : ''}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t('agents.lastRun')}</dt>
-                      <dd>
-                        {formatWhen(selected.lastRunAt, i18n.language)}
-                        {selected.lastRunStatus
-                          ? ` · ${t(`agents.runStatus.${selected.lastRunStatus}`)}`
-                          : ''}
-                      </dd>
-                    </div>
-                  </dl>
-                </section>
-
-                <section className="card">
-                  <div className="card-header">
-                    <div>
-                      <h2 className="card-title">{t('agents.configTitle')}</h2>
+                      <h2 className="card-title">
+                        {isCreating
+                          ? t('agents.newAgent')
+                          : selected?.name || t('agents.configTitle')}
+                      </h2>
                       <p className="card-subtitle">{t('agents.configSubtitle')}</p>
                     </div>
                   </div>
-                  <h3 className="agents-coverage-title">{t('agents.instructions')}</h3>
-                  <pre className="agents-pre">{selected.instructions}</pre>
-                  <h3 className="agents-coverage-title">{t('agents.rules')}</h3>
-                  <ul className="agents-coverage-list">
-                    {selected.rules.map((rule) => (
-                      <li key={rule}>{rule}</li>
-                    ))}
-                  </ul>
-                  <h3 className="agents-coverage-title">{t('agents.tools')}</h3>
-                  <p>{selected.allowedTools.join(', ') || '—'}</p>
+                  {!isCreating && selected ? (
+                    <dl className="agents-meta">
+                      <div>
+                        <dt>{t('common.status')}</dt>
+                        <dd>{t(`agents.status.${selected.providerStatus}`)}</dd>
+                      </div>
+                      <div>
+                        <dt>{t('agents.schedule')}</dt>
+                        <dd>
+                          {selected.schedule.kind === 'cron'
+                            ? selected.schedule.expression
+                            : t('agents.scheduleManual')}
+                          {selected.schedule.description
+                            ? ` · ${selected.schedule.description}`
+                            : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{t('agents.lastRun')}</dt>
+                        <dd>
+                          {formatWhen(selected.lastRunAt, i18n.language)}
+                          {selected.lastRunStatus
+                            ? ` · ${t(`agents.runStatus.${selected.lastRunStatus}`)}`
+                            : ''}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                  <AgentConfigForm
+                    draft={draft}
+                    tools={tools}
+                    models={models}
+                    isNew={isCreating}
+                    isSaving={isSaving}
+                    labels={formLabels}
+                    onChange={setDraft}
+                    onSave={() => void saveDraft()}
+                    onCancel={cancelCreate}
+                  />
                 </section>
 
-                <section className="card">
-                  <div className="card-header">
-                    <div>
-                      <h2 className="card-title">{t('agents.runsTitle')}</h2>
-                      <p className="card-subtitle">{t('agents.runsSubtitle')}</p>
+                {!isCreating ? (
+                  <section className="card">
+                    <div className="card-header">
+                      <div>
+                        <h2 className="card-title">{t('agents.runsTitle')}</h2>
+                        <p className="card-subtitle">{t('agents.runsSubtitle')}</p>
+                      </div>
                     </div>
-                  </div>
-                  {runs.length === 0 ? (
-                    <p className="card-subtitle">{t('agents.noRuns')}</p>
-                  ) : (
-                    <div className="table-wrap">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>{t('agents.started')}</th>
-                            <th>{t('common.status')}</th>
-                            <th>{t('agents.trigger')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {runs.map((run) => (
-                            <tr
-                              key={run.runId}
-                              className={
-                                run.runId === selectedRunId ? 'is-selected' : ''
-                              }
-                            >
-                              <td>
-                                <button
-                                  type="button"
-                                  className="btn-link"
-                                  onClick={() => setSelectedRunId(run.runId)}
-                                >
-                                  {formatWhen(run.startedAt, i18n.language)}
-                                </button>
-                              </td>
-                              <td>{t(`agents.runStatus.${run.status}`)}</td>
-                              <td>{t(`agents.triggerKind.${run.trigger}`)}</td>
+                    {runs.length === 0 ? (
+                      <p className="card-subtitle">{t('agents.noRuns')}</p>
+                    ) : (
+                      <div className="table-wrap">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>{t('agents.started')}</th>
+                              <th>{t('common.status')}</th>
+                              <th>{t('agents.trigger')}</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
+                          </thead>
+                          <tbody>
+                            {runs.map((run) => (
+                              <tr
+                                key={run.runId}
+                                className={
+                                  run.runId === selectedRunId ? 'is-selected' : ''
+                                }
+                              >
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn-link"
+                                    onClick={() => setSelectedRunId(run.runId)}
+                                  >
+                                    {formatWhen(run.startedAt, i18n.language)}
+                                  </button>
+                                </td>
+                                <td>{t(`agents.runStatus.${run.status}`)}</td>
+                                <td>{t(`agents.triggerKind.${run.trigger}`)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                ) : null}
 
-                {selectedRun ? (
+                {!isCreating && selectedRun ? (
                   <section className="card">
                     <div className="card-header">
                       <div>
