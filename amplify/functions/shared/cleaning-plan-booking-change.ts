@@ -22,6 +22,7 @@ import {
   type CleaningVisitBookingContext,
 } from './cleaning-plan-booking-context';
 import {
+  canReopenCleaningPlanForBookingChange,
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
   plannerFieldsAffectCleaningContext,
@@ -34,7 +35,7 @@ import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
 } from './slack-notifications';
-import { docClient, getTodayInMadrid } from './visit-task-utils';
+import { docClient, getNowTimeInMadrid, getTodayInMadrid } from './visit-task-utils';
 
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
@@ -279,6 +280,7 @@ export const reopenCleaningPlansForBookingContextChange = async ({
   }
 
   const today = getTodayInMadrid();
+  const nowTime = getNowTimeInMadrid();
   const currentFields = plannerCleaningFields(current);
   const previousFields = previous ? plannerCleaningFields(previous) : null;
   if (
@@ -363,12 +365,12 @@ export const reopenCleaningPlansForBookingContextChange = async ({
   const changeLines: string[] = [];
 
   for (const plannedDate of candidateDates) {
-    if (plannedDate < today) {
+    if (!canReopenCleaningPlanForBookingChange({ plannedDate, today, nowTime })) {
       debugBookingPlan(
         'D',
-        'cleaning-plan-booking-change.ts:past',
-        'Skipped past cleaning plan date',
-        { plannedDate, today },
+        'cleaning-plan-booking-change.ts:window',
+        'Skipped cleaning plan outside reopen window',
+        { plannedDate, today, nowTime },
       );
       continue;
     }

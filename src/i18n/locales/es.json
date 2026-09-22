@@ -2052,7 +2052,7 @@
       },
       "notify_cleaning_plan_booking": {
         "name": "Cambios de reserva en plan de limpieza listo",
-        "description": "Si Guesty crea o cambia una reserva que altera un plan de limpieza ya listo (nueva reserva, check-in, huéspedes, tarjeta o hueco), reabre el plan y avisa en #cleanings-aptos con el detalle y un enlace para revisarlo. El cierre lo hace una persona. Un cambio solo de hora el mismo día no dispara este aviso."
+        "description": "Si Guesty crea o cambia una reserva que altera un plan de limpieza ya listo (nueva reserva, check-in, huéspedes, tarjeta o hueco), reabre el plan y avisa en #cleanings-aptos. Solo hasta las 10:00 del día del plan; nunca en planes de días pasados. El cierre lo hace una persona. Un cambio solo de hora el mismo día no dispara este aviso."
       },
       "notify_cleaning_plan_visit_change": {
         "name": "Guesty cambia una visita de un plan listo",

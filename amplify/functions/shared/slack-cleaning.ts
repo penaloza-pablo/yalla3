@@ -1,6 +1,7 @@
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { recordCleaningCompletion } from './cleaner-stats';
 import { getPlanByDate, isCleaningVisitType, normalizeStartTime } from './cleaning-plan';
+import { canReopenCleaningPlanForBookingChange } from './cleaning-plan-booking-change-format';
 import { nowIso } from './dynamo-http';
 import { loadSlackSecrets, slackApi } from './slack';
 import {
@@ -758,8 +759,13 @@ export const notifyReadyCleaningPlanBookingChanges = async ({
   const uniqueDates = [
     ...new Set(checkInDates.map((value) => asString(value)).filter(Boolean)),
   ];
+  const today = getTodayInMadrid();
+  const nowTime = getNowTimeInMadrid();
   const readyDates: string[] = [];
   for (const date of uniqueDates) {
+    if (!canReopenCleaningPlanForBookingChange({ plannedDate: date, today, nowTime })) {
+      continue;
+    }
     const plan = await getPlanByDate(plansTable, date);
     const status =
       typeof plan?.status === 'string' ? plan.status.toUpperCase() : '';

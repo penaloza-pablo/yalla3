@@ -7,7 +7,8 @@ import {
   SLACK_NOTIFICATION_IDS,
   isSlackNotificationEnabled,
 } from './slack-notifications';
-import { docClient } from './visit-task-utils';
+import { docClient, getNowTimeInMadrid, getTodayInMadrid } from './visit-task-utils';
+import { canReopenCleaningPlanForBookingChange } from './cleaning-plan-booking-change-format';
 import {
   datesToReopenForVisitChange,
   describeCleaningPlanVisitChange,
@@ -176,11 +177,16 @@ export const reopenCleaningPlansForVisitChange = async (
     listingLabel: booking.listingLabel || asString(change.listingLabel),
   };
 
+  const today = getTodayInMadrid();
+  const nowTime = getNowTimeInMadrid();
   const reopenedDates: string[] = [];
   for (const date of datesToReopenForVisitChange(
     resolvedChange.previousDate,
     resolvedChange.nextDate,
   )) {
+    if (!canReopenCleaningPlanForBookingChange({ plannedDate: date, today, nowTime })) {
+      continue;
+    }
     const result = await reopenReadyPlan(
       plansTable,
       date,

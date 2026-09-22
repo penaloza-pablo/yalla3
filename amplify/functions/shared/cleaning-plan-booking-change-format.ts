@@ -25,6 +25,29 @@ export type VisitBookingContextSnapshot = {
   sofaBedYes: boolean;
 };
 
+export const CLEANING_PLAN_REOPEN_CUTOFF_TIME = '10:00';
+
+export const canReopenCleaningPlanForBookingChange = ({
+  plannedDate,
+  today,
+  nowTime,
+}: {
+  plannedDate: string;
+  today: string;
+  nowTime: string;
+}) => {
+  if (!DATE_ONLY.test(plannedDate) || !DATE_ONLY.test(today)) {
+    return false;
+  }
+  if (plannedDate < today) {
+    return false;
+  }
+  if (plannedDate > today) {
+    return true;
+  }
+  return nowTime < CLEANING_PLAN_REOPEN_CUTOFF_TIME;
+};
+
 export const candidateCleaningPlanDatesForBookingChange = ({
   currentCheckIn,
   previousCheckIn,

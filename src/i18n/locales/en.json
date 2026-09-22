@@ -2052,7 +2052,7 @@
       },
       "notify_cleaning_plan_booking": {
         "name": "Booking changes on a ready cleaning plan",
-        "description": "If Guesty creates or changes a reservation that rewrites a ready cleaning plan (new booking, check-in, guests, gift card or gap), the plan is reopened and a message is posted in #cleanings-aptos with the details and a link to review it. A person has to mark it ready again. A same-day time-only change does not trigger this."
+        "description": "If Guesty creates or changes a reservation that rewrites a ready cleaning plan (new booking, check-in, guests, gift card or gap), the plan is reopened and a message is posted in #cleanings-aptos. Only until 10:00 on the plan date; never for past-day plans. A person has to mark it ready again. A same-day time-only change does not trigger this."
       },
       "notify_cleaning_plan_visit_change": {
         "name": "Guesty changes a visit on a ready plan",

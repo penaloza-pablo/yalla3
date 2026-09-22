@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canReopenCleaningPlanForBookingChange,
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
   formatCleaningPlanDateDdMm,
@@ -128,6 +129,54 @@ test('P2-211 noise webhook does not look like a check-in move', () => {
     plannerFieldsAffectCleaningContext(previous, {
       ...previous,
       checkInDate: '2026-09-21',
+    }),
+    true,
+  );
+  assert.equal(
+    plannerFieldsAffectCleaningContext(previous, {
+      ...previous,
+      guestCount: 3,
+    }),
+    true,
+  );
+});
+
+test('today plan can reopen only before 10:00 Madrid', () => {
+  assert.equal(
+    canReopenCleaningPlanForBookingChange({
+      plannedDate: '2026-09-22',
+      today: '2026-09-22',
+      nowTime: '09:59',
+    }),
+    true,
+  );
+  assert.equal(
+    canReopenCleaningPlanForBookingChange({
+      plannedDate: '2026-09-22',
+      today: '2026-09-22',
+      nowTime: '10:00',
+    }),
+    false,
+  );
+});
+
+test('never reopens a past cleaning plan', () => {
+  assert.equal(
+    canReopenCleaningPlanForBookingChange({
+      plannedDate: '2026-09-21',
+      today: '2026-09-22',
+      nowTime: '08:00',
+    }),
+    false,
+  );
+});
+
+test('future cleaning plans can reopen after 10:00', () => {
+  assert.equal(
+    canReopenCleaningPlanForBookingChange({
+      plannedDate: '2026-09-23',
+      today: '2026-09-22',
+      nowTime: '18:00',
     }),
     true,
   );
