@@ -4,6 +4,7 @@ import {
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
   formatCleaningPlanDateDdMm,
+  plannerFieldsAffectCleaningContext,
 } from './cleaning-plan-booking-change-format';
 
 test('formats plan dates as dd/mm', () => {
@@ -97,5 +98,37 @@ test('ignores identical booking context', () => {
   assert.deepEqual(
     describeVisitBookingContextChanges('Clean Baranda', snapshot, snapshot),
     [],
+  );
+});
+
+test('does not reopen yesterday when the webhook is for today check-in', () => {
+  const dates = candidateCleaningPlanDatesForBookingChange({
+    currentCheckIn: '2026-09-22',
+    previousCheckIn: '2026-09-22',
+    lookbackDays: 4,
+    today: '2026-09-22',
+  });
+  assert.deepEqual(dates, ['2026-09-22']);
+});
+
+test('P2-211 noise webhook does not look like a check-in move', () => {
+  const previous = {
+    checkInDate: '2026-09-22',
+    checkOutDate: '2026-09-25',
+    guestCount: 2,
+    giftCard: '',
+    linen: '',
+    confirmationCode: 'HMTQFYXHZ9',
+    listingId: '693c3ad20c4f0500133cd017',
+    listingNickname: '211',
+    status: 'confirmed',
+  };
+  assert.equal(plannerFieldsAffectCleaningContext(previous, previous), false);
+  assert.equal(
+    plannerFieldsAffectCleaningContext(previous, {
+      ...previous,
+      checkInDate: '2026-09-21',
+    }),
+    true,
   );
 });

@@ -834,6 +834,7 @@ export const handler = async (event) => {
     const oldStatus = getExistingString(existing, "Status");
     const previousPlanner = existing
       ? {
+          ReservationID: reservationId,
           Guests: getExistingNumber(existing, "Guests"),
           CheckInDate: getExistingString(existing, "CheckInDate"),
           CheckOutDate: getExistingString(existing, "CheckOutDate"),

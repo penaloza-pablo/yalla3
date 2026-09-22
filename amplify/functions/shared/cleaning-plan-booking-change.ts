@@ -1,6 +1,11 @@
 import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import type { BookingPlannerItem } from './bookings-planner';
-import { isActivePlannerStatus, toDateOnly } from './bookings-planner';
+import {
+  canonicalizeLinenValue,
+  isActivePlannerStatus,
+  toDateOnly,
+  toGuestCount,
+  type BookingPlannerItem,
+} from './bookings-planner';
 import {
   CLEANING_SETTINGS_ID,
   getPlanByDate,
@@ -19,6 +24,7 @@ import {
 import {
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
+  plannerFieldsAffectCleaningContext,
   type VisitBookingContextSnapshot,
 } from './cleaning-plan-booking-change-format';
 import { nowIso } from './dynamo-http';
@@ -62,6 +68,21 @@ const asPlanItems = (value: unknown): Record<string, unknown>[] =>
       )
     : [];
 
+const plannerCleaningFields = (item: BookingPlannerItem) => {
+  const listingId = asString(item.ListingID);
+  return {
+    checkInDate: toDateOnly(item.CheckInDate),
+    checkOutDate: toDateOnly(item.CheckOutDate),
+    guestCount: toGuestCount(item.Guests),
+    giftCard: asString(item.GiftCard),
+    linen: canonicalizeLinenValue(item.Linen, listingId),
+    confirmationCode: asString(item.ConfirmationCode),
+    listingId,
+    listingNickname: asString(item.ListingNickname),
+    status: asString(item.Status),
+  };
+};
+
 const snapshotFromContext = (
   context: CleaningVisitBookingContext | null,
 ): VisitBookingContextSnapshot | null => {
@@ -81,11 +102,13 @@ const snapshotFromContext = (
 
 const toExtraBooking = (
   previous?: BookingPlannerItem | null,
+  fallbackReservationId = '',
 ): Record<string, unknown> | null => {
   if (!previous) {
     return null;
   }
-  const reservationId = asString(previous.ReservationID);
+  const reservationId =
+    asString(previous.ReservationID) || asString(fallbackReservationId);
   const listingId = asString(previous.ListingID);
   const checkInDate = toDateOnly(previous.CheckInDate);
   if (!reservationId || !listingId || !checkInDate) {
@@ -255,13 +278,35 @@ export const reopenCleaningPlansForBookingContextChange = async ({
     return { reopenedDates: [] as string[], notified: false };
   }
 
+  const today = getTodayInMadrid();
+  const currentFields = plannerCleaningFields(current);
+  const previousFields = previous ? plannerCleaningFields(previous) : null;
+  if (
+    previousFields &&
+    !plannerFieldsAffectCleaningContext(previousFields, currentFields)
+  ) {
+    debugBookingPlan(
+      'C',
+      'cleaning-plan-booking-change.ts:unchanged',
+      'Skipped reopen: reservation snapshot did not change cleaning context',
+      {
+        reservationId: asString(current.ReservationID),
+        previousReservationId: asString(previous?.ReservationID),
+        checkIn: currentFields.checkInDate,
+        previousCheckIn: previousFields.checkInDate,
+        listing: currentFields.listingNickname || currentFields.listingId,
+      },
+    );
+    return { reopenedDates: [] as string[], notified: false };
+  }
+
   const gapFreeNights = await loadGapFreeNights();
   const lookbackDays = Math.max(gapFreeNights ?? 7, 1);
   const candidateDates = candidateCleaningPlanDatesForBookingChange({
     currentCheckIn: toDateOnly(current.CheckInDate),
     previousCheckIn: toDateOnly(previous?.CheckInDate),
     lookbackDays,
-    today: getTodayInMadrid(),
+    today,
   });
   if (candidateDates.length === 0) {
     debugBookingPlan(
@@ -292,7 +337,19 @@ export const reopenCleaningPlansForBookingContextChange = async ({
     },
   );
 
-  const extraBooking = toExtraBooking(previous);
+  const extraBooking = toExtraBooking(previous, asString(current.ReservationID));
+  debugBookingPlan(
+    'B',
+    'cleaning-plan-booking-change.ts:extra',
+    'Previous snapshot overlay for before-context',
+    {
+      reservationId: asString(current.ReservationID),
+      previousReservationId: asString(previous?.ReservationID),
+      extraReservationId: asString(extraBooking?.ReservationID),
+      extraCheckIn: toDateOnly(extraBooking?.CheckInDate),
+      hasExtra: Boolean(extraBooking),
+    },
+  );
   const extraBookings =
     extraBooking && isActivePlannerStatus(extraBooking.Status)
       ? [extraBooking]
@@ -306,6 +363,15 @@ export const reopenCleaningPlansForBookingContextChange = async ({
   const changeLines: string[] = [];
 
   for (const plannedDate of candidateDates) {
+    if (plannedDate < today) {
+      debugBookingPlan(
+        'D',
+        'cleaning-plan-booking-change.ts:past',
+        'Skipped past cleaning plan date',
+        { plannedDate, today },
+      );
+      continue;
+    }
     const plan = await getPlanByDate(plansTable, plannedDate);
     const planStatus = asString(plan?.status).toUpperCase();
     if (planStatus !== 'READY') {
@@ -353,17 +419,33 @@ export const reopenCleaningPlansForBookingContextChange = async ({
     const dateLines: string[] = [];
     for (const visit of visits) {
       const propertyId = asString(visit.propertyId);
+      const afterBooking = pickNextBookingForVisit(afterBookings, visit);
+      const beforeBooking = pickNextBookingForVisit(beforeBookings, visit);
+      debugBookingPlan(
+        'B',
+        'cleaning-plan-booking-change.ts:pick',
+        'Before/after next booking for visit',
+        {
+          plannedDate,
+          visitTitle: asString(visit.title) || propertyId,
+          afterReservationId: asString(afterBooking?.ReservationID),
+          afterCheckIn: toDateOnly(afterBooking?.CheckInDate),
+          beforeReservationId: asString(beforeBooking?.ReservationID),
+          beforeCheckIn: toDateOnly(beforeBooking?.CheckInDate),
+          currentReservationId: asString(current.ReservationID),
+        },
+      );
       const afterContext = buildVisitBookingContext({
         plannedDate,
         listingId: propertyId,
-        booking: pickNextBookingForVisit(afterBookings, visit),
+        booking: afterBooking,
         property: properties.get(propertyId),
         gapFreeNights,
       });
       const beforeContext = buildVisitBookingContext({
         plannedDate,
         listingId: propertyId,
-        booking: pickNextBookingForVisit(beforeBookings, visit),
+        booking: beforeBooking,
         property: properties.get(propertyId),
         gapFreeNights,
       });

@@ -50,7 +50,7 @@ export const candidateCleaningPlanDatesForBookingChange = ({
   );
   const lookback = Math.max(0, Math.min(lookbackDays, MAX_CANDIDATE_DATES));
   const windowStart = addDaysToDateString(minCheckIn, -lookback);
-  const earliest = addDaysToDateString(today, -1);
+  const earliest = today;
   const from = windowStart < earliest ? earliest : windowStart;
   if (from > maxCheckIn) {
     return [];
@@ -119,4 +119,36 @@ export const describeVisitBookingContextChanges = (
     );
   }
   return lines;
+};
+
+export type PlannerCleaningContextFields = {
+  checkInDate?: string;
+  checkOutDate?: string;
+  guestCount?: number;
+  giftCard?: string;
+  linen?: string;
+  confirmationCode?: string;
+  listingId?: string;
+  listingNickname?: string;
+  status?: string;
+};
+
+export const plannerFieldsAffectCleaningContext = (
+  previous: PlannerCleaningContextFields | null | undefined,
+  current: PlannerCleaningContextFields,
+) => {
+  if (!previous) {
+    return true;
+  }
+  return (
+    asString(previous.checkInDate) !== asString(current.checkInDate) ||
+    asString(previous.checkOutDate) !== asString(current.checkOutDate) ||
+    (previous.guestCount ?? 0) !== (current.guestCount ?? 0) ||
+    asString(previous.giftCard) !== asString(current.giftCard) ||
+    asString(previous.linen) !== asString(current.linen) ||
+    asString(previous.confirmationCode) !== asString(current.confirmationCode) ||
+    asString(previous.listingId) !== asString(current.listingId) ||
+    asString(previous.listingNickname) !== asString(current.listingNickname) ||
+    asString(previous.status) !== asString(current.status)
+  );
 };
