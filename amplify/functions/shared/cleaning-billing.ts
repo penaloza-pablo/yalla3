@@ -8,7 +8,6 @@ import {
   isCleaningVisitType,
   getPlanByDate,
   normalizeCleaningTypes,
-  normalizePrice,
   queryCleaningVisitsForDate,
   resolveCleaningType,
   scanAllItems,
@@ -20,6 +19,14 @@ import { docClient, getTodayInMadrid, putItem } from './visit-task-utils';
 
 export const OTHER_CLEANING_TYPE_ID = '__other__';
 export const VISIBLE_PAST_MONTHS = 3;
+
+export const normalizeSignedPrice = (value: unknown) => {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  return Math.round(numeric * 100) / 100;
+};
 
 export type BillingMonthStatus = 'CURRENT' | 'PENDING_TO_CLOSE' | 'CLOSED';
 export type BillingWarning = 'open' | 'type' | 'price';
@@ -156,7 +163,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
         property: asString(item.property) || asString(item.propertyId),
         cleaningTypeId: asString(item.cleaningTypeId),
         cleaningTypeName: asString(item.cleaningTypeName),
-        price: normalizePrice(item.price),
+        price: normalizeSignedPrice(item.price),
         isOther: Boolean(item.isOther) || asString(item.cleaningTypeId) === OTHER_CLEANING_TYPE_ID,
       } satisfies ManualBillingLine;
     })

@@ -23,21 +23,19 @@ import type {
   PropertyCleaningType,
 } from './types'
 import { YlIcon } from '../design/icons'
+import {
+  findPlanResourceOverlaps,
+  overlapMessageParams,
+  timeToMinutes,
+} from '../../amplify/functions/shared/plan-resource-overlap'
 
 const EARLY_CHECK_IN_CUTOFF = '12:30'
 const EARLY_CHECK_IN_SUGGESTED = '11:00'
 
-const timeToMinutes = (value: string) => {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) {
-    return null
-  }
-  const hours = Number(match[1])
-  const minutes = Number(match[2])
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null
-  }
-  return hours * 60 + minutes
+const durationHoursForRow = (row: CleaningPlanRow) => {
+  const selected = row.cleaningTypes.find((type) => type.id === row.cleaningTypeId)
+  const hours = selected?.durationHours ?? row.durationHours ?? 0
+  return Number.isFinite(hours) && hours > 0 ? hours : 0
 }
 
 const isAfterEarlyCutoff = (startTime: string) => {
@@ -476,6 +474,32 @@ export function CleaningPlanView({
       const incomplete = planRows.filter((row) => !row.cleanerId || !row.startTime)
       if (incomplete.length > 0) {
         setError(t('cleaningPlan.incompleteReady'))
+        return
+      }
+      const overlapSlots = planRows.flatMap((row) => {
+        const startMinutes = timeToMinutes(row.startTime)
+        const durationMinutes = Math.round(durationHoursForRow(row) * 60)
+        if (!row.cleanerId || startMinutes === null || durationMinutes <= 0) {
+          return []
+        }
+        return [
+          {
+            id: row.visitId,
+            title: row.title || row.visitId,
+            resourceId: row.cleanerId,
+            startMinutes,
+            durationMinutes,
+          },
+        ]
+      })
+      const overlaps = findPlanResourceOverlaps(overlapSlots)
+      if (overlaps.length > 0) {
+        const overlap = overlaps[0]
+        const cleanerName =
+          cleanerById.get(overlap.resourceId)?.name || overlap.resourceId
+        setError(
+          t('cleaningPlan.overlapReady', overlapMessageParams(overlap, cleanerName)),
+        )
         return
       }
     }

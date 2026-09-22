@@ -393,11 +393,12 @@ const queryVisitsForDate = async (visitsTable: string, scheduledDate: string) =>
 export const loadMaintenanceVisitsForMonth = async (
   visitsTable: string,
   monthId: string,
+  options: { includeFuture?: boolean } = {},
 ) => {
   const today = getTodayInMadrid();
   const perDay = await Promise.all(
     datesInMonth(monthId)
-      .filter((date) => date <= today)
+      .filter((date) => options.includeFuture || date <= today)
       .map((date) => queryVisitsForDate(visitsTable, date)),
   );
   return perDay.flat().filter((visit) => {
@@ -860,6 +861,7 @@ export const buildMonthDetail = async (params: {
   visitTypesTable: string;
   propertiesTable: string;
   persistSummary?: boolean;
+  includeFuture?: boolean;
   propertyIds?: string[];
 }) => {
   const stored = await getMonthRecord(params.billingTable, params.monthId);
@@ -885,8 +887,11 @@ export const buildMonthDetail = async (params: {
     };
   }
 
+  const today = getTodayInMadrid();
   const [visits, settings, propertyById, visitTypes] = await Promise.all([
-    loadMaintenanceVisitsForMonth(params.visitsTable, params.monthId),
+    loadMaintenanceVisitsForMonth(params.visitsTable, params.monthId, {
+      includeFuture: params.includeFuture === true,
+    }),
     ensureSettings({
       settingsTable: params.settingsTable,
       providersTable: params.providersTable,
@@ -905,11 +910,25 @@ export const buildMonthDetail = async (params: {
     propertyById,
     visitTypeById,
   ).filter((line) => matchesPropertyScope(line.propertyId, params.propertyIds));
-  const summary = summarizeLines(lines);
-  const countable = lines.filter((line) => !line.dismissed);
+  const billedLines =
+    params.includeFuture === true
+      ? assembleMaintenanceLines(
+          visits.filter(
+            (visit) => asString(visit.scheduledDate).slice(0, 10) <= today,
+          ),
+          stored,
+          settings,
+          propertyById,
+          visitTypeById,
+        ).filter((line) =>
+          matchesPropertyScope(line.propertyId, params.propertyIds),
+        )
+      : lines;
+  const summary = summarizeLines(billedLines);
+  const countable = billedLines.filter((line) => !line.dismissed);
   const canClose =
     status === 'PENDING_TO_CLOSE' &&
-    lines.length > 0 &&
+    billedLines.length > 0 &&
     countable.every((line) => isApprovedOrAbove(line.billingStatus));
   const month = {
     id: params.monthId,

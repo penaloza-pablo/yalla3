@@ -18,6 +18,11 @@ import type {
   MaintenancePlanStatus,
 } from './types'
 import { YlIcon } from '../design/icons'
+import {
+  findPlanResourceOverlaps,
+  overlapMessageParams,
+  timeToMinutes,
+} from '../../amplify/functions/shared/plan-resource-overlap'
 
 const addOneHour = (value: string) => {
   const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
@@ -285,6 +290,40 @@ export function MaintenancePlanView({
       )
       if (incomplete.length > 0) {
         setError(t('maintenancePlan.incompleteReady'))
+        return
+      }
+      const overlapSlots = rows.flatMap((row) => {
+        const startMinutes = timeToMinutes(row.startTime)
+        const endMinutes = timeToMinutes(row.endTime)
+        if (
+          !row.agentId ||
+          startMinutes === null ||
+          endMinutes === null ||
+          endMinutes <= startMinutes
+        ) {
+          return []
+        }
+        return [
+          {
+            id: row.visitId,
+            title: row.title || row.visitId,
+            resourceId: row.agentId,
+            startMinutes,
+            durationMinutes: endMinutes - startMinutes,
+          },
+        ]
+      })
+      const overlaps = findPlanResourceOverlaps(overlapSlots)
+      if (overlaps.length > 0) {
+        const overlap = overlaps[0]
+        const agentName =
+          agentById.get(overlap.resourceId)?.name || overlap.resourceId
+        setError(
+          t(
+            'maintenancePlan.overlapReady',
+            overlapMessageParams(overlap, agentName),
+          ),
+        )
         return
       }
     }

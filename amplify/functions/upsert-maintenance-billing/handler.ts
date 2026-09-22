@@ -168,7 +168,7 @@ export const handler = async (event: {
         message: 'Reopen the month before making changes.',
       });
     } else if (action === 'close') {
-      const detail = await buildMonthDetail({ monthId, ...context });
+      const detail = await buildMonthDetail({ monthId, includeFuture: true, ...context });
       if (monthId >= currentMonthId()) {
         return buildHttpResponse(400, {
           message: 'The current month cannot be closed.',
@@ -215,7 +215,7 @@ export const handler = async (event: {
       if (!visitId) {
         return buildHttpResponse(400, { message: 'visitId is required.' });
       }
-      const detail = await buildMonthDetail({ monthId, ...context });
+      const detail = await buildMonthDetail({ monthId, includeFuture: true, ...context });
       const line = detail.lines.find(
         (entry) => entry.source === 'visit' && entry.visitId === visitId,
       );
@@ -365,7 +365,7 @@ export const handler = async (event: {
       const lineIds = Array.isArray(payload.lineIds)
         ? payload.lineIds.map((entry) => asString(entry)).filter(Boolean)
         : [];
-      const detail = await buildMonthDetail({ monthId, ...context });
+      const detail = await buildMonthDetail({ monthId, includeFuture: true, ...context });
       const selected = lineIds
         .map((id) => detail.lines.find((line) => line.id === id))
         .filter((line): line is NonNullable<typeof line> => Boolean(line));
@@ -470,7 +470,7 @@ export const handler = async (event: {
       });
     } else if (action === 'advance-group' || action === 'override-group') {
       const lineId = asString(payload.lineId);
-      const detail = await buildMonthDetail({ monthId, ...context });
+      const detail = await buildMonthDetail({ monthId, includeFuture: true, ...context });
       const line = detail.lines.find(
         (entry) => entry.source === 'group' && entry.id === lineId,
       );
@@ -574,6 +574,7 @@ export const handler = async (event: {
     const detail = await buildMonthDetail({
       monthId,
       persistSummary: true,
+      includeFuture: true,
       ...context,
     });
     return buildHttpResponse(200, {

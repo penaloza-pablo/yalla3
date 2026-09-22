@@ -33,6 +33,11 @@ import {
   type CleaningPlanChangeItem,
 } from '../shared/slack-cleaning';
 import {
+  findPlanResourceOverlaps,
+  overlapErrorMessage,
+  timeToMinutes,
+} from '../shared/plan-resource-overlap';
+import {
   isStartTimeAfterAfternoonCutoff,
   notifyPlanReadyWithLateVisits,
   visitSlackLabel,
@@ -232,6 +237,36 @@ export const handler = async (event: {
           message:
             'Every cleaning visit needs a cleaner and a start time before the plan can be marked ready.',
           missingCount: missing.length,
+        });
+      }
+      const overlapSlots = normalizedItems.flatMap((item) => {
+        const startMinutes = timeToMinutes(item.startTime);
+        const durationMinutes = Math.round((item.durationHours || 0) * 60);
+        if (!item.cleanerId || startMinutes === null || durationMinutes <= 0) {
+          return [];
+        }
+        const visit = visitById.get(item.visitId);
+        return [
+          {
+            id: item.visitId,
+            title: visitSlackLabel(visit, item.visitId),
+            resourceId: item.cleanerId,
+            startMinutes,
+            durationMinutes,
+          },
+        ];
+      });
+      const overlaps = findPlanResourceOverlaps(overlapSlots);
+      if (overlaps.length > 0) {
+        const overlap = overlaps[0];
+        const cleaner = await loadCleaner(cleanersTable, overlap.resourceId);
+        const cleanerName =
+          typeof cleaner?.name === 'string' && cleaner.name.trim()
+            ? cleaner.name.trim()
+            : overlap.resourceId;
+        return buildHttpResponse(400, {
+          message: overlapErrorMessage(overlap, cleanerName),
+          code: 'RESOURCE_OVERLAP',
         });
       }
     }

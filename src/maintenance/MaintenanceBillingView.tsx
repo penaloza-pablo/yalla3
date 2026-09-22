@@ -12,7 +12,11 @@ import { ExportScopeModal } from '../ExportScopeModal'
 import { downloadFromResponse } from '../lib/download'
 import { authFetch } from '../lib/auth-fetch'
 import { fetchJson } from '../operations/api'
-import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
+import {
+  formatDateOnlyLabel,
+  getTodayMadrid,
+  isFutureMadridDate,
+} from '../operations/dateHelpers'
 import {
   filterPropertySelectOptions,
   getPropertyLabel,
@@ -235,6 +239,7 @@ export function MaintenanceBillingView({
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
   const [groupFilter, setGroupFilter] =
     useState<CleaningBillingPropertyGroup | ''>('')
+  const [showScheduled, setShowScheduled] = useState(false)
   const [draft, setDraft] = useState<LineDraft>(emptyDraft(''))
   const [openVisitId, setOpenVisitId] = useState('')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
@@ -448,9 +453,12 @@ export function MaintenanceBillingView({
       if (propertyIds.length > 0 && !propertyIds.includes(line.propertyId)) {
         return false
       }
+      if (!showScheduled && !line.isManual && isFutureMadridDate(line.date)) {
+        return false
+      }
       return true
     })
-  }, [groupFilter, lines, propertyById, propertyIds])
+  }, [groupFilter, lines, propertyById, propertyIds, showScheduled])
 
   const filteredTotal = filteredLines
     .filter((line) => !line.dismissed && isApprovedOrAbove(line.billingStatus))
@@ -974,9 +982,9 @@ export function MaintenanceBillingView({
                     }}
                   >
                     <YlIcon name="line.3.horizontal.decrease" size={16} />
-                    {propertyIds.length + (groupFilter ? 1 : 0) > 0 ? (
+                    {propertyIds.length + (groupFilter ? 1 : 0) + (showScheduled ? 1 : 0) > 0 ? (
                       <span className="filter-badge">
-                        {propertyIds.length + (groupFilter ? 1 : 0)}
+                        {propertyIds.length + (groupFilter ? 1 : 0) + (showScheduled ? 1 : 0)}
                       </span>
                     ) : null}
                   </button>
@@ -1156,7 +1164,16 @@ export function MaintenanceBillingView({
             value={groupFilter === 'other' ? 'apartments' : groupFilter}
             onChange={setGroupFilter}
             groups={BILLING_PROPERTY_GROUP_CHIPS}
-          />
+          >
+            <button
+              type="button"
+              className={`btn-quick-filter ${showScheduled ? 'is-active' : ''}`}
+              aria-pressed={showScheduled}
+              onClick={() => setShowScheduled((current) => !current)}
+            >
+              {t('maintenanceBilling.scheduledChip')}
+            </button>
+          </PropertyGroupChips>
           <div className="table-wrapper">
             <table className="data-table data-table-maintenance-billing">
               <thead>
@@ -1329,7 +1346,6 @@ export function MaintenanceBillingView({
                               <input
                                 className="billing-inline-input"
                                 type="number"
-                                min="0"
                                 step="0.01"
                                 value={inline.price}
                                 disabled={isSaving || isSelecting || line.dismissed}
@@ -1900,7 +1916,6 @@ export function MaintenanceBillingView({
                   {t('maintenanceBilling.price')}
                   <input
                     type="number"
-                    min="0"
                     step="0.01"
                     value={draft.price}
                     onChange={(event) =>
@@ -2089,7 +2104,6 @@ export function MaintenanceBillingView({
                   {t('maintenanceBilling.price')}
                   <input
                     type="number"
-                    min="0"
                     step="0.01"
                     value={draft.price}
                     onChange={(event) =>

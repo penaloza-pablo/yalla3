@@ -12,6 +12,7 @@ import {
   deriveMonthStatus,
   getMonthRecord,
   isMonthId,
+  normalizeSignedPrice,
   type BillingOverride,
   type ManualBillingLine,
 } from '../shared/cleaning-billing';
@@ -23,7 +24,6 @@ import {
   parseBody,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
-import { normalizePrice as normalizeCleaningPrice } from '../shared/cleaning-plan';
 import { putItem } from '../shared/visit-task-utils';
 
 type Payload = {
@@ -179,7 +179,7 @@ export const handler = async (event: {
           ? OTHER_CLEANING_TYPE_ID
           : asString(payload.cleaningTypeId),
         cleaningTypeName: asString(payload.cleaningTypeName),
-        price: normalizeCleaningPrice(payload.price),
+        price: normalizeSignedPrice(payload.price),
         isOther,
       };
       if (!override.cleaningTypeName) {
@@ -216,7 +216,7 @@ export const handler = async (event: {
           ? OTHER_CLEANING_TYPE_ID
           : asString(payload.cleaningTypeId),
         cleaningTypeName: asString(payload.cleaningTypeName),
-        price: normalizeCleaningPrice(payload.price),
+        price: normalizeSignedPrice(payload.price),
         isOther,
       };
       if (!line.propertyId || !line.cleaningTypeName) {

@@ -76,6 +76,7 @@ export const handler = async (event: HttpEvent) => {
       const detail = await buildMonthDetail({
         monthId,
         persistSummary: true,
+        includeFuture: true,
         ...context,
       });
       return buildHttpResponse(200, {

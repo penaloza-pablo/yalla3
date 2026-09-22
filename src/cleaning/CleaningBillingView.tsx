@@ -500,7 +500,7 @@ export function CleaningBillingView({
       ? draft.cleaningTypeName.trim()
       : draftTypes.find((item) => item.id === draft.cleaningTypeId)?.name ||
         draft.cleaningTypeName.trim()
-    const price = Number(draft.price)
+    const price = Number(String(draft.price).replace(',', '.'))
     if (!cleaningTypeName || !Number.isFinite(price)) {
       setError(t('cleaningBilling.lineRequired'))
       return
@@ -1172,7 +1172,6 @@ export function CleaningBillingView({
                   {t('cleaningBilling.price')}
                   <input
                     type="number"
-                    min="0"
                     step="0.01"
                     value={draft.price}
                     onChange={(event) =>

@@ -23,6 +23,11 @@ import {
 } from '../shared/dynamo-http';
 import { invokeGuestyTaskSync } from '../shared/guesty-sync';
 import {
+  findPlanResourceOverlaps,
+  overlapErrorMessage,
+  timeToMinutes,
+} from '../shared/plan-resource-overlap';
+import {
   isStartTimeAfterAfternoonCutoff,
   notifyPlanReadyWithLateVisits,
   visitSlackLabel,
@@ -183,6 +188,41 @@ export const handler = async (event: {
           message:
             'Every maintenance visit needs an agent, a start time, and an end time before the plan can be marked ready.',
           missingCount: missing.length,
+        });
+      }
+      const overlapSlots = normalizedItems.flatMap((item) => {
+        const startMinutes = timeToMinutes(item.startTime);
+        const endMinutes = timeToMinutes(item.endTime);
+        if (
+          !item.agentId ||
+          startMinutes === null ||
+          endMinutes === null ||
+          endMinutes <= startMinutes
+        ) {
+          return [];
+        }
+        const visit = visitById.get(item.visitId);
+        return [
+          {
+            id: item.visitId,
+            title: visitSlackLabel(visit, item.visitId),
+            resourceId: item.agentId,
+            startMinutes,
+            durationMinutes: endMinutes - startMinutes,
+          },
+        ];
+      });
+      const overlaps = findPlanResourceOverlaps(overlapSlots);
+      if (overlaps.length > 0) {
+        const overlap = overlaps[0];
+        const agent = await loadAgent(agentsTable, overlap.resourceId);
+        const agentName =
+          typeof agent?.name === 'string' && agent.name.trim()
+            ? agent.name.trim()
+            : overlap.resourceId;
+        return buildHttpResponse(400, {
+          message: overlapErrorMessage(overlap, agentName),
+          code: 'RESOURCE_OVERLAP',
         });
       }
     }
