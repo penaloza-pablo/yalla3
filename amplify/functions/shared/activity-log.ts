@@ -32,6 +32,7 @@ export const LOG_FEATURES = {
   MOVEMENTS: 'Movements',
   SERVICES: 'Services & Subscriptions',
   SLACK: 'Slack',
+  AGENTS: 'Agents',
 } as const;
 
 type HttpHeaders = Record<string, string | string[] | undefined>;

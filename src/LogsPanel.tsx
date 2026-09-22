@@ -61,6 +61,7 @@ const FEATURE_OPTIONS = [
   'Movements',
   'Services & Subscriptions',
   'Slack',
+  'Agents',
 ] as const
 
 const formatLogDate = (value: string, locale: string) => {

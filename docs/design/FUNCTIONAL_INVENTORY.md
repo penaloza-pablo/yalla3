@@ -59,7 +59,7 @@ Bookings      → Bookings | Bookings Plan | Check-in Tracker | Bookings setting
 Cleaning      → Cleaning Plan | Cleaning Incidents | Cleaning Billing | Cleaning settings
                 ES sidebar: Plan | Incidencias | Historial | Ajustes  (etiquetas ambiguas)
 Maintenance   → Maintenance Plan | Incidents | Billing | settings  (mismo patrón de etiquetas)
-Settings      → Logs | Users | Roles | Slack
+Settings      → Logs | Users | Roles | Slack | Agents | Global Variables
 Grow          → Grow solution 1 | 2 | 3   → placeholders “coming soon”
 Finance       → Property Reports | Reports Settings | Property Groups | Movements | Services & Subscriptions
 Visual        → Visual Buttons | Messages | Action bars | Cards | Inputs | Tokens | Lab
@@ -215,6 +215,7 @@ Aliases legacy RBAC: `Finance solution 1/2/3` → Property Reports / Movements /
 | Users | Lista Cognito; asignar role; display name | `getCognitoUsers` / `getUsers`, `upsertUserRole` |
 | Roles | CRUD nombre + checklist pages/actions/dashboard cards | `get/upsert-role` |
 | Slack | Toggles por automation (overdue cleaning, visit closed comments, `/yalla hoy`, plan reopened/changes, early CI ready, EOD plans, late delivery, late visit after 13:01) | `get/upsert-slack-notification` |
+| Agents | Catálogo de agentes operativos, configuración (instrucciones, reglas, herramientas, programación, proveedor) y ejecuciones con cobertura (qué se revisó / qué no) | `ai-agents` |
 | Account | Perfil + `LanguageSwitcher` + sign out | Cognito |
 
 ### 5.13 Placeholders y residuales (no borrar datos; sí decidir IA)

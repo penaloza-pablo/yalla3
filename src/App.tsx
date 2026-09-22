@@ -80,6 +80,7 @@ import { SpotCheckPanel } from './SpotCheckPanel'
 import { UsersPanel } from './rbac/UsersPanel'
 import { RolesPanel } from './rbac/RolesPanel'
 import { SlackPanel } from './SlackPanel'
+import { AgentsPanel } from './agents/AgentsPanel'
 import { GlobalVariablesView } from './settings/GlobalVariablesView'
 import { usePermissions } from './rbac/PermissionsProvider'
 import {
@@ -9073,6 +9074,8 @@ function App() {
           />
         ) : activePage === 'Slack' ? (
           <SlackPanel getEndpoint={getEndpoint} />
+        ) : activePage === 'Agents' ? (
+          <AgentsPanel getEndpoint={getEndpoint} />
         ) : activePage === 'Global Variables' ? (
           <GlobalVariablesView getEndpoint={getEndpoint} />
         ) : activePage === 'Property Reports' ? (

@@ -893,6 +893,59 @@ const receiveAkilesEventsUrl = receiveAkilesEventsFn.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
 
+const aiAgentsStack = backend.createStack('ai-agents');
+const aiAgentsTable = new Table(aiAgentsStack, 'AiAgentsTable', {
+  tableName: 'yalla-ai-agents',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const aiAgentRunsTable = new Table(aiAgentsStack, 'AiAgentRunsTable', {
+  tableName: 'yalla-ai-agent-runs',
+  partitionKey: { name: 'agentId', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+const openaiSecret = Secret.fromSecretNameV2(
+  aiAgentsStack,
+  'YallaOpenAiSecret',
+  'yalla/openai',
+);
+const aiAgentsFn = new NodejsFunction(aiAgentsStack, 'AiAgents', {
+  entry: path.join(jobSchedulerHandlerRoot, 'ai-agents/handler.ts'),
+  handler: 'handler',
+  runtime: Runtime.NODEJS_22_X,
+  timeout: Duration.seconds(120),
+  memorySize: 512,
+  depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+  bundling: jobSchedulerBundling,
+  environment: {
+    ...jobSchedulerAuthEnv,
+    AGENTS_TABLE: aiAgentsTable.tableName,
+    RUNS_TABLE: aiAgentRunsTable.tableName,
+    BOOKINGS_TABLE: 'yalla-bookings',
+    LOGS_TABLE: activityLogsTable.tableName,
+    OPENAI_SECRET_ID: 'yalla/openai',
+  },
+});
+aiAgentsTable.grantReadWriteData(aiAgentsFn);
+aiAgentRunsTable.grantReadWriteData(aiAgentsFn);
+activityLogsTable.grantWriteData(aiAgentsFn);
+openaiSecret.grantRead(aiAgentsFn);
+aiAgentsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    resources: [
+      bookingsTable.tableArn,
+      `${bookingsTable.tableArn}/index/CheckInDate-index`,
+    ],
+  }),
+);
+const aiAgentsUrl = aiAgentsFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+
 backend.upsertVisit.addEnvironment(
   'TEMPLATES_TABLE',
   'yalla-visit-templates',
@@ -2335,6 +2388,7 @@ backend.addOutput({
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,
     proxyGuestyBookingsSyncUrl: proxyGuestyBookingsSyncUrl.url,
     getActivityLogsUrl: getActivityLogsUrl.url,
+    aiAgentsUrl: aiAgentsUrl.url,
     getSpotChecksUrl: getSpotChecksUrl.url,
     completeSpotCheckUrl: completeSpotCheckUrl.url,
     getCleanersUrl: getCleanersUrl.url,

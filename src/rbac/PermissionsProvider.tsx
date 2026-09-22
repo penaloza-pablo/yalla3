@@ -10,6 +10,7 @@ import {
 import { Hub } from 'aws-amplify/utils'
 import {
   allPermissionKeys,
+  applyPermissionCatalog,
   pagePermission,
 } from '../../amplify/functions/shared/rbac-catalog'
 import { DEFAULT_DASHBOARD_LAYOUT_ID } from '../../amplify/functions/shared/dashboard-layout'
@@ -122,7 +123,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           new Set(
             isBootstrap
               ? allPermissionKeys()
-              : (payload.permissions ?? []),
+              : applyPermissionCatalog(payload.permissions ?? []),
           ),
         )
         setLoadError(null)

@@ -98,7 +98,7 @@ Misma sidebar de dos niveles que en escritorio, **visible por defecto**. Ocultar
 | Cleaning * | Limpieza → Plan, Incidencias, Facturación, Ajustes | Relabel “Historial” → **Facturación** |
 | Maintenance * | Mantenimiento → espejo de Limpieza | |
 | Property Reports / Groups / Movements / Services / Reports Settings | Finanzas → funcionalidades en sidebar | |
-| Logs / Users / Roles / Slack | Administración | |
+| Logs / Users / Roles / Slack / Agents | Administración | |
 | Visual * | **Sistema visual** (admin) | Catálogo `yl.*` + laboratorio de borradores; no es un módulo operativo |
 | SettingsPanel | Cuenta (perfil + idioma) | |
 | Grow 1–3 | Fuera de nav (B1) | RBAC intacto; alta futura vía § Incorporación de módulos |

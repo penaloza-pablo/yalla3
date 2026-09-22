@@ -50,7 +50,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Settings',
-    items: ['Logs', 'Users', 'Roles', 'Slack', 'Global Variables'],
+    items: ['Logs', 'Users', 'Roles', 'Slack', 'Agents', 'Global Variables'],
   },
   {
     section: 'Grow',
@@ -222,7 +222,7 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 4
+export const PERMISSIONS_CATALOG_VERSION = 5
 
 export const applyPermissionCatalog = (
   permissions: string[],
@@ -270,6 +270,14 @@ export const applyPermissionCatalog = (
       !next.includes(pagePermission('Check-in Tracker'))
     ) {
       next.push(pagePermission('Check-in Tracker'))
+    }
+  }
+  if (from < 5) {
+    if (
+      next.includes(pagePermission('Logs')) &&
+      !next.includes(pagePermission('Agents'))
+    ) {
+      next.push(pagePermission('Agents'))
     }
   }
   return next
