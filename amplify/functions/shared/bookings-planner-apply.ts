@@ -30,6 +30,27 @@ import { reopenCleaningPlansForBookingContextChange } from './cleaning-plan-book
 import { notifyReadyCleaningPlanBookingChanges } from './slack-cleaning';
 import { docClient, getNowTimeInMadrid, getTodayInMadrid } from './visit-task-utils';
 
+const debugBookingPlan = (
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+) => {
+  const payload = {
+    sessionId: 'ba4530',
+    runId: 'post-fix',
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now(),
+  };
+  console.log('YALLA_DEBUG', JSON.stringify(payload));
+  // #region agent log
+  fetch('http://127.0.0.1:7799/ingest/ef8463ab-135a-4483-82b6-033ac983e58b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ba4530'},body:JSON.stringify(payload)}).catch(()=>{});
+  // #endregion
+};
+
 const GUESTY_CLIENT_PATH =
   '/opt/nodejs/node_modules/@nockai/guesty-client/index.mjs';
 
@@ -372,13 +393,36 @@ export const applyPlannerToReservation = async ({
 
   const reopenFromBookingContext = async () => {
     if (!notifyCleaningPlan || overrides) {
+      debugBookingPlan(
+        'A',
+        'bookings-planner-apply.ts:reopenFromBookingContext',
+        'Skipped booking-plan reopen',
+        {
+          reservationId,
+          notifyCleaningPlan,
+          hasOverrides: Boolean(overrides),
+        },
+      );
       return { reopenedDates: [] as string[], notified: false };
     }
     try {
-      return await reopenCleaningPlansForBookingContextChange({
+      const result = await reopenCleaningPlansForBookingContextChange({
         current: current as BookingPlannerItem,
         previous,
       });
+      debugBookingPlan(
+        'A',
+        'bookings-planner-apply.ts:reopenFromBookingContext',
+        'Booking-plan reopen finished',
+        {
+          reservationId,
+          checkIn: String(current.CheckInDate ?? ''),
+          listing: String(current.ListingNickname ?? current.ListingID ?? ''),
+          reopenedDates: result.reopenedDates,
+          notified: result.notified,
+        },
+      );
+      return result;
     } catch (error) {
       console.error(
         `Failed to reopen cleaning plans for booking ${reservationId}`,

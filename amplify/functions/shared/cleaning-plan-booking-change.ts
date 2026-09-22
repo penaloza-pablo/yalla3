@@ -33,6 +33,27 @@ import { docClient, getTodayInMadrid } from './visit-task-utils';
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
+const debugBookingPlan = (
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+) => {
+  const payload = {
+    sessionId: 'ba4530',
+    runId: 'post-fix',
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now(),
+  };
+  console.log('YALLA_DEBUG', JSON.stringify(payload));
+  // #region agent log
+  fetch('http://127.0.0.1:7799/ingest/ef8463ab-135a-4483-82b6-033ac983e58b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ba4530'},body:JSON.stringify(payload)}).catch(()=>{});
+  // #endregion
+};
+
 const asPlanItems = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value)
     ? value.filter(
@@ -243,8 +264,33 @@ export const reopenCleaningPlansForBookingContextChange = async ({
     today: getTodayInMadrid(),
   });
   if (candidateDates.length === 0) {
+    debugBookingPlan(
+      'B',
+      'cleaning-plan-booking-change.ts:candidates',
+      'No candidate cleaning plan dates',
+      {
+        reservationId: asString(current.ReservationID),
+        checkIn: toDateOnly(current.CheckInDate),
+        previousCheckIn: toDateOnly(previous?.CheckInDate),
+        lookbackDays,
+        listing: asString(current.ListingNickname) || asString(current.ListingID),
+      },
+    );
     return { reopenedDates: [] as string[], notified: false };
   }
+
+  debugBookingPlan(
+    'B',
+    'cleaning-plan-booking-change.ts:candidates',
+    'Candidate cleaning plan dates',
+    {
+      reservationId: asString(current.ReservationID),
+      checkIn: toDateOnly(current.CheckInDate),
+      lookbackDays,
+      candidateDates,
+      listing: asString(current.ListingNickname) || asString(current.ListingID),
+    },
+  );
 
   const extraBooking = toExtraBooking(previous);
   const extraBookings =
@@ -261,12 +307,28 @@ export const reopenCleaningPlansForBookingContextChange = async ({
 
   for (const plannedDate of candidateDates) {
     const plan = await getPlanByDate(plansTable, plannedDate);
-    if (asString(plan?.status).toUpperCase() !== 'READY') {
+    const planStatus = asString(plan?.status).toUpperCase();
+    if (planStatus !== 'READY') {
+      debugBookingPlan(
+        'E',
+        'cleaning-plan-booking-change.ts:plan',
+        'Plan is not READY',
+        { plannedDate, planStatus: planStatus || 'missing' },
+      );
       continue;
     }
     const visits = (await queryCleaningVisitsForDate(visitsTable, plannedDate))
       .filter((visit) => visitMatchesListingKeys(visit, listingKeys));
     if (visits.length === 0) {
+      debugBookingPlan(
+        'C',
+        'cleaning-plan-booking-change.ts:visits',
+        'READY plan has no matching listing visits',
+        {
+          plannedDate,
+          listing: asString(current.ListingNickname) || asString(current.ListingID),
+        },
+      );
       continue;
     }
 
@@ -314,9 +376,28 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       );
     }
     if (dateLines.length === 0) {
+      debugBookingPlan(
+        'D',
+        'cleaning-plan-booking-change.ts:diff',
+        'Matching visits but booking context did not change',
+        {
+          plannedDate,
+          visitTitles: visits.map((visit) => asString(visit.title)),
+        },
+      );
       continue;
     }
     const result = await reopenReadyPlanKeepingItems(plansTable, plannedDate);
+    debugBookingPlan(
+      'E',
+      'cleaning-plan-booking-change.ts:reopen',
+      'Attempted to reopen READY plan',
+      {
+        plannedDate,
+        reopened: result.reopened,
+        changeLines: dateLines,
+      },
+    );
     if (!result.reopened) {
       continue;
     }
@@ -331,6 +412,12 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       changeLines,
     );
     notified = slack.sent;
+    debugBookingPlan(
+      'A',
+      'cleaning-plan-booking-change.ts:slack',
+      'Slack notify result',
+      { reopenedDates, notified, skipped: slack.skipped, changeCount: changeLines.length },
+    );
   } catch (error) {
     console.error(
       'Failed to notify Slack of cleaning plan booking context change',

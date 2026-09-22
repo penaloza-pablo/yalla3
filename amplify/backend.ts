@@ -546,6 +546,14 @@ new CfnSchedule(plannerScheduleStack, 'ApplyBookingsPlannerDaily', {
     input: JSON.stringify({ syncGuesty: true }),
   },
 });
+const yallaBookingsReceiverRole = Role.fromRoleArn(
+  plannerScheduleStack,
+  'YallaBookingsReceiverRole',
+  'arn:aws:iam::471112597523:role/service-role/yalla-bookingsReceiver-role-ab8jrarq',
+);
+backend.applyBookingsPlanner.resources.lambda.grantInvoke(
+  yallaBookingsReceiverRole,
+);
 bookingsPlannerSettingsTable.grantReadData(
   backend.upsertBookingPlannerFields.resources.lambda,
 );
