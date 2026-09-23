@@ -119,6 +119,7 @@ export type AgentToolInfo = {
   version?: number
   createdAt?: string
   updatedAt?: string
+  inputSchema?: Record<string, unknown>
 }
 
 export type AgentVersionInfo = {

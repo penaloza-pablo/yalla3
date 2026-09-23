@@ -3,6 +3,23 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
+const isMissingRequiredValue = (value: unknown, propertySchema: unknown) => {
+  if (value == null) {
+    return true;
+  }
+  const type =
+    propertySchema &&
+    typeof propertySchema === 'object' &&
+    !Array.isArray(propertySchema) &&
+    typeof (propertySchema as { type?: unknown }).type === 'string'
+      ? (propertySchema as { type: string }).type
+      : undefined;
+  if (type === 'string' && typeof value === 'string') {
+    return value.trim() === '';
+  }
+  return false;
+};
+
 export const validateAgainstSchema = (
   schema: Record<string, unknown> | undefined,
   value: unknown,
@@ -19,7 +36,7 @@ export const validateAgainstSchema = (
     ? schema.required.filter((entry): entry is string => typeof entry === 'string')
     : [];
   for (const key of required) {
-    if (!(key in record)) {
+    if (!(key in record) || isMissingRequiredValue(record[key], properties[key])) {
       return { ok: false, message: `Missing required argument: ${key}.` };
     }
   }

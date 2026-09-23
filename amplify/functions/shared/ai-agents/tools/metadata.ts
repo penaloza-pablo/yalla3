@@ -1,1 +1,1 @@
-export const TOOL_CATALOG_VERSION = 1;
+export const TOOL_CATALOG_VERSION = 2;

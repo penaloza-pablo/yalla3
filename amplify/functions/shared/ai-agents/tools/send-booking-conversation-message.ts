@@ -18,6 +18,7 @@ const parameters: Record<string, unknown> = {
     },
     deliver: {
       type: 'boolean',
+      default: true,
       description:
         'When true (default), deliver through Guesty Inbox. When false, save an internal note only.',
     },

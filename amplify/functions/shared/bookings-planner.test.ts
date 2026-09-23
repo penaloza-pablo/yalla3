@@ -11,6 +11,8 @@ import {
   getReservationGuestCount,
   GIFT_CARD_OFF,
   guestyReservationMatchesPlannerPatch,
+  isBookingsPlanDoubleOrTwoSinglesAsk,
+  isBookingsPlanSofaCamaUnknownAsk,
   isDoNotEarlyCheckIn,
   isEarlyCheckInEnabled,
   isGiftCardFrozen,
@@ -21,6 +23,9 @@ import {
   plannerWarningsChanged,
   resolveEarlyCheckInMode,
   shouldWritePlannerToGuesty,
+  sofaCamaUnknownWarningsFor,
+  SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES,
+  VERDEJO_LISTING_ID,
 } from './bookings-planner';
 
 const enabledSettings = {
@@ -421,3 +426,60 @@ test('planner keeps do not early check-in unless agenda turns early on', () => {
   assert.equal(fromAgenda.earlyCheckIn, EARLY_CHECK_IN_ON);
   assert.equal(fromAgenda.earlyCheckInOn, true);
 });
+
+test('Booking Plan sofa-cama unknown warnings cover sofa bed ask and Verdejo double-or-two-singles', () => {
+  const verdejo = {
+    ReservationID: 'res-verdejo',
+    ListingID: VERDEJO_LISTING_ID,
+    Status: 'confirmed',
+    Linen: '',
+    Access: '1234',
+  };
+  const sofaBed = {
+    ReservationID: 'res-sofa',
+    ListingID: 'listing-open',
+    Status: 'confirmed',
+    Linen: '',
+  };
+
+  assert.equal(isBookingsPlanSofaCamaUnknownAsk(verdejo), true);
+  assert.equal(isBookingsPlanDoubleOrTwoSinglesAsk(verdejo), true);
+  assert.deepEqual(sofaCamaUnknownWarningsFor(verdejo), [
+    'double_or_two_singles_ask',
+  ]);
+  assert.equal(
+    SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES.double_or_two_singles_ask,
+    'Pregunta al huésped si quiere cama doble o dos individuales.',
+  );
+
+  assert.equal(isBookingsPlanSofaCamaUnknownAsk(sofaBed), true);
+  assert.equal(isBookingsPlanDoubleOrTwoSinglesAsk(sofaBed), false);
+  assert.deepEqual(sofaCamaUnknownWarningsFor(sofaBed), ['linen_ask_guest']);
+  assert.equal(
+    SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES.linen_ask_guest,
+    'Consulta al huésped lo del sofá cama.',
+  );
+
+  assert.equal(
+    isBookingsPlanSofaCamaUnknownAsk({
+      ...verdejo,
+      Linen: LINEN_VALUES.DOUBLE,
+    }),
+    false,
+  );
+  assert.equal(
+    isBookingsPlanSofaCamaUnknownAsk({
+      ...sofaBed,
+      Linen: LINEN_VALUES.NO,
+    }),
+    false,
+  );
+  assert.equal(
+    isBookingsPlanSofaCamaUnknownAsk({
+      ...verdejo,
+      Status: 'inquiry',
+    }),
+    false,
+  );
+});
+

@@ -587,6 +587,87 @@ export const asPlannerWarnings = (value: unknown): PlannerWarningCode[] => {
   ];
 };
 
+export const displayedPlannerWarnings = (item: {
+  ListingID?: unknown;
+  ListingNickname?: unknown;
+  Linen?: unknown;
+  Access?: unknown;
+  PlannerWarnings?: unknown;
+}): PlannerWarningCode[] => {
+  const listingId = asString(item.ListingID);
+  const linen = canonicalizeLinenValue(
+    item.Linen,
+    listingId,
+    asString(item.ListingNickname),
+  );
+  const warnings = asPlannerWarnings(item.PlannerWarnings);
+  const access = asString(item.Access);
+  const visible = access
+    ? warnings.filter((code) => code !== 'gift_card_access_missing')
+    : warnings;
+  if (isCanonicalLinenValue(linen, listingId)) {
+    return visible;
+  }
+  const missingCode = isVerdejoBedListing(listingId)
+    ? 'double_or_two_singles_ask'
+    : 'linen_ask_guest';
+  return visible.includes(missingCode) ? visible : [...visible, missingCode];
+};
+
+export const SOFA_CAMA_UNKNOWN_WARNING_CODES = [
+  'linen_ask_guest',
+  'double_or_two_singles_ask',
+] as const;
+
+export type SofaCamaUnknownWarningCode =
+  (typeof SOFA_CAMA_UNKNOWN_WARNING_CODES)[number];
+
+export const SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES: Record<
+  SofaCamaUnknownWarningCode,
+  string
+> = {
+  linen_ask_guest: 'Consulta al huésped lo del sofá cama.',
+  double_or_two_singles_ask:
+    'Pregunta al huésped si quiere cama doble o dos individuales.',
+};
+
+const isSofaCamaUnknownWarning = (
+  code: PlannerWarningCode,
+): code is SofaCamaUnknownWarningCode =>
+  code === 'linen_ask_guest' || code === 'double_or_two_singles_ask';
+
+export const isPlannerLinenUnknown = (item: {
+  ListingID?: unknown;
+  ListingNickname?: unknown;
+  Linen?: unknown;
+}) => {
+  const listingId = asString(item.ListingID);
+  const linen = canonicalizeLinenValue(
+    item.Linen,
+    listingId,
+    asString(item.ListingNickname),
+  );
+  return !isCanonicalLinenValue(linen, listingId);
+};
+
+export const sofaCamaUnknownWarningsFor = (
+  item: Record<string, unknown>,
+): SofaCamaUnknownWarningCode[] =>
+  displayedPlannerWarnings(item).filter(isSofaCamaUnknownWarning);
+
+export const isBookingsPlanSofaCamaUnknownAsk = (
+  item: Record<string, unknown>,
+) =>
+  isActivePlannerStatus(item.Status) &&
+  isPlannerLinenUnknown(item) &&
+  sofaCamaUnknownWarningsFor(item).length > 0;
+
+export const isBookingsPlanDoubleOrTwoSinglesAsk = (
+  item: Record<string, unknown>,
+) =>
+  isBookingsPlanSofaCamaUnknownAsk(item) &&
+  sofaCamaUnknownWarningsFor(item).includes('double_or_two_singles_ask');
+
 const warningKey = (codes: PlannerWarningCode[]) =>
   [...codes].sort().join('|');
 

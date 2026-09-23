@@ -52,7 +52,10 @@ export function ToolsStudio({ getEndpoint }: ToolsStudioProps) {
     void loadTools()
   }, [loadTools])
 
-  const runTool = async (toolName: string) => {
+  const runTool = async (
+    toolName: string,
+    args: Record<string, unknown>,
+  ) => {
     if (!endpoint) {
       return { error: t('agents.missingEndpoint') }
     }
@@ -60,7 +63,7 @@ export function ToolsStudio({ getEndpoint }: ToolsStudioProps) {
       const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tool: toolName }),
+        body: JSON.stringify({ tool: toolName, arguments: args }),
       })
       const payload = (await response.json()) as {
         output?: unknown
@@ -138,6 +141,12 @@ export function ToolsStudio({ getEndpoint }: ToolsStudioProps) {
           version: t('agents.version'),
           risk: t('agents.riskLevel'),
           history: t('agents.versionHistory'),
+          argsTitle: t('agents.toolArgsTitle'),
+          argsHint: t('agents.toolArgsHint'),
+          argsMissing: t('agents.toolArgsMissing'),
+          required: t('agents.toolArgRequired'),
+          optional: t('agents.toolArgOptional'),
+          cancel: t('common.cancel'),
         }}
         onRun={runTool}
         onLoadVersions={loadVersions}

@@ -1,8 +1,7 @@
 import {
   type PlannerWarningCode,
   canonicalizeLinenValue,
-  isCanonicalLinenValue,
-  isVerdejoBedListing,
+  displayedPlannerWarnings,
   resolveEarlyCheckInMode,
   type EarlyCheckInMode,
 } from '../../amplify/functions/shared/bookings-planner'
@@ -87,21 +86,13 @@ export const mapPlannerPlanRow = (
 
 export const warningsForPlannerPlanRow = (
   row: PlannerPlanRow,
-): PlannerWarningCode[] => {
-  const warnings = row.access.trim()
-    ? row.warnings.filter((code) => code !== 'gift_card_access_missing')
-    : row.warnings
-  if (isCanonicalLinenValue(row.linen, row.listingId)) {
-    return warnings
-  }
-  const missingCode = isVerdejoBedListing(row.listingId)
-    ? 'double_or_two_singles_ask'
-    : 'linen_ask_guest'
-  if (warnings.includes(missingCode)) {
-    return warnings
-  }
-  return [...warnings, missingCode]
-}
+): PlannerWarningCode[] =>
+  displayedPlannerWarnings({
+    ListingID: row.listingId,
+    Linen: row.linen,
+    Access: row.access,
+    PlannerWarnings: row.warnings,
+  })
 
 export const bookingsPlanWithoutWarningCounts = (rows: PlannerPlanRow[]) => {
   const total = rows.length

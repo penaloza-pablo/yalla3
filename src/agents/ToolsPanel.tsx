@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { EmptyState, TableSkeleton } from '../design/Feedback'
 import { formatToolOutput, formatWhen } from './format'
+import {
+  collectToolArguments,
+  defaultToolArgumentValues,
+  toolInputFields,
+} from './tool-schema'
 import type { AgentToolInfo } from './types'
 
 type ToolRunState = {
@@ -32,9 +37,16 @@ type ToolsPanelProps = {
     version: string
     risk: string
     history: string
+    argsTitle: string
+    argsHint: string
+    argsMissing: string
+    required: string
+    optional: string
+    cancel: string
   }
   onRun: (
     toolName: string,
+    args: Record<string, unknown>,
   ) => Promise<{ output?: unknown; error?: string; runId?: string }>
   onLoadVersions?: (toolName: string) => Promise<ToolVersion[]>
 }
@@ -52,6 +64,13 @@ export function ToolsPanel({
   const [versions, setVersions] = useState<Record<string, ToolVersion[]>>(
     versionsByTool ?? {},
   )
+  const [prompting, setPrompting] = useState<string | null>(null)
+  const [argValues, setArgValues] = useState<
+    Record<string, Record<string, string | boolean>>
+  >({})
+  const [argError, setArgError] = useState<Record<string, string | undefined>>(
+    {},
+  )
 
   useEffect(() => {
     if (versionsByTool) {
@@ -59,12 +78,16 @@ export function ToolsPanel({
     }
   }, [versionsByTool])
 
-  const runTool = async (toolName: string) => {
+  const executeTool = async (
+    toolName: string,
+    args: Record<string, unknown>,
+  ) => {
+    setArgError((current) => ({ ...current, [toolName]: undefined }))
     setRuns((current) => ({
       ...current,
       [toolName]: { isRunning: true, output: undefined, error: undefined },
     }))
-    const result = await onRun(toolName)
+    const result = await onRun(toolName, args)
     setRuns((current) => ({
       ...current,
       [toolName]: {
@@ -74,6 +97,38 @@ export function ToolsPanel({
         runId: result.runId,
       },
     }))
+  }
+
+  const runTool = async (tool: AgentToolInfo) => {
+    const fields = toolInputFields(tool.inputSchema)
+    if (fields.length > 0 && prompting !== tool.name) {
+      setPrompting(tool.name)
+      setArgValues((current) => ({
+        ...current,
+        [tool.name]: current[tool.name] ?? defaultToolArgumentValues(fields),
+      }))
+      setArgError((current) => ({
+        ...current,
+        [tool.name]: undefined,
+      }))
+      return
+    }
+    if (fields.length > 0) {
+      const collected = collectToolArguments(
+        fields,
+        argValues[tool.name] ?? defaultToolArgumentValues(fields),
+      )
+      if (!collected.ok) {
+        setArgError((current) => ({
+          ...current,
+          [tool.name]: labels.argsMissing,
+        }))
+        return
+      }
+      await executeTool(tool.name, collected.arguments)
+      return
+    }
+    await executeTool(tool.name, {})
   }
 
   const loadHistory = async (toolName: string) => {
@@ -97,6 +152,9 @@ export function ToolsPanel({
       {tools.map((tool) => {
         const run = runs[tool.name]
         const history = versions[tool.name] ?? []
+        const fields = toolInputFields(tool.inputSchema)
+        const isPrompting = prompting === tool.name
+        const values = argValues[tool.name] ?? defaultToolArgumentValues(fields)
         return (
           <section className="card" key={tool.name}>
             <div className="card-header">
@@ -106,14 +164,26 @@ export function ToolsPanel({
                 </h2>
                 <p className="card-subtitle">{tool.description}</p>
               </div>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={() => void runTool(tool.name)}
-                disabled={run?.isRunning}
-              >
-                {run?.isRunning ? labels.running : labels.run}
-              </button>
+              <div className="agents-tool-actions">
+                {isPrompting ? (
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => setPrompting(null)}
+                    disabled={run?.isRunning}
+                  >
+                    {labels.cancel}
+                  </button>
+                ) : null}
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void runTool(tool)}
+                  disabled={run?.isRunning}
+                >
+                  {run?.isRunning ? labels.running : labels.run}
+                </button>
+              </div>
             </div>
             <dl className="agents-meta">
               <div>
@@ -129,6 +199,72 @@ export function ToolsPanel({
                 <dd>{tool.riskLevel ?? 'read'}</dd>
               </div>
             </dl>
+            {isPrompting && fields.length > 0 ? (
+              <form
+                className="agents-tool-args"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void runTool(tool)
+                }}
+              >
+                <h3 className="agents-coverage-title">{labels.argsTitle}</h3>
+                <p className="card-subtitle">{labels.argsHint}</p>
+                {fields.map((field) => (
+                  <label key={field.name} className="agents-tool-arg">
+                    <span>
+                      <code>{field.name}</code>
+                      {field.required ? (
+                        <span className="agents-tool-arg-flag">
+                          {' '}
+                          {labels.required}
+                        </span>
+                      ) : (
+                        <span className="agents-tool-arg-flag is-optional">
+                          {' '}
+                          {labels.optional}
+                        </span>
+                      )}
+                    </span>
+                    {field.description ? (
+                      <span className="card-subtitle">{field.description}</span>
+                    ) : null}
+                    {field.type === 'boolean' ? (
+                      <input
+                        type="checkbox"
+                        checked={values[field.name] === true}
+                        onChange={(event) =>
+                          setArgValues((current) => ({
+                            ...current,
+                            [tool.name]: {
+                              ...values,
+                              [field.name]: event.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                    ) : (
+                      <input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        required={field.required}
+                        value={String(values[field.name] ?? '')}
+                        onChange={(event) =>
+                          setArgValues((current) => ({
+                            ...current,
+                            [tool.name]: {
+                              ...values,
+                              [field.name]: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    )}
+                  </label>
+                ))}
+                {argError[tool.name] ? (
+                  <p className="notice error">{argError[tool.name]}</p>
+                ) : null}
+              </form>
+            ) : null}
             {onLoadVersions ? (
               <button
                 className="btn-secondary"

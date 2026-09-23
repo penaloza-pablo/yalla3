@@ -69,6 +69,11 @@ const parseVersion = (value: unknown): VersionSelector | undefined => {
   return undefined;
 };
 
+const asToolArguments = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
 export const handler = async (event: HttpEvent) => {
   const isHttp = isHttpRequest(event);
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
@@ -166,6 +171,7 @@ export const handler = async (event: HttpEvent) => {
           tool?: string;
           action?: string;
           input?: string;
+          arguments?: Record<string, unknown>;
           executionMode?: ExecutionMode;
           version?: VersionSelector;
           runId?: string;
@@ -212,9 +218,10 @@ export const handler = async (event: HttpEvent) => {
         const startedAt = nowIso();
         const runId = crypto.randomUUID();
         const actor = await getActorEmail(event);
+        const toolArguments = asToolArguments(body.arguments);
         const executed = await executeTool({
           toolId: toolName,
-          arguments: {},
+          arguments: toolArguments,
           actor,
           agentId: TOOL_DEBUG_AGENT_ID,
           runId,
@@ -255,7 +262,7 @@ export const handler = async (event: HttpEvent) => {
               at: startedAt,
               type: 'TOOL_CALL' as const,
               name: toolName,
-              input: {},
+              input: toolArguments,
             },
             {
               id: crypto.randomUUID(),

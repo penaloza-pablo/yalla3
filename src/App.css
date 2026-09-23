@@ -7970,6 +7970,40 @@ th {
   gap: 16px;
 }
 
+.agents-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.agents-tool-args {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+
+.agents-tool-arg {
+  display: grid;
+  gap: 4px;
+}
+
+.agents-tool-arg > input[type='text'],
+.agents-tool-arg > input[type='number'] {
+  width: 100%;
+}
+
+.agents-tool-arg-flag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yl-go, #2f6fed);
+}
+
+.agents-tool-arg-flag.is-optional {
+  font-weight: 500;
+  color: var(--yl-muted, #667085);
+}
+
 .agents-json {
   margin: 0;
   padding: 12px 14px;

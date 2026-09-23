@@ -1,0 +1,27 @@
+---
+description: Tools de Agent Studio deben declarar inputSchema y pedir parámetros al ejecutar desde Tools
+globs: amplify/functions/shared/ai-agents/tools/**/*.ts,src/agents/ToolsPanel.tsx,src/agents/ToolsStudio.tsx,src/agents/tool-schema.ts
+alwaysApply: false
+---
+
+# Agent Studio tools con parámetros
+
+Al crear o cambiar un tool en `amplify/functions/shared/ai-agents/tools/`:
+
+- Declara `inputSchema` / `parameters` JSON Schema. Si el tool no corre sin datos, pon esos campos en `required`.
+- No ejecutes tools con `{}` cuando hay `required`. El POST de Agent Studio > Tools envía `{ tool, arguments }`.
+- En Tools, al pulsar Ejecutar, si hay parámetros (p. ej. `list_booking_conversation` + `reservationId`), muestra un formulario, valida y recién entonces llama al backend.
+
+```ts
+// ❌ BAD — required en schema, Run manda vacío
+execute: async () => listConversationPosts({ reservationId: '' })
+
+// ✅ GOOD
+required: ['reservationId']
+execute: async (args) => {
+  const reservationId =
+    typeof args.reservationId === 'string' ? args.reservationId.trim() : ''
+  if (!reservationId) throw new Error('reservationId is required.')
+  return listConversationPosts({ reservationId })
+}
+```
