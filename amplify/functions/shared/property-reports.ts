@@ -430,7 +430,7 @@ export const shouldRefreshPayoutSnapshot = (
 export const applyLiveReservationToBooking = (
   item: Record<string, unknown>,
   live: Record<string, unknown>,
-) => {
+): Record<string, unknown> => {
   const status = asString(live.status) || asString(item.Status);
   const canceledAt =
     asString(live.canceledAt) ||
