@@ -19,6 +19,7 @@ import {
   putAgent,
 } from '../shared/ai-agents/store';
 import {
+  getRegisteredTool,
   listPublicTools,
   registeredToolNames,
 } from '../shared/ai-agents/tools/registry';
@@ -123,10 +124,42 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (method === 'POST') {
-      const body = parseBody<{ agentId?: string }>(event.body) ?? {};
+      const body =
+        parseBody<{ agentId?: string; tool?: string }>(event.body) ?? {};
+      const toolName = body.tool?.trim();
+      if (toolName) {
+        const tool = getRegisteredTool(toolName);
+        if (!tool) {
+          return buildHttpResponse(404, {
+            message: `Unknown tool: ${toolName}.`,
+          });
+        }
+        try {
+          const result = await tool.execute({});
+          await recordActivityLog(event, {
+            feature: 'Agents',
+            action: 'run-tool',
+            entityId: toolName,
+            entityName: toolName,
+            summary: `Ran tool ${toolName}.`,
+          });
+          return buildHttpResponse(200, {
+            tool: toolName,
+            output: result.content,
+            coverage: result.coverage ?? null,
+          });
+        } catch (error) {
+          return buildHttpResponse(422, {
+            tool: toolName,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       const agentId = body.agentId?.trim();
       if (!agentId) {
-        return buildHttpResponse(400, { message: 'agentId is required.' });
+        return buildHttpResponse(400, {
+          message: 'agentId or tool is required.',
+        });
       }
       const triggeredBy = await getActorEmail(event);
       const run = await runAgent({

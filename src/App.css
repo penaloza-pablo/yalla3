@@ -7965,6 +7965,24 @@ th {
   gap: 8px;
 }
 
+.agents-tools-list {
+  display: grid;
+  gap: 16px;
+}
+
+.agents-json {
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  max-height: 28rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre;
+  background: color-mix(in srgb, var(--yl-ink, #101828) 4%, transparent);
+  border-radius: 10px;
+}
+
 .agents-detail .form-grid {
   margin-top: 16px;
 }

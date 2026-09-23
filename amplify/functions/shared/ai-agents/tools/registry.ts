@@ -16,6 +16,8 @@ export const listPublicTools = () =>
 
 export const registeredToolNames = () => new Set(Object.keys(TOOLS));
 
+export const getRegisteredTool = (name: string) => TOOLS[name];
+
 export const resolveAllowedTools = (allowedTools: string[]) => {
   const resolved: AgentTool[] = [];
   const missing: string[] = [];

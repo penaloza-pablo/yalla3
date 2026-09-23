@@ -6,7 +6,10 @@ import { EmptyState, TableSkeleton } from '../design/Feedback'
 import { YlIcon } from '../design/icons'
 import { AgentConfigForm } from './AgentConfigForm'
 import { draftFromAgent, emptyAgentDraft, type AgentDraft } from './form'
+import { ToolsPanel } from './ToolsPanel'
 import type { AgentRecord, AgentRun, AgentToolInfo, CoverageItem } from './types'
+
+type AgentsSection = 'catalog' | 'tools'
 
 type AgentsPanelProps = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -82,6 +85,7 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [section, setSection] = useState<AgentsSection>('catalog')
   const isCreatingRef = useRef(false)
 
   const endpoint = getEndpoint(
@@ -321,6 +325,29 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
     }
   }
 
+  const runTool = async (toolName: string) => {
+    if (!endpoint) {
+      return { error: t('agents.missingEndpoint') }
+    }
+    try {
+      const response = await authFetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tool: toolName }),
+      })
+      const payload = (await response.json()) as {
+        output?: unknown
+        message?: string
+      }
+      if (!response.ok) {
+        return { error: payload.message || t('agents.toolRunError') }
+      }
+      return { output: payload.output }
+    } catch {
+      return { error: t('agents.toolRunError') }
+    }
+  }
+
   const formLabels = {
     name: t('common.name'),
     purpose: t('agents.purpose'),
@@ -370,7 +397,7 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
                 type="button"
                 onClick={() => {
                   void loadAgents()
-                  if (selectedId && !isCreating) {
+                  if (section === 'catalog' && selectedId && !isCreating) {
                     void loadDetail(selectedId)
                   }
                 }}
@@ -379,27 +406,31 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
               >
                 <YlIcon name="arrow.clockwise" size={16} />
               </button>
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={startCreate}
-                disabled={isCreating}
-              >
-                {t('agents.newAgent')}
-              </button>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={() => void runSelected()}
-                disabled={
-                  !selectedId ||
-                  isRunning ||
-                  isCreating ||
-                  selected?.enabled === false
-                }
-              >
-                {isRunning ? t('agents.running') : t('agents.runNow')}
-              </button>
+              {section === 'catalog' ? (
+                <>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={startCreate}
+                    disabled={isCreating}
+                  >
+                    {t('agents.newAgent')}
+                  </button>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={() => void runSelected()}
+                    disabled={
+                      !selectedId ||
+                      isRunning ||
+                      isCreating ||
+                      selected?.enabled === false
+                    }
+                  >
+                    {isRunning ? t('agents.running') : t('agents.runNow')}
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </MobileBodyPortal>
@@ -408,47 +439,59 @@ export function AgentsPanel({ getEndpoint }: AgentsPanelProps) {
       {message ? <p className="notice success">{message}</p> : null}
       {error ? <p className="notice error">{error}</p> : null}
 
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">{t('agents.toolsCatalogTitle')}</h2>
-            <p className="card-subtitle">{t('agents.toolsCatalogSubtitle')}</p>
-          </div>
-        </div>
-        {tools.length === 0 ? (
-          <p className="card-subtitle">{t('agents.noRegisteredTools')}</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t('agents.toolName')}</th>
-                  <th>{t('agents.toolDescription')}</th>
-                  <th>{t('agents.toolOutput')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tools.map((tool) => (
-                  <tr key={tool.name}>
-                    <td>
-                      <code>{tool.name}</code>
-                    </td>
-                    <td>{tool.description}</td>
-                    <td>{tool.outputDescription}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <section className="summary-cards cleaning-settings-cards">
+        <button
+          type="button"
+          className={`card card-compact summary-card-button ${
+            section === 'catalog' ? 'is-selected' : ''
+          }`}
+          onClick={() => setSection('catalog')}
+        >
+          <p className="card-label">{t('agents.catalogCard')}</p>
+          <p className="card-value">{isLoading ? '—' : agents.length}</p>
+          <p className="card-meta">{t('agents.catalogCardMeta')}</p>
+        </button>
+        <button
+          type="button"
+          className={`card card-compact summary-card-button ${
+            section === 'tools' ? 'is-selected' : ''
+          }`}
+          onClick={() => setSection('tools')}
+        >
+          <p className="card-label">{t('agents.toolsCard')}</p>
+          <p className="card-value">{isLoading ? '—' : tools.length}</p>
+          <p className="card-meta">{t('agents.toolsCardMeta')}</p>
+        </button>
       </section>
 
-      {isLoading ? <TableSkeleton rows={4} label={t('agents.catalogTitle')} /> : null}
-      {!isLoading && agents.length === 0 && !isCreating && !error ? (
+      {section === 'tools' ? (
+        <ToolsPanel
+          tools={tools}
+          isLoading={isLoading}
+          labels={{
+            title: t('agents.toolsCatalogTitle'),
+            output: t('agents.toolOutput'),
+            run: t('agents.runTool'),
+            running: t('agents.runningTool'),
+            empty: t('agents.noRegisteredTools'),
+            outputTitle: t('agents.toolOutputTitle'),
+          }}
+          onRun={runTool}
+        />
+      ) : null}
+
+      {section === 'catalog' && isLoading ? (
+        <TableSkeleton rows={4} label={t('agents.catalogTitle')} />
+      ) : null}
+      {section === 'catalog' &&
+      !isLoading &&
+      agents.length === 0 &&
+      !isCreating &&
+      !error ? (
         <EmptyState message={t('agents.emptyBody')} />
       ) : null}
 
-      {agents.length > 0 || isCreating ? (
+      {section === 'catalog' && (agents.length > 0 || isCreating) ? (
         <div className="agents-layout">
           <section className="card agents-list-card">
             <div className="card-header">
