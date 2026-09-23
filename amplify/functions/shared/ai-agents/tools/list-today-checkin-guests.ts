@@ -1,5 +1,6 @@
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, getTodayInMadrid } from '../../visit-task-utils';
+import { TOOL_CATALOG_VERSION } from './metadata';
 import type { AgentTool, CoverageItem, ToolResult } from '../types';
 
 const CHECK_IN_INDEX = 'CheckInDate-index';
@@ -17,17 +18,36 @@ const skippedStatus = (status: string) => {
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
+const parameters: Record<string, unknown> = {
+  type: 'object',
+  properties: {},
+  additionalProperties: false,
+};
+
 export const listTodayCheckinGuestsTool: AgentTool = {
+  id: 'list_today_checkin_guests',
   name: 'list_today_checkin_guests',
   description:
     'Lists guests with a check-in date equal to today in Europe/Madrid. Returns names and booking ids. Skips inquiry and cancelled reservations.',
   outputDescription:
     'JSON with businessDate (Europe/Madrid ISO date), timezone, guests[{guestName, reservationId}], and skippedCount for excluded bookings.',
-  parameters: {
+  riskLevel: 'read',
+  requiresApproval: false,
+  timeoutMs: 15_000,
+  enabled: true,
+  catalogVersion: TOOL_CATALOG_VERSION,
+  inputSchema: parameters,
+  outputSchema: {
     type: 'object',
-    properties: {},
-    additionalProperties: false,
+    properties: {
+      businessDate: { type: 'string' },
+      timezone: { type: 'string' },
+      guests: { type: 'array' },
+      skippedCount: { type: 'number' },
+    },
   },
+  executionTarget: 'internal',
+  parameters,
   execute: async (): Promise<ToolResult> => {
     const tableName = process.env.BOOKINGS_TABLE || 'yalla-bookings';
     const dateIso = getTodayInMadrid();

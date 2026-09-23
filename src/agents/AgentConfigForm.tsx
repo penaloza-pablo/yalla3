@@ -32,6 +32,11 @@ type AgentConfigFormProps = {
     tools: string
     toolsHelp: string
     noTools: string
+    limits: string
+    maxTurns: string
+    maxToolCalls: string
+    maxCostUsd: string
+    timeoutMs: string
     save: string
     saving: string
     cancel: string
@@ -222,6 +227,61 @@ export function AgentConfigForm({
             ))}
           </div>
         )}
+      </div>
+      <div className="form-field-span">
+        <p className="agents-coverage-title">{labels.limits}</p>
+        <div className="agents-limits-grid">
+          <label>
+            {labels.maxTurns}
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={draft.maxTurns}
+              onChange={(event) =>
+                onChange({ ...draft, maxTurns: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            {labels.maxToolCalls}
+            <input
+              type="number"
+              min={1}
+              max={40}
+              value={draft.maxToolCalls}
+              onChange={(event) =>
+                onChange({ ...draft, maxToolCalls: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            {labels.maxCostUsd}
+            <input
+              type="number"
+              min={0.01}
+              max={20}
+              step={0.01}
+              value={draft.maxCostUsd}
+              onChange={(event) =>
+                onChange({ ...draft, maxCostUsd: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            {labels.timeoutMs}
+            <input
+              type="number"
+              min={5000}
+              max={110000}
+              step={1000}
+              value={draft.timeoutMs}
+              onChange={(event) =>
+                onChange({ ...draft, timeoutMs: event.target.value })
+              }
+            />
+          </label>
+        </div>
       </div>
       <div className="form-field-span agents-form-actions">
         {isNew ? (

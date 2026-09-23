@@ -11,6 +11,10 @@ export type AgentDraft = {
   enabled: boolean
   coverageType: 'tool_declared' | 'mention_in_output'
   expectedParagraphs: string
+  maxTurns: string
+  maxToolCalls: string
+  maxCostUsd: string
+  timeoutMs: string
 }
 
 export const emptyAgentDraft = (model: string): AgentDraft => ({
@@ -23,6 +27,10 @@ export const emptyAgentDraft = (model: string): AgentDraft => ({
   enabled: true,
   coverageType: 'tool_declared',
   expectedParagraphs: '',
+  maxTurns: '8',
+  maxToolCalls: '12',
+  maxCostUsd: '0.5',
+  timeoutMs: '90000',
 })
 
 export const draftFromAgent = (agent: AgentRecord): AgentDraft => ({
@@ -39,4 +47,8 @@ export const draftFromAgent = (agent: AgentRecord): AgentDraft => ({
     agent.coveragePolicy?.expectedParagraphs != null
       ? String(agent.coveragePolicy.expectedParagraphs)
       : '',
+  maxTurns: String(agent.runtimeLimits?.maxTurns ?? 8),
+  maxToolCalls: String(agent.runtimeLimits?.maxToolCalls ?? 12),
+  maxCostUsd: String(agent.runtimeLimits?.maxCostUsd ?? 0.5),
+  timeoutMs: String(agent.runtimeLimits?.timeoutMs ?? 90_000),
 })

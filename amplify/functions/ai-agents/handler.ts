@@ -2,6 +2,7 @@ import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
+  nowIso,
   parseBody,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
@@ -9,20 +10,31 @@ import { getActorEmail } from '../shared/cognito-auth';
 import { recordActivityLog } from '../shared/activity-log';
 import { decorateAgent, runAgent } from '../shared/ai-agents/runtime';
 import { normalizeAgentUpsert } from '../shared/ai-agents/agent-config';
+import { TOOL_DEBUG_AGENT_ID } from '../shared/ai-agents/limits';
 import { OPENAI_MODELS } from '../shared/ai-agents/models';
 import {
   allocateAgentId,
   getAgent,
+  getAgentVersion,
   getRun,
+  getRunById,
+  listAgentVersions,
   listAgents,
+  listRecentRuns,
   listRuns,
+  listStoredTools,
+  listToolVersions,
+  publishAgent,
   putAgent,
+  putRun,
 } from '../shared/ai-agents/store';
+import { executeTool } from '../shared/ai-agents/tool-executor';
 import {
   getRegisteredTool,
-  listPublicTools,
   registeredToolNames,
 } from '../shared/ai-agents/tools/registry';
+import type { ExecutionMode } from '../shared/ai-agents/types';
+import type { VersionSelector } from '../shared/ai-agents/select-version';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -41,10 +53,21 @@ const parseLimit = (value?: string) => {
   return Math.min(Math.trunc(parsed), 100);
 };
 
-const resourcesPayload = () => ({
-  tools: listPublicTools(),
+const resourcesPayload = async () => ({
+  tools: await listStoredTools(),
   models: [...OPENAI_MODELS],
 });
+
+const parseVersion = (value: unknown): VersionSelector | undefined => {
+  if (value === 'draft' || value === 'published') {
+    return value;
+  }
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric > 0) {
+    return numeric;
+  }
+  return undefined;
+};
 
 export const handler = async (event: HttpEvent) => {
   const isHttp = isHttpRequest(event);
@@ -66,7 +89,9 @@ export const handler = async (event: HttpEvent) => {
       const run = await runAgent({
         agentId: scheduledAgentId,
         trigger: 'schedule',
-        triggeredBy: 'scheduler',
+        actor: 'scheduler',
+        source: 'scheduler',
+        executionMode: 'production',
       });
       return { ok: true, run };
     }
@@ -82,6 +107,13 @@ export const handler = async (event: HttpEvent) => {
         model?: string;
         enabled?: unknown;
         coveragePolicy?: { type?: string; expectedParagraphs?: unknown };
+        runtimeLimits?: {
+          maxTurns?: number;
+          timeoutMs?: number;
+          maxCostUsd?: number;
+          maxToolCalls?: number;
+        };
+        approvalPolicy?: { requireApprovalFor?: unknown };
       }>(event.body);
       if (!body) {
         return buildHttpResponse(400, { message: 'Invalid JSON body.' });
@@ -104,6 +136,7 @@ export const handler = async (event: HttpEvent) => {
         : {
             ...normalized.agent,
             id: await allocateAgentId(normalized.agent.name),
+            createdAt: nowIso(),
           };
       await putAgent(agent);
       const decorated = await decorateAgent(
@@ -112,20 +145,62 @@ export const handler = async (event: HttpEvent) => {
         },
       );
       await recordActivityLog(event, {
-        feature: 'Agents',
+        feature: 'Agent Studio',
         action: existing ? 'update' : 'create',
         entityId: agent.id,
         entityName: agent.name,
         summary: existing
-          ? `Updated agent ${agent.name}.`
+          ? `Updated draft of ${agent.name} (v${agent.draftVersion}).`
           : `Created agent ${agent.name}.`,
       });
-      return buildHttpResponse(200, { item: decorated, ...resourcesPayload() });
+      return buildHttpResponse(200, {
+        item: decorated,
+        ...(await resourcesPayload()),
+      });
     }
 
     if (method === 'POST') {
       const body =
-        parseBody<{ agentId?: string; tool?: string }>(event.body) ?? {};
+        parseBody<{
+          agentId?: string;
+          tool?: string;
+          action?: string;
+          input?: string;
+          executionMode?: ExecutionMode;
+          version?: VersionSelector;
+          runId?: string;
+          approvalId?: string;
+        }>(event.body) ?? {};
+      if (body.action === 'publish') {
+        const agentId = body.agentId?.trim();
+        if (!agentId) {
+          return buildHttpResponse(400, { message: 'agentId is required.' });
+        }
+        const published = await publishAgent(agentId);
+        if (!published) {
+          return buildHttpResponse(404, { message: 'Agent was not found.' });
+        }
+        const decorated = await decorateAgent(published);
+        await recordActivityLog(event, {
+          feature: 'Agent Studio',
+          action: 'publish',
+          entityId: agentId,
+          entityName: published.name,
+          summary: `Published ${published.name} v${published.publishedVersion}.`,
+        });
+        return buildHttpResponse(200, {
+          item: decorated,
+          ...(await resourcesPayload()),
+        });
+      }
+      if (body.action === 'approve') {
+        return buildHttpResponse(501, {
+          message:
+            'Approval resume is persisted on the run but the Approvals UI is not implemented yet.',
+          runId: body.runId,
+          approvalId: body.approvalId,
+        });
+      }
       const toolName = body.tool?.trim();
       if (toolName) {
         const tool = getRegisteredTool(toolName);
@@ -134,26 +209,100 @@ export const handler = async (event: HttpEvent) => {
             message: `Unknown tool: ${toolName}.`,
           });
         }
-        try {
-          const result = await tool.execute({});
-          await recordActivityLog(event, {
-            feature: 'Agents',
-            action: 'run-tool',
-            entityId: toolName,
-            entityName: toolName,
-            summary: `Ran tool ${toolName}.`,
-          });
-          return buildHttpResponse(200, {
-            tool: toolName,
-            output: result.content,
-            coverage: result.coverage ?? null,
-          });
-        } catch (error) {
+        const startedAt = nowIso();
+        const runId = crypto.randomUUID();
+        const actor = await getActorEmail(event);
+        const executed = await executeTool({
+          toolId: toolName,
+          arguments: {},
+          actor,
+          agentId: TOOL_DEBUG_AGENT_ID,
+          runId,
+          allowedTools: [toolName],
+        });
+        const finishedAt = nowIso();
+        const run = {
+          runId,
+          agentId: TOOL_DEBUG_AGENT_ID,
+          agentName: toolName,
+          toolId: toolName,
+          executionMode: 'tool' as const,
+          status:
+            executed.status === 'ok'
+              ? ('succeeded' as const)
+              : ('failed' as const),
+          trigger: 'tool_debug' as const,
+          startedAt,
+          finishedAt,
+          triggeredBy: actor,
+          source: 'agent-studio-tools',
+          result:
+            executed.status === 'ok'
+              ? JSON.stringify(executed.content)
+              : undefined,
+          error:
+            executed.status === 'error'
+              ? executed.error
+              : executed.status === 'needs_approval'
+                ? 'Approval required.'
+                : undefined,
+          estimatedCostUsd: 0,
+          latencyMs:
+            executed.status === 'needs_approval' ? 0 : executed.latencyMs,
+          steps: [
+            {
+              id: crypto.randomUUID(),
+              at: startedAt,
+              type: 'TOOL_CALL' as const,
+              name: toolName,
+              input: {},
+            },
+            {
+              id: crypto.randomUUID(),
+              at: finishedAt,
+              type:
+                executed.status === 'ok'
+                  ? ('TOOL_RESULT' as const)
+                  : ('ERROR' as const),
+              name: toolName,
+              output: executed.status === 'ok' ? executed.content : undefined,
+              error:
+                executed.status === 'error'
+                  ? executed.error
+                  : executed.status === 'needs_approval'
+                    ? 'Approval required.'
+                    : undefined,
+              latencyMs:
+                executed.status === 'needs_approval'
+                  ? undefined
+                  : executed.latencyMs,
+            },
+          ],
+        };
+        await putRun(run);
+        await recordActivityLog(event, {
+          feature: 'Agent Studio',
+          action: 'run-tool',
+          entityId: toolName,
+          entityName: toolName,
+          summary: `Ran tool ${toolName}.`,
+        });
+        if (executed.status !== 'ok') {
           return buildHttpResponse(422, {
             tool: toolName,
-            message: error instanceof Error ? error.message : String(error),
+            run,
+            message:
+              executed.status === 'error'
+                ? executed.error
+                : 'Approval required.',
           });
         }
+        return buildHttpResponse(200, {
+          tool: toolName,
+          output: executed.content,
+          coverage: executed.coverage ?? null,
+          run,
+        });
       }
       const agentId = body.agentId?.trim();
       if (!agentId) {
@@ -162,23 +311,63 @@ export const handler = async (event: HttpEvent) => {
         });
       }
       const triggeredBy = await getActorEmail(event);
+      const executionMode: ExecutionMode =
+        body.executionMode === 'test' ? 'test' : 'production';
       const run = await runAgent({
         agentId,
-        trigger: 'manual',
-        triggeredBy,
+        input: body.input,
+        actor: triggeredBy,
+        executionMode,
+        version: parseVersion(body.version),
+        trigger: executionMode === 'test' ? 'test' : 'manual',
+        source: 'agent-studio',
       });
       await recordActivityLog(event, {
-        feature: 'Agents',
+        feature: 'Agent Studio',
         action: 'run',
         entityId: agentId,
         entityName: agentId,
         summary: `Ran agent ${agentId} (${run.status}).`,
       });
-      return buildHttpResponse(run.status === 'failed' ? 422 : 200, { run });
+      return buildHttpResponse(
+        run.status === 'succeeded' || run.status === 'waiting_for_approval'
+          ? 200
+          : 422,
+        { run },
+      );
+    }
+
+    const view = query.view?.trim();
+    if (view === 'runtime') {
+      const items = await listRecentRuns(parseLimit(query.limit));
+      return buildHttpResponse(200, { items, count: items.length });
+    }
+    if (view === 'tools') {
+      const tools = await listStoredTools();
+      return buildHttpResponse(200, {
+        items: tools,
+        count: tools.length,
+        models: [...OPENAI_MODELS],
+      });
+    }
+    if (view === 'tool-versions') {
+      const tool = query.tool?.trim();
+      if (!tool) {
+        return buildHttpResponse(400, { message: 'tool is required.' });
+      }
+      const items = await listToolVersions(tool);
+      return buildHttpResponse(200, { items, count: items.length });
     }
 
     const agentId = query.id?.trim();
     const runId = query.runId?.trim();
+    if (runId && !agentId) {
+      const run = await getRunById(runId);
+      if (!run) {
+        return buildHttpResponse(404, { message: 'Run was not found.' });
+      }
+      return buildHttpResponse(200, { run });
+    }
     if (agentId && runId) {
       const run = await getRun(agentId, runId);
       if (!run) {
@@ -190,17 +379,36 @@ export const handler = async (event: HttpEvent) => {
       const runs = await listRuns(agentId, parseLimit(query.limit));
       return buildHttpResponse(200, { items: runs, count: runs.length });
     }
+    if (agentId && query.versions === '1') {
+      const versions = await listAgentVersions(agentId);
+      return buildHttpResponse(200, { items: versions, count: versions.length });
+    }
+    if (agentId && query.version) {
+      const version = Number(query.version);
+      if (!Number.isInteger(version) || version <= 0) {
+        return buildHttpResponse(400, { message: 'Invalid version.' });
+      }
+      const item = await getAgentVersion(agentId, version);
+      if (!item) {
+        return buildHttpResponse(404, { message: 'Version was not found.' });
+      }
+      return buildHttpResponse(200, { item });
+    }
     if (agentId) {
       const agent = await getAgent(agentId);
       if (!agent) {
         return buildHttpResponse(404, { message: 'Agent was not found.' });
       }
       const decorated = await decorateAgent(agent);
-      const runs = await listRuns(agentId, 8);
+      const [runs, versions] = await Promise.all([
+        listRuns(agentId, 8),
+        listAgentVersions(agentId),
+      ]);
       return buildHttpResponse(200, {
         item: decorated,
         recentRuns: runs,
-        ...resourcesPayload(),
+        versions,
+        ...(await resourcesPayload()),
       });
     }
 
@@ -212,7 +420,7 @@ export const handler = async (event: HttpEvent) => {
     return buildHttpResponse(200, {
       items,
       count: items.length,
-      ...resourcesPayload(),
+      ...(await resourcesPayload()),
     });
   } catch (error) {
     console.error('agents handler failed', error);

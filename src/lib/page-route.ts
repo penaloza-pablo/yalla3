@@ -7,11 +7,16 @@ import {
 
 const PAGE_QUERY_KEY = 'page'
 
+const PAGE_ALIASES: Record<string, string> = {
+  Agents: 'Agent Catalog',
+}
+
 export const readPageFromLocation = (validPages: Set<string>): string | null => {
   if (typeof window === 'undefined') {
     return null
   }
-  const page = new URLSearchParams(window.location.search).get(PAGE_QUERY_KEY)?.trim()
+  const raw = new URLSearchParams(window.location.search).get(PAGE_QUERY_KEY)?.trim()
+  const page = raw ? (PAGE_ALIASES[raw] ?? raw) : ''
   if (page && validPages.has(page)) {
     return page
   }

@@ -52,4 +52,7 @@ test('normalizeAgentUpsert keeps allowed tools, rules, and model', () => {
   assert.equal(result.agent.coveragePolicy.type, 'mention_in_output');
   assert.equal(result.agent.coveragePolicy.expectedParagraphs, 3);
   assert.equal(result.agent.provider, 'openai');
+  assert.equal(result.agent.status, 'draft');
+  assert.equal(result.agent.draftVersion, 1);
+  assert.equal(result.agent.publishedVersion, undefined);
 });

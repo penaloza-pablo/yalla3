@@ -50,7 +50,11 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Settings',
-    items: ['Logs', 'Users', 'Roles', 'Slack', 'Agents', 'Global Variables'],
+    items: ['Logs', 'Users', 'Roles', 'Slack', 'Global Variables'],
+  },
+  {
+    section: 'Agent Studio',
+    items: ['Agent Catalog', 'Tools', 'Agent Runtime'],
   },
   {
     section: 'Grow',
@@ -222,12 +226,13 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 5
+export const PERMISSIONS_CATALOG_VERSION = 6
 
 export const applyPermissionCatalog = (
   permissions: string[],
   storedVersion?: unknown,
 ) => {
+  const hadAgents = permissions.includes(pagePermission('Agents'))
   let next = permissions.filter(isKnownPermission)
   const from =
     typeof storedVersion === 'number' && Number.isFinite(storedVersion)
@@ -275,9 +280,18 @@ export const applyPermissionCatalog = (
   if (from < 5) {
     if (
       next.includes(pagePermission('Logs')) &&
-      !next.includes(pagePermission('Agents'))
+      !next.includes(pagePermission('Agent Catalog'))
     ) {
-      next.push(pagePermission('Agents'))
+      next.push(pagePermission('Agent Catalog'))
+    }
+  }
+  if (from < 6 || hadAgents) {
+    if (hadAgents || next.includes(pagePermission('Logs'))) {
+      for (const page of ['Agent Catalog', 'Tools', 'Agent Runtime'] as const) {
+        if (!next.includes(pagePermission(page))) {
+          next.push(pagePermission(page))
+        }
+      }
     }
   }
   return next
