@@ -285,6 +285,7 @@ function getGuestEmail(reservation) {
 }
 
 function getConversationId(reservation) {
+  // Pointer only (B10). Never persist Guesty inbox posts on the booking item.
   return (
     reservation?.conversationId ||
     reservation?.conversation?._id ||

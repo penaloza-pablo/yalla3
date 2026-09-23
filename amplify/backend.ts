@@ -38,6 +38,7 @@ import { getBookingsPlannerSettings } from './functions/get-bookings-planner-set
 import { upsertBookingsPlannerSettings } from './functions/upsert-bookings-planner-settings/resource';
 import { applyBookingsPlanner } from './functions/apply-bookings-planner/resource';
 import { upsertBookingPlannerFields } from './functions/upsert-booking-planner-fields/resource';
+import { bookingConversation } from './functions/booking-conversation/resource';
 import { getReviews } from './functions/get-reviews/resource';
 import { getReviewsSyncState } from './functions/get-reviews-sync-state/resource';
 import { updateReviewWorkflow } from './functions/update-review-workflow/resource';
@@ -125,6 +126,7 @@ const backend = defineBackend({
   upsertBookingsPlannerSettings,
   applyBookingsPlanner,
   upsertBookingPlannerFields,
+  bookingConversation,
   getReviews,
   getReviewsSyncState,
   updateReviewWorkflow,
@@ -213,6 +215,7 @@ const lambdaFunctionsWithHttp = [
   backend.upsertBookingsPlannerSettings,
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
+  backend.bookingConversation,
   backend.getReviews,
   backend.getReviewsSyncState,
   backend.updateReviewWorkflow,
@@ -430,6 +433,7 @@ bookingsTable.grantReadWriteData(backend.applyBookingsPlanner.resources.lambda);
 bookingsTable.grantReadWriteData(
   backend.upsertBookingPlannerFields.resources.lambda,
 );
+bookingsTable.grantReadWriteData(backend.bookingConversation.resources.lambda);
 backend.getBookings.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: [
@@ -584,6 +588,7 @@ for (const fn of [
   backend.upsertBookingsPlannerSettings,
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
+  backend.bookingConversation,
 ]) {
   const lambdaFn = fn.resources.lambda as LambdaFunction;
   lambdaFn.addLayers(guestyAuthLayer);
@@ -935,13 +940,21 @@ activityLogsTable.grantWriteData(aiAgentsFn);
 openaiSecret.grantRead(aiAgentsFn);
 aiAgentsFn.addToRolePolicy(
   new PolicyStatement({
-    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+      'dynamodb:UpdateItem',
+    ],
     resources: [
       bookingsTable.tableArn,
       `${bookingsTable.tableArn}/index/CheckInDate-index`,
     ],
   }),
 );
+aiAgentsFn.addLayers(guestyAuthLayer);
+aiAgentsFn.addToRolePolicy(guestySecretsPolicy);
+aiAgentsFn.addToRolePolicy(guestySsmPolicy);
 const aiAgentsUrl = aiAgentsFn.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1043,6 +1056,7 @@ const activityLogWriters = [
   backend.proxyGuestyBookingsSync,
   backend.upsertBookingsPlannerSettings,
   backend.upsertBookingPlannerFields,
+  backend.bookingConversation,
   backend.completeSpotCheck,
   backend.upsertCleaner,
   backend.upsertCleaningPlan,
@@ -2106,6 +2120,10 @@ const upsertBookingPlannerFieldsUrl =
   backend.upsertBookingPlannerFields.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const bookingConversationUrl =
+  backend.bookingConversation.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const getReviewsUrl = backend.getReviews.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -2353,6 +2371,7 @@ backend.addOutput({
     upsertBookingsPlannerSettingsUrl: upsertBookingsPlannerSettingsUrl.url,
     applyBookingsPlannerUrl: applyBookingsPlannerUrl.url,
     upsertBookingPlannerFieldsUrl: upsertBookingPlannerFieldsUrl.url,
+    bookingConversationUrl: bookingConversationUrl.url,
     getCheckInTrackerUrl: getCheckInTrackerUrl.url,
     upsertCheckInTrackerUrl: upsertCheckInTrackerUrl.url,
     receiveAkilesEventsUrl: receiveAkilesEventsUrl.url,

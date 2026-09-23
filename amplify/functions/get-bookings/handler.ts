@@ -29,7 +29,7 @@ const PROJECTED_FIELDS = [
   'UpdatedAt',
   'EventType',
   'Currency',
-  'ConversationID',
+  'ConversationID', // pointer to Guesty inbox; posts are never stored here
   'ListingID',
   'GuestEmail',
   'GuestPaidTotal',

@@ -26,6 +26,7 @@ Registro vivo. Si no está aquí, no existe para el siguiente agente.
 | B7 | **Login** (Authenticator de Amplify) entra en el rediseño. Hoy solo personaliza el logo. |
 | B8 | **Hebreo:** no traducir ni activar `he` en el switcher durante este rediseño. Sí preparar `dir` + propiedades lógicas en tokens nuevos. Un catálogo hebreo + QA RTL de 35 pantallas desviaría esta tarea. Cuando existan traducciones, será un slice propio. |
 | B9 | **Sidebar HIG de dos niveles** (secciones + funcionalidades). Las funcionalidades de una sección se eligen en el sidebar, no en tabs de barra superior. Iconos **regular**. La sidebar está visible por defecto; ocultarla es opt-in. Tablet no auto-colapsa a un rail de secciones. |
+| B10 | **Chat de Guesty no se persiste en Booking.** `yalla-bookings` solo guarda el puntero `ConversationID`. El historial se lee y se escribe bajo demanda contra Guesty Open API. Un hilo puede cubrir varias reservas (`relatedReservationIds`). |
 
 ---
 
@@ -95,3 +96,4 @@ Ver `UX_ARCHITECTURE.md` § Incorporación de módulos. Resumen: spec funcional 
 | 2026-09-12 | Apertura. Arqueología + dirección. Checkpoint. |
 | 2026-09-12 | Respuestas B1–B6, login, hebreo. Grow oculto. Routing en shell. Nav por rol. |
 | 2026-09-12 | Slice 0 en código. Sign out añadido a Cuenta (no existía en la app). |
+| 2026-09-23 | B10: chat Guesty = puntero `ConversationID` + lectura/escritura live. |

@@ -1,9 +1,13 @@
+import { listBookingConversationTool } from './list-booking-conversation';
 import { listTodayCheckinGuestsTool } from './list-today-checkin-guests';
+import { sendBookingConversationMessageTool } from './send-booking-conversation-message';
 import { TOOL_CATALOG_VERSION } from './metadata';
 import type { AgentTool, AgentToolPublic } from '../types';
 
 const TOOLS: Record<string, AgentTool> = {
   [listTodayCheckinGuestsTool.name]: listTodayCheckinGuestsTool,
+  [listBookingConversationTool.name]: listBookingConversationTool,
+  [sendBookingConversationMessageTool.name]: sendBookingConversationMessageTool,
 };
 
 const toPublic = (tool: AgentTool): AgentToolPublic => ({
