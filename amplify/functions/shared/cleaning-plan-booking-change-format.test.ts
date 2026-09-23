@@ -4,8 +4,10 @@ import {
   canReopenCleaningPlanForBookingChange,
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
+  formatCleaningPlanBookingContextSlackText,
   formatCleaningPlanDateDdMm,
   plannerFieldsAffectCleaningContext,
+  selectPlanVisitsForBookingContextChange,
 } from './cleaning-plan-booking-change-format';
 
 test('formats plan dates as dd/mm', () => {
@@ -34,7 +36,7 @@ test('check-in move covers the previous and new cleaning days', () => {
 });
 
 test('describes Baranda check-in rewrite the way ops expects', () => {
-  const lines = describeVisitBookingContextChanges(
+  const block = describeVisitBookingContextChanges(
     'Clean Baranda',
     {
       confirmationCode: 'OLD',
@@ -55,14 +57,13 @@ test('describes Baranda check-in rewrite the way ops expects', () => {
       sofaBedYes: false,
     },
   );
-  assert.ok(
-    lines.includes('Clean Baranda: antes check-in 18/09 y ahora 17/09'),
-  );
-  assert.ok(lines.includes('Clean Baranda: con hueco → sin hueco'));
+  assert.equal(block?.title, 'Clean Baranda');
+  assert.ok(block?.facts.includes('Antes check-in 18/09, ahora 17/09'));
+  assert.ok(block?.facts.includes('Antes con hueco, ahora sin hueco'));
 });
 
 test('same-day booking identity without date change still reports the new reservation', () => {
-  const lines = describeVisitBookingContextChanges(
+  const block = describeVisitBookingContextChanges(
     'Clean Baranda',
     {
       confirmationCode: 'OLD',
@@ -83,7 +84,10 @@ test('same-day booking identity without date change still reports the new reserv
       sofaBedYes: false,
     },
   );
-  assert.deepEqual(lines, ['Clean Baranda: reserva OLD → MARIA']);
+  assert.deepEqual(block, {
+    title: 'Clean Baranda',
+    facts: ['Antes reserva OLD, ahora MARIA'],
+  });
 });
 
 test('ignores identical booking context', () => {
@@ -96,9 +100,9 @@ test('ignores identical booking context', () => {
     hasBookingGap: false,
     sofaBedYes: false,
   };
-  assert.deepEqual(
+  assert.equal(
     describeVisitBookingContextChanges('Clean Baranda', snapshot, snapshot),
-    [],
+    null,
   );
 });
 
@@ -179,5 +183,58 @@ test('future cleaning plans can reopen after 10:00', () => {
       nowTime: '18:00',
     }),
     true,
+  );
+});
+
+test('Esperanza 9 Slack diffs keep one visit per listing on the plan', () => {
+  const selected = selectPlanVisitsForBookingContextChange(
+    [
+      {
+        id: 'GST-6aaeedbf7ce34884c832a5b1',
+        title: 'Clean Esperanza 9 + Recambio ambientador',
+        propertyId: '6835cef04af0d8002845abdd',
+      },
+      {
+        id: 'VISIT-RECONCILE-6a7d2fe332e6ffb928b1e835',
+        title: 'Clean Esperanza 9',
+        propertyId: '6835cef04af0d8002845abdd',
+      },
+    ],
+    [
+      {
+        visitId: 'GST-6aaeedbf7ce34884c832a5b1',
+        propertyId: '6835cef04af0d8002845abdd',
+      },
+    ],
+  );
+  assert.deepEqual(
+    selected.map((visit) => visit.id),
+    ['GST-6aaeedbf7ce34884c832a5b1'],
+  );
+});
+
+test('formats the Esperanza 9 reopen Slack copy with a linked plan date', () => {
+  const text = formatCleaningPlanBookingContextSlackText({
+    dates: ['2026-09-23'],
+    blocks: [
+      {
+        title: 'Clean Esperanza 9 + Recambio ambientador',
+        facts: [
+          'Antes check-in 23/09, ahora 26/09',
+          'Antes tarjeta 1 - 26/09, ahora Sin tarjeta',
+        ],
+      },
+    ],
+    linkedDates: ['<https://app.example/?page=Cleaning%20Plan&planDate=2026-09-23|2026-09-23>'],
+  });
+  assert.equal(
+    text,
+    [
+      'Se reabrió el plan de limpieza del 2026-09-23 por cambios en una reserva. Clean Esperanza 9 + Recambio ambientador:',
+      '- Antes check-in 23/09, ahora 26/09',
+      '- Antes tarjeta 1 - 26/09, ahora Sin tarjeta',
+      '',
+      'Revisar plan y volver a marcarlo como listo: <https://app.example/?page=Cleaning%20Plan&planDate=2026-09-23|2026-09-23>',
+    ].join('\n'),
   );
 });

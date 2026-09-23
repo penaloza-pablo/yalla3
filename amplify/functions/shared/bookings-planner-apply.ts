@@ -46,9 +46,6 @@ const debugBookingPlan = (
     timestamp: Date.now(),
   };
   console.log('YALLA_DEBUG', JSON.stringify(payload));
-  // #region agent log
-  fetch('http://127.0.0.1:7799/ingest/ef8463ab-135a-4483-82b6-033ac983e58b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ba4530'},body:JSON.stringify(payload)}).catch(()=>{});
-  // #endregion
 };
 
 const GUESTY_CLIENT_PATH =

@@ -25,7 +25,10 @@ import {
   canReopenCleaningPlanForBookingChange,
   candidateCleaningPlanDatesForBookingChange,
   describeVisitBookingContextChanges,
+  formatCleaningPlanBookingContextSlackText,
   plannerFieldsAffectCleaningContext,
+  selectPlanVisitsForBookingContextChange,
+  type VisitBookingContextChangeBlock,
   type VisitBookingContextSnapshot,
 } from './cleaning-plan-booking-change-format';
 import { nowIso } from './dynamo-http';
@@ -56,9 +59,6 @@ const debugBookingPlan = (
     timestamp: Date.now(),
   };
   console.log('YALLA_DEBUG', JSON.stringify(payload));
-  // #region agent log
-  fetch('http://127.0.0.1:7799/ingest/ef8463ab-135a-4483-82b6-033ac983e58b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ba4530'},body:JSON.stringify(payload)}).catch(()=>{});
-  // #endregion
 };
 
 const asPlanItems = (value: unknown): Record<string, unknown>[] =>
@@ -208,9 +208,20 @@ const reopenReadyPlanKeepingItems = async (
 
 export const notifyCleaningPlanBookingContextChange = async (
   reopenedDates: string[],
-  changeLines: string[],
+  changeBlocks: VisitBookingContextChangeBlock[],
 ) => {
-  if (reopenedDates.length === 0 || changeLines.length === 0) {
+  const text = formatCleaningPlanBookingContextSlackText({
+    dates: reopenedDates.map((date) => escapeMrkdwn(date)),
+    blocks: changeBlocks.map((block) => ({
+      title: escapeMrkdwn(block.title),
+      facts: block.facts.map((fact) => escapeMrkdwn(fact)),
+    })),
+    linkedDates: reopenedDates.map((date) => {
+      const url = appPageUrl('Cleaning Plan', { planDate: date });
+      return `<${url}|${escapeMrkdwn(date)}>`;
+    }),
+  });
+  if (!text) {
     return { sent: false, skipped: 'no_ready_plan' as const };
   }
   if (
@@ -230,20 +241,6 @@ export const notifyCleaningPlanBookingContextChange = async (
     );
     return { sent: false, skipped: 'channel' as const };
   }
-
-  const planLinks = reopenedDates.map((date) => {
-    const url = appPageUrl('Cleaning Plan', { planDate: date });
-    return `• <${url}|Plan del ${escapeMrkdwn(date)}>`;
-  });
-  const header =
-    reopenedDates.length === 1
-      ? `Se reabrió el plan de limpieza del ${escapeMrkdwn(reopenedDates[0])} porque Guesty actualizó una reserva. Hay que revisarlo y volver a marcarlo como listo.`
-      : 'Se reabrieron planes de limpieza porque Guesty actualizó una reserva. Hay que revisarlos y volver a marcarlos como listos.';
-  const text = [
-    header,
-    ...planLinks,
-    ...changeLines.map((line) => `• ${escapeMrkdwn(line)}`),
-  ].join('\n');
 
   await slackApi('chat.postMessage', {
     channel: cleaningChannelId,
@@ -362,7 +359,7 @@ export const reopenCleaningPlansForBookingContextChange = async ({
   const propertiesTable = process.env.PROPERTIES_TABLE;
   const listingIds = [...listingKeys];
   const reopenedDates: string[] = [];
-  const changeLines: string[] = [];
+  const changeBlocks: VisitBookingContextChangeBlock[] = [];
 
   for (const plannedDate of candidateDates) {
     if (!canReopenCleaningPlanForBookingChange({ plannedDate, today, nowTime })) {
@@ -385,8 +382,28 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       );
       continue;
     }
-    const visits = (await queryCleaningVisitsForDate(visitsTable, plannedDate))
-      .filter((visit) => visitMatchesListingKeys(visit, listingKeys));
+    const matchingVisits = (
+      await queryCleaningVisitsForDate(visitsTable, plannedDate)
+    ).filter((visit) => visitMatchesListingKeys(visit, listingKeys));
+    const visits = selectPlanVisitsForBookingContextChange(
+      matchingVisits,
+      asPlanItems(plan?.items),
+    );
+    debugBookingPlan(
+      'F',
+      'cleaning-plan-booking-change.ts:visits',
+      'Visits selected for booking-context Slack diffs',
+      {
+        plannedDate,
+        matchingTitles: matchingVisits.map(
+          (visit) => asString(visit.title) || asString(visit.id),
+        ),
+        selectedTitles: visits.map(
+          (visit) => asString(visit.title) || asString(visit.id),
+        ),
+        selectedCount: visits.length,
+      },
+    );
     if (visits.length === 0) {
       debugBookingPlan(
         'C',
@@ -418,7 +435,7 @@ export const reopenCleaningPlansForBookingContextChange = async ({
         : Promise.resolve(new Map<string, Record<string, unknown>>()),
     ]);
 
-    const dateLines: string[] = [];
+    const dateBlocks: VisitBookingContextChangeBlock[] = [];
     for (const visit of visits) {
       const propertyId = asString(visit.propertyId);
       const afterBooking = pickNextBookingForVisit(afterBookings, visit);
@@ -451,15 +468,16 @@ export const reopenCleaningPlansForBookingContextChange = async ({
         property: properties.get(propertyId),
         gapFreeNights,
       });
-      dateLines.push(
-        ...describeVisitBookingContextChanges(
-          asString(visit.title) || propertyId,
-          snapshotFromContext(beforeContext),
-          snapshotFromContext(afterContext),
-        ),
+      const block = describeVisitBookingContextChanges(
+        asString(visit.title) || propertyId,
+        snapshotFromContext(beforeContext),
+        snapshotFromContext(afterContext),
       );
+      if (block) {
+        dateBlocks.push(block);
+      }
     }
-    if (dateLines.length === 0) {
+    if (dateBlocks.length === 0) {
       debugBookingPlan(
         'D',
         'cleaning-plan-booking-change.ts:diff',
@@ -479,28 +497,36 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       {
         plannedDate,
         reopened: result.reopened,
-        changeLines: dateLines,
+        changeBlocks: dateBlocks,
       },
     );
     if (!result.reopened) {
       continue;
     }
     reopenedDates.push(plannedDate);
-    changeLines.push(...dateLines);
+    changeBlocks.push(...dateBlocks);
   }
 
   let notified = false;
   try {
     const slack = await notifyCleaningPlanBookingContextChange(
       reopenedDates,
-      changeLines,
+      changeBlocks,
     );
     notified = slack.sent;
     debugBookingPlan(
       'A',
       'cleaning-plan-booking-change.ts:slack',
       'Slack notify result',
-      { reopenedDates, notified, skipped: slack.skipped, changeCount: changeLines.length },
+      {
+        reopenedDates,
+        notified,
+        skipped: slack.skipped,
+        changeCount: changeBlocks.reduce(
+          (total, block) => total + block.facts.length,
+          0,
+        ),
+      },
     );
   } catch (error) {
     console.error(
