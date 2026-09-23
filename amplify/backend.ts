@@ -588,6 +588,7 @@ for (const fn of [
   backend.upsertBookingsPlannerSettings,
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
+  backend.getPropertyReport,
 ]) {
   const lambdaFn = fn.resources.lambda as LambdaFunction;
   lambdaFn.addLayers(guestyAuthLayer);
@@ -1873,9 +1874,6 @@ propertyReportsTable.grantReadWriteData(
   backend.upsertPropertyReport.resources.lambda,
 );
 bookingsTable.grantReadData(backend.getPropertyReport.resources.lambda);
-backend.getPropertyReport.resources.lambda.addLayers(guestyAuthLayer);
-backend.getPropertyReport.resources.lambda.addToRolePolicy(guestySecretsPolicy);
-backend.getPropertyReport.resources.lambda.addToRolePolicy(guestySsmPolicy);
 backend.getPropertyReport.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: [

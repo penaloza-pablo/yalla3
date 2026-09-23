@@ -160,7 +160,7 @@ export const updateCaseFields = async (
   const values: Record<string, unknown> = {};
   const setParts: string[] = [];
   let index = 0;
-  const fields = { ...set, updatedAt: nowIso() };
+  const fields: Record<string, unknown> = { ...set, updatedAt: nowIso() };
   for (const [field, value] of Object.entries(fields)) {
     if (value === undefined) {
       continue;
