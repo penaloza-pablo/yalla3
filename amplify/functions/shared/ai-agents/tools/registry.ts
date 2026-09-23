@@ -1,5 +1,5 @@
+import { getUpcomingReservationAlertsTool } from './get-upcoming-reservation-alerts';
 import { listBookingConversationTool } from './list-booking-conversation';
-import { listBookingsPlanSofaCamaUnknownTool } from './list-bookings-plan-sofa-cama-unknown';
 import { listTodayCheckinGuestsTool } from './list-today-checkin-guests';
 import { sendBookingConversationMessageTool } from './send-booking-conversation-message';
 import { TOOL_CATALOG_VERSION } from './metadata';
@@ -7,7 +7,7 @@ import type { AgentTool, AgentToolPublic } from '../types';
 
 const TOOLS: Record<string, AgentTool> = {
   [listTodayCheckinGuestsTool.name]: listTodayCheckinGuestsTool,
-  [listBookingsPlanSofaCamaUnknownTool.name]: listBookingsPlanSofaCamaUnknownTool,
+  [getUpcomingReservationAlertsTool.name]: getUpcomingReservationAlertsTool,
   [listBookingConversationTool.name]: listBookingConversationTool,
   [sendBookingConversationMessageTool.name]: sendBookingConversationMessageTool,
 };

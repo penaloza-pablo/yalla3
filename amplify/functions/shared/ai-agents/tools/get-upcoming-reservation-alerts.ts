@@ -1,11 +1,10 @@
 import { extractConversationId } from '../../booking-conversation';
 import {
+  alertsForPlannerBooking,
   canonicalizeLinenValue,
-  isBookingsPlanSofaCamaUnknownAsk,
+  isBookingsPlanWithAlerts,
   PLANNER_WINDOW_DAYS,
-  sofaCamaUnknownWarningsFor,
-  SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES,
-  type SofaCamaUnknownWarningCode,
+  type PlannerAlertType,
 } from '../../bookings-planner';
 import { listPlannerWindowBookings } from '../../bookings-planner-window';
 import { resolveYallaPropertyLabel } from '../../property-identity';
@@ -22,31 +21,19 @@ const parameters: Record<string, unknown> = {
 const asString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : value == null ? '' : String(value);
 
-type SofaCamaUnknownBooking = {
-  reservationId: string;
-  conversationId: string;
-  list_booking_conversation: { reservationId: string };
-  guestName: string;
-  property: string;
-  listingId: string;
-  checkIn: string;
-  checkOut: string;
-  linen: string;
-  warning: string;
-  warningCode: SofaCamaUnknownWarningCode;
-  warnings: Array<{
-    code: SofaCamaUnknownWarningCode;
-    text: string;
-  }>;
-};
+const emptyCounts = (): Record<PlannerAlertType, number> => ({
+  SOFA_BED: 0,
+  ACCESS_LINK: 0,
+  SINGLE_GUEST_VERIFICATION: 0,
+});
 
-export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
-  id: 'list_bookings_plan_sofa_cama_unknown',
-  name: 'list_bookings_plan_sofa_cama_unknown',
+export const getUpcomingReservationAlertsTool: AgentTool = {
+  id: 'get_upcoming_reservation_alerts',
+  name: 'get_upcoming_reservation_alerts',
   description:
-    'Lists Booking Plan rows (confirmed check-ins in the planner window) where sofa bed / linen is unknown (?). Includes both warning texts: ask about the sofa bed, and for Arenal Verdejo ask if they want a double or two singles.',
+    'Lists upcoming Booking Plan reservations (confirmed check-ins in the planner window) that still have warnings. Each warning is a separate alert: sofa bed unknown, missing Access code/link, or single-guest verification.',
   outputDescription:
-    'JSON with businessDate, warningTexts, counts, and bookings[{reservationId, conversationId, list_booking_conversation: { reservationId }, guestName, property, linen, warning, warningCode, warnings[{code, text}]}]. reservationId is the required argument for list_booking_conversation; conversationId is the stored inbox pointer when present.',
+    'JSON with reservations[{reservationId, conversationId, list_booking_conversation: { reservationId }, guestName, property, checkIn, checkOut, guests, linen, access, alerts[{type, code, value, warning}]}]. reservationId is the required argument for list_booking_conversation; conversationId is the stored inbox pointer when present.',
   riskLevel: 'read',
   requiresApproval: false,
   timeoutMs: 20_000,
@@ -58,10 +45,10 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
     properties: {
       businessDate: { type: 'string' },
       timezone: { type: 'string' },
-      warningTexts: { type: 'object' },
-      bookings: { type: 'array' },
+      reservations: { type: 'array' },
       count: { type: 'number' },
-      counts: { type: 'object' },
+      alertCount: { type: 'number' },
+      countsByType: { type: 'object' },
     },
   },
   executionTarget: 'internal',
@@ -70,20 +57,32 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
     const tableName = process.env.BOOKINGS_TABLE || 'yalla-bookings';
     const dateIso = getTodayInMadrid();
     const items = await listPlannerWindowBookings(tableName, dateIso);
-    const bookings: SofaCamaUnknownBooking[] = [];
+    const reservations: Array<{
+      reservationId: string;
+      conversationId: string;
+      list_booking_conversation: { reservationId: string };
+      guestName: string;
+      property: string;
+      listingId: string;
+      checkIn: string;
+      checkOut: string;
+      guests: string;
+      linen: string;
+      access: string;
+      alerts: ReturnType<typeof alertsForPlannerBooking>;
+    }> = [];
     const planned: CoverageItem[] = [];
     const unchecked: CoverageItem[] = [];
-    const counts = {
-      linen_ask_guest: 0,
-      double_or_two_singles_ask: 0,
-    };
+    const countsByType = emptyCounts();
+    let alertCount = 0;
 
     for (const item of items) {
       const reservationId = asString(item.ReservationID);
-      if (!reservationId) {
+      if (!reservationId || !isBookingsPlanWithAlerts(item)) {
         continue;
       }
-      if (!isBookingsPlanSofaCamaUnknownAsk(item)) {
+      const alerts = alertsForPlannerBooking(item);
+      if (alerts.length === 0) {
         continue;
       }
       const listingId = asString(item.ListingID);
@@ -101,17 +100,9 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
           listingNickname,
           nickname: listingNickname,
         }) || listingNickname;
-      const warningCodes = sofaCamaUnknownWarningsFor(item);
-      const warnings = warningCodes.map((code) => ({
-        code,
-        text: SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES[code],
-      }));
-      const primary = warnings[0];
-      if (!primary) {
-        continue;
-      }
-      for (const code of warningCodes) {
-        counts[code] += 1;
+      for (const alert of alerts) {
+        countsByType[alert.type] += 1;
+        alertCount += 1;
       }
       if (!conversationId) {
         unchecked.push({
@@ -121,7 +112,7 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
           source: `yalla-bookings ReservationID=${reservationId}`,
         });
       }
-      bookings.push({
+      reservations.push({
         reservationId,
         conversationId,
         list_booking_conversation: { reservationId },
@@ -130,27 +121,23 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
         listingId,
         checkIn: asString(item.CheckInDate).slice(0, 10),
         checkOut: asString(item.CheckOutDate).slice(0, 10),
+        guests: asString(item.Guests),
         linen: linen || '?',
-        warning: primary.text,
-        warningCode: primary.code,
-        warnings,
+        access: asString(item.Access),
+        alerts,
       });
       planned.push({
         id: reservationId,
         label: guestName || reservationId,
-        detail: `${property} · ${primary.text}`,
-        source: `Booking Plan sofa cama = ? ${primary.code}`,
+        detail: `${property} · ${alerts.length} alert${alerts.length === 1 ? '' : 's'}`,
+        source: 'Booking Plan warnings',
       });
     }
 
-    bookings.sort((left, right) => {
+    reservations.sort((left, right) => {
       const byDate = left.checkIn.localeCompare(right.checkIn);
       if (byDate !== 0) {
         return byDate;
-      }
-      const byWarning = left.warningCode.localeCompare(right.warningCode);
-      if (byWarning !== 0) {
-        return byWarning;
       }
       return left.guestName.localeCompare(right.guestName, 'es');
     });
@@ -160,10 +147,10 @@ export const listBookingsPlanSofaCamaUnknownTool: AgentTool = {
         businessDate: dateIso,
         timezone: 'Europe/Madrid',
         plannerWindowDays: PLANNER_WINDOW_DAYS,
-        warningTexts: SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES,
-        count: bookings.length,
-        counts,
-        bookings,
+        count: reservations.length,
+        alertCount,
+        countsByType,
+        reservations,
       },
       coverage: { planned, unchecked },
     };

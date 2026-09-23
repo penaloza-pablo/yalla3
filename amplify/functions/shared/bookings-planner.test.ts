@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  alertsForPlannerBooking,
   ACCESS_FIELD_ID,
   computePlannerFields,
   defaultPlannerSettings,
@@ -13,6 +14,7 @@ import {
   guestyReservationMatchesPlannerPatch,
   isBookingsPlanDoubleOrTwoSinglesAsk,
   isBookingsPlanSofaCamaUnknownAsk,
+  isBookingsPlanWithAlerts,
   isDoNotEarlyCheckIn,
   isEarlyCheckInEnabled,
   isGiftCardFrozen,
@@ -480,6 +482,77 @@ test('Booking Plan sofa-cama unknown warnings cover sofa bed ask and Verdejo dou
       Status: 'inquiry',
     }),
     false,
+  );
+});
+
+test('Booking Plan upcoming alerts split sofa, access and single-guest warnings', () => {
+  const mixed = {
+    ReservationID: 'res-mixed',
+    ListingID: 'listing-open',
+    Status: 'confirmed',
+    Linen: '',
+    Access: '',
+    Guests: 1,
+    PlannerWarnings: ['gift_card_access_missing', 'single_guest'],
+  };
+  assert.equal(isBookingsPlanWithAlerts(mixed), true);
+  assert.deepEqual(alertsForPlannerBooking(mixed), [
+    {
+      type: 'ACCESS_LINK',
+      code: 'gift_card_access_missing',
+      value: '',
+      warning: 'Configura el código o enlace de Access',
+    },
+    {
+      type: 'SINGLE_GUEST_VERIFICATION',
+      code: 'single_guest',
+      value: 'PENDING',
+      warning: 'Valida con el huésped esta reserva de 1 guest.',
+    },
+    {
+      type: 'SOFA_BED',
+      code: 'linen_ask_guest',
+      value: '?',
+      warning: 'Consulta al huésped lo del sofá cama.',
+    },
+  ]);
+
+  const accessFilled = alertsForPlannerBooking({
+    ...mixed,
+    Access: 'https://access.example/code',
+    Linen: LINEN_VALUES.NO,
+    PlannerWarnings: ['gift_card_access_missing', 'single_guest'],
+  });
+  assert.deepEqual(accessFilled, [
+    {
+      type: 'SINGLE_GUEST_VERIFICATION',
+      code: 'single_guest',
+      value: 'PENDING',
+      warning: 'Valida con el huésped esta reserva de 1 guest.',
+    },
+  ]);
+
+  assert.equal(
+    isBookingsPlanWithAlerts({ ...mixed, Status: 'inquiry' }),
+    false,
+  );
+  assert.deepEqual(
+    alertsForPlannerBooking({
+      ReservationID: 'res-verdejo',
+      ListingID: VERDEJO_LISTING_ID,
+      Status: 'confirmed',
+      Linen: '',
+      Access: '1234',
+    }),
+    [
+      {
+        type: 'SOFA_BED',
+        code: 'double_or_two_singles_ask',
+        value: '?',
+        warning:
+          'Pregunta al huésped si quiere cama doble o dos individuales.',
+      },
+    ],
   );
 });
 

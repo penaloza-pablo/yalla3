@@ -614,6 +614,31 @@ export const displayedPlannerWarnings = (item: {
   return visible.includes(missingCode) ? visible : [...visible, missingCode];
 };
 
+export const PLANNER_WARNING_TEXT_ES: Record<PlannerWarningCode, string> = {
+  linen_ask_guest: 'Consulta al huésped lo del sofá cama.',
+  gift_card_access_missing: 'Configura el código o enlace de Access',
+  single_guest: 'Valida con el huésped esta reserva de 1 guest.',
+  double_or_two_singles_ask:
+    'Pregunta al huésped si quiere cama doble o dos individuales.',
+};
+
+export const PLANNER_ALERT_TYPES = {
+  linen_ask_guest: 'SOFA_BED',
+  double_or_two_singles_ask: 'SOFA_BED',
+  gift_card_access_missing: 'ACCESS_LINK',
+  single_guest: 'SINGLE_GUEST_VERIFICATION',
+} as const;
+
+export type PlannerAlertType =
+  (typeof PLANNER_ALERT_TYPES)[PlannerWarningCode];
+
+export type PlannerReservationAlert = {
+  type: PlannerAlertType;
+  code: PlannerWarningCode;
+  value: string;
+  warning: string;
+};
+
 export const SOFA_CAMA_UNKNOWN_WARNING_CODES = [
   'linen_ask_guest',
   'double_or_two_singles_ask',
@@ -626,9 +651,8 @@ export const SOFA_CAMA_UNKNOWN_WARNING_TEXT_ES: Record<
   SofaCamaUnknownWarningCode,
   string
 > = {
-  linen_ask_guest: 'Consulta al huésped lo del sofá cama.',
-  double_or_two_singles_ask:
-    'Pregunta al huésped si quiere cama doble o dos individuales.',
+  linen_ask_guest: PLANNER_WARNING_TEXT_ES.linen_ask_guest,
+  double_or_two_singles_ask: PLANNER_WARNING_TEXT_ES.double_or_two_singles_ask,
 };
 
 const isSofaCamaUnknownWarning = (
@@ -654,6 +678,41 @@ export const sofaCamaUnknownWarningsFor = (
   item: Record<string, unknown>,
 ): SofaCamaUnknownWarningCode[] =>
   displayedPlannerWarnings(item).filter(isSofaCamaUnknownWarning);
+
+export const alertValueForPlannerWarning = (
+  code: PlannerWarningCode,
+  item: Record<string, unknown>,
+) => {
+  if (code === 'linen_ask_guest' || code === 'double_or_two_singles_ask') {
+    const listingId = asString(item.ListingID);
+    const linen = canonicalizeLinenValue(
+      item.Linen,
+      listingId,
+      asString(item.ListingNickname),
+    );
+    return linen || '?';
+  }
+  if (code === 'gift_card_access_missing') {
+    return asString(item.Access);
+  }
+  if (code === 'single_guest') {
+    return 'PENDING';
+  }
+  return '';
+};
+
+export const alertsForPlannerBooking = (
+  item: Record<string, unknown>,
+): PlannerReservationAlert[] =>
+  displayedPlannerWarnings(item).map((code) => ({
+    type: PLANNER_ALERT_TYPES[code],
+    code,
+    value: alertValueForPlannerWarning(code, item),
+    warning: PLANNER_WARNING_TEXT_ES[code],
+  }));
+
+export const isBookingsPlanWithAlerts = (item: Record<string, unknown>) =>
+  isActivePlannerStatus(item.Status) && alertsForPlannerBooking(item).length > 0;
 
 export const isBookingsPlanSofaCamaUnknownAsk = (
   item: Record<string, unknown>,
