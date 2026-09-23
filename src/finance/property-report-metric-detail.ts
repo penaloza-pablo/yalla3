@@ -290,6 +290,18 @@ export const buildMetricDetailSections = (
           ),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'maintenanceCoverByOwnerVat':
+      return [
+        section(
+          maintenanceName,
+          maintenanceName,
+          allocatedRows(
+            sources.maintenance,
+            (line) => line.iva,
+            (line) => isOwnerAlloc(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'maintenanceCoverByUs':
       return [
         section(
@@ -298,6 +310,18 @@ export const buildMetricDetailSections = (
           allocatedRows(
             sources.maintenance,
             (line) => line.net,
+            (line) => isBearAlloc(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'maintenanceCoverByUsVat':
+      return [
+        section(
+          maintenanceName,
+          maintenanceName,
+          allocatedRows(
+            sources.maintenance,
+            (line) => line.iva,
             (line) => isBearAlloc(line.allocation),
           ),
         ),
@@ -394,6 +418,27 @@ export const buildMetricDetailSections = (
           ),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'expensesAndServicesCoverByOwnerVat':
+      return [
+        section(
+          servicesName,
+          servicesName,
+          allocatedRows(
+            sources.services,
+            (line) => line.iva,
+            (line) => isOwnerAlloc(line.allocation),
+          ),
+        ),
+        section(
+          expensesName,
+          expensesName,
+          allocatedRows(
+            sources.expenses,
+            (line) => line.iva,
+            (line) => isOwnerAlloc(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'expensesAndServicesCoverByUs':
       return [
         section(
@@ -411,6 +456,27 @@ export const buildMetricDetailSections = (
           allocatedRows(
             sources.expenses,
             (line) => line.net,
+            (line) => isBearAlloc(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'expensesAndServicesCoverByUsVat':
+      return [
+        section(
+          servicesName,
+          servicesName,
+          allocatedRows(
+            sources.services,
+            (line) => line.iva,
+            (line) => isBearAlloc(line.allocation),
+          ),
+        ),
+        section(
+          expensesName,
+          expensesName,
+          allocatedRows(
+            sources.expenses,
+            (line) => line.iva,
             (line) => isBearAlloc(line.allocation),
           ),
         ),

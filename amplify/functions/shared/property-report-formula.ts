@@ -44,13 +44,17 @@ export const FORMULA_CATALOG_VARIABLES = [
   'cleaningMargin',
   'maintenance',
   'maintenanceCoverByOwner',
+  'maintenanceCoverByOwnerVat',
   'maintenanceCoverByUs',
+  'maintenanceCoverByUsVat',
   'markup',
   'markupVat',
   'iva',
   'expensesAndServices',
   'expensesAndServicesCoverByOwner',
+  'expensesAndServicesCoverByOwnerVat',
   'expensesAndServicesCoverByUs',
+  'expensesAndServicesCoverByUsVat',
 ] as const;
 
 export type FormulaCatalogVariable = (typeof FORMULA_CATALOG_VARIABLES)[number];

@@ -24,6 +24,7 @@ export type PropertyReportFieldRole = 'source' | 'indicator'
 export type AllocatedReportLine = {
   section: 'cleaning' | 'maintenance' | 'service' | 'expense' | 'income'
   net: number
+  iva?: number
   allocation: ReportLineAllocation | ''
 }
 
@@ -235,14 +236,26 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'maintenanceCoverByOwner',
     unit: 'money',
     role: 'indicator',
+    formula: 'sum(maintenance.net where allocation in [owner, ownerPlus12])',
+  },
+  {
+    id: 'maintenanceCoverByOwnerVat',
+    unit: 'money',
+    role: 'indicator',
     formula:
-      'sum(maintenance.net where allocation in [owner, ownerPlus12])',
+      'sum(maintenance.iva where allocation in [owner, ownerPlus12])',
   },
   {
     id: 'maintenanceCoverByUs',
     unit: 'money',
     role: 'indicator',
     formula: 'sum(maintenance.net where allocation = bear)',
+  },
+  {
+    id: 'maintenanceCoverByUsVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum(maintenance.iva where allocation = bear)',
   },
   {
     id: 'markup',
@@ -278,10 +291,23 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
       'sum((service|expense).net where allocation in [owner, ownerPlus12])',
   },
   {
+    id: 'expensesAndServicesCoverByOwnerVat',
+    unit: 'money',
+    role: 'indicator',
+    formula:
+      'sum((service|expense).iva where allocation in [owner, ownerPlus12])',
+  },
+  {
     id: 'expensesAndServicesCoverByUs',
     unit: 'money',
     role: 'indicator',
     formula: 'sum((service|expense).net where allocation = bear)',
+  },
+  {
+    id: 'expensesAndServicesCoverByUsVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum((service|expense).iva where allocation = bear)',
   },
   {
     id: 'amountTransferred',
@@ -361,10 +387,19 @@ const evaluateNamedFormula = (
 const sumAllocated = (
   lines: AllocatedReportLine[],
   match: (line: AllocatedReportLine) => boolean,
+  amount: (line: AllocatedReportLine) => number = (line) => line.net,
 ) =>
   roundMoney(
-    lines.reduce((sum, line) => (match(line) ? sum + line.net : sum), 0),
+    lines.reduce(
+      (sum, line) => (match(line) ? sum + amount(line) : sum),
+      0,
+    ),
   )
+
+const sumAllocatedIva = (
+  lines: AllocatedReportLine[],
+  match: (line: AllocatedReportLine) => boolean,
+) => sumAllocated(lines, match, (line) => line.iva ?? 0)
 
 const resolveManagementFee = (
   values: Record<string, number>,
@@ -407,7 +442,17 @@ export const computePropertyReportMetrics = (
       line.section === 'maintenance' &&
       (line.allocation === 'owner' || line.allocation === 'ownerPlus12'),
   )
+  const maintenanceCoverByOwnerVat = sumAllocatedIva(
+    inputs.allocatedLines,
+    (line) =>
+      line.section === 'maintenance' &&
+      (line.allocation === 'owner' || line.allocation === 'ownerPlus12'),
+  )
   const maintenanceCoverByUs = sumAllocated(
+    inputs.allocatedLines,
+    (line) => line.section === 'maintenance' && line.allocation === 'bear',
+  )
+  const maintenanceCoverByUsVat = sumAllocatedIva(
     inputs.allocatedLines,
     (line) => line.section === 'maintenance' && line.allocation === 'bear',
   )
@@ -431,7 +476,19 @@ export const computePropertyReportMetrics = (
       (line.section === 'service' || line.section === 'expense') &&
       (line.allocation === 'owner' || line.allocation === 'ownerPlus12'),
   )
+  const expensesAndServicesCoverByOwnerVat = sumAllocatedIva(
+    inputs.allocatedLines,
+    (line) =>
+      (line.section === 'service' || line.section === 'expense') &&
+      (line.allocation === 'owner' || line.allocation === 'ownerPlus12'),
+  )
   const expensesAndServicesCoverByUs = sumAllocated(
+    inputs.allocatedLines,
+    (line) =>
+      (line.section === 'service' || line.section === 'expense') &&
+      line.allocation === 'bear',
+  )
+  const expensesAndServicesCoverByUsVat = sumAllocatedIva(
     inputs.allocatedLines,
     (line) =>
       (line.section === 'service' || line.section === 'expense') &&
@@ -469,13 +526,17 @@ export const computePropertyReportMetrics = (
     cleaningMargin,
     maintenance: roundMoney(inputs.maintenanceNet),
     maintenanceCoverByOwner,
+    maintenanceCoverByOwnerVat,
     maintenanceCoverByUs,
+    maintenanceCoverByUsVat,
     markup,
     markupVat,
     iva,
     expensesAndServices,
     expensesAndServicesCoverByOwner,
+    expensesAndServicesCoverByOwnerVat,
     expensesAndServicesCoverByUs,
+    expensesAndServicesCoverByUsVat,
     marketManagementFee,
     marketManagementCommission,
     fixedRent: roundMoney(settings?.fixedRent ?? 0),
@@ -545,13 +606,17 @@ export const computePropertyReportMetrics = (
     managementFeeVat,
     maintenance: roundMoney(inputs.maintenanceNet),
     maintenanceCoverByOwner,
+    maintenanceCoverByOwnerVat,
     maintenanceCoverByUs,
+    maintenanceCoverByUsVat,
     markup,
     markupVat,
     iva,
     expensesAndServices,
     expensesAndServicesCoverByOwner,
+    expensesAndServicesCoverByOwnerVat,
     expensesAndServicesCoverByUs,
+    expensesAndServicesCoverByUsVat,
     amountTransferred,
     marketManagementFee,
     marketManagementCommission,

@@ -1186,26 +1186,31 @@ export function PropertyReportsView({
           ...cleaningLines.map((line) => ({
             section: 'cleaning' as const,
             net: line.price ?? 0,
+            iva: ivaEuroFromNet(line.price ?? 0, line.ivaRate),
             allocation: lineAllocations[`cleaning:${line.id}`] ?? '',
           })),
           ...maintenanceLines.map((line) => ({
             section: 'maintenance' as const,
             net: line.price ?? 0,
+            iva: ivaEuroFromNet(line.price ?? 0, line.ivaRate),
             allocation: lineAllocations[`maintenance:${line.id}`] ?? '',
           })),
           ...serviceLines.map((line) => ({
             section: 'service' as const,
             net: line.price,
+            iva: ivaEuroFromNet(line.price, line.ivaRate),
             allocation: lineAllocations[`service:${line.id}`] ?? '',
           })),
           ...expenses.map((line) => ({
             section: 'expense' as const,
             net: line.amountExclIva,
+            iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
             allocation: lineAllocations[`expense:${line.id}`] ?? '',
           })),
           ...incomes.map((line) => ({
             section: 'income' as const,
             net: line.amountExclIva,
+            iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
             allocation: lineAllocations[`income:${line.id}`] ?? '',
           })),
         ],
