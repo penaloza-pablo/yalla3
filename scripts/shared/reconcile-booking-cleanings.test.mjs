@@ -6,6 +6,7 @@ import {
   datesToScan,
   extractReservationIdFromTask,
   isCleaningVisitType,
+  shouldCreateEarlyCheckoutVisit,
   toMadridDate,
 } from "./reconcile-booking-cleanings.mjs";
 
@@ -22,7 +23,7 @@ test("never-started: canceled before check-in", () => {
   );
 });
 
-test("early-checkout: canceled on or after check-in", () => {
+test("early-checkout: canceled on a later calendar day", () => {
   assert.equal(
     classifyBookingCancellation({
       status: "canceled",
@@ -32,6 +33,72 @@ test("early-checkout: canceled on or after check-in", () => {
       guestStayStatus: "not_set",
     }),
     "early-checkout"
+  );
+});
+
+test("never-started: canceled overnight into the check-in calendar day", () => {
+  assert.equal(
+    classifyBookingCancellation({
+      status: "canceled",
+      checkInDate: "2026-09-23",
+      canceledAt: "2026-09-22T23:02:30.600Z",
+      isMidStay: false,
+      guestStayStatus: "not_set",
+    }),
+    "never-started"
+  );
+});
+
+test("never-started: canceled on check-in day without a started stay", () => {
+  assert.equal(
+    classifyBookingCancellation({
+      status: "canceled",
+      checkInDate: "2026-09-23",
+      canceledAt: "2026-09-23T08:00:00.000Z",
+      isMidStay: false,
+      guestStayStatus: "not_set",
+    }),
+    "never-started"
+  );
+});
+
+test("early-checkout: same-day cancel after check-in status", () => {
+  assert.equal(
+    classifyBookingCancellation({
+      status: "canceled",
+      checkInDate: "2026-09-23",
+      canceledAt: "2026-09-23T18:00:00.000Z",
+      isMidStay: false,
+      guestStayStatus: "checked_in",
+    }),
+    "early-checkout"
+  );
+});
+
+test("does not invent a reconcile visit when Guesty already covered the day", () => {
+  assert.equal(
+    shouldCreateEarlyCheckoutVisit({
+      openVisitCount: 0,
+      hasTerminalVisit: true,
+      hasOpenCleaningOnTargetDate: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldCreateEarlyCheckoutVisit({
+      openVisitCount: 0,
+      hasTerminalVisit: false,
+      hasOpenCleaningOnTargetDate: true,
+    }),
+    false
+  );
+  assert.equal(
+    shouldCreateEarlyCheckoutVisit({
+      openVisitCount: 0,
+      hasTerminalVisit: false,
+      hasOpenCleaningOnTargetDate: false,
+    }),
+    true
   );
 });
 

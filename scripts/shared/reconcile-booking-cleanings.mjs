@@ -200,10 +200,24 @@ export function classifyBookingCancellation({
 
   const checkIn = toDateOnly(checkInDate);
   const canceledDate = toMadridDate(canceledAt);
-  if (canceledDate && checkIn && canceledDate >= checkIn) {
+  // Same-calendar-day cancel without a started stay is a no-show, not a
+  // mid-stay checkout. Overnight UTC timestamps often land on check-in day
+  // in Madrid (e.g. 23:02Z → 01:02), which used to spawn VISIT-RECONCILE.
+  if (canceledDate && checkIn && canceledDate > checkIn) {
     return "early-checkout";
   }
   return "never-started";
+}
+
+export function shouldCreateEarlyCheckoutVisit({
+  openVisitCount,
+  hasTerminalVisit,
+  hasOpenCleaningOnTargetDate,
+}) {
+  if (Number(openVisitCount) > 0) return false;
+  if (hasTerminalVisit) return false;
+  if (hasOpenCleaningOnTargetDate) return false;
+  return true;
 }
 
 export function datesToScan(checkInDate, checkOutDate, canceledAt) {
@@ -465,6 +479,19 @@ async function createReconcileVisit(ctx, booking, scheduledDate, templateVisit) 
   return action;
 }
 
+async function hasOpenCleaningOnDate(ctx, listingId, scheduledDate, exceptReservationId) {
+  if (!listingId || !scheduledDate) return false;
+  const others = await queryPropertyDate(ctx, listingId, scheduledDate);
+  for (const other of others) {
+    if (!isCleaningVisitType(attrS(other, "visitTypeId"))) continue;
+    if (!isOpenVisitStatus(attrS(other, "status"))) continue;
+    const otherReservationId = extractReservationIdFromVisit(other);
+    if (exceptReservationId && otherReservationId === exceptReservationId) continue;
+    return true;
+  }
+  return false;
+}
+
 async function findVisitsForReservation(ctx, booking, extraVisits = []) {
   const dates = datesToScan(booking.checkInDate, booking.checkOutDate, booking.canceledAt);
   const found = [];
@@ -473,6 +500,8 @@ async function findVisitsForReservation(ctx, booking, extraVisits = []) {
       found.push(...(await queryPropertyDate(ctx, booking.listingId, date)));
     }
   }
+  const synthetic = await getVisitItem(ctx, `VISIT-RECONCILE-${booking.reservationId}`);
+  if (synthetic) found.push(synthetic);
   const visits = dedupeVisits([...found, ...extraVisits]).filter((item) => {
     if (!isCleaningVisitType(attrS(item, "visitTypeId"))) return false;
     return extractReservationIdFromVisit(item) === booking.reservationId;
@@ -529,6 +558,32 @@ export async function reconcileReservation(ctx, { reservationId, extraVisits = [
       return { reservationId, kind, skipped: true, reason: "missing-departure-date", actions };
     }
     if (openVisits.length === 0) {
+      const hasTerminalVisit = visits.some((visit) =>
+        isTerminalVisitStatus(attrS(visit, "status"))
+      );
+      const hasOpenCleaningOnTargetDate = await hasOpenCleaningOnDate(
+        ctx,
+        booking.listingId,
+        targetDate,
+        booking.reservationId
+      );
+      if (
+        !shouldCreateEarlyCheckoutVisit({
+          openVisitCount: 0,
+          hasTerminalVisit,
+          hasOpenCleaningOnTargetDate,
+        })
+      ) {
+        return {
+          reservationId,
+          kind,
+          skipped: true,
+          reason: hasOpenCleaningOnTargetDate
+            ? "already-covered"
+            : "guesty-already-closed",
+          actions,
+        };
+      }
       const template = visits[0] || extraVisits[0] || null;
       if (!booking.listingId && !template) {
         return { reservationId, kind, skipped: true, reason: "missing-property", actions };
