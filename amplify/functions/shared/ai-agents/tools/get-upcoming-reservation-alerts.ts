@@ -31,7 +31,7 @@ export const getUpcomingReservationAlertsTool: AgentTool = {
   id: 'get_upcoming_reservation_alerts',
   name: 'get_upcoming_reservation_alerts',
   description:
-    'Lists upcoming Booking Plan reservations (confirmed check-ins in the planner window) that still have warnings. Each warning is a separate alert: sofa bed unknown, missing Access code/link, or single-guest verification.',
+    'Lists upcoming Booking Plan reservations (confirmed check-ins in the planner window) that still have warnings. Each warning is a separate alert: sofa bed unknown, missing Access code/link, or single-guest verification. Gift card is never an alert; the system always calculates it.',
   outputDescription:
     'JSON with reservations[{reservationId, conversationId, list_booking_conversation: { reservationId }, guestName, property, checkIn, checkOut, guests, linen, access, alerts[{type, code, value, warning}]}]. reservationId is the required argument for list_booking_conversation; conversationId is the stored inbox pointer when present.',
   riskLevel: 'read',

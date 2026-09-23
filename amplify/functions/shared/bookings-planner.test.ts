@@ -499,7 +499,7 @@ test('Booking Plan upcoming alerts split sofa, access and single-guest warnings'
   assert.deepEqual(alertsForPlannerBooking(mixed), [
     {
       type: 'ACCESS_LINK',
-      code: 'gift_card_access_missing',
+      code: 'access_link_missing',
       value: '',
       warning: 'Configura el código o enlace de Access',
     },

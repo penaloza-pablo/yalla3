@@ -629,12 +629,22 @@ export const PLANNER_ALERT_TYPES = {
   single_guest: 'SINGLE_GUEST_VERIFICATION',
 } as const;
 
+export const PLANNER_ALERT_CODES = {
+  linen_ask_guest: 'linen_ask_guest',
+  double_or_two_singles_ask: 'double_or_two_singles_ask',
+  gift_card_access_missing: 'access_link_missing',
+  single_guest: 'single_guest',
+} as const;
+
 export type PlannerAlertType =
   (typeof PLANNER_ALERT_TYPES)[PlannerWarningCode];
 
+export type PlannerAlertCode =
+  (typeof PLANNER_ALERT_CODES)[PlannerWarningCode];
+
 export type PlannerReservationAlert = {
   type: PlannerAlertType;
-  code: PlannerWarningCode;
+  code: PlannerAlertCode;
   value: string;
   warning: string;
 };
@@ -706,7 +716,7 @@ export const alertsForPlannerBooking = (
 ): PlannerReservationAlert[] =>
   displayedPlannerWarnings(item).map((code) => ({
     type: PLANNER_ALERT_TYPES[code],
-    code,
+    code: PLANNER_ALERT_CODES[code],
     value: alertValueForPlannerWarning(code, item),
     warning: PLANNER_WARNING_TEXT_ES[code],
   }));
