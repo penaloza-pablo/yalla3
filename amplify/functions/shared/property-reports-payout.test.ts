@@ -3,7 +3,10 @@ import test from 'node:test';
 import {
   applyLiveReservationToBooking,
   bookingHasPayout,
+  includePayoutInReportMonth,
   mapReportBooking,
+  PAYOUT_REPORT_MONTH_OVERRIDES,
+  payoutOverrideReservationIdsForMonth,
   refreshPayoutBookingSnapshot,
   shouldRefreshPayoutSnapshot,
 } from './property-reports';
@@ -242,5 +245,105 @@ test('Guesty refresh with hostPayout 0 drops a stale quoted booking', async () =
   assert.equal(
     bookingHasPayout(refreshed.reservation, refreshed.item, TODAY),
     false,
+  );
+});
+
+test('Nayandra Mattos payout is reported in September, not August', () => {
+  const reservationId = '6a95793daf6fe76b0ba9b676';
+  assert.equal(PAYOUT_REPORT_MONTH_OVERRIDES[reservationId], '2026-09');
+  assert.deepEqual(payoutOverrideReservationIdsForMonth('2026-09'), [
+    reservationId,
+  ]);
+  assert.deepEqual(payoutOverrideReservationIdsForMonth('2026-08'), []);
+
+  const nayandra = payoutCase({
+    status: 'confirmed',
+    hostPayout: 226.36,
+    hostServiceFee: 41.52,
+    fareCleaning: 115,
+    totalPaid: 226.36,
+    payments: [
+      {
+        status: 'SUCCEEDED',
+        amount: 226.36,
+        payoutId: 'M-3X7MIJHEWNLXHZKKDC42IMYNV2TFM7FS',
+      },
+    ],
+    checkIn: '2026-08-31',
+    checkOut: '2026-09-02',
+  });
+  nayandra.item.ReservationID = reservationId;
+  nayandra.reservation._id = reservationId;
+  nayandra.reservation.confirmationCode = 'HMPBP9BP9N';
+  nayandra.item.GuestName = 'Nayandra Mattos';
+
+  assert.equal(
+    includePayoutInReportMonth(
+      reservationId,
+      nayandra.reservation,
+      nayandra.item,
+      '2026-08',
+      TODAY,
+    ),
+    false,
+  );
+  assert.equal(
+    includePayoutInReportMonth(
+      reservationId,
+      nayandra.reservation,
+      nayandra.item,
+      '2026-09',
+      TODAY,
+    ),
+    true,
+  );
+  assert.equal(
+    includePayoutInReportMonth(
+      reservationId,
+      nayandra.reservation,
+      nayandra.item,
+      '2026-10',
+      TODAY,
+    ),
+    false,
+  );
+
+  const mapped = mapReportBooking(nayandra.item, nayandra.reservation);
+  assert.equal(mapped.checkInDate, '2026-08-31');
+  assert.equal(mapped.checkOutDate, '2026-09-02');
+  assert.equal(mapped.hostPayout, 226.36);
+  assert.equal(mapped.hostServiceFee, 41.52);
+  assert.equal(mapped.fareCleaning, 115);
+  assert.equal(
+    shouldRefreshPayoutSnapshot(nayandra.reservation, nayandra.item, NOW),
+    false,
+  );
+});
+
+test('month override keeps the payout in September even if later validation would drop it', () => {
+  const reservationId = '6a95793daf6fe76b0ba9b676';
+  const stale = payoutCase({
+    status: 'confirmed',
+    hostPayout: 226.36,
+    hostServiceFee: 41.52,
+    fareCleaning: 115,
+    payments: [{ status: 'PENDING', amount: 226.36 }],
+    checkIn: '2026-08-31',
+    checkOut: '2026-09-02',
+  });
+  stale.item.ReservationID = reservationId;
+  assert.equal(
+    bookingHasPayout(stale.reservation, stale.item, TODAY),
+    false,
+  );
+  assert.equal(
+    includePayoutInReportMonth(
+      reservationId,
+      stale.reservation,
+      stale.item,
+      '2026-09',
+      TODAY,
+    ),
+    true,
   );
 });

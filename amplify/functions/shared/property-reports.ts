@@ -262,6 +262,34 @@ export const syntheticPlanta2Property = (): Record<string, unknown> => ({
   active: true,
 });
 
+export const PAYOUT_REPORT_MONTH_OVERRIDES: Record<string, string> = {
+  // One-off accounting correction: Nayandra Mattos / Mendizabal / HMPBP9BP9N.
+  // Keep check-in 2026-08-31 and all Guesty amounts; report the payout in 2026-09.
+  '6a95793daf6fe76b0ba9b676': '2026-09',
+};
+
+export const payoutReportMonthOverride = (reservationId: string) =>
+  PAYOUT_REPORT_MONTH_OVERRIDES[reservationId] || '';
+
+export const payoutOverrideReservationIdsForMonth = (monthId: string) =>
+  Object.entries(PAYOUT_REPORT_MONTH_OVERRIDES)
+    .filter(([, reportMonthId]) => reportMonthId === monthId)
+    .map(([reservationId]) => reservationId);
+
+export const includePayoutInReportMonth = (
+  reservationId: string,
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+  monthId: string,
+  today?: string,
+) => {
+  const overrideMonth = payoutReportMonthOverride(reservationId);
+  if (overrideMonth) {
+    return overrideMonth === monthId;
+  }
+  return bookingHasPayout(reservation, item, today);
+};
+
 export const reservationFromPayload = (raw: unknown) => {
   let payload: unknown = raw;
   if (typeof payload === 'string' && payload.trim()) {
@@ -376,6 +404,11 @@ export const shouldRefreshPayoutSnapshot = (
   item: Record<string, unknown>,
   nowMs = Date.now(),
 ) => {
+  const reservationId =
+    asString(item.ReservationID) || asString(reservation?._id);
+  if (payoutReportMonthOverride(reservationId)) {
+    return false;
+  }
   if (bookingStatuses(reservation, item).some(isExcludedPayoutStatus)) {
     return false;
   }

@@ -8,10 +8,10 @@ import { buildMonthDetail as buildCleaningMonthDetail } from '../shared/cleaning
 import { buildMonthDetail as buildMaintenanceMonthDetail } from '../shared/maintenance-billing';
 import {
   asString,
-  bookingHasPayout,
   datesInReportMonth,
   getBookingById,
   getReportRecord,
+  includePayoutInReportMonth,
   isMonthIdValue,
   isPropertyReportEligible,
   isReportableMonth,
@@ -25,6 +25,8 @@ import {
   mapReportBooking,
   mergeDefaultLineAllocations,
   parseLineAllocations,
+  payoutOverrideReservationIdsForMonth,
+  payoutReportMonthOverride,
   queryBookingsByCheckInDate,
   refreshPayoutBookingSnapshots,
   reportMonthSummary,
@@ -66,6 +68,11 @@ const loadPayoutBookings = async (
       if (!reservationId || seen.has(reservationId)) {
         continue;
       }
+      const overrideMonth = payoutReportMonthOverride(reservationId);
+      if (overrideMonth && overrideMonth !== monthId) {
+        seen.add(reservationId);
+        continue;
+      }
       const listingKnown =
         Boolean(asString(summary.ListingID)) ||
         Boolean(asString(summary.ListingNickname));
@@ -89,6 +96,21 @@ const loadPayoutBookings = async (
     }
   }
 
+  for (const reservationId of payoutOverrideReservationIdsForMonth(monthId)) {
+    if (seen.has(reservationId)) {
+      continue;
+    }
+    seen.add(reservationId);
+    const item = await getBookingById(bookingsTable, reservationId);
+    if (!item || !listingMatchesProperty(item, property)) {
+      continue;
+    }
+    candidates.push({
+      item,
+      reservation: reservationFromPayload(item.RawPayload),
+    });
+  }
+
   const guestyClient = await loadGuestyClient();
   const refreshed = await refreshPayoutBookingSnapshots(candidates, {
     fetchLive: guestyClient
@@ -97,7 +119,14 @@ const loadPayoutBookings = async (
     persistTable: bookingsTable,
   });
   const bookings = refreshed
-    .filter(({ item, reservation }) => bookingHasPayout(reservation, item))
+    .filter(({ item, reservation }) =>
+      includePayoutInReportMonth(
+        asString(item.ReservationID) || asString(reservation?._id),
+        reservation,
+        item,
+        monthId,
+      ),
+    )
     .map(({ item, reservation }) => mapReportBooking(item, reservation));
   bookings.sort((left, right) => {
     if (left.checkInDate !== right.checkInDate) {
