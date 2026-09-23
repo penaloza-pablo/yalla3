@@ -10,6 +10,7 @@ const LEGACY_PAGE_MAP: Record<string, string> = {
   'Finance solution 1': 'Property Reports',
   'Finance solution 2': 'Movements',
   'Finance solution 3': 'Services & Subscriptions',
+  'Unassigned tasks': 'Cases',
 }
 
 type StoredPage = {

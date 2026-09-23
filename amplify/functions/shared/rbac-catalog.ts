@@ -14,7 +14,7 @@ export const NAVIGATION: NavGroup[] = [
     section: 'Ops',
     items: [
       'Properties',
-      'Unassigned tasks',
+      'Cases',
       'Visit templates',
       'Template Auto Assign',
       'Job scheduler',
@@ -233,7 +233,15 @@ export const applyPermissionCatalog = (
   storedVersion?: unknown,
 ) => {
   const hadAgents = permissions.includes(pagePermission('Agents'))
-  let next = permissions.filter(isKnownPermission)
+  const casesKey = pagePermission('Cases')
+  const normalized = [
+    ...new Set(
+      permissions.map((key) =>
+        key === pagePermission('Unassigned tasks') ? casesKey : key,
+      ),
+    ),
+  ]
+  let next = normalized.filter(isKnownPermission)
   const from =
     typeof storedVersion === 'number' && Number.isFinite(storedVersion)
       ? Math.floor(storedVersion)
@@ -361,7 +369,7 @@ export const ROLE_SEEDS: {
         'Check-in Tracker',
         'Bookings settings',
         'Reviews',
-        'Unassigned tasks',
+        'Cases',
         'Visit templates',
         'Template Auto Assign',
         'Job scheduler',
@@ -407,7 +415,7 @@ export const ROLE_SEEDS: {
         'Bookings Plan',
         'Check-in Tracker',
         'Bookings settings',
-        'Unassigned tasks',
+        'Cases',
         'Maintenance Plan',
         'Maintenance Incidents',
         'Maintenance Billing',

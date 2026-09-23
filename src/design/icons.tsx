@@ -666,6 +666,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   Properties: 'list.bullet.rectangle',
   Reviews: 'star',
   'Unassigned tasks': 'list.bullet',
+  Cases: 'list.bullet',
   'Visit templates': 'doc.text',
   'Template Auto Assign': 'arrow.triangle.2.circlepath',
   'Job scheduler': 'arrow.clockwise',

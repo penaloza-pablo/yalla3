@@ -9,6 +9,7 @@ const PAGE_QUERY_KEY = 'page'
 
 const PAGE_ALIASES: Record<string, string> = {
   Agents: 'Agent Catalog',
+  'Unassigned tasks': 'Cases',
 }
 
 export const readPageFromLocation = (validPages: Set<string>): string | null => {

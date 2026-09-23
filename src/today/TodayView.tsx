@@ -412,7 +412,7 @@ export function TodayView({
           <CountMetric
             label={t('today.unassignedTasks')}
             value={unassignedPending}
-            onClick={() => onNavigate('Unassigned tasks')}
+            onClick={() => onNavigate('Cases')}
           />
           <CountMetric
             label={t('today.plannerWarnings')}

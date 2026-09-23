@@ -179,6 +179,34 @@ export const asNumber = (value: unknown) => {
 
 export const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
+export const maintenanceVisitPrice = (
+  visit: Record<string, unknown>,
+  settings: MaintenanceSettings,
+  override?: LineOverride,
+): number | null => {
+  if (override?.dismissed) {
+    return null;
+  }
+  const visitTypeId =
+    asString(visit.visitTypeId) || asString(visit.visit_type_id);
+  const mapping = settings.visitTypeHours.find(
+    (entry) => entry.visitTypeId === visitTypeId,
+  );
+  const hoursDisabled = Boolean(override?.hoursDisabled);
+  const mappedHours = mapping ? mapping.hours : null;
+  const hours = hoursDisabled
+    ? 0
+    : override?.hours === undefined
+      ? mappedHours
+      : override.hours;
+  const computedPrice =
+    hours !== null && hours > 0 ? roundMoney(hours * settings.hourlyCost) : null;
+  if (hoursDisabled) {
+    return asNumber(override?.price);
+  }
+  return asNumber(override?.price) ?? computedPrice;
+};
+
 export const isMonthId = (value?: string) =>
   Boolean(value && /^\d{4}-\d{2}$/.test(value.trim()));
 

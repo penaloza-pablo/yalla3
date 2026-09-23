@@ -45,6 +45,8 @@ import { getVisits } from './functions/get-visits/resource';
 import { upsertVisit } from './functions/upsert-visit/resource';
 import { getTasks } from './functions/get-tasks/resource';
 import { upsertTask } from './functions/upsert-task/resource';
+import { getCases } from './functions/get-cases/resource';
+import { upsertCase } from './functions/upsert-case/resource';
 import { getTeams } from './functions/get-teams/resource';
 import { getUsers } from './functions/get-users/resource';
 import { getRoles } from './functions/get-roles/resource';
@@ -132,6 +134,8 @@ const backend = defineBackend({
   upsertVisit,
   getTasks,
   upsertTask,
+  getCases,
+  upsertCase,
   getTeams,
   getUsers,
   getRoles,
@@ -1635,6 +1639,57 @@ const maintenancePlansTable = new Table(dataStack, 'MaintenancePlansTable', {
   billingMode: BillingMode.PAY_PER_REQUEST,
   removalPolicy: RemovalPolicy.RETAIN,
 });
+const casesTable = new Table(dataStack, 'CasesTable', {
+  tableName: 'yalla-cases',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+casesTable.addGlobalSecondaryIndex({
+  indexName: 'status-updatedAt-index',
+  partitionKey: { name: 'status', type: AttributeType.STRING },
+  sortKey: { name: 'updatedAt', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+casesTable.addGlobalSecondaryIndex({
+  indexName: 'propertyId-updatedAt-index',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  sortKey: { name: 'updatedAt', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+const caseEventsTable = new Table(dataStack, 'CaseEventsTable', {
+  tableName: 'yalla-case-events',
+  partitionKey: { name: 'id', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+caseEventsTable.addGlobalSecondaryIndex({
+  indexName: 'caseId-createdAt-index',
+  partitionKey: { name: 'caseId', type: AttributeType.STRING },
+  sortKey: { name: 'createdAt', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+casesTable.grantReadWriteData(backend.getCases.resources.lambda);
+casesTable.grantReadWriteData(backend.upsertCase.resources.lambda);
+caseEventsTable.grantReadWriteData(backend.getCases.resources.lambda);
+caseEventsTable.grantReadWriteData(backend.upsertCase.resources.lambda);
+propertiesTable.grantReadData(backend.getCases.resources.lambda);
+propertiesTable.grantReadData(backend.upsertCase.resources.lambda);
+visitsTable.grantReadData(backend.getCases.resources.lambda);
+visitsTable.grantReadData(backend.upsertCase.resources.lambda);
+tasksTable.grantReadWriteData(backend.upsertCase.resources.lambda);
+financeMovementsTable.grantReadData(backend.getCases.resources.lambda);
+financeMovementsTable.grantReadWriteData(backend.upsertCase.resources.lambda);
+maintenanceBillingTable.grantReadData(backend.getCases.resources.lambda);
+maintenanceBillingDetailsTable.grantReadData(backend.getCases.resources.lambda);
+backend.getCases.addEnvironment(
+  'BILLING_TABLE',
+  maintenanceBillingTable.tableName,
+);
+backend.getCases.addEnvironment(
+  'SETTINGS_TABLE',
+  maintenanceBillingDetailsTable.tableName,
+);
 maintenanceIncidentsTable.addGlobalSecondaryIndex({
   indexName: 'providerId-createdAt-index',
   partitionKey: { name: 'providerId', type: AttributeType.STRING },
@@ -2137,6 +2192,12 @@ const getTasksUrl = backend.getTasks.resources.lambda.addFunctionUrl({
 const upsertTaskUrl = backend.upsertTask.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+const getCasesUrl = backend.getCases.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertCaseUrl = backend.upsertCase.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 const getTeamsUrl = backend.getTeams.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -2371,6 +2432,8 @@ backend.addOutput({
     upsertVisitUrl: upsertVisitUrl.url,
     getTasksUrl: getTasksUrl.url,
     upsertTaskUrl: upsertTaskUrl.url,
+    getCasesUrl: getCasesUrl.url,
+    upsertCaseUrl: upsertCaseUrl.url,
     getTeamsUrl: getTeamsUrl.url,
     getUsersUrl: getUsersUrl.url,
     getRolesUrl: getRolesUrl.url,

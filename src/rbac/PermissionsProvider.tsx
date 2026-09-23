@@ -192,7 +192,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         (page === 'Movements' &&
           permissions.has(pagePermission('Finance solution 2'))) ||
         (page === 'Services & Subscriptions' &&
-          permissions.has(pagePermission('Finance solution 3'))),
+          permissions.has(pagePermission('Finance solution 3'))) ||
+        (page === 'Cases' &&
+          permissions.has(pagePermission('Unassigned tasks'))),
       canTodayView: (view: TodayViewMode) =>
         isTodayViewMode(view) && canAccessTodayView(view, todayViews),
       refresh: () => load(),

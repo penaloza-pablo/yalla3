@@ -101,7 +101,7 @@ export const handler = async (event: HttpEvent) => {
       const unassigned = await queryAllByStatus(tableName, 'UNASSIGNED');
       const dismissed = await queryAllByStatus(tableName, 'DISMISS');
       const items = [...unassigned, ...dismissed]
-        .filter((task) => !task.visitId)
+        .filter((task) => !task.visitId && !task.caseId)
         .sort((a, b) => {
           const aDate =
             typeof a.createdAt === 'string' ? a.createdAt : '';

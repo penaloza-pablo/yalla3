@@ -14,6 +14,8 @@ import {
   groupedMemberIdSet,
   isReportGroupRecord,
   isReportGroupType,
+  reportGroupById,
+  reportGroupForMember,
   resolveReportGroups,
 } from '../../amplify/functions/shared/property-groups'
 import i18n from '../i18n'
@@ -189,6 +191,60 @@ export const filterMovementsPropertyOptions = (properties: PropertyOption[]) => 
     ),
   )
   return [...p2, ...groupOptions, ...rest, ...other]
+}
+
+export const filterCaseReportOptions = (properties: PropertyOption[]) => {
+  const groups = resolveReportGroups(properties)
+  const memberIds = groupedMemberIdSet(groups)
+  const groupIds = new Set(groups.map((group) => group.id))
+  const groupOptions = sortPropertyOptions(
+    groups.map((group) => toGroupOption(group, properties)),
+  )
+  const singles = sortPropertyOptions(
+    properties.filter((property) => {
+      if (!property.id || memberIds.has(property.id) || groupIds.has(property.id)) {
+        return false
+      }
+      if (isP2RoomProperty(property) || isOtherProperty(property)) {
+        return false
+      }
+      if (isFinanceGroupProperty(property)) {
+        return false
+      }
+      if (isMtlPropertyType(property.type) || property.mtlPrincipalId?.trim()) {
+        return false
+      }
+      return true
+    }),
+  )
+  return [...groupOptions, ...singles]
+}
+
+export const reportDestinationIdForProperty = (
+  properties: PropertyOption[],
+  propertyId: string,
+) => {
+  const groups = resolveReportGroups(properties)
+  const group =
+    reportGroupById(groups, propertyId) ??
+    reportGroupForMember(groups, propertyId)
+  return group?.id || propertyId
+}
+
+export const taskMatchesReportDestination = (
+  properties: PropertyOption[],
+  taskPropertyId: string,
+  destinationId: string,
+) => {
+  if (!destinationId) {
+    return true
+  }
+  if (taskPropertyId === destinationId) {
+    return true
+  }
+  const groups = resolveReportGroups(properties)
+  const group = reportGroupById(groups, destinationId)
+  return Boolean(group?.memberIds.includes(taskPropertyId))
 }
 
 export const partitionFinancePropertyOptions = (properties: PropertyOption[]) => {

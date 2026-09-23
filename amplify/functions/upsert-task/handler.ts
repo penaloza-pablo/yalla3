@@ -150,9 +150,82 @@ export const handler = async (event: {
 
   if (action === 'skip' && existing) {
     const taskId = typeof existing.id === 'string' ? existing.id : '';
-    const skipPatch = {
-      set: { status: 'SKIPPED' },
-    };
+    const visitId =
+      typeof existing.visitId === 'string' ? existing.visitId.trim() : '';
+    const existingCopyId =
+      typeof existing.inboxCopyId === 'string' ? existing.inboxCopyId.trim() : '';
+    const skipSet: Record<string, unknown> = { status: 'SKIPPED' };
+
+    if (visitId && !existingCopyId && taskId) {
+      const copyId = `${taskId}-INBOX`;
+      const foundCopy = await docClient.send(
+        new GetCommand({
+          TableName: tasksTable,
+          Key: { id: copyId },
+        }),
+      );
+      let copied = Boolean(foundCopy.Item);
+      if (!foundCopy.Item) {
+        const propertyId =
+          typeof existing.propertyId === 'string' ? existing.propertyId.trim() : '';
+        const teamId =
+          typeof existing.teamId === 'string' ? existing.teamId.trim() : '';
+        if (!propertyId || !teamId) {
+          console.error(
+            'Skipped task is missing propertyId or teamId; inbox copy was not created',
+            taskId,
+          );
+        } else {
+          const title =
+            typeof existing.title === 'string' && existing.title.trim()
+              ? existing.title.trim()
+              : taskId;
+          const copy: Record<string, unknown> = {
+            id: copyId,
+            propertyId,
+            teamId,
+            title,
+            status: 'UNASSIGNED',
+            priority: normalizePriority(
+              typeof existing.priority === 'string' ? existing.priority : undefined,
+            ),
+            sourceTaskId: taskId,
+            createdAt: timestamp,
+            ...withUserEditSyncMetadata({}, timestamp),
+          };
+          const titleEs =
+            typeof existing.titleEs === 'string' ? existing.titleEs.trim() : '';
+          const description =
+            typeof existing.description === 'string'
+              ? existing.description.trim()
+              : '';
+          const descriptionEs =
+            typeof existing.descriptionEs === 'string'
+              ? existing.descriptionEs.trim()
+              : '';
+          const dueDate =
+            typeof existing.dueDate === 'string' ? existing.dueDate.trim() : '';
+          if (titleEs) copy.titleEs = titleEs;
+          if (description) copy.description = description;
+          if (descriptionEs) copy.descriptionEs = descriptionEs;
+          if (dueDate) copy.dueDate = dueDate;
+          await putItem(tasksTable, copy);
+          copied = true;
+          await recordActivityLog(event, {
+            feature: LOG_FEATURES.OPERATIONS,
+            action: 'create',
+            entityId: copyId,
+            entityName: title,
+            summary: `created inbox copy ${quoted(title)} from skipped task ${quoted(taskId)}`,
+          });
+        }
+      }
+      if (copied) {
+        skipSet.inboxCopyId = copyId;
+      }
+    }
+
+    const skipPatch = { set: skipSet };
     await patchUserOriginatedRecord(tasksTable, taskId, skipPatch);
     const item = mergeUserEditResponseItem(existing, skipPatch, timestamp);
     return buildHttpResponse(200, { item });

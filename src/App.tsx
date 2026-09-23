@@ -27,6 +27,7 @@ import {
 } from './ReviewWorkflowPanel'
 import { fetchJson } from './operations/api'
 import { DailyOperationsView } from './operations/DailyOperationsView'
+import { CasesView } from './operations/CasesView'
 import { DismissibleNotice } from './operations/DismissibleNotice'
 import {
   canonicalizeLinenValue,
@@ -3269,6 +3270,7 @@ function App() {
       activePage === 'Properties' ||
       activePage === 'Bookings' ||
       activePage === 'Daily Operations' ||
+      activePage === 'Cases' ||
       activePage === 'Unassigned tasks' ||
       activePage === 'Visit templates' ||
       activePage === 'Template Auto Assign' ||
@@ -8906,13 +8908,10 @@ function App() {
               onNavigate={navigateToPage}
             />
           </DashboardNavContext.Provider>
-        ) : activePage === 'Unassigned tasks' ? (
-          <DailyOperationsView
-            mode="unassigned"
+        ) : activePage === 'Cases' || activePage === 'Unassigned tasks' ? (
+          <CasesView
             getEndpoint={getEndpoint}
-            getCurrentUserEmail={getCurrentUserEmail}
             propertyOptions={activeManagedPropertyOptions}
-            onNavigate={navigateToPage}
           />
         ) : activePage === 'Visit templates' ? (
           <DailyOperationsView

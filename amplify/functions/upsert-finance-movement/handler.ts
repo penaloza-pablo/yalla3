@@ -62,6 +62,7 @@ type MovementPayload = {
   endDate?: string;
   defaultAllocation?: string;
   allocation?: string;
+  caseId?: string;
   action?: string;
 };
 
@@ -327,6 +328,9 @@ export const handler = async (event: {
       status,
       date,
       ...(existingAllocation ? { allocation: existingAllocation } : {}),
+      ...(asString(payload.caseId) || asString(existing?.caseId)
+        ? { caseId: asString(payload.caseId) || asString(existing?.caseId) }
+        : {}),
       createdAt: asString(existing?.createdAt) || timestamp,
       updatedAt: timestamp,
     };

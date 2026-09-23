@@ -160,7 +160,7 @@ const queryAllByStatus = async (tableName: string, status: string) => {
 
 const countUnassignedPending = async (tableName: string) => {
   const items = await queryAllByStatus(tableName, 'UNASSIGNED');
-  return items.filter((task) => !task.visitId).length;
+  return items.filter((task) => !task.visitId && !task.caseId).length;
 };
 
 const countScheduledVisits = (

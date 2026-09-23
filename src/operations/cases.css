@@ -1,0 +1,131 @@
+.cases-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cases-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.cases-board.has-closed {
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+}
+
+.cases-column {
+  background: var(--yl-surface-2);
+  border: 1px solid var(--yl-stroke);
+  border-radius: 16px;
+  padding: 12px;
+  min-height: 280px;
+}
+
+.cases-column-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.cases-column-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.cases-column-hint,
+.cases-meta {
+  color: var(--yl-text-3);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.cases-card {
+  background: var(--yl-surface);
+  border: 1px solid var(--yl-stroke);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cases-card-open {
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.cases-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.cases-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cases-cost {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cases-cost div,
+.cases-event,
+.cases-link-row {
+  background: var(--yl-surface-2);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.cases-event {
+  margin-top: 8px;
+}
+
+.cases-event.is-issue {
+  box-shadow: inset 3px 0 0 var(--yl-warning);
+}
+
+.cases-event.is-comment {
+  box-shadow: inset 3px 0 0 var(--yl-kk-sky);
+}
+
+.cases-error {
+  color: var(--yl-danger);
+  margin: 0;
+}
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.cases-inline-form {
+  display: grid;
+  gap: 8px;
+}
+
+.cases-link-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .cases-board,
+  .cases-board.has-closed {
+    grid-template-columns: 1fr;
+  }
+}
