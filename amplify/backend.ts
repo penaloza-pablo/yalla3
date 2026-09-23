@@ -45,8 +45,6 @@ import { getVisits } from './functions/get-visits/resource';
 import { upsertVisit } from './functions/upsert-visit/resource';
 import { getTasks } from './functions/get-tasks/resource';
 import { upsertTask } from './functions/upsert-task/resource';
-import { getCases } from './functions/get-cases/resource';
-import { upsertCase } from './functions/upsert-case/resource';
 import { getTeams } from './functions/get-teams/resource';
 import { getUsers } from './functions/get-users/resource';
 import { getRoles } from './functions/get-roles/resource';
@@ -134,8 +132,6 @@ const backend = defineBackend({
   upsertVisit,
   getTasks,
   upsertTask,
-  getCases,
-  upsertCase,
   getTeams,
   getUsers,
   getRoles,
@@ -1670,27 +1666,83 @@ caseEventsTable.addGlobalSecondaryIndex({
   sortKey: { name: 'createdAt', type: AttributeType.STRING },
   projectionType: ProjectionType.ALL,
 });
-casesTable.grantReadWriteData(backend.getCases.resources.lambda);
-casesTable.grantReadWriteData(backend.upsertCase.resources.lambda);
-caseEventsTable.grantReadWriteData(backend.getCases.resources.lambda);
-caseEventsTable.grantReadWriteData(backend.upsertCase.resources.lambda);
-propertiesTable.grantReadData(backend.getCases.resources.lambda);
-propertiesTable.grantReadData(backend.upsertCase.resources.lambda);
-visitsTable.grantReadData(backend.getCases.resources.lambda);
-visitsTable.grantReadData(backend.upsertCase.resources.lambda);
-tasksTable.grantReadWriteData(backend.upsertCase.resources.lambda);
-financeMovementsTable.grantReadData(backend.getCases.resources.lambda);
-financeMovementsTable.grantReadWriteData(backend.upsertCase.resources.lambda);
-maintenanceBillingTable.grantReadData(backend.getCases.resources.lambda);
-maintenanceBillingDetailsTable.grantReadData(backend.getCases.resources.lambda);
-backend.getCases.addEnvironment(
-  'BILLING_TABLE',
-  maintenanceBillingTable.tableName,
+const getCasesFn = new NodejsFunction(jobSchedulerStack, 'GetCases', {
+  entry: path.join(jobSchedulerHandlerRoot, 'get-cases/handler.ts'),
+  handler: 'handler',
+  runtime: Runtime.NODEJS_22_X,
+  timeout: Duration.seconds(30),
+  memorySize: 512,
+  depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+  bundling: jobSchedulerBundling,
+  environment: {
+    ...jobSchedulerAuthEnv,
+    CASES_TABLE: casesTable.tableName,
+    CASE_EVENTS_TABLE: caseEventsTable.tableName,
+    VISITS_TABLE: 'yalla-visits',
+    PROPERTIES_TABLE: 'yalla-properties',
+    MOVEMENTS_TABLE: 'yalla-finance-movements',
+    BILLING_TABLE: maintenanceBillingTable.tableName,
+    SETTINGS_TABLE: maintenanceBillingDetailsTable.tableName,
+  },
+});
+const upsertCaseFn = new NodejsFunction(jobSchedulerStack, 'UpsertCase', {
+  entry: path.join(jobSchedulerHandlerRoot, 'upsert-case/handler.ts'),
+  handler: 'handler',
+  runtime: Runtime.NODEJS_22_X,
+  timeout: Duration.seconds(30),
+  memorySize: 512,
+  depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+  bundling: jobSchedulerBundling,
+  environment: {
+    ...jobSchedulerAuthEnv,
+    CASES_TABLE: casesTable.tableName,
+    CASE_EVENTS_TABLE: caseEventsTable.tableName,
+    VISITS_TABLE: 'yalla-visits',
+    PROPERTIES_TABLE: 'yalla-properties',
+    TASKS_TABLE: 'yalla-tasks',
+    MOVEMENTS_TABLE: 'yalla-finance-movements',
+    LOGS_TABLE: activityLogsTable.tableName,
+  },
+});
+casesTable.grantReadWriteData(getCasesFn);
+casesTable.grantReadWriteData(upsertCaseFn);
+caseEventsTable.grantReadWriteData(getCasesFn);
+caseEventsTable.grantReadWriteData(upsertCaseFn);
+propertiesTable.grantReadData(getCasesFn);
+propertiesTable.grantReadData(upsertCaseFn);
+visitsTable.grantReadData(getCasesFn);
+visitsTable.grantReadData(upsertCaseFn);
+tasksTable.grantReadWriteData(upsertCaseFn);
+financeMovementsTable.grantReadData(getCasesFn);
+financeMovementsTable.grantReadWriteData(upsertCaseFn);
+maintenanceBillingTable.grantReadData(getCasesFn);
+maintenanceBillingDetailsTable.grantReadData(getCasesFn);
+activityLogsTable.grantWriteData(upsertCaseFn);
+for (const fn of [getCasesFn, upsertCaseFn]) {
+  fn.addToRolePolicy(
+    new PolicyStatement({
+      actions: ['dynamodb:Query', 'dynamodb:Scan'],
+      resources: [
+        `${casesTable.tableArn}/index/*`,
+        `${caseEventsTable.tableArn}/index/*`,
+        `${visitsTable.tableArn}/index/*`,
+        `${financeMovementsTable.tableArn}/index/*`,
+      ],
+    }),
+  );
+}
+upsertCaseFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query', 'dynamodb:Scan'],
+    resources: [`${tasksTable.tableArn}/index/*`],
+  }),
 );
-backend.getCases.addEnvironment(
-  'SETTINGS_TABLE',
-  maintenanceBillingDetailsTable.tableName,
-);
+const getCasesUrl = getCasesFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const upsertCaseUrl = upsertCaseFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 maintenanceIncidentsTable.addGlobalSecondaryIndex({
   indexName: 'providerId-createdAt-index',
   partitionKey: { name: 'providerId', type: AttributeType.STRING },
@@ -2196,12 +2248,6 @@ const getTasksUrl = backend.getTasks.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
 const upsertTaskUrl = backend.upsertTask.resources.lambda.addFunctionUrl({
-  authType: FunctionUrlAuthType.NONE,
-});
-const getCasesUrl = backend.getCases.resources.lambda.addFunctionUrl({
-  authType: FunctionUrlAuthType.NONE,
-});
-const upsertCaseUrl = backend.upsertCase.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
 const getTeamsUrl = backend.getTeams.resources.lambda.addFunctionUrl({
