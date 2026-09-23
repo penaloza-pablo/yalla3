@@ -77,6 +77,12 @@ const isIncomeDirectToUs = (allocation: LineAllocation | '') =>
   allocation === 'doNotSend' ||
   allocation === 'bear'
 
+const isIncomeToOwner = (allocation: LineAllocation | '') =>
+  allocation === 'directToOwner' ||
+  allocation === 'owner' ||
+  allocation === 'applyMarkup' ||
+  allocation === 'ownerPlus12'
+
 const payoutRows = (
   payouts: MetricDetailPayout[],
   amount: (row: MetricDetailPayout) => number,
@@ -222,6 +228,42 @@ export const buildMetricDetailSections = (
             sources.incomes,
             (line) => line.net,
             (line) => isIncomeDirectToUs(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'otherIncomesDirectToUsVat':
+      return [
+        section(
+          incomesName,
+          incomesName,
+          allocatedRows(
+            sources.incomes,
+            (line) => line.iva,
+            (line) => isIncomeDirectToUs(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'otherIncomeToOwnerNet':
+      return [
+        section(
+          incomesName,
+          incomesName,
+          allocatedRows(
+            sources.incomes,
+            (line) => line.net,
+            (line) => isIncomeToOwner(line.allocation),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'otherIncomeToOwnerVat':
+      return [
+        section(
+          incomesName,
+          incomesName,
+          allocatedRows(
+            sources.incomes,
+            (line) => line.iva,
+            (line) => isIncomeToOwner(line.allocation),
           ),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))

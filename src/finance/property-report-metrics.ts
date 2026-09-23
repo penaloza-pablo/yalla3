@@ -66,6 +66,13 @@ const isIncomeDirectToUs = (line: AllocatedReportLine) =>
     line.allocation === 'doNotSend' ||
     line.allocation === 'bear')
 
+const isIncomeToOwner = (line: AllocatedReportLine) =>
+  line.section === 'income' &&
+  (line.allocation === 'directToOwner' ||
+    line.allocation === 'owner' ||
+    line.allocation === 'applyMarkup' ||
+    line.allocation === 'ownerPlus12')
+
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
 /**
@@ -94,6 +101,24 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     unit: 'money',
     role: 'indicator',
     formula: 'sum(income.net where allocation = directToUs)',
+  },
+  {
+    id: 'otherIncomesDirectToUsVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum(income.iva where allocation = directToUs)',
+  },
+  {
+    id: 'otherIncomeToOwnerNet',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum(income.net where allocation in [directToOwner, applyMarkup])',
+  },
+  {
+    id: 'otherIncomeToOwnerVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'sum(income.iva where allocation in [directToOwner, applyMarkup])',
   },
   {
     id: 'payoutCleaningNet',
@@ -498,11 +523,26 @@ export const computePropertyReportMetrics = (
     inputs.allocatedLines,
     isIncomeDirectToUs,
   )
+  const otherIncomesDirectToUsVat = sumAllocatedIva(
+    inputs.allocatedLines,
+    isIncomeDirectToUs,
+  )
+  const otherIncomeToOwnerNet = sumAllocated(
+    inputs.allocatedLines,
+    isIncomeToOwner,
+  )
+  const otherIncomeToOwnerVat = sumAllocatedIva(
+    inputs.allocatedLines,
+    isIncomeToOwner,
+  )
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
     channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
     otherIncomesDirectToUs,
+    otherIncomesDirectToUsVat,
+    otherIncomeToOwnerNet,
+    otherIncomeToOwnerVat,
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
     cleaningFee: roundMoney(inputs.cleaningFee),
@@ -579,6 +619,9 @@ export const computePropertyReportMetrics = (
     channelFee,
     otherIncomesNet: roundMoney(inputs.otherIncomesNet),
     otherIncomesDirectToUs,
+    otherIncomesDirectToUsVat,
+    otherIncomeToOwnerNet,
+    otherIncomeToOwnerVat,
     payoutCleaningNet: roundMoney(inputs.payoutCleaningNet),
     payoutCleaningGross: roundMoney(inputs.payoutCleaningGross),
     cleaningFee: roundMoney(inputs.cleaningFee),
