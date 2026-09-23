@@ -1,4 +1,9 @@
-import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import {
   currentMonthId as billingCurrentMonthId,
   datesInMonth,
@@ -34,7 +39,7 @@ import {
   occurrencePriceWithIva,
   resolveIvaRate,
 } from './iva';
-import { docClient } from './visit-task-utils';
+import { docClient, getTodayInMadrid } from './visit-task-utils';
 import {
   isCostAllocation,
   toIncomeAllocation,
@@ -283,6 +288,13 @@ export const reservationFromPayload = (raw: unknown) => {
   return null;
 };
 
+const PAYOUT_SNAPSHOT_FRESH_MS = 6 * 60 * 60 * 1000;
+
+const dateOnly = (value: unknown) => asString(value).slice(0, 10);
+
+const paymentStatus = (entry: unknown) =>
+  asString(asRecord(entry)?.status).toUpperCase();
+
 const moneyFromReservation = (reservation: Record<string, unknown> | null) => {
   const money = asRecord(reservation?.money) ?? {};
   return {
@@ -294,31 +306,289 @@ const moneyFromReservation = (reservation: Record<string, unknown> | null) => {
   };
 };
 
-export const bookingHasPayout = (
-  reservation: Record<string, unknown> | null,
-  item: Record<string, unknown>,
-) => {
-  const status = asString(item.Status || reservation?.status).toLowerCase();
-  if (
-    status === 'canceled' ||
-    status === 'cancelled' ||
-    status === 'inquiry'
-  ) {
-    return false;
-  }
-  const money = moneyFromReservation(reservation);
-  if (money.hostPayout === null) {
-    return false;
-  }
-  const hasSucceededPayment = money.payments.some((entry) => {
+const hasSucceededPayment = (payments: unknown[]) =>
+  payments.some((entry) => {
     const payment = asRecord(entry);
     if (!payment) {
       return false;
     }
-    const paymentStatus = asString(payment.status).toUpperCase();
-    return paymentStatus === 'SUCCEEDED' || Boolean(asString(payment.payoutId));
+    const status = paymentStatus(payment);
+    return status === 'SUCCEEDED' || Boolean(asString(payment.payoutId));
   });
-  return hasSucceededPayment || money.hostPayout > 0;
+
+const hasCancelledPayment = (payments: unknown[]) =>
+  payments.some((entry) => {
+    const status = paymentStatus(entry);
+    return (
+      status === 'CANCELLED' ||
+      status === 'CANCELED' ||
+      status === 'REFUNDED'
+    );
+  });
+
+const isCanceledStatus = (value: string) =>
+  value === 'canceled' || value === 'cancelled';
+
+const isExcludedPayoutStatus = (value: string) =>
+  value === 'inquiry' || value === 'declined' || value === 'expired';
+
+const bookingStatuses = (
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+) => {
+  const fromReservation = asString(reservation?.status).toLowerCase();
+  const fromItem = asString(item.Status).toLowerCase();
+  return [fromReservation, fromItem].filter(Boolean);
+};
+
+const looksCanceled = (
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+) => {
+  if (bookingStatuses(reservation, item).some(isCanceledStatus)) {
+    return true;
+  }
+  return Boolean(
+    dateOnly(reservation?.canceledAt) ||
+      dateOnly(reservation?.cancelledAt) ||
+      dateOnly(item.CanceledAt),
+  );
+};
+
+const payoutCheckoutDate = (
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+) =>
+  dateOnly(item.CheckOutDate) ||
+  dateOnly(reservation?.checkOutDateLocalized) ||
+  dateOnly(reservation?.checkOutDate);
+
+const isFreshPayoutSnapshot = (item: Record<string, unknown>, nowMs: number) => {
+  const updatedAt = Date.parse(asString(item.UpdatedAt));
+  if (!Number.isFinite(updatedAt)) {
+    return false;
+  }
+  return nowMs - updatedAt < PAYOUT_SNAPSHOT_FRESH_MS;
+};
+
+export const shouldRefreshPayoutSnapshot = (
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+  nowMs = Date.now(),
+) => {
+  if (bookingStatuses(reservation, item).some(isExcludedPayoutStatus)) {
+    return false;
+  }
+  if (isFreshPayoutSnapshot(item, nowMs)) {
+    return false;
+  }
+  const money = moneyFromReservation(reservation);
+  const canceled = looksCanceled(reservation, item);
+  const hostPayout = money.hostPayout ?? 0;
+  if (hasSucceededPayment(money.payments) && !canceled) {
+    return false;
+  }
+  if (canceled && hostPayout <= 0) {
+    return false;
+  }
+  return hostPayout > 0;
+};
+
+export const applyLiveReservationToBooking = (
+  item: Record<string, unknown>,
+  live: Record<string, unknown>,
+) => {
+  const status = asString(live.status) || asString(item.Status);
+  const canceledAt =
+    asString(live.canceledAt) ||
+    asString(live.cancelledAt) ||
+    asString(item.CanceledAt);
+  return {
+    ...item,
+    Status: status,
+    ...(canceledAt ? { CanceledAt: canceledAt } : {}),
+    RawPayload: JSON.stringify({
+      event: 'reservation.updated',
+      meta: { source: 'property-report-refresh' },
+      reservation: live,
+    }),
+  };
+};
+
+const mergeLiveReservation = (
+  current: Record<string, unknown> | null,
+  live: Record<string, unknown>,
+) => {
+  const livePayout = asNumber(asRecord(live.money)?.hostPayout);
+  if (livePayout !== null || !current) {
+    return live;
+  }
+  return {
+    ...current,
+    ...live,
+    money: current.money ?? live.money,
+  };
+};
+
+export const persistBookingPayoutRefresh = async (
+  tableName: string,
+  reservationId: string,
+  live: Record<string, unknown>,
+  current?: Record<string, unknown>,
+) => {
+  const status = asString(live.status) || asString(current?.Status);
+  const canceledAt =
+    asString(live.canceledAt) ||
+    asString(live.cancelledAt) ||
+    asString(current?.CanceledAt);
+  const payload = JSON.stringify({
+    event: 'reservation.updated',
+    meta: { source: 'property-report-refresh' },
+    reservation: live,
+  });
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: { ReservationID: reservationId },
+      UpdateExpression: canceledAt
+        ? 'SET #status = :status, RawPayload = :payload, UpdatedAt = :updatedAt, CanceledAt = :canceledAt'
+        : 'SET #status = :status, RawPayload = :payload, UpdatedAt = :updatedAt',
+      ExpressionAttributeNames: { '#status': 'Status' },
+      ExpressionAttributeValues: {
+        ':status': status,
+        ':payload': payload,
+        ':updatedAt': nowIso(),
+        ...(canceledAt ? { ':canceledAt': canceledAt } : {}),
+      },
+    }),
+  );
+};
+
+export type LiveReservationFetcher = (
+  reservationId: string,
+) => Promise<Record<string, unknown> | null>;
+
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+) => {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workerCount = Math.min(Math.max(limit, 1), items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = next;
+        next += 1;
+        if (index >= items.length) {
+          return;
+        }
+        results[index] = await mapper(items[index]);
+      }
+    }),
+  );
+  return results;
+};
+
+export const refreshPayoutBookingSnapshot = async (params: {
+  item: Record<string, unknown>;
+  reservation: Record<string, unknown> | null;
+  fetchLive?: LiveReservationFetcher | null;
+  persistTable?: string;
+  nowMs?: number;
+}) => {
+  const { item, reservation } = params;
+  if (
+    !params.fetchLive ||
+    !shouldRefreshPayoutSnapshot(reservation, item, params.nowMs)
+  ) {
+    return { item, reservation };
+  }
+  const reservationId =
+    asString(item.ReservationID) || asString(reservation?._id);
+  if (!reservationId) {
+    return { item, reservation };
+  }
+  try {
+    const live = await params.fetchLive(reservationId);
+    if (!live) {
+      return { item, reservation };
+    }
+    const merged = mergeLiveReservation(reservation, live);
+    const nextItem = applyLiveReservationToBooking(item, merged);
+    if (params.persistTable) {
+      try {
+        await persistBookingPayoutRefresh(
+          params.persistTable,
+          reservationId,
+          merged,
+          item,
+        );
+      } catch (error) {
+        console.warn(
+          'Failed to persist refreshed payout snapshot',
+          reservationId,
+          error,
+        );
+      }
+    }
+    return { item: nextItem, reservation: merged };
+  } catch (error) {
+    console.warn('Failed to refresh payout snapshot', reservationId, error);
+    return { item, reservation };
+  }
+};
+
+export const refreshPayoutBookingSnapshots = async (
+  candidates: Array<{
+    item: Record<string, unknown>;
+    reservation: Record<string, unknown> | null;
+  }>,
+  options: {
+    fetchLive?: LiveReservationFetcher | null;
+    persistTable?: string;
+    nowMs?: number;
+    concurrency?: number;
+  } = {},
+) =>
+  mapWithConcurrency(
+    candidates,
+    options.concurrency ?? 4,
+    (candidate) =>
+      refreshPayoutBookingSnapshot({
+        ...candidate,
+        fetchLive: options.fetchLive,
+        persistTable: options.persistTable,
+        nowMs: options.nowMs,
+      }),
+  );
+
+export const bookingHasPayout = (
+  reservation: Record<string, unknown> | null,
+  item: Record<string, unknown>,
+  today = getTodayInMadrid(),
+) => {
+  if (bookingStatuses(reservation, item).some(isExcludedPayoutStatus)) {
+    return false;
+  }
+  const money = moneyFromReservation(reservation);
+  if (money.hostPayout === null || money.hostPayout <= 0) {
+    return false;
+  }
+  if (hasSucceededPayment(money.payments)) {
+    return true;
+  }
+  const retainedAfterCancel =
+    looksCanceled(reservation, item) || hasCancelledPayment(money.payments);
+  if (retainedAfterCancel) {
+    return true;
+  }
+  const checkout = payoutCheckoutDate(reservation, item);
+  if (checkout && checkout < today) {
+    return false;
+  }
+  return true;
 };
 
 export const mapReportBooking = (

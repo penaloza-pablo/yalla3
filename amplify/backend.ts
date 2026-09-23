@@ -1873,9 +1873,17 @@ propertyReportsTable.grantReadWriteData(
   backend.upsertPropertyReport.resources.lambda,
 );
 bookingsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+backend.getPropertyReport.resources.lambda.addLayers(guestyAuthLayer);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(guestySecretsPolicy);
+backend.getPropertyReport.resources.lambda.addToRolePolicy(guestySsmPolicy);
 backend.getPropertyReport.resources.lambda.addToRolePolicy(
   new PolicyStatement({
-    actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem'],
+    actions: [
+      'dynamodb:Query',
+      'dynamodb:GetItem',
+      'dynamodb:BatchGetItem',
+      'dynamodb:UpdateItem',
+    ],
     resources: [
       bookingsTable.tableArn,
       `${bookingsTable.tableArn}/index/CheckInDate-index`,

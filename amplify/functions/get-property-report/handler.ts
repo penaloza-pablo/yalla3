@@ -26,12 +26,17 @@ import {
   mergeDefaultLineAllocations,
   parseLineAllocations,
   queryBookingsByCheckInDate,
+  refreshPayoutBookingSnapshots,
   reportMonthSummary,
   reportScopeForProperty,
   reservationFromPayload,
   resolveReportProperty,
   roundMoney,
 } from '../shared/property-reports';
+import {
+  fetchGuestyReservation,
+  loadGuestyClient,
+} from '../shared/guesty-client';
 import {
   GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
   isGlobalReportSettingsId,
@@ -50,7 +55,10 @@ const loadPayoutBookings = async (
   monthId: string,
 ) => {
   const seen = new Set<string>();
-  const bookings = [];
+  const candidates: Array<{
+    item: Record<string, unknown>;
+    reservation: Record<string, unknown> | null;
+  }> = [];
   for (const date of datesInReportMonth(monthId)) {
     const page = await queryBookingsByCheckInDate(bookingsTable, date);
     for (const summary of page) {
@@ -74,13 +82,23 @@ const loadPayoutBookings = async (
       if (!listingMatchesProperty(item, property)) {
         continue;
       }
-      const reservation = reservationFromPayload(item.RawPayload);
-      if (!bookingHasPayout(reservation, item)) {
-        continue;
-      }
-      bookings.push(mapReportBooking(item, reservation));
+      candidates.push({
+        item,
+        reservation: reservationFromPayload(item.RawPayload),
+      });
     }
   }
+
+  const guestyClient = await loadGuestyClient();
+  const refreshed = await refreshPayoutBookingSnapshots(candidates, {
+    fetchLive: guestyClient
+      ? (reservationId) => fetchGuestyReservation(guestyClient, reservationId)
+      : null,
+    persistTable: bookingsTable,
+  });
+  const bookings = refreshed
+    .filter(({ item, reservation }) => bookingHasPayout(reservation, item))
+    .map(({ item, reservation }) => mapReportBooking(item, reservation));
   bookings.sort((left, right) => {
     if (left.checkInDate !== right.checkInDate) {
       return left.checkInDate.localeCompare(right.checkInDate);

@@ -18,6 +18,6 @@ export const getPropertyReport = defineFunction({
     PURCHASES_TABLE: 'yalla-purchases',
     INVENTORY_TABLE: 'yalla-inventory',
   },
-  timeoutSeconds: 60,
+  timeoutSeconds: 90,
   memoryMB: 1024,
 });
