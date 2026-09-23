@@ -23,6 +23,7 @@ import type {
   MemoryPolicy,
   PermissionPolicy,
   RuntimeLimits,
+  ToolRiskLevel,
   ToolVersionRecord,
 } from './types';
 
@@ -36,6 +37,13 @@ const asStringList = (value: unknown) =>
   Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : [];
+
+const asRiskLevel = (value: unknown): ToolRiskLevel => {
+  if (value === 'write-low-risk' || value === 'write-controlled') {
+    return value;
+  }
+  return 'read';
+};
 
 const asRunStatus = (value: unknown): AgentRunStatus | undefined => {
   if (
@@ -491,7 +499,7 @@ export const listToolVersions = async (name: string) => {
         description: asString(item.description),
         catalogVersion: Number(item.catalogVersion) || version,
         createdAt: asString(item.createdAt) || undefined,
-        riskLevel: asString(item.riskLevel) || 'read',
+        riskLevel: asRiskLevel(item.riskLevel),
       } satisfies Partial<ToolVersionRecord> & { version: number; name: string };
     })
     .sort((left, right) => right.version - left.version);
