@@ -26,6 +26,7 @@ import {
   currentReportMonthId,
   deriveReportStatus,
   emptyReportRecord,
+  getReportRecord,
   isMonthIdValue,
   isPropertyReportEligible,
   isReportFrozen,
@@ -41,7 +42,9 @@ import {
 import {
   GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
   isGlobalReportSettingsId,
+  mergeReportSettings,
   parseReportSettings,
+  parseVisibility,
   REPORT_SETTINGS_MONTH_ID,
   validateReportSettings,
 } from '../shared/property-report-settings';
@@ -295,6 +298,52 @@ export const handler = async (event: {
     }
   }
 
+  if (action === 'visibility') {
+    const visibility = parseVisibility(payload.visibility, { persist: true });
+    if (!visibility) {
+      return buildHttpResponse(400, { message: 'visibility is required.' });
+    }
+    try {
+      const foundSettings = await docClient.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { propertyId, monthId: REPORT_SETTINGS_MONTH_ID },
+        }),
+      );
+      const existingSettings = (foundSettings.Item as
+        | Record<string, unknown>
+        | undefined) ?? {};
+      const timestamp = nowIso();
+      const item = {
+        ...existingSettings,
+        propertyId,
+        monthId: REPORT_SETTINGS_MONTH_ID,
+        kind: 'settings',
+        visibility,
+        createdAt: asString(existingSettings.createdAt) || timestamp,
+        updatedAt: timestamp,
+      };
+      await putItem(tableName, item);
+      const name = reportScopeForProperty(property).name;
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.PROPERTY_REPORTS,
+        action: 'visibility',
+        entityId: `${propertyId}#${REPORT_SETTINGS_MONTH_ID}`,
+        entityName: name,
+        summary: `updated property report card order ${quoted(name)}`,
+      });
+      return buildHttpResponse(200, {
+        item,
+        settings: parseReportSettings(item),
+      });
+    } catch (error) {
+      return buildHttpResponse(500, {
+        message: 'Failed to update the property report card order.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const monthId = payload.monthId?.trim() ?? '';
   if (!isMonthIdValue(monthId) || !isReportableMonth(monthId)) {
     return buildHttpResponse(400, {
@@ -376,7 +425,7 @@ export const handler = async (event: {
   } else {
     return buildHttpResponse(400, {
       message:
-        'action must be ready, close, publish, reopen, allocate, or settings.',
+        'action must be ready, close, publish, reopen, allocate, settings, or visibility.',
     });
   }
 
@@ -398,6 +447,27 @@ export const handler = async (event: {
     item.publishedAt = asString(existing?.publishedAt) || timestamp;
   } else {
     delete item.publishedAt;
+  }
+  if (nextStatus === 'READY_TO_PUBLISH' || nextStatus === 'PUBLISHED') {
+    const snapshot =
+      parseVisibility(existing?.visibilitySnapshot) ??
+      mergeReportSettings(
+        parseReportSettings(
+          await getReportRecord(tableName, propertyId, REPORT_SETTINGS_MONTH_ID),
+        ),
+        parseReportSettings(
+          await getReportRecord(
+            tableName,
+            GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+            REPORT_SETTINGS_MONTH_ID,
+          ),
+        ),
+      ).visibility;
+    if (snapshot) {
+      item.visibilitySnapshot = snapshot;
+    }
+  } else {
+    delete item.visibilitySnapshot;
   }
 
   try {

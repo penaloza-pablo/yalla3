@@ -19,6 +19,8 @@ type Props = {
   detailSources: MetricDetailSources
   visibility?: ReportVisibility | null
   hideManagementFee?: boolean
+  canReorder?: boolean
+  onReorderMetrics?: (tab: ReportTabId, fromId: string, toId: string) => void
   feeFormula?: string
   contributionFormula?: string
   ourProfitFormula?: string
@@ -34,6 +36,7 @@ const TAB_ICONS: Record<ReportTabId, YlIconName> = {
 
 const COUNT_IDS = new Set(['bookingCount', 'nights'])
 const PERCENT_IDS = new Set(['marketManagementFee'])
+const CARD_DRAG_MIME = 'application/x-yalla-report-metric'
 
 const formatMetric = (
   key: string,
@@ -71,6 +74,8 @@ export function PropertyClosedReportView({
   detailSources,
   visibility,
   hideManagementFee = false,
+  canReorder = false,
+  onReorderMetrics,
   feeFormula,
   contributionFormula,
   ourProfitFormula,
@@ -82,6 +87,9 @@ export function PropertyClosedReportView({
   const tabs = REPORT_TABS.filter((item) => resolved[item].visible)
   const [tab, setTab] = useState<ReportTabId>(tabs[0] ?? 'property')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const skipCardClickRef = useRef(false)
   const railRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
   const money = useMemo(
@@ -256,19 +264,93 @@ export function PropertyClosedReportView({
           const help = metricHelp(key)
           const isHero = key === row.primary
           const canOpenDetail = metricHasDetail(key)
+          const isDragging = draggingId === key
+          const isDropTarget = dropTargetId === key && draggingId !== key
+          const openDetail = () => {
+            if (!canOpenDetail) {
+              return
+            }
+            if (skipCardClickRef.current) {
+              skipCardClickRef.current = false
+              return
+            }
+            setDetailId(key)
+          }
           return (
             <article
               key={key}
-              className={`card closed-report-kpi${isHero ? ' is-hero' : ''}${canOpenDetail ? ' is-clickable' : ''}`}
-              role={canOpenDetail ? 'button' : undefined}
-              tabIndex={canOpenDetail ? 0 : undefined}
-              onClick={canOpenDetail ? () => setDetailId(key) : undefined}
+              className={`card closed-report-kpi${isHero ? ' is-hero' : ''}${canOpenDetail ? ' is-clickable' : ''}${canReorder ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+              role={canOpenDetail || canReorder ? 'button' : undefined}
+              tabIndex={canOpenDetail || canReorder ? 0 : undefined}
+              aria-grabbed={canReorder ? isDragging : undefined}
+              draggable={canReorder}
+              onDragStart={
+                canReorder
+                  ? (event) => {
+                      const origin = event.target as HTMLElement | null
+                      if (origin?.closest('.metric-help-wrap')) {
+                        event.preventDefault()
+                        return
+                      }
+                      skipCardClickRef.current = true
+                      event.dataTransfer.setData(CARD_DRAG_MIME, key)
+                      event.dataTransfer.effectAllowed = 'move'
+                      setDraggingId(key)
+                    }
+                  : undefined
+              }
+              onDragEnd={
+                canReorder
+                  ? () => {
+                      setDraggingId(null)
+                      setDropTargetId(null)
+                      window.setTimeout(() => {
+                        skipCardClickRef.current = false
+                      }, 0)
+                    }
+                  : undefined
+              }
+              onDragOver={
+                canReorder
+                  ? (event) => {
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                      if (dropTargetId !== key) {
+                        setDropTargetId(key)
+                      }
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                canReorder
+                  ? () => {
+                      setDropTargetId((current) =>
+                        current === key ? null : current,
+                      )
+                    }
+                  : undefined
+              }
+              onDrop={
+                canReorder
+                  ? (event) => {
+                      event.preventDefault()
+                      const fromId =
+                        event.dataTransfer.getData(CARD_DRAG_MIME) || draggingId
+                      setDropTargetId(null)
+                      setDraggingId(null)
+                      if (fromId && fromId !== key) {
+                        onReorderMetrics?.(tab, fromId, key)
+                      }
+                    }
+                  : undefined
+              }
+              onClick={canOpenDetail ? openDetail : undefined}
               onKeyDown={
                 canOpenDetail
                   ? (event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
-                        setDetailId(key)
+                        openDetail()
                       }
                     }
                   : undefined

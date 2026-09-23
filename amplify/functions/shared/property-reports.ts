@@ -53,6 +53,7 @@ import {
   previousReportStatus,
   type PropertyReportStatus,
 } from './property-report-status';
+import { parseVisibility } from './property-report-settings';
 
 export {
   COST_ALLOCATIONS,
@@ -1191,6 +1192,9 @@ export const reportMonthSummary = (
     canReopen: status !== 'IN_PROGRESS',
     closedAt: asString(stored?.closedAt) || undefined,
     updatedAt: asString(stored?.updatedAt) || undefined,
+    visibilitySnapshot: isReportFrozen(status)
+      ? parseVisibility(stored?.visibilitySnapshot) ?? undefined
+      : undefined,
   };
 };
 

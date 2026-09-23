@@ -47,6 +47,50 @@ export type ReportTabVisibility = {
 
 export type ReportVisibility = Record<ReportTabId, ReportTabVisibility>;
 
+export const reorderListItem = <T,>(
+  items: T[],
+  fromIndex: number,
+  toIndex: number,
+): T[] => {
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= items.length ||
+    toIndex >= items.length ||
+    fromIndex === toIndex
+  ) {
+    return items;
+  }
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+};
+
+export const reorderVisibilityMetrics = (
+  visibility: ReportVisibility,
+  tab: ReportTabId,
+  fromId: string,
+  toId: string,
+): ReportVisibility => {
+  const metrics = visibility[tab].metrics;
+  const nextMetrics = reorderListItem(
+    metrics,
+    metrics.indexOf(fromId),
+    metrics.indexOf(toId),
+  );
+  if (nextMetrics === metrics) {
+    return visibility;
+  }
+  return {
+    ...visibility,
+    [tab]: {
+      ...visibility[tab],
+      metrics: nextMetrics,
+    },
+  };
+};
+
 export const DEFAULT_MARKUP_PERCENT = 12;
 export const DEFAULT_MARKET_MANAGEMENT_FEE = 20;
 

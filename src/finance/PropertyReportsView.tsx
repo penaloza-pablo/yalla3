@@ -25,11 +25,16 @@ import {
 import type { PropertyOption } from '../operations/types'
 import {
   GLOBAL_REPORT_SETTINGS_PROPERTY_ID,
+  defaultReportVisibility,
   emptyReportSettings,
   mergeReportSettings,
   parseReportSettings,
+  parseVisibility,
+  reorderVisibilityMetrics,
   resolveMarkupPercent,
   type PropertyReportSettings,
+  type ReportTabId,
+  type ReportVisibility,
 } from '../../amplify/functions/shared/property-report-settings'
 import { DEFAULT_AMOUNT_TRANSFERRED_FORMULA, DEFAULT_COMMISSION_FORMULA } from '../../amplify/functions/shared/property-report-formula'
 import {
@@ -71,6 +76,7 @@ type ReportMonth = {
   canClose: boolean
   canPublish: boolean
   canReopen: boolean
+  visibilitySnapshot?: ReportVisibility | null
 }
 
 type ReportBooking = {
@@ -419,6 +425,7 @@ const mapMonth = (item: Record<string, unknown>): ReportMonth => {
       item.canReopen === undefined
         ? status !== 'IN_PROGRESS'
         : Boolean(item.canReopen),
+    visibilitySnapshot: parseVisibility(item.visibilitySnapshot),
   }
 }
 
@@ -816,6 +823,63 @@ export function PropertyReportsView({
       }
     },
     [endpoints.get, globalSettings, t],
+  )
+
+  const persistCardOrder = useCallback(
+    async (tab: ReportTabId, fromId: string, toId: string) => {
+      const currentVisibility =
+        reportSettings.visibility ?? defaultReportVisibility()
+      const nextVisibility = reorderVisibilityMetrics(
+        currentVisibility,
+        tab,
+        fromId,
+        toId,
+      )
+      if (nextVisibility === currentVisibility) {
+        return
+      }
+      const previous = reportSettings
+      setReportSettings({ ...reportSettings, visibility: nextVisibility })
+      if (!endpoints.upsert || !selectedPropertyId) {
+        return
+      }
+      try {
+        const payload = await fetchJson<{ settings?: Record<string, unknown> }>(
+          endpoints.upsert,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              propertyId: selectedPropertyId,
+              action: 'visibility',
+              visibility: nextVisibility,
+            }),
+          },
+        )
+        if (payload.settings) {
+          setReportSettings(
+            mergeReportSettings(
+              parseReportSettings(payload.settings),
+              globalSettings,
+            ),
+          )
+        }
+      } catch (saveError) {
+        setReportSettings(previous)
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : t('propertyReports.reorderError'),
+        )
+      }
+    },
+    [
+      endpoints.upsert,
+      globalSettings,
+      reportSettings,
+      selectedPropertyId,
+      t,
+    ],
   )
 
   useEffect(() => {
@@ -1766,7 +1830,18 @@ export function PropertyReportsView({
           ) : null}
           <PropertyClosedReportView
           metrics={closedReportMetrics}
-          visibility={reportSettings.visibility}
+          visibility={
+            report && isReportFrozen(report.status) && report.visibilitySnapshot
+              ? report.visibilitySnapshot
+              : reportSettings.visibility
+          }
+          canReorder={Boolean(
+            report &&
+              !isReportFrozen(report.status) &&
+              endpoints.upsert &&
+              selectedPropertyId,
+          )}
+          onReorderMetrics={persistCardOrder}
           hideManagementFee={reportSettings.businessModel === 'fixedRent'}
           feeFormula={
             reportSettings.businessModel === 'commission'

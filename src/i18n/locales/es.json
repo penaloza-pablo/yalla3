@@ -1574,6 +1574,7 @@
     "missingWrite": "Falta el endpoint de escritura de Property Reports. Vuelve a desplegar el backend.",
     "loadError": "No se pudo cargar el reporte de la propiedad.",
     "saveError": "No se pudo actualizar el reporte de la propiedad.",
+    "reorderError": "No se pudo guardar el orden de las tarjetas.",
     "updated": "Reporte de propiedad actualizado.",
     "openReport": "Abrir informe de desempeño",
     "openMonths": "Abrir informes mensuales",

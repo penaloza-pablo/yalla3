@@ -1217,6 +1217,23 @@ button.today-card {
   cursor: pointer;
 }
 
+.closed-report-kpi.is-draggable {
+  cursor: grab;
+}
+
+.closed-report-kpi.is-draggable.is-clickable {
+  cursor: grab;
+}
+
+.closed-report-kpi.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.closed-report-kpi.is-drop-target {
+  box-shadow: 0 0 0 2px #12b76a;
+}
+
 .closed-report-kpi.is-clickable:hover,
 .closed-report-kpi.is-clickable:focus-visible {
   box-shadow: 0 0 0 2px #d0d5dd;

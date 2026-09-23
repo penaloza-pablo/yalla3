@@ -1574,6 +1574,7 @@
     "missingWrite": "Missing Property Reports write endpoint. Redeploy the backend.",
     "loadError": "Unable to load the property report.",
     "saveError": "Unable to update the property report.",
+    "reorderError": "Unable to save the card order.",
     "updated": "Property report updated.",
     "openReport": "Open performance report",
     "openMonths": "Open monthly reports",
