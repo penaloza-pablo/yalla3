@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  ACTIVITY_LOG_VISIBLE_FROM,
+  isVisitTaskActivitySummary,
+  logMatchesProperty,
+  logMatchesUsers,
+  propertyMatchLabels,
+} from '../amplify/functions/shared/activity-log-policy'
 import { translatePage } from './i18n/display'
 import { authFetch } from './lib/auth-fetch'
+import { cognitoUserLabel, loadCognitoUserOptions, type CognitoUserOption } from './lib/cognito-users'
 import { MobileBodyPortal } from './MobileBodyPortal'
 import { YlIcon } from './design/icons'
+import { fetchJson } from './operations/api'
+import { filterPropertySelectOptions, getPropertyLabel } from './operations/propertyHelpers'
+import type { PropertyOption } from './operations/types'
 
 type ActivityLogRow = {
   id: string
@@ -14,6 +25,8 @@ type ActivityLogRow = {
   action?: string
   entityId?: string
   entityName?: string
+  propertyId?: string
+  propertyName?: string
 }
 
 type LogsApiResponse = {
@@ -81,6 +94,33 @@ const formatLogDate = (value: string, locale: string) => {
   })
 }
 
+const mapLogProperty = (item: Record<string, unknown>): PropertyOption => {
+  const id = String(item.id ?? '')
+  const nicknameRaw = String(item.nickname ?? item.Nickname ?? '')
+  const listingNickname = String(item.ListingNickname ?? item.listingNickname ?? '')
+  const title = String(item.title ?? '')
+  const mtlPrincipalId = String(
+    item.MTL_PRINCIPALID ?? item.mtlPrincipalId ?? item.MTL_PRINCIPAL_ID ?? '',
+  ).trim()
+  return {
+    id,
+    nickname: nicknameRaw,
+    title,
+    listingNickname,
+    type: String(item.type ?? item.Type ?? '').trim() || undefined,
+    abbreviation: String(item.abbreviation ?? '').trim() || undefined,
+    mtlPrincipalId: mtlPrincipalId || undefined,
+  }
+}
+
+const labelsForProperty = (property: PropertyOption) =>
+  propertyMatchLabels([
+    getPropertyLabel(property),
+    property.nickname,
+    property.listingNickname,
+    property.title,
+  ])
+
 const isSameLocalDay = (isoValue: string, now = new Date()) => {
   const parsed = new Date(isoValue)
   if (Number.isNaN(parsed.getTime())) {
@@ -111,10 +151,19 @@ export function LogsPanel({
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [featureFilters, setFeatureFilters] = useState<string[]>([])
   const [featureFilterDraft, setFeatureFilterDraft] = useState<string[]>([])
+  const [userFilters, setUserFilters] = useState<string[]>([])
+  const [userFilterDraft, setUserFilterDraft] = useState<string[]>([])
+  const [propertyFilters, setPropertyFilters] = useState<string[]>([])
+  const [propertyFilterDraft, setPropertyFilterDraft] = useState<string[]>([])
+  const [userListQuery, setUserListQuery] = useState('')
+  const [propertyListQuery, setPropertyListQuery] = useState('')
+  const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([])
+  const [cognitoUsers, setCognitoUsers] = useState<CognitoUserOption[]>([])
   const [quickPreset, setQuickPreset] = useState<LogsQuickPreset>('none')
   const [nextKey, setNextKey] = useState<Record<string, unknown> | null>(null)
   const [truncated, setTruncated] = useState(false)
   const requestSeq = useRef(0)
+  const hiddenPageLoads = useRef(0)
 
   const fetchLogs = useCallback(
     async (options?: { cursor?: Record<string, unknown> | null }) => {
@@ -132,6 +181,7 @@ export function LogsPanel({
       if (append) {
         setIsLoadingMore(true)
       } else {
+        hiddenPageLoads.current = 0
         setIsLoading(true)
         setNextKey(null)
         setTruncated(false)
@@ -150,10 +200,25 @@ export function LogsPanel({
         if (query) {
           params.set('q', query)
         }
-        if (quickPreset === 'today') {
-          const start = new Date()
-          start.setHours(0, 0, 0, 0)
-          params.set('from', start.toISOString())
+        const startOfToday = new Date()
+        startOfToday.setHours(0, 0, 0, 0)
+        const from =
+          quickPreset === 'today' &&
+          startOfToday.toISOString() > ACTIVITY_LOG_VISIBLE_FROM
+            ? startOfToday.toISOString()
+            : ACTIVITY_LOG_VISIBLE_FROM
+        params.set('from', from)
+        if (userFilters.length > 0) {
+          params.set('users', userFilters.join(','))
+        }
+        if (propertyFilters.length > 0) {
+          params.set('propertyIds', propertyFilters.join(','))
+          const names = propertyOptions
+            .filter((property) => propertyFilters.includes(property.id))
+            .flatMap((property) => labelsForProperty(property))
+          if (names.length > 0) {
+            params.set('propertyNames', JSON.stringify([...new Set(names)]))
+          }
         }
         if (options?.cursor) {
           params.set('exclusiveStartKey', JSON.stringify(options.cursor))
@@ -193,7 +258,7 @@ export function LogsPanel({
         }
       }
     },
-    [featureFilters, getEndpoint, quickPreset, searchQuery, t],
+    [featureFilters, getEndpoint, propertyFilters, propertyOptions, quickPreset, searchQuery, t, userFilters],
   )
 
   useEffect(() => {
@@ -204,13 +269,129 @@ export function LogsPanel({
     return () => window.clearTimeout(handle)
   }, [fetchLogs, searchQuery])
 
+  useEffect(() => {
+    const propertiesEndpoint = getEndpoint(
+      'getPropertiesUrl',
+      import.meta.env.VITE_GET_PROPERTIES_URL,
+    )
+    const usersEndpoint = getEndpoint(
+      'getCognitoUsersUrl',
+      import.meta.env.VITE_GET_COGNITO_USERS_URL,
+    )
+    let cancelled = false
+
+    const loadFilterOptions = async () => {
+      if (propertiesEndpoint) {
+        try {
+          const payload = await fetchJson<{ items?: Record<string, unknown>[] }>(
+            propertiesEndpoint,
+          )
+          if (!cancelled) {
+            setPropertyOptions(
+              filterPropertySelectOptions(
+                (payload.items ?? []).map(mapLogProperty),
+              ),
+            )
+          }
+        } catch {
+          if (!cancelled) {
+            setPropertyOptions([])
+          }
+        }
+      }
+      if (usersEndpoint) {
+        try {
+          const users = await loadCognitoUserOptions(usersEndpoint)
+          if (!cancelled) {
+            setCognitoUsers(users)
+          }
+        } catch {
+          if (!cancelled) {
+            setCognitoUsers([])
+          }
+        }
+      }
+    }
+
+    void loadFilterOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [getEndpoint])
+
+  const selectedPropertyNames = useMemo(() => {
+    const selected = new Set(propertyFilters)
+    return [
+      ...new Set(
+        propertyOptions
+          .filter((property) => selected.has(property.id))
+          .flatMap((property) => labelsForProperty(property)),
+      ),
+    ]
+  }, [propertyFilters, propertyOptions])
+
+  const userOptions = useMemo(() => {
+    const byEmail = new Map<string, string>()
+    for (const user of cognitoUsers) {
+      byEmail.set(user.email, cognitoUserLabel(user))
+    }
+    for (const row of rows) {
+      const email = row.userEmail.trim().toLowerCase()
+      if (!email || email === 'system' || byEmail.has(email)) {
+        continue
+      }
+      byEmail.set(email, row.userEmail.trim())
+    }
+    return [...byEmail.entries()]
+      .map(([email, label]) => ({ email, label }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
+      )
+  }, [cognitoUsers, rows])
+
+  const filteredUserOptions = useMemo(() => {
+    const query = userListQuery.trim().toLowerCase()
+    if (!query) {
+      return userOptions
+    }
+    return userOptions.filter(
+      (option) =>
+        option.email.includes(query) ||
+        option.label.toLowerCase().includes(query),
+    )
+  }, [userListQuery, userOptions])
+
+  const filteredPropertyOptions = useMemo(() => {
+    const query = propertyListQuery.trim().toLowerCase()
+    if (!query) {
+      return propertyOptions
+    }
+    return propertyOptions.filter((property) =>
+      getPropertyLabel(property).toLowerCase().includes(query),
+    )
+  }, [propertyListQuery, propertyOptions])
+
   const visibleRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    let next = rows
+    let next = rows.filter(
+      (row) =>
+        row.createdAt >= ACTIVITY_LOG_VISIBLE_FROM &&
+        !isVisitTaskActivitySummary(row.summary),
+    )
 
     if (featureFilters.length > 0) {
       const selected = new Set(featureFilters)
       next = next.filter((row) => selected.has(row.feature))
+    }
+
+    if (userFilters.length > 0) {
+      next = next.filter((row) => logMatchesUsers(row.userEmail, userFilters))
+    }
+
+    if (propertyFilters.length > 0) {
+      next = next.filter((row) =>
+        logMatchesProperty(row, propertyFilters, selectedPropertyNames),
+      )
     }
 
     if (query) {
@@ -222,7 +403,8 @@ export function LogsPanel({
           featureLabel.includes(query) ||
           row.summary.toLowerCase().includes(query) ||
           (row.action ?? '').toLowerCase().includes(query) ||
-          (row.entityName ?? '').toLowerCase().includes(query)
+          (row.entityName ?? '').toLowerCase().includes(query) ||
+          (row.propertyName ?? '').toLowerCase().includes(query)
         )
       })
     }
@@ -232,13 +414,47 @@ export function LogsPanel({
     }
 
     return next
-  }, [featureFilters, quickPreset, rows, searchQuery, t])
+  }, [
+    featureFilters,
+    propertyFilters,
+    quickPreset,
+    rows,
+    searchQuery,
+    selectedPropertyNames,
+    t,
+    userFilters,
+  ])
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      isLoadingMore ||
+      !nextKey ||
+      quickPreset === 'last100' ||
+      rows.length === 0 ||
+      visibleRows.length > 0 ||
+      hiddenPageLoads.current >= 6
+    ) {
+      return
+    }
+    hiddenPageLoads.current += 1
+    void fetchLogs({ cursor: nextKey })
+  }, [
+    fetchLogs,
+    isLoading,
+    isLoadingMore,
+    nextKey,
+    quickPreset,
+    rows.length,
+    visibleRows.length,
+  ])
 
   const uniqueUsers = useMemo(() => {
     return new Set(visibleRows.map((row) => row.userEmail).filter(Boolean)).size
   }, [visibleRows])
 
-  const activeFilterCount = featureFilters.length
+  const activeFilterCount =
+    featureFilters.length + userFilters.length + propertyFilters.length
   const hasActiveFilters =
     activeFilterCount > 0 || Boolean(searchQuery.trim()) || quickPreset !== 'none'
   const canLoadMore =
@@ -307,6 +523,10 @@ export function LogsPanel({
                 aria-label={t('common.filters')}
                 onClick={() => {
                   setFeatureFilterDraft([...featureFilters])
+                  setUserFilterDraft([...userFilters])
+                  setPropertyFilterDraft([...propertyFilters])
+                  setUserListQuery('')
+                  setPropertyListQuery('')
                   setIsFilterOpen(true)
                 }}
               >
@@ -369,7 +589,7 @@ export function LogsPanel({
 
         {isFilterOpen ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
-            <div className="modal modal-scrollable">
+            <div className="modal modal-wide modal-scrollable">
               <div className="modal-header">
                 <div>
                   <h3 className="modal-title">{t('common.filters')}</h3>
@@ -385,10 +605,90 @@ export function LogsPanel({
                 </button>
               </div>
               <div className="modal-body">
-                <div className="filter-grid">
+                <div className="filter-grid filter-grid-3">
+                  <div className="filter-group">
+                    <p className="filter-title">{t('logs.user')}</p>
+                    <input
+                      className="search-input filter-list-search"
+                      type="search"
+                      value={userListQuery}
+                      placeholder={t('logs.searchUsers')}
+                      aria-label={t('logs.searchUsers')}
+                      onChange={(event) => setUserListQuery(event.target.value)}
+                    />
+                    <div className="filter-options filter-options-scroll">
+                      {filteredUserOptions.length === 0 ? (
+                        <p className="filter-empty">{t('logs.noFilterOptions')}</p>
+                      ) : (
+                        filteredUserOptions.map((option) => {
+                          const isChecked = userFilterDraft.includes(option.email)
+                          return (
+                            <label className="filter-option" key={option.email}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(event) => {
+                                  setUserFilterDraft((current) => {
+                                    if (event.target.checked) {
+                                      return [...current, option.email]
+                                    }
+                                    return current.filter(
+                                      (value) => value !== option.email,
+                                    )
+                                  })
+                                }}
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                  <div className="filter-group">
+                    <p className="filter-title">{t('logs.property')}</p>
+                    <input
+                      className="search-input filter-list-search"
+                      type="search"
+                      value={propertyListQuery}
+                      placeholder={t('logs.searchProperties')}
+                      aria-label={t('logs.searchProperties')}
+                      onChange={(event) =>
+                        setPropertyListQuery(event.target.value)
+                      }
+                    />
+                    <div className="filter-options filter-options-scroll">
+                      {filteredPropertyOptions.length === 0 ? (
+                        <p className="filter-empty">{t('logs.noFilterOptions')}</p>
+                      ) : (
+                        filteredPropertyOptions.map((property) => {
+                          const isChecked = propertyFilterDraft.includes(property.id)
+                          return (
+                            <label className="filter-option" key={property.id}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(event) => {
+                                  setPropertyFilterDraft((current) => {
+                                    if (event.target.checked) {
+                                      return [...current, property.id]
+                                    }
+                                    return current.filter(
+                                      (value) => value !== property.id,
+                                    )
+                                  })
+                                }}
+                              />
+                              <span>{getPropertyLabel(property)}</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
                   <div className="filter-group">
                     <p className="filter-title">{t('logs.feature')}</p>
-                    <div className="filter-options">
+                    <div className="filter-options filter-options-scroll">
                       {FEATURE_OPTIONS.map((option) => {
                         const isChecked = featureFilterDraft.includes(option)
                         return (
@@ -417,7 +717,13 @@ export function LogsPanel({
                 <button
                   className="btn-secondary"
                   type="button"
-                  onClick={() => setFeatureFilterDraft([])}
+                  onClick={() => {
+                    setFeatureFilterDraft([])
+                    setUserFilterDraft([])
+                    setPropertyFilterDraft([])
+                    setUserListQuery('')
+                    setPropertyListQuery('')
+                  }}
                 >
                   {t('common.clear')}
                 </button>
@@ -426,6 +732,8 @@ export function LogsPanel({
                   type="button"
                   onClick={() => {
                     setFeatureFilters([...featureFilterDraft])
+                    setUserFilters([...userFilterDraft])
+                    setPropertyFilters([...propertyFilterDraft])
                     setIsFilterOpen(false)
                   }}
                 >

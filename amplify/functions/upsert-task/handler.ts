@@ -1,10 +1,5 @@
 import { DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
-  LOG_FEATURES,
-  quoted,
-  recordActivityLog,
-} from '../shared/activity-log';
-import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -211,13 +206,6 @@ export const handler = async (event: {
           if (dueDate) copy.dueDate = dueDate;
           await putItem(tasksTable, copy);
           copied = true;
-          await recordActivityLog(event, {
-            feature: LOG_FEATURES.OPERATIONS,
-            action: 'create',
-            entityId: copyId,
-            entityName: title,
-            summary: `created inbox copy ${quoted(title)} from skipped task ${quoted(taskId)}`,
-          });
         }
       }
       if (copied) {
@@ -242,17 +230,6 @@ export const handler = async (event: {
         Key: { id: taskId },
       }),
     );
-    const taskTitle =
-      typeof existing.title === 'string' && existing.title.trim()
-        ? existing.title
-        : taskId;
-    await recordActivityLog(event, {
-      feature: LOG_FEATURES.OPERATIONS,
-      action: 'delete',
-      entityId: taskId,
-      entityName: taskTitle,
-      summary: `deleted task ${quoted(taskTitle)}`,
-    });
     return buildHttpResponse(200, { item: { id: taskId, deleted: true } });
   }
 
@@ -455,26 +432,6 @@ export const handler = async (event: {
       }
       await putItem(tasksTable, item);
     }
-
-    const taskTitle =
-      typeof item.title === 'string' && item.title.trim()
-        ? item.title
-        : typeof item.id === 'string'
-          ? item.id
-          : 'task';
-    const taskStatus =
-      typeof item.status === 'string' ? item.status.toLowerCase() : '';
-    await recordActivityLog(event, {
-      feature: LOG_FEATURES.OPERATIONS,
-      action: isUpdate ? 'update' : 'create',
-      entityId: typeof item.id === 'string' ? item.id : undefined,
-      entityName: taskTitle,
-      summary: isUpdate
-        ? taskStatus === 'completed' || taskStatus === 'cancelled' || taskStatus === 'dismiss'
-          ? `marked task ${quoted(taskTitle)} as ${taskStatus}`
-          : `updated task ${quoted(taskTitle)}`
-        : `created task ${quoted(taskTitle)}`,
-    });
 
     if (isUpdate && typeof item.id === 'string' && hasGuestyTaskId(item)) {
       try {

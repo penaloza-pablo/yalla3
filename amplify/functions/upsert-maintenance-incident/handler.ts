@@ -209,6 +209,8 @@ export const handler = async (event: {
       action: isUpdate ? 'update' : 'create',
       entityId: id,
       entityName: property || visitId,
+      ...(propertyId ? { propertyId } : {}),
+      ...(property ? { propertyName: property } : {}),
       summary: isUpdate
         ? `updated maintenance incident ${quoted(id)} for ${quoted(property)}`
         : `created maintenance incident ${quoted(id)} for ${quoted(property)}`,

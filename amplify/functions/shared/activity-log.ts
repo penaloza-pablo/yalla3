@@ -45,6 +45,8 @@ export type ActivityLogEntry = {
   entityId?: string;
   entityName?: string;
   userEmail?: string;
+  propertyId?: string;
+  propertyName?: string;
 };
 
 export const quoted = (value?: string | null) => {
@@ -66,6 +68,8 @@ export const recordActivityLog = async (
     const id = crypto.randomUUID();
     const userEmail =
       entry.userEmail?.trim() || (await getActorEmail(event));
+    const propertyId = entry.propertyId?.trim();
+    const propertyName = entry.propertyName?.trim();
 
     await client.send(
       new PutCommand({
@@ -81,6 +85,8 @@ export const recordActivityLog = async (
           ...(entry.action ? { action: entry.action } : {}),
           ...(entry.entityId ? { entityId: entry.entityId } : {}),
           ...(entry.entityName ? { entityName: entry.entityName } : {}),
+          ...(propertyId ? { propertyId } : {}),
+          ...(propertyName ? { propertyName: propertyName.slice(0, 120) } : {}),
         },
       }),
     );

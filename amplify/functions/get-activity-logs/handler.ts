@@ -3,6 +3,12 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { rejectIfUnauthenticated } from '../shared/cognito-auth';
 import { ACTIVITY_LOG_PK } from '../shared/activity-log';
 import {
+  ACTIVITY_LOG_VISIBLE_FROM,
+  isVisitTaskActivitySummary,
+  logMatchesProperty,
+  logMatchesUsers,
+} from '../shared/activity-log-policy';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -39,6 +45,30 @@ const parseFeatures = (value?: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const parseStringList = (value?: string) => {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return trimmed
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 const asString = (value: unknown) => (typeof value === 'string' ? value : '');
 
 type IndexMode = 'pk' | 'feature' | 'userEmail';
@@ -52,6 +82,8 @@ type MappedLog = {
   action?: string;
   entityId?: string;
   entityName?: string;
+  propertyId?: string;
+  propertyName?: string;
   pk: string;
   sk: string;
 };
@@ -65,6 +97,8 @@ const mapItem = (item: Record<string, unknown>): MappedLog => ({
   action: asString(item.action) || undefined,
   entityId: asString(item.entityId) || undefined,
   entityName: asString(item.entityName) || undefined,
+  propertyId: asString(item.propertyId) || undefined,
+  propertyName: asString(item.propertyName) || undefined,
   pk: asString(item.pk) || ACTIVITY_LOG_PK,
   sk: asString(item.sk),
 });
@@ -78,6 +112,8 @@ const publicItem = (item: MappedLog) => ({
   action: item.action,
   entityId: item.entityId,
   entityName: item.entityName,
+  propertyId: item.propertyId,
+  propertyName: item.propertyName,
 });
 
 const cursorForItem = (item: MappedLog, mode: IndexMode) => {
@@ -104,6 +140,7 @@ const matchesSearch = (item: MappedLog, query: string) => {
     item.action ?? '',
     item.entityName ?? '',
     item.entityId ?? '',
+    item.propertyName ?? '',
   ]
     .join(' ')
     .toLowerCase();
@@ -135,13 +172,24 @@ export const handler = async (event: {
   const query = event.queryStringParameters ?? {};
   const limit = parseLimit(query.limit);
   const search = (query.q ?? query.search ?? '').trim().toLowerCase().slice(0, 80);
-  const from = (query.from ?? '').trim();
-  const userEmail = (query.userEmail ?? '').trim();
+  const requestedFrom = (query.from ?? '').trim();
+  const from =
+    !requestedFrom || requestedFrom < ACTIVITY_LOG_VISIBLE_FROM
+      ? ACTIVITY_LOG_VISIBLE_FROM
+      : requestedFrom;
+  const users = parseStringList(query.users || query.userEmail);
+  const propertyIds = parseStringList(query.propertyIds);
+  const propertyNames = parseStringList(query.propertyNames);
   const features = parseFeatures(query.features || query.feature);
   let exclusiveStartKey = parseExclusiveStartKey(query.exclusiveStartKey);
 
-  const useFeatureIndex = features.length === 1 && !userEmail;
-  const useUserIndex = !useFeatureIndex && Boolean(userEmail);
+  const useFeatureIndex =
+    features.length === 1 && users.length === 0 && propertyIds.length === 0 && propertyNames.length === 0;
+  const useUserIndex =
+    !useFeatureIndex &&
+    users.length === 1 &&
+    propertyIds.length === 0 &&
+    propertyNames.length === 0;
   const indexMode: IndexMode = useFeatureIndex
     ? 'feature'
     : useUserIndex
@@ -158,7 +206,7 @@ export const handler = async (event: {
     keyCondition = '#feature = :feature';
   } else if (useUserIndex) {
     keyNames['#userEmail'] = 'userEmail';
-    keyValues[':userEmail'] = userEmail;
+    keyValues[':userEmail'] = users[0];
     keyCondition = '#userEmail = :userEmail';
   } else {
     keyNames['#pk'] = 'pk';
@@ -202,7 +250,19 @@ export const handler = async (event: {
       examined += page.length;
 
       for (const item of page) {
-        if (features.length > 1 && !features.includes(item.feature)) {
+        if (item.createdAt && item.createdAt < ACTIVITY_LOG_VISIBLE_FROM) {
+          continue;
+        }
+        if (isVisitTaskActivitySummary(item.summary)) {
+          continue;
+        }
+        if (features.length > 0 && !features.includes(item.feature)) {
+          continue;
+        }
+        if (!logMatchesUsers(item.userEmail, users)) {
+          continue;
+        }
+        if (!logMatchesProperty(item, propertyIds, propertyNames)) {
           continue;
         }
         if (!matchesSearch(item, search)) {

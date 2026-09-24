@@ -152,11 +152,14 @@ export const handler = async (event: {
       typeof item.title === 'string' && item.title.trim()
         ? item.title
         : visitId;
+    const propertyId =
+      typeof item.propertyId === 'string' ? item.propertyId.trim() : '';
     await recordActivityLog(event, {
       feature: LOG_FEATURES.OPERATIONS,
       action: 'refresh',
       entityId: visitId,
       entityName: visitTitle,
+      ...(propertyId ? { propertyId } : {}),
       summary: result.changed
         ? `refreshed visit ${quoted(visitTitle)} from Guesty (${String(result.guestyStatus ?? '')} → ${String(result.yallaStatus ?? '')})`
         : `refreshed visit ${quoted(visitTitle)} from Guesty; already in sync`,
@@ -493,11 +496,14 @@ export const handler = async (event: {
           : 'visit';
     const visitStatus =
       typeof item.status === 'string' ? item.status.toLowerCase() : '';
+    const savedPropertyId =
+      typeof item.propertyId === 'string' ? item.propertyId.trim() : '';
     await recordActivityLog(event, {
       feature: LOG_FEATURES.OPERATIONS,
       action: isUpdate ? 'update' : 'create',
       entityId: typeof item.id === 'string' ? item.id : undefined,
       entityName: visitTitle,
+      ...(savedPropertyId ? { propertyId: savedPropertyId } : {}),
       summary: isUpdate
         ? visitStatus === 'cancelled' || visitStatus === 'completed'
           ? `marked visit ${quoted(visitTitle)} as ${visitStatus}`

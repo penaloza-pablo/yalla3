@@ -1909,6 +1909,21 @@ button.today-card {
   align-content: start;
 }
 
+.filter-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.filter-list-search {
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-empty {
+  margin: 0;
+  color: #667085;
+  font-size: 0.9rem;
+}
+
 .filter-group {
   display: flex;
   flex-direction: column;
@@ -6499,6 +6514,7 @@ th {
 
   .form-grid,
   .filter-grid,
+  .filter-grid-3,
   .rule-form-fields {
     grid-template-columns: 1fr;
   }

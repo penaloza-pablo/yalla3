@@ -253,6 +253,7 @@ export const handler = async (event: {
       action: existing.Item ? 'update' : 'create',
       entityId: id,
       entityName: propertyLabel,
+      ...(!isGroup && id ? { propertyId: id, propertyName: propertyLabel } : {}),
       summary: existing.Item
         ? isGroup
           ? `updated property group ${quoted(propertyLabel)}`
