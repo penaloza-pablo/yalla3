@@ -433,6 +433,13 @@ export const handler = async (event: {
       await putItem(tasksTable, item);
     }
 
+    const taskTitle =
+      typeof item.title === 'string' && item.title.trim()
+        ? item.title
+        : typeof item.id === 'string'
+          ? item.id
+          : 'task';
+
     if (isUpdate && typeof item.id === 'string' && hasGuestyTaskId(item)) {
       try {
         const syncResult = await invokeGuestyTaskSync({
