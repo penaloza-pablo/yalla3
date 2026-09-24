@@ -33,6 +33,7 @@ export type MetricDetailPayout = {
   id: string
   guestName: string
   guestPay: number
+  nights: number
   channelFee: number
   cleaningFee: number
   cleaningGross: number
@@ -132,6 +133,16 @@ export const buildMetricDetailSections = (
     case 'paidByGuest':
       return [
         section(payoutName, payoutName, payoutRows(sources.payouts, (row) => row.guestPay)),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'averageRatePerNight':
+      return [
+        section(
+          payoutName,
+          payoutName,
+          payoutRows(sources.payouts, (row) =>
+            row.nights > 0 ? roundMoney(row.guestPay / row.nights) : 0,
+          ),
+        ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'channelFee':
       return [

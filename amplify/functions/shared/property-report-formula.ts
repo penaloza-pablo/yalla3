@@ -43,6 +43,7 @@ export const FORMULA_CATALOG_VARIABLES = [
   'otherIncomesIva',
   'bookingCount',
   'nights',
+  'averageRatePerNight',
   'income',
   'cleaningMargin',
   'maintenance',

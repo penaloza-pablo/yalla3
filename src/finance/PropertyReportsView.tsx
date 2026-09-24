@@ -1864,6 +1864,7 @@ export function PropertyReportsView({
               id: row.booking.reservationId || row.booking.bookingId,
               guestName: row.booking.guestName || '—',
               guestPay: row.guestPay ?? 0,
+              nights: row.nights ?? 0,
               channelFee: row.booking.hostServiceFee ?? 0,
               cleaningFee: row.cleaningFee ?? 0,
               cleaningGross: row.cleaningGross ?? 0,

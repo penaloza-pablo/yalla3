@@ -216,6 +216,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'source',
   },
   {
+    id: 'averageRatePerNight',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'paidByGuest / nights',
+  },
+  {
     id: 'managementFee',
     unit: 'money',
     role: 'source',
@@ -535,6 +541,9 @@ export const computePropertyReportMetrics = (
     inputs.allocatedLines,
     isIncomeToOwner,
   )
+  const nights = inputs.nights
+  const averageRatePerNight =
+    nights > 0 ? roundMoney(roundMoney(inputs.paidByGuest) / nights) : 0
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
     channelFee,
@@ -561,7 +570,8 @@ export const computePropertyReportMetrics = (
     otherExpensesIva: roundMoney(inputs.otherExpensesIva),
     otherIncomesIva: roundMoney(inputs.otherIncomesIva),
     bookingCount: inputs.bookingCount,
-    nights: inputs.nights,
+    nights,
+    averageRatePerNight,
     income,
     cleaningMargin,
     maintenance: roundMoney(inputs.maintenanceNet),
@@ -664,7 +674,8 @@ export const computePropertyReportMetrics = (
     marketManagementFee,
     marketManagementCommission,
     bookingCount: inputs.bookingCount,
-    nights: inputs.nights,
+    nights,
+    averageRatePerNight,
     fixedRent: roundMoney(settings?.fixedRent ?? 0),
   }
 }
