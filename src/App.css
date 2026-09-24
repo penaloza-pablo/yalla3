@@ -3491,6 +3491,10 @@ th {
   background: #fff;
 }
 
+.operations-detail-modal.is-start-veiled > .modal-header {
+  background: transparent;
+}
+
 .visit-start-veil {
   position: absolute;
   inset: 0;
@@ -3528,7 +3532,7 @@ th {
 
 .visit-start-button:disabled {
   opacity: 0.7;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .visit-start-reveal {
@@ -3543,30 +3547,11 @@ th {
 }
 
 .visit-start-veil-notice {
-  max-width: 280px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #fff;
-  color: #1d2939;
-  text-align: center;
+  width: min(440px, 100%);
 }
 
-.visit-start-veil-notice p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.visit-start-veil-notice button {
-  margin-top: 8px;
-  border: 0;
-  background: transparent;
-  color: var(--yl-go);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.visit-start-veil-notice .notice {
+  margin-top: 0;
 }
 
 .operations-kanban-complete.is-start {

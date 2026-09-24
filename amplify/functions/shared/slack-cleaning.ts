@@ -29,7 +29,11 @@ import {
   visitHasOpenTasks,
 } from './visit-task-utils';
 import {
+  notStartedResolvedInYallaText,
   overdueCompletedInYallaText,
+  SLACK_NOT_STARTED_CHANNEL_FIELD,
+  SLACK_NOT_STARTED_FIELD,
+  SLACK_NOT_STARTED_TS_FIELD,
   SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
   SLACK_OVERDUE_TS_FIELD,
@@ -37,10 +41,15 @@ import {
 
 export {
   isPastOverdueGrace,
+  isPastStartGrace,
+  notStartedResolvedInYallaText,
   overdueCompletedInYallaText,
   overdueLookbackDates,
   overdueNotifyKey,
   OVERDUE_GRACE_MINUTES,
+  SLACK_NOT_STARTED_CHANNEL_FIELD,
+  SLACK_NOT_STARTED_FIELD,
+  SLACK_NOT_STARTED_TS_FIELD,
   SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
   SLACK_OVERDUE_TS_FIELD,
@@ -48,6 +57,8 @@ export {
 
 export const SNOOZE_ACTION_ID = 'cleaning_snooze';
 export const DONE_ACTION_ID = 'cleaning_done';
+export const START_SNOOZE_ACTION_ID = 'cleaning_start_snooze';
+export const START_DONE_ACTION_ID = 'cleaning_start_done';
 export const SNOOZE_MODAL_CALLBACK = 'cleaning_snooze_modal';
 
 const asString = (value: unknown) =>
@@ -131,6 +142,9 @@ export const appPageUrl = (page: string, extra?: Record<string, string>) => {
 
 export const overdueCleaningMessage = (title: string) =>
   `${escapeMrkdwn(title)} debería haber terminado y no se ha cerrado:`;
+
+export const notStartedCleaningMessage = (title: string) =>
+  `${escapeMrkdwn(title)} debería haber empezado y no se ha iniciado:`;
 
 export const overdueMaintenanceMessage = (title: string) =>
   `${escapeMrkdwn(title)} (mantenimiento) debería haber terminado y no se ha cerrado.`;
@@ -243,6 +257,35 @@ export const resolveOverdueChannel = (params: {
     : null;
 };
 
+export const notStartedCleaningBlocks = (visitId: string, nickname: string) => [
+  {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: notStartedCleaningMessage(nickname),
+    },
+  },
+  {
+    type: 'actions',
+    block_id: `cleaning_not_started_actions:${visitId}`.slice(0, 255),
+    elements: [
+      {
+        type: 'button',
+        action_id: START_SNOOZE_ACTION_ID,
+        text: { type: 'plain_text', text: 'Posponer' },
+        value: visitId,
+      },
+      {
+        type: 'button',
+        action_id: START_DONE_ACTION_ID,
+        style: 'primary',
+        text: { type: 'plain_text', text: 'Iniciada' },
+        value: visitId,
+      },
+    ],
+  },
+];
+
 export const overdueCleaningBlocks = (visitId: string, nickname: string) => [
   {
     type: 'section',
@@ -277,6 +320,7 @@ export const snoozeModalView = (options: {
   channelId: string;
   messageTs: string;
   initialTime: string;
+  kind?: 'end' | 'start';
 }) => ({
   type: 'modal',
   callback_id: SNOOZE_MODAL_CALLBACK,
@@ -284,6 +328,7 @@ export const snoozeModalView = (options: {
     visitId: options.visitId,
     channelId: options.channelId,
     messageTs: options.messageTs,
+    kind: options.kind ?? 'end',
   }),
   title: { type: 'plain_text', text: 'Posponer' },
   submit: { type: 'plain_text', text: 'Guardar' },
@@ -294,7 +339,10 @@ export const snoozeModalView = (options: {
       block_id: 'end_time',
       label: {
         type: 'plain_text',
-        text: 'Nueva hora de finalización',
+        text:
+          options.kind === 'start'
+            ? 'Nueva hora de inicio'
+            : 'Nueva hora de finalización',
       },
       element: {
         type: 'timepicker',
@@ -577,6 +625,224 @@ export const snoozeCleaningFromSlack = async (options: {
     visit,
   );
   const text = `La limpieza de ${escapeMrkdwn(nickname)} se pospuso. Nueva hora de finalización: ${endTime}.`;
+  await replaceMessage(options.channelId, options.messageTs, text);
+  return { ok: true, message: text };
+};
+
+const clockMinutes = (value: string) => {
+  const normalized = normalizeStartTime(value);
+  if (!normalized) {
+    return null;
+  }
+  const [hours, minutes] = normalized.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const clockFromMinutes = (total: number) => {
+  const capped = Math.min(Math.max(total, 0), 23 * 60 + 59);
+  const hours = Math.floor(capped / 60);
+  const minutes = capped % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const isNotStartedSlackMessage = (message: Record<string, unknown>) => {
+  const text = asString(message.text);
+  if (text.includes('debería haber empezado')) {
+    return true;
+  }
+  const blocks = Array.isArray(message.blocks) ? message.blocks : [];
+  return blocks.some((block) => {
+    const record = asRecord(block);
+    const elements = Array.isArray(record?.elements) ? record.elements : [];
+    return elements.some((element) => {
+      const actionId = asString(asRecord(element)?.action_id);
+      return (
+        actionId === START_DONE_ACTION_ID || actionId === START_SNOOZE_ACTION_ID
+      );
+    });
+  });
+};
+
+const findNotStartedSlackMessage = async (visit: Record<string, unknown>) => {
+  const visitId = asString(visit.id);
+  const title = asString(visit.title);
+  if (!visitId) {
+    return null;
+  }
+  let channelId = asString(visit[SLACK_NOT_STARTED_CHANNEL_FIELD]);
+  if (!channelId) {
+    const secrets = await loadSlackSecrets();
+    const nickname = await loadPropertyNickname(
+      process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+      visit,
+    );
+    const channel = resolveOverdueChannel({
+      teamKind: 'cleaning',
+      nickname,
+      propertyId: asString(visit.propertyId),
+      title: title || nickname,
+      secrets,
+    });
+    channelId = channel?.channelId ?? '';
+  }
+  if (!channelId) {
+    return null;
+  }
+  try {
+    const history = (await slackApi('conversations.history', {
+      channel: channelId,
+      limit: 100,
+    })) as { messages?: unknown[] };
+    const messages = Array.isArray(history.messages) ? history.messages : [];
+    for (const raw of messages) {
+      const message = asRecord(raw);
+      if (!message) {
+        continue;
+      }
+      const ts = asString(message.ts);
+      if (
+        ts &&
+        isNotStartedSlackMessage(message) &&
+        messageMentionsVisit(message, visitId, title)
+      ) {
+        return { channelId, messageTs: ts };
+      }
+    }
+  } catch (error) {
+    console.error(
+      `Failed to search not-started Slack message for visit ${visitId}`,
+      error,
+    );
+  }
+  return null;
+};
+
+export const markNotStartedSlackMessageResolvedInYalla = async (
+  visit: Record<string, unknown>,
+  resolution: 'started' | 'completed' = 'started',
+) => {
+  if (
+    !(await isSlackNotificationEnabled(
+      SLACK_NOTIFICATION_IDS.cleaningNotStarted,
+    ))
+  ) {
+    return;
+  }
+  if (
+    !asString(visit[SLACK_NOT_STARTED_FIELD]) &&
+    !asString(visit[SLACK_NOT_STARTED_TS_FIELD])
+  ) {
+    return;
+  }
+  const title = asString(visit.title) || 'Visita';
+  let channelId = asString(visit[SLACK_NOT_STARTED_CHANNEL_FIELD]);
+  let messageTs = asString(visit[SLACK_NOT_STARTED_TS_FIELD]);
+  if (!channelId || !messageTs) {
+    const found = await findNotStartedSlackMessage(visit);
+    if (!found) {
+      return;
+    }
+    channelId = found.channelId;
+    messageTs = found.messageTs;
+  }
+  const text =
+    resolution === 'completed'
+      ? overdueCompletedInYallaText(escapeMrkdwn(title))
+      : notStartedResolvedInYallaText(escapeMrkdwn(title));
+  await replaceMessage(channelId, messageTs, text);
+};
+
+export const startCleaningFromSlack = async (options: {
+  visitsTable: string;
+  visitId: string;
+  channelId: string;
+  messageTs: string;
+}) => {
+  const visit = await loadVisit(options.visitsTable, options.visitId);
+  if (!visit) {
+    return { ok: false, message: 'No se encontró la visita.' };
+  }
+  const currentStatus = asString(visit.status).toUpperCase();
+  const nickname = await loadPropertyNickname(
+    process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+    visit,
+  );
+  if (TERMINAL_VISIT_STATUSES.has(currentStatus)) {
+    const text =
+      currentStatus === 'CANCELLED'
+        ? `La limpieza de ${escapeMrkdwn(nickname)} ya estaba cancelada.`
+        : overdueCompletedInYallaText(escapeMrkdwn(nickname));
+    await replaceMessage(options.channelId, options.messageTs, text);
+    return { ok: true, alreadyClosed: true, message: text };
+  }
+  if (asString(visit.startedAt)) {
+    const text = notStartedResolvedInYallaText(escapeMrkdwn(nickname));
+    await replaceMessage(options.channelId, options.messageTs, text);
+    return { ok: true, alreadyClosed: true, message: text };
+  }
+  if (!isOpenCleaningVisit(visit)) {
+    return { ok: false, message: 'La visita ya no está abierta.' };
+  }
+  const scheduledDate = asString(visit.scheduledDate).slice(0, 10);
+  if (scheduledDate && scheduledDate > getTodayInMadrid()) {
+    return {
+      ok: false,
+      message: 'No se puede iniciar una visita de un día futuro.',
+    };
+  }
+  const timestamp = nowIso();
+  await patchUserOriginatedRecord(options.visitsTable, options.visitId, {
+    set: { startedAt: timestamp },
+  });
+  const text = `La limpieza de ${escapeMrkdwn(nickname)} se marcó como iniciada.`;
+  await replaceMessage(options.channelId, options.messageTs, text);
+  return { ok: true, message: text };
+};
+
+export const snoozeCleaningStartFromSlack = async (options: {
+  visitsTable: string;
+  visitId: string;
+  newStartTime: string;
+  channelId: string;
+  messageTs: string;
+}) => {
+  const startTime = normalizeStartTime(options.newStartTime);
+  if (!startTime) {
+    return { ok: false, message: 'Hora no válida.' };
+  }
+  if (startTime <= getNowTimeInMadrid()) {
+    return {
+      ok: false,
+      message: 'Elige una hora posterior a ahora (hora de Madrid).',
+    };
+  }
+  const visit = await loadVisit(options.visitsTable, options.visitId);
+  if (!visit || !isOpenCleaningVisit(visit) || asString(visit.startedAt)) {
+    return { ok: false, message: 'La visita ya no está pendiente de inicio.' };
+  }
+  const previousStart = clockMinutes(asString(visit.scheduledStartTime));
+  const previousEnd = clockMinutes(asString(visit.scheduledEndTime));
+  const nextStart = clockMinutes(startTime);
+  const setFields: Record<string, string> = { scheduledStartTime: startTime };
+  if (
+    previousStart !== null &&
+    previousEnd !== null &&
+    nextStart !== null &&
+    previousEnd > previousStart
+  ) {
+    setFields.scheduledEndTime = clockFromMinutes(
+      nextStart + (previousEnd - previousStart),
+    );
+  }
+  await patchUserOriginatedRecord(options.visitsTable, options.visitId, {
+    set: setFields,
+    remove: [SLACK_NOT_STARTED_FIELD],
+  });
+  const nickname = await loadPropertyNickname(
+    process.env.PROPERTY_CLEANING_DETAILS_TABLE || '',
+    visit,
+  );
+  const text = `La limpieza de ${escapeMrkdwn(nickname)} se pospuso. Nueva hora de inicio: ${startTime}.`;
   await replaceMessage(options.channelId, options.messageTs, text);
   return { ok: true, message: text };
 };

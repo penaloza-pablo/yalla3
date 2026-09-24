@@ -1315,7 +1315,13 @@ export function VisitDetailModal({
       onWheel={trapBackgroundScroll}
       onTouchMove={trapBackgroundScroll}
     >
-      <div className="modal operations-detail-modal modal-scrollable">
+      <div
+        className={`modal operations-detail-modal modal-scrollable${
+          visit && visitAwaitingStart(visit) && !tasksRevealed
+            ? ' is-start-veiled'
+            : ''
+        }`}
+      >
         <div className="modal-header">
           <div>
             <h3 className="modal-title" id="visit-detail-title">
@@ -1381,7 +1387,8 @@ export function VisitDetailModal({
           {!isEditOpen &&
           !isCompleteOpen &&
           !isCancelOpen &&
-          !isAddTaskOpen
+          !isAddTaskOpen &&
+          !(visit && visitAwaitingStart(visit) && !tasksRevealed)
             ? errorNotice
             : null}
           {isLoading ? <p>{t('common.loading')}</p> : null}

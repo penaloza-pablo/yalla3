@@ -32,6 +32,7 @@ import {
 } from '../shared/visit-task-utils';
 import { appendUrgentTaskTitles } from '../shared/visit-title';
 import {
+  markNotStartedSlackMessageResolvedInYalla,
   markOverdueSlackMessageCompletedInYalla,
   notifyVisitClosedWithComments,
 } from '../shared/slack-cleaning';
@@ -181,6 +182,17 @@ export const handler = async (event: {
           error,
         );
       }
+      try {
+        await markNotStartedSlackMessageResolvedInYalla(
+          { ...item, status: 'COMPLETED' },
+          'completed',
+        );
+      } catch (error) {
+        console.error(
+          'Failed to mark not-started Slack message completed in Yalla',
+          error,
+        );
+      }
     }
     return buildHttpResponse(200, {
       item: nextStatus ? { ...item, status: nextStatus } : item,
@@ -235,6 +247,14 @@ export const handler = async (event: {
       await patchUserOriginatedRecord(visitsTable, visitId, patch);
       item = mergeUserEditResponseItem(existing, patch, timestamp);
       item.id = visitId;
+      try {
+        await markNotStartedSlackMessageResolvedInYalla(item, 'started');
+      } catch (error) {
+        console.error(
+          'Failed to mark not-started Slack message started in Yalla',
+          error,
+        );
+      }
       const visitTitle =
         typeof item.title === 'string' && item.title.trim()
           ? item.title
@@ -562,6 +582,17 @@ export const handler = async (event: {
         : `created visit ${quoted(visitTitle)}`,
     });
 
+    if (startedNow && status !== 'COMPLETED') {
+      try {
+        await markNotStartedSlackMessageResolvedInYalla(item, 'started');
+      } catch (error) {
+        console.error(
+          'Failed to mark not-started Slack message started in Yalla',
+          error,
+        );
+      }
+    }
+
     if (status === 'COMPLETED' && previousStatus !== 'COMPLETED') {
       try {
         await recordCleaningCompletion(item);
@@ -578,6 +609,14 @@ export const handler = async (event: {
       } catch (error) {
         console.error(
           'Failed to mark overdue Slack message completed in Yalla',
+          error,
+        );
+      }
+      try {
+        await markNotStartedSlackMessageResolvedInYalla(item, 'completed');
+      } catch (error) {
+        console.error(
+          'Failed to mark not-started Slack message completed in Yalla',
           error,
         );
       }

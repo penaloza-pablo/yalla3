@@ -1,4 +1,5 @@
 import { YlIcon } from '../design/icons'
+import { DismissibleNotice } from './DismissibleNotice'
 
 type Props = {
   busy: boolean
@@ -26,13 +27,13 @@ export function VisitStartVeil({
   return (
     <div className="visit-start-veil">
       {notice ? (
-        <div className="visit-start-veil-notice" role="alert">
-          <p>{notice}</p>
-          {onDismissNotice ? (
-            <button type="button" onClick={onDismissNotice}>
-              {dismissLabel}
-            </button>
-          ) : null}
+        <div className="visit-start-veil-notice">
+          <DismissibleNotice
+            dismissLabel={dismissLabel}
+            onDismiss={() => onDismissNotice?.()}
+          >
+            {notice}
+          </DismissibleNotice>
         </div>
       ) : null}
       <button

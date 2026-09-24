@@ -3039,7 +3039,13 @@ export function DailyOperationsView({
 
       {selectedVisit && mode === 'dashboard' ? (
         <div className="modal-overlay yl-visit-sheet" role="dialog" aria-modal="true">
-          <div className="modal operations-detail-modal modal-scrollable">
+          <div
+            className={`modal operations-detail-modal modal-scrollable${
+              visitAwaitingStart(selectedVisit) && !tasksRevealed
+                ? ' is-start-veiled'
+                : ''
+            }`}
+          >
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{selectedVisit.title}</h3>
@@ -3098,7 +3104,11 @@ export function DailyOperationsView({
               className="modal-body operations-detail-body"
               ref={visitDetailBodyRef}
             >
-              {visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
+              {visitWorkModalOpen &&
+              !stackedVisitModalOpen &&
+              !(visitAwaitingStart(selectedVisit) && !tasksRevealed)
+                ? errorNotice
+                : null}
               <div className="operations-detail-fields">
                 <span className="operations-detail-plain">
                   {propertyById.get(selectedVisit.propertyId) ??

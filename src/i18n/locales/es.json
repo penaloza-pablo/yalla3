@@ -2215,6 +2215,10 @@
         "name": "Notify Cleanings Overdue",
         "description": "Envía un mensaje a Slack 15 minutos después de la hora de fin si la visita sigue abierta. Al completar en Yalla, el mensaje de Slack se marca como listo."
       },
+      "notify_cleaning_not_started": {
+        "name": "Limpieza sin iniciar",
+        "description": "Envía un mensaje a Slack 15 minutos después de la hora de inicio si la limpieza todavía no se ha marcado como iniciada. Al iniciarla en Yalla, el mensaje de Slack se actualiza."
+      },
       "notify_visit_closed_with_comments": {
         "name": "Notify visit closed with comments",
         "description": "Envía un mensaje a Slack cuando se cierra una visita con comentarios."

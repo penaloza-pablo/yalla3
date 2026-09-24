@@ -4,6 +4,7 @@ import { docClient } from './visit-task-utils';
 
 export const SLACK_NOTIFICATION_IDS = {
   cleaningOverdue: 'notify_cleaning_overdue',
+  cleaningNotStarted: 'notify_cleaning_not_started',
   visitClosedComments: 'notify_visit_closed_with_comments',
   slackHoy: 'notify_slack_hoy',
   cleaningPlanReopened: 'notify_cleaning_plan_reopened',
@@ -24,6 +25,7 @@ export const SLACK_NOTIFICATION_DEFINITIONS: {
   id: SlackNotificationId;
 }[] = [
   { id: SLACK_NOTIFICATION_IDS.cleaningOverdue },
+  { id: SLACK_NOTIFICATION_IDS.cleaningNotStarted },
   { id: SLACK_NOTIFICATION_IDS.visitClosedComments },
   { id: SLACK_NOTIFICATION_IDS.slackHoy },
   { id: SLACK_NOTIFICATION_IDS.cleaningPlanReopened },

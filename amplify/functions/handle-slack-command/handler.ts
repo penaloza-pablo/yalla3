@@ -7,7 +7,11 @@ import {
   SNOOZE_ACTION_ID,
   SNOOZE_MODAL_CALLBACK,
   snoozeCleaningFromSlack,
+  snoozeCleaningStartFromSlack,
   snoozeModalView,
+  START_DONE_ACTION_ID,
+  START_SNOOZE_ACTION_ID,
+  startCleaningFromSlack,
 } from '../shared/slack-cleaning';
 import { normalizeStartTime } from '../shared/cleaning-plan';
 import { getNowTimeInMadrid } from '../shared/visit-task-utils';
@@ -90,11 +94,16 @@ const handleBlockActions = async (payload: Record<string, unknown>) => {
     return slackEmptyAck();
   }
 
-  if (actionId === SNOOZE_ACTION_ID) {
+  if (actionId === SNOOZE_ACTION_ID || actionId === START_SNOOZE_ACTION_ID) {
     const visit = await loadVisit(visitsTable, visitId);
     const initialTime =
-      normalizeStartTime(asString(visit?.scheduledEndTime)) ||
-      getNowTimeInMadrid();
+      normalizeStartTime(
+        asString(
+          actionId === START_SNOOZE_ACTION_ID
+            ? visit?.scheduledStartTime
+            : visit?.scheduledEndTime,
+        ),
+      ) || getNowTimeInMadrid();
     await slackApi('views.open', {
       trigger_id: triggerId,
       view: snoozeModalView({
@@ -102,8 +111,24 @@ const handleBlockActions = async (payload: Record<string, unknown>) => {
         channelId,
         messageTs,
         initialTime,
+        kind: actionId === START_SNOOZE_ACTION_ID ? 'start' : 'end',
       }),
     });
+    return slackEmptyAck();
+  }
+
+  if (actionId === START_DONE_ACTION_ID) {
+    const result = await startCleaningFromSlack({
+      visitsTable,
+      visitId,
+      channelId,
+      messageTs,
+    });
+    const alreadyClosed =
+      'alreadyClosed' in result && Boolean(result.alreadyClosed);
+    if ((!result.ok || alreadyClosed) && responseUrl) {
+      await postEphemeral(responseUrl, result.message);
+    }
     return slackEmptyAck();
   }
 
@@ -147,13 +172,22 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
   const selectedTime = asString(
     asRecord(asRecord(values?.end_time)?.scheduled_end_time)?.selected_time,
   );
-  const result = await snoozeCleaningFromSlack({
-    visitsTable,
-    visitId: asString(meta.visitId),
-    newEndTime: selectedTime,
-    channelId: asString(meta.channelId),
-    messageTs: asString(meta.messageTs),
-  });
+  const result =
+    asString(meta.kind) === 'start'
+      ? await snoozeCleaningStartFromSlack({
+          visitsTable,
+          visitId: asString(meta.visitId),
+          newStartTime: selectedTime,
+          channelId: asString(meta.channelId),
+          messageTs: asString(meta.messageTs),
+        })
+      : await snoozeCleaningFromSlack({
+          visitsTable,
+          visitId: asString(meta.visitId),
+          newEndTime: selectedTime,
+          channelId: asString(meta.channelId),
+          messageTs: asString(meta.messageTs),
+        });
   if (!result.ok) {
     return slackJsonResponse(200, {
       response_action: 'errors',

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   isPastOverdueGrace,
+  isPastStartGrace,
+  notStartedResolvedInYallaText,
   overdueCompletedInYallaText,
   overdueLookbackDates,
   overdueNotifyKey,
@@ -42,6 +44,20 @@ test('overdue after midnight uses yesterday visits in the grace window', () => {
     '2026-09-22',
     '2026-09-21',
   ]);
+});
+
+test('start warning waits 15 minutes after scheduled start', () => {
+  const base = {
+    scheduledDate: '2026-09-22',
+    startTime: '09:00',
+    today: '2026-09-22',
+  };
+  assert.equal(isPastStartGrace({ ...base, nowTime: '09:14' }), false);
+  assert.equal(isPastStartGrace({ ...base, nowTime: '09:15' }), true);
+  assert.equal(
+    notStartedResolvedInYallaText('Clean Fe'),
+    'Clean Fe: esta visita fue iniciada en Yalla.',
+  );
 });
 
 test('notify key stays unique per visit schedule', () => {

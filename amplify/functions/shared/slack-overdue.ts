@@ -49,3 +49,25 @@ export const overdueLookbackDates = (today: string) => {
 
 export const overdueCompletedInYallaText = (title: string) =>
   `${title}: esta visita fue completada en Yalla.`;
+
+export const SLACK_NOT_STARTED_FIELD = 'slackNotStartedNotifiedFor';
+export const SLACK_NOT_STARTED_CHANNEL_FIELD = 'slackNotStartedChannelId';
+export const SLACK_NOT_STARTED_TS_FIELD = 'slackNotStartedMessageTs';
+
+export const isPastStartGrace = (options: {
+  scheduledDate: string;
+  startTime: string;
+  today: string;
+  nowTime: string;
+  graceMinutes?: number;
+}) =>
+  isPastOverdueGrace({
+    scheduledDate: options.scheduledDate,
+    endTime: options.startTime,
+    today: options.today,
+    nowTime: options.nowTime,
+    graceMinutes: options.graceMinutes,
+  });
+
+export const notStartedResolvedInYallaText = (title: string) =>
+  `${title}: esta visita fue iniciada en Yalla.`;

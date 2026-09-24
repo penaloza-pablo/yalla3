@@ -2215,6 +2215,10 @@
         "name": "Notify Cleanings Overdue",
         "description": "Posts in Slack 15 minutes after the scheduled end if the visit is still open. Completing the visit in Yalla marks that Slack message as done."
       },
+      "notify_cleaning_not_started": {
+        "name": "Cleaning not started",
+        "description": "Posts in Slack 15 minutes after the scheduled start if the cleaning has not been marked as started. Starting it in Yalla updates that Slack message."
+      },
       "notify_visit_closed_with_comments": {
         "name": "Notify visit closed with comments",
         "description": "Posts in Slack when a visit is closed with comments."

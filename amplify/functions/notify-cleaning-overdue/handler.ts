@@ -6,7 +6,10 @@ import {
 import {
   classifyOverdueTeam,
   isPastOverdueGrace,
+  isPastStartGrace,
   loadPropertyNickname,
+  notStartedCleaningBlocks,
+  notStartedCleaningMessage,
   overdueCleaningBlocks,
   overdueCleaningMessage,
   overdueLookbackDates,
@@ -14,6 +17,9 @@ import {
   overdueMaintenanceMessage,
   overdueNotifyKey,
   resolveOverdueChannel,
+  SLACK_NOT_STARTED_CHANNEL_FIELD,
+  SLACK_NOT_STARTED_FIELD,
+  SLACK_NOT_STARTED_TS_FIELD,
   SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
   SLACK_OVERDUE_TS_FIELD,
@@ -108,6 +114,33 @@ const postTestMessages = async () => {
   return { action: 'testChannels', results };
 };
 
+const isTestNotStartedEvent = (event: unknown) =>
+  Boolean(
+    event &&
+      typeof event === 'object' &&
+      (event as { action?: string }).action === 'testNotStarted',
+  );
+
+const postTestNotStartedMessage = async () => {
+  const secrets = await loadSlackSecrets({ forceRefresh: true });
+  const channelId = secrets.cleaningChannelId;
+  if (!channelId) {
+    return {
+      action: 'testNotStarted',
+      ok: false,
+      error: 'Missing cleaningChannelId in yalla/slack.',
+    };
+  }
+  const title = '[Yalla prueba] Clean Arenal Jerez';
+  const text = notStartedCleaningMessage(title);
+  await slackApi('chat.postMessage', {
+    channel: channelId,
+    text,
+    blocks: notStartedCleaningBlocks('yalla-test-not-started', title),
+  });
+  return { action: 'testNotStarted', ok: true, channelId };
+};
+
 const isEarlyCheckInEvent = (event: unknown) =>
   Boolean(
     event &&
@@ -125,6 +158,9 @@ const isOpsDigestEvent = (event: unknown) =>
 export const handler = async (event?: unknown) => {
   if (isTestChannelsEvent(event)) {
     return postTestMessages();
+  }
+  if (isTestNotStartedEvent(event)) {
+    return postTestNotStartedMessage();
   }
 
   const visitsTable = process.env.TABLE_NAME;
@@ -166,10 +202,19 @@ export const handler = async (event?: unknown) => {
     return { early, access, digest };
   }
 
-  if (
-    !(await isSlackNotificationEnabled(SLACK_NOTIFICATION_IDS.cleaningOverdue))
-  ) {
+  const overdueEnabled = await isSlackNotificationEnabled(
+    SLACK_NOTIFICATION_IDS.cleaningOverdue,
+  );
+  const notStartedEnabled = await isSlackNotificationEnabled(
+    SLACK_NOTIFICATION_IDS.cleaningNotStarted,
+  );
+  if (!overdueEnabled) {
     console.log('Slack overdue notify skipped: automation disabled.');
+  }
+  if (!notStartedEnabled) {
+    console.log('Slack not-started notify skipped: automation disabled.');
+  }
+  if (!overdueEnabled && !notStartedEnabled) {
     return { early, access, digest };
   }
 
@@ -196,6 +241,7 @@ export const handler = async (event?: unknown) => {
     }
   }
 
+  if (overdueEnabled) {
   for (const visit of visits) {
     const visitId = asString(visit.id);
     const status = asString(visit.status).toUpperCase();
@@ -272,6 +318,84 @@ export const handler = async (event?: unknown) => {
       });
     } catch (error) {
       console.error(`Failed to notify overdue visit ${visitId}`, error);
+    }
+  }
+  }
+
+  if (notStartedEnabled) {
+    for (const visit of visits) {
+      const visitId = asString(visit.id);
+      const status = asString(visit.status).toUpperCase();
+      const startTime = normalizeStartTime(asString(visit.scheduledStartTime));
+      const scheduledDate = asString(visit.scheduledDate).slice(0, 10) || today;
+      if (
+        !visitId ||
+        !startTime ||
+        asString(visit.startedAt) ||
+        TERMINAL_VISIT_STATUSES.has(status)
+      ) {
+        continue;
+      }
+      if (
+        !isPastStartGrace({
+          scheduledDate,
+          startTime,
+          today,
+          nowTime,
+        })
+      ) {
+        continue;
+      }
+      const notifyKey = overdueNotifyKey(scheduledDate, startTime);
+      if (asString(visit[SLACK_NOT_STARTED_FIELD]) === notifyKey) {
+        continue;
+      }
+      const teamId = asString(visit.teamId);
+      const teamKind = classifyOverdueTeam(
+        teamId,
+        teamNames.get(teamId) ?? asString(visit.team),
+      );
+      if (teamKind !== 'cleaning') {
+        continue;
+      }
+      const nickname = await loadPropertyNickname(detailsTable, visit);
+      const title = asString(visit.title) || nickname;
+      const channel = resolveOverdueChannel({
+        teamKind: 'cleaning',
+        nickname,
+        propertyId: asString(visit.propertyId),
+        title,
+        secrets,
+      });
+      if (!channel) {
+        console.error(
+          `Slack not-started notify skipped for ${visitId}: missing cleaning channel.`,
+        );
+        continue;
+      }
+      try {
+        console.log(
+          `Posting not-started ${visitId} to Slack secret key ${channel.key}`,
+        );
+        const text = notStartedCleaningMessage(title);
+        const posted = await slackApi('chat.postMessage', {
+          channel: channel.channelId,
+          text,
+          blocks: notStartedCleaningBlocks(visitId, title),
+        });
+        const setFields: Record<string, string> = {
+          [SLACK_NOT_STARTED_FIELD]: notifyKey,
+          [SLACK_NOT_STARTED_CHANNEL_FIELD]: posted.channel || channel.channelId,
+        };
+        if (posted.ts) {
+          setFields[SLACK_NOT_STARTED_TS_FIELD] = posted.ts;
+        }
+        await patchUserOriginatedRecord(visitsTable, visitId, {
+          set: setFields,
+        });
+      } catch (error) {
+        console.error(`Failed to notify not-started visit ${visitId}`, error);
+      }
     }
   }
 
