@@ -16,6 +16,8 @@ type WorkProps = {
   visitOverdue?: boolean
   visitClosed?: boolean
   canAct?: boolean
+  awaitingStart?: boolean
+  onStart?: () => void
   onComplete: (task: TaskRecord) => void
 }
 
@@ -168,6 +170,12 @@ export function VisitTaskList(props: Props) {
         const isCancelled = task.status === 'CANCELLED'
         const canToggleTask =
           Boolean(props.canAct) && !isCancelled && !props.visitClosed
+        const showStart =
+          Boolean(props.awaitingStart) &&
+          !isCompleted &&
+          !isSkipped &&
+          !isCancelled &&
+          !props.visitClosed
         const description = displayTaskDescription(
           i18n.language,
           task.description,
@@ -211,12 +219,25 @@ export function VisitTaskList(props: Props) {
                 className={`btn-icon btn-icon-ghost${
                   isCompleted ? ' is-task-complete' : ''
                 }`}
-                aria-label={t('operations.completeTask')}
+                aria-label={
+                  showStart
+                    ? t('operations.startVisit')
+                    : t('operations.completeTask')
+                }
+                title={
+                  showStart
+                    ? t('operations.startVisit')
+                    : t('operations.completeTask')
+                }
                 aria-pressed={isCompleted}
                 disabled={!canToggleTask || isCompleted}
-                onClick={() => props.onComplete(task)}
+                onClick={() =>
+                  showStart && props.onStart
+                    ? props.onStart()
+                    : props.onComplete(task)
+                }
               >
-                <YlIcon name="checkmark" size={16} />
+                <YlIcon name={showStart ? 'play' : 'checkmark'} size={16} />
               </button>
             </div>
           </li>

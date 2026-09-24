@@ -42,6 +42,7 @@ export const YL_ICON_NAMES = [
   'square.grid.2x2',
   'checkmark',
   'checkmark.circle',
+  'play',
   'forward.end',
   'square.on.square',
   'clock',
@@ -377,6 +378,12 @@ function regularGlyph(name: YlIconName): ReactNode {
           <path d="M4.6 10.4 8.2 14 15.5 5.8" />
         </Outline>
       )
+    case 'play':
+      return (
+        <Outline>
+          <path d="M6.6 4.4 15.4 10 6.6 15.6z" />
+        </Outline>
+      )
     case 'checkmark.circle':
       return (
         <Outline>
@@ -544,6 +551,8 @@ function fillGlyph(name: YlIconName): ReactNode | null {
           d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm3.5 5.2-4.4 5.3-2.6-2.6 1.2-1.2 1.5 1.5 3.2-3.9 1.1.9z"
         />
       )
+    case 'play':
+      return <path fill="currentColor" d="M6.2 3.8 16.4 10 6.2 16.2z" />
     case 'info.circle':
       return (
         <path
@@ -599,6 +608,7 @@ export const ICON_GROUPS: { id: string; names: YlIconName[] }[] = [
       'trash',
       'checkmark',
       'checkmark.circle',
+      'play',
       'cart',
       'forward.end',
       'square.on.square',

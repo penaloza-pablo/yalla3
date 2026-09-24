@@ -22,6 +22,7 @@ type Props = {
   syncingVisitIds: Set<string>
   onDayDateChange: (date: string) => void
   onSelectVisit: (visitId: string) => void
+  onStartVisit: (visit: VisitRecord) => void
   onCompleteVisit: (visit: VisitRecord) => void
   canCreateVisit?: boolean
   onCreateVisit?: () => void
@@ -62,6 +63,7 @@ export function OperationsKanbanView({
   syncingVisitIds,
   onDayDateChange,
   onSelectVisit,
+  onStartVisit,
   onCompleteVisit,
   canCreateVisit = false,
   onCreateVisit,
@@ -113,11 +115,19 @@ export function OperationsKanbanView({
             const isCancelled = visit.status === 'CANCELLED'
             const isBusy =
               completingVisitIds.has(visit.id) || syncingVisitIds.has(visit.id)
+            const awaitingStart = !visit.startedAt?.trim()
+            const isFuture = isFutureMadridDate(visit.scheduledDate)
             const canToggleComplete =
-              !isCompleted &&
-              !isCancelled &&
-              !isBusy &&
-              !isFutureMadridDate(visit.scheduledDate)
+              !isCompleted && !isCancelled && !isBusy && !isFuture
+            const actionLabel = isCompleted
+              ? t('operations.completed')
+              : isFuture
+                ? awaitingStart
+                  ? t('operations.cannotStartFutureVisit')
+                  : t('operations.cannotCompleteFutureVisit')
+                : awaitingStart
+                  ? t('operations.startVisit')
+                  : t('operations.completeVisit')
 
             return (
               <li key={visit.id}>
@@ -158,27 +168,19 @@ export function OperationsKanbanView({
                     type="button"
                     className={`btn-icon operations-kanban-complete${
                       isCompleted ? ' is-checked' : ''
-                    }`}
+                    }${awaitingStart && !isCompleted && !isCancelled ? ' is-start' : ''}`}
                     aria-pressed={isCompleted}
                     aria-busy={isBusy}
                     disabled={!canToggleComplete}
-                    aria-label={
-                      isCompleted
-                        ? t('operations.completed')
-                        : isFutureMadridDate(visit.scheduledDate)
-                          ? t('operations.cannotCompleteFutureVisit')
-                          : t('operations.completeVisit')
-                    }
-                    title={
-                      isCompleted
-                        ? t('operations.completed')
-                        : isFutureMadridDate(visit.scheduledDate)
-                          ? t('operations.cannotCompleteFutureVisit')
-                          : t('operations.completeVisit')
-                    }
+                    aria-label={actionLabel}
+                    title={actionLabel}
                     onClick={(event) => {
                       event.stopPropagation()
                       if (!canToggleComplete) {
+                        return
+                      }
+                      if (awaitingStart) {
+                        onStartVisit(visit)
                         return
                       }
                       onCompleteVisit(visit)
@@ -186,6 +188,8 @@ export function OperationsKanbanView({
                   >
                     {isCompleted ? (
                       <YlIcon name="checkmark.circle" variant="fill" size={22} />
+                    ) : awaitingStart ? (
+                      <YlIcon name="play" variant="fill" size={18} />
                     ) : (
                       <span
                         className="operations-kanban-complete-empty"

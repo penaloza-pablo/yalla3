@@ -214,6 +214,45 @@ export const handler = async (event: {
     }
   }
 
+  if (payload.action === 'start') {
+    if (!existing) {
+      return buildHttpResponse(400, { message: 'id is required.' });
+    }
+    const visitId = payload.id?.trim() ?? '';
+    const scheduledDate =
+      typeof existing.scheduledDate === 'string' ? existing.scheduledDate : '';
+    if (scheduledDate > getTodayInMadrid()) {
+      return buildHttpResponse(400, {
+        message: 'Visits scheduled for a future date cannot be started.',
+      });
+    }
+    const existingStartedAt =
+      typeof existing.startedAt === 'string' ? existing.startedAt.trim() : '';
+    const timestamp = nowIso();
+    let item = existing;
+    if (!existingStartedAt) {
+      const patch = { set: { startedAt: timestamp } };
+      await patchUserOriginatedRecord(visitsTable, visitId, patch);
+      item = mergeUserEditResponseItem(existing, patch, timestamp);
+      item.id = visitId;
+      const visitTitle =
+        typeof item.title === 'string' && item.title.trim()
+          ? item.title
+          : visitId;
+      const savedPropertyId =
+        typeof item.propertyId === 'string' ? item.propertyId.trim() : '';
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.OPERATIONS,
+        action: 'update',
+        entityId: visitId,
+        entityName: visitTitle,
+        ...(savedPropertyId ? { propertyId: savedPropertyId } : {}),
+        summary: `marked visit ${quoted(visitTitle)} as started`,
+      });
+    }
+    return buildHttpResponse(200, { item });
+  }
+
   const previousStatus = existing
     ? normalizeStatus(typeof existing.status === 'string' ? existing.status : '')
     : '';
@@ -379,8 +418,12 @@ export const handler = async (event: {
           ? existing.sourceTemplateId
           : undefined,
     startedAt:
-      payload.startedAt ??
-      (typeof existing?.startedAt === 'string' ? existing.startedAt : undefined),
+      (typeof existing?.startedAt === 'string' && existing.startedAt.trim()
+        ? existing.startedAt
+        : undefined) ??
+      (typeof payload.startedAt === 'string' && payload.startedAt.trim()
+        ? payload.startedAt.trim()
+        : undefined),
     closedAt:
       status === 'COMPLETED' || status === 'CANCELLED'
         ? payload.closedAt ?? timestamp
@@ -498,6 +541,12 @@ export const handler = async (event: {
       typeof item.status === 'string' ? item.status.toLowerCase() : '';
     const savedPropertyId =
       typeof item.propertyId === 'string' ? item.propertyId.trim() : '';
+    const hadStartedAt =
+      typeof existing?.startedAt === 'string' &&
+      existing.startedAt.trim().length > 0;
+    const hasStartedAt =
+      typeof item.startedAt === 'string' && item.startedAt.trim().length > 0;
+    const startedNow = hasStartedAt && !hadStartedAt;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.OPERATIONS,
       action: isUpdate ? 'update' : 'create',
@@ -507,7 +556,9 @@ export const handler = async (event: {
       summary: isUpdate
         ? visitStatus === 'cancelled' || visitStatus === 'completed'
           ? `marked visit ${quoted(visitTitle)} as ${visitStatus}`
-          : `updated visit ${quoted(visitTitle)}`
+          : startedNow
+            ? `marked visit ${quoted(visitTitle)} as started`
+            : `updated visit ${quoted(visitTitle)}`
         : `created visit ${quoted(visitTitle)}`,
     });
 

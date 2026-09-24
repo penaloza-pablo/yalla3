@@ -1125,6 +1125,14 @@
     "createVisit": "Crear visita",
     "editVisit": "Editar visita",
     "completeVisit": "Completar visita",
+    "startVisit": "Iniciar visita",
+    "start": "Iniciar",
+    "showTasks": "Ver tareas",
+    "visitStarted": "Visita iniciada.",
+    "cannotStartFutureVisit": "No se puede iniciar una visita con fecha futura.",
+    "assignedUserFallback": "el usuario asignado",
+    "assignedOnly": "Solo puede ser completado por {{user}} o por un administrador de Yalla!",
+    "assignedOnlyStart": "Solo puede ser iniciado por {{user}} o por un administrador de Yalla!",
     "cancelVisit": "Cancelar visita",
     "hours": "Horas",
     "poolOfHours": "Bolsa de horas",
@@ -2321,7 +2329,8 @@
       "cleaningBillingEdit": "Editar en Limpiezas / Facturación (tablas del mes)",
       "cleaningBillingPrices": "Visibilidad de precios de limpieza",
       "createTasks": "Crear tareas",
-      "dashboardConfigureWidgets": "Configurar widgets del panel"
+      "dashboardConfigureWidgets": "Configurar widgets del panel",
+      "actOnOthersVisits": "Iniciar y completar visitas o tareas asignadas a otro usuario"
     }
   },
   "spotCheck": {

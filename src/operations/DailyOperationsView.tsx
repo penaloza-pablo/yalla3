@@ -44,6 +44,14 @@ import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { CollapsibleVisitTasks } from './CollapsibleVisitTasks'
 import { DismissibleNotice } from './DismissibleNotice'
 import { VisitTaskList } from './VisitTaskList'
+import { VisitStartVeil } from './VisitStartVeil'
+import {
+  mayCompleteWork,
+  taskAssigneeOf,
+  visitAssigneeOf,
+  visitAwaitingStart,
+  workAssigneeName,
+} from './visitAssignmentGate'
 import { isManagementTeam } from './teamColors'
 import { displayTaskTitle } from './taskTitleDisplay'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
@@ -383,6 +391,14 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   appliesToHourBank: Boolean(item.appliesToHourBank),
   specialHours: Boolean(item.specialHours),
+  startedAt:
+    typeof item.startedAt === 'string' && item.startedAt.trim()
+      ? item.startedAt
+      : undefined,
+  closedAt:
+    typeof item.closedAt === 'string' && item.closedAt.trim()
+      ? item.closedAt
+      : undefined,
   guestyTaskId:
     typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
   taskCountTotal:
@@ -536,6 +552,9 @@ export function DailyOperationsView({
   const isCreatingVisit = !visitForm.id
   const isCreatingTask = !taskForm.id
   const canCreateTasks = can(ACTION_KEYS.createTasks)
+  const canActOnOthers = can(ACTION_KEYS.actOnOthersVisits)
+  const [tasksRevealed, setTasksRevealed] = useState(false)
+  const visitDetailBodyRef = useRef<HTMLDivElement>(null)
 
   const visitHasOpenTasks = useMemo(
     () => visitTasks.some((task) => !isResolvedTaskStatus(task.status)),
@@ -1250,6 +1269,25 @@ export function DailyOperationsView({
   }, [getCurrentUserEmail])
 
   useEffect(() => {
+    setTasksRevealed(false)
+  }, [selectedVisitId])
+
+  useEffect(() => {
+    const node = visitDetailBodyRef.current
+    if (!node) {
+      return
+    }
+    const veiled = Boolean(
+      selectedVisit && visitAwaitingStart(selectedVisit) && !tasksRevealed,
+    )
+    if (veiled) {
+      node.setAttribute('inert', '')
+    } else {
+      node.removeAttribute('inert')
+    }
+  }, [selectedVisit, tasksRevealed])
+
+  useEffect(() => {
     if (mode !== 'dashboard') {
       return
     }
@@ -1803,6 +1841,15 @@ export function DailyOperationsView({
     if (!selectedVisit) {
       return false
     }
+    if (visitAwaitingStart(selectedVisit)) {
+      await startVisitRecord(selectedVisit)
+      return false
+    }
+    const denied = deniedAssigneeName(selectedVisit)
+    if (denied) {
+      setError(t('operations.assignedOnly', { user: denied }))
+      return false
+    }
     if (isFutureMadridDate(selectedVisit.scheduledDate)) {
       setError(t('operations.cannotCompleteFutureVisit'))
       return false
@@ -1842,6 +1889,15 @@ export function DailyOperationsView({
 
   const openCompleteVisitModal = () => {
     if (!selectedVisit) return
+    if (visitAwaitingStart(selectedVisit)) {
+      void startVisitRecord(selectedVisit)
+      return
+    }
+    const denied = deniedAssigneeName(selectedVisit)
+    if (denied) {
+      setError(t('operations.assignedOnly', { user: denied }))
+      return
+    }
     if (isFutureMadridDate(selectedVisit.scheduledDate)) {
       setError(t('operations.cannotCompleteFutureVisit'))
       return
@@ -1943,8 +1999,103 @@ export function DailyOperationsView({
     }
   }
 
+  const assigneePending = (visit: VisitRecord) => {
+    if (mode !== 'dashboard') {
+      return false
+    }
+    const date = visit.scheduledDate
+    if (isCleaningVisitType(visit.visitTypeId)) {
+      return Boolean(endpoints.cleaningPlan) && !cleaningPlansByDate[date]
+    }
+    if (isMaintenanceVisitType(visit.visitTypeId)) {
+      return Boolean(endpoints.maintenancePlan) && !maintenancePlansByDate[date]
+    }
+    return false
+  }
+
+  const deniedAssigneeName = (visit: VisitRecord, task?: TaskRecord) => {
+    if (assigneePending(visit)) {
+      return ''
+    }
+    const visitAssignee = visitAssigneeOf(visit, users)
+    const taskAssignee = taskAssigneeOf(task, users)
+    const allowed = mayCompleteWork({
+      canActOnOthers,
+      sessionEmail,
+      visitAssignee,
+      taskAssignee,
+    })
+    if (allowed) {
+      return null
+    }
+    return (
+      workAssigneeName(visitAssignee, taskAssignee) ||
+      t('operations.assignedUserFallback')
+    )
+  }
+
+  const startVisitRecord = async (visit: VisitRecord) => {
+    if (!visitAwaitingStart(visit) || assigneePending(visit)) {
+      return
+    }
+    const denied = deniedAssigneeName(visit)
+    if (denied) {
+      setError(t('operations.assignedOnlyStart', { user: denied }))
+      return
+    }
+    if (isFutureMadridDate(visit.scheduledDate)) {
+      setError(t('operations.cannotStartFutureVisit'))
+      return
+    }
+    if (!endpoints.upsertVisit) {
+      setError(t('operations.unableUpdateVisit'))
+      return
+    }
+    setCompletingVisitIds((current) => {
+      const next = new Set(current)
+      next.add(visit.id)
+      return next
+    })
+    setError(null)
+    try {
+      await saveVisit(endpoints.upsertVisit, {
+        id: visit.id,
+        action: 'start',
+      })
+      clearTodaySummaryCache()
+      setDashboardRefreshKey((current) => current + 1)
+      await loadVisits()
+      if (selectedVisitId === visit.id && endpoints.visits) {
+        const refreshed = await getVisitById(endpoints.visits, visit.id)
+        if (refreshed.item) {
+          const mapped = mapVisit(refreshed.item as Record<string, unknown>)
+          setVisits((current) =>
+            current.map((entry) => (entry.id === mapped.id ? mapped : entry)),
+          )
+        }
+      }
+    } catch {
+      setError(t('operations.unableUpdateVisit'))
+    } finally {
+      setCompletingVisitIds((current) => {
+        const next = new Set(current)
+        next.delete(visit.id)
+        return next
+      })
+    }
+  }
+
   const completeVisitFromKanban = async (visit: VisitRecord) => {
     if (visit.status === 'COMPLETED' || visit.status === 'CANCELLED') {
+      return
+    }
+    if (visitAwaitingStart(visit)) {
+      await startVisitRecord(visit)
+      return
+    }
+    const denied = deniedAssigneeName(visit)
+    if (denied) {
+      setError(t('operations.assignedOnly', { user: denied }))
       return
     }
     if (isFutureMadridDate(visit.scheduledDate)) {
@@ -2120,6 +2271,31 @@ export function DailyOperationsView({
 
   const completeTask = async (task: TaskRecord) => {
     if (!endpoints.upsertTask) return
+    const host =
+      (selectedVisit && task.visitId === selectedVisit.id ? selectedVisit : null) ??
+      visits.find((entry) => entry.id === task.visitId) ??
+      null
+    if (host && visitAwaitingStart(host)) {
+      await startVisitRecord(host)
+      return
+    }
+    const visitAssignee = visitAssigneeOf(
+      host ?? { assignedUserId: '' },
+      users,
+    )
+    const allowed = mayCompleteWork({
+      canActOnOthers,
+      sessionEmail,
+      visitAssignee,
+      taskAssignee: taskAssigneeOf(task, users),
+    })
+    if (!allowed) {
+      const name =
+        workAssigneeName(visitAssignee, taskAssigneeOf(task, users)) ||
+        t('operations.assignedUserFallback')
+      setError(t('operations.assignedOnly', { user: name }))
+      return
+    }
     try {
       const closedBy = await getCurrentUserEmail()
       await saveTask(endpoints.upsertTask, {
@@ -2492,6 +2668,7 @@ export function DailyOperationsView({
               syncingVisitIds={syncingVisitIds}
               onDayDateChange={setDayViewDate}
               onSelectVisit={setSelectedVisitId}
+              onStartVisit={(visit) => void startVisitRecord(visit)}
               onCompleteVisit={(visit) => void completeVisitFromKanban(visit)}
               canCreateVisit={can(ACTION_KEYS.dailyOpsCreate)}
               onCreateVisit={openCreateVisit}
@@ -2917,7 +3094,10 @@ export function DailyOperationsView({
                 <YlIcon name="xmark" size={16} />
               </button>
             </div>
-            <div className="modal-body operations-detail-body">
+            <div
+              className="modal-body operations-detail-body"
+              ref={visitDetailBodyRef}
+            >
               {visitWorkModalOpen && !stackedVisitModalOpen ? errorNotice : null}
               <div className="operations-detail-fields">
                 <span className="operations-detail-plain">
@@ -2972,19 +3152,40 @@ export function DailyOperationsView({
                       type="button"
                       className="btn-icon btn-icon-ghost operations-complete-visit-btn"
                       aria-label={
-                        isFutureMadridDate(selectedVisit.scheduledDate)
-                          ? t('operations.cannotCompleteFutureVisit')
-                          : t('operations.completeVisit')
+                        visitAwaitingStart(selectedVisit)
+                          ? isFutureMadridDate(selectedVisit.scheduledDate)
+                            ? t('operations.cannotStartFutureVisit')
+                            : t('operations.startVisit')
+                          : isFutureMadridDate(selectedVisit.scheduledDate)
+                            ? t('operations.cannotCompleteFutureVisit')
+                            : t('operations.completeVisit')
                       }
                       title={
-                        isFutureMadridDate(selectedVisit.scheduledDate)
-                          ? t('operations.cannotCompleteFutureVisit')
-                          : t('operations.completeVisit')
+                        visitAwaitingStart(selectedVisit)
+                          ? isFutureMadridDate(selectedVisit.scheduledDate)
+                            ? t('operations.cannotStartFutureVisit')
+                            : t('operations.startVisit')
+                          : isFutureMadridDate(selectedVisit.scheduledDate)
+                            ? t('operations.cannotCompleteFutureVisit')
+                            : t('operations.completeVisit')
                       }
-                      disabled={isFutureMadridDate(selectedVisit.scheduledDate)}
-                      onClick={openCompleteVisitModal}
+                      disabled={
+                        isFutureMadridDate(selectedVisit.scheduledDate) ||
+                        (visitAwaitingStart(selectedVisit) &&
+                          assigneePending(selectedVisit))
+                      }
+                      onClick={
+                        visitAwaitingStart(selectedVisit)
+                          ? () => void startVisitRecord(selectedVisit)
+                          : openCompleteVisitModal
+                      }
                     >
-                      <YlIcon name="checkmark" size={16} />
+                      <YlIcon
+                        name={
+                          visitAwaitingStart(selectedVisit) ? 'play' : 'checkmark'
+                        }
+                        size={16}
+                      />
                     </button>
                     {canCreateTasks ? (
                     <button
@@ -3123,6 +3324,8 @@ export function DailyOperationsView({
                     selectedVisit.status === 'CANCELLED'
                   }
                   canAct={Boolean(endpoints.upsertTask)}
+                  awaitingStart={visitAwaitingStart(selectedVisit)}
+                  onStart={() => void startVisitRecord(selectedVisit)}
                   onComplete={(task) => void completeTask(task)}
                 />
               </CollapsibleVisitTasks>
@@ -3142,6 +3345,22 @@ export function DailyOperationsView({
                 />
               </label>
             </div>
+            {visitAwaitingStart(selectedVisit) && !tasksRevealed ? (
+              <VisitStartVeil
+                busy={
+                  completingVisitIds.has(selectedVisit.id) ||
+                  assigneePending(selectedVisit)
+                }
+                disabled={isFutureMadridDate(selectedVisit.scheduledDate)}
+                label={t('operations.start')}
+                revealLabel={t('operations.showTasks')}
+                notice={error ?? ''}
+                dismissLabel={t('common.close')}
+                onDismissNotice={error ? () => setError(null) : undefined}
+                onStart={() => void startVisitRecord(selectedVisit)}
+                onReveal={() => setTasksRevealed(true)}
+              />
+            ) : null}
           </div>
         </div>
       ) : null}

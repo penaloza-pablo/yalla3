@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type TouchEvent, type WheelEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent, type WheelEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { fetchUserAttributes } from 'aws-amplify/auth'
 import { useTranslation } from 'react-i18next'
@@ -23,6 +23,14 @@ import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { CollapsibleVisitTasks } from './CollapsibleVisitTasks'
 import { DismissibleNotice } from './DismissibleNotice'
 import { VisitTaskList } from './VisitTaskList'
+import { VisitStartVeil } from './VisitStartVeil'
+import {
+  mayCompleteWork,
+  taskAssigneeOf,
+  visitAssigneeOf,
+  visitAwaitingStart,
+  workAssigneeName,
+} from './visitAssignmentGate'
 import {
   buildApplyTemplateVisitPayload,
   emptyDraftTask,
@@ -137,6 +145,14 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   appliesToHourBank: Boolean(item.appliesToHourBank),
   specialHours: Boolean(item.specialHours),
+  startedAt:
+    typeof item.startedAt === 'string' && item.startedAt.trim()
+      ? item.startedAt
+      : undefined,
+  closedAt:
+    typeof item.closedAt === 'string' && item.closedAt.trim()
+      ? item.closedAt
+      : undefined,
   guestyTaskId:
     typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
 })
@@ -261,6 +277,12 @@ export function VisitDetailModal({
     cancelConfirmed: false,
   })
   const [commentsDraft, setCommentsDraft] = useState('')
+  const [sessionEmail, setSessionEmail] = useState('')
+  const [planAssigneeEmail, setPlanAssigneeEmail] = useState('')
+  const [planAssigneeName, setPlanAssigneeName] = useState('')
+  const [assigneeReady, setAssigneeReady] = useState(false)
+  const [tasksRevealed, setTasksRevealed] = useState(false)
+  const detailBodyRef = useRef<HTMLDivElement>(null)
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false)
   const [addTaskForm, setAddTaskForm] = useState({
     title: '',
@@ -271,6 +293,7 @@ export function VisitDetailModal({
   const [editTaskIds, setEditTaskIds] = useState<string[]>([])
   const [editingDraftIndex, setEditingDraftIndex] = useState<number | null>(null)
   const canCreateTasks = can(ACTION_KEYS.createTasks)
+  const canActOnOthers = can(ACTION_KEYS.actOnOthersVisits)
 
   const endpoints = useMemo(
     () => ({
@@ -364,8 +387,92 @@ export function VisitDetailModal({
     setTasks(((tasksPayload.items ?? []) as Record<string, unknown>[]).map(mapTask))
   }
 
+  const visitAssignee = useMemo(
+    () =>
+      visit
+        ? visitAssigneeOf(
+            {
+              ...visit,
+              planAssigneeEmail,
+              planAssigneeName,
+            },
+            users,
+          )
+        : visitAssigneeOf(
+            { assignedUserId: '', planAssigneeEmail, planAssigneeName },
+            users,
+          ),
+    [planAssigneeEmail, planAssigneeName, users, visit],
+  )
+
+  const deniedAssigneeName = (task?: TaskRecord) => {
+    const taskAssignee = taskAssigneeOf(task, users)
+    const allowed =
+      assigneeReady &&
+      mayCompleteWork({
+        canActOnOthers,
+        sessionEmail,
+        visitAssignee,
+        taskAssignee,
+      })
+    if (allowed) {
+      return null
+    }
+    if (!assigneeReady) {
+      return ''
+    }
+    return (
+      workAssigneeName(visitAssignee, taskAssignee) ||
+      t('operations.assignedUserFallback')
+    )
+  }
+
+  const startVisit = async () => {
+    if (!visit || !endpoints.upsertVisit || visit.startedAt) {
+      return false
+    }
+    if (!assigneeReady) {
+      return false
+    }
+    const denied = deniedAssigneeName()
+    if (denied) {
+      setError(t('operations.assignedOnlyStart', { user: denied }))
+      return false
+    }
+    if (isFutureMadridDate(visit.scheduledDate)) {
+      setError(t('operations.cannotStartFutureVisit'))
+      return false
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      await saveVisit(endpoints.upsertVisit, {
+        id: visit.id,
+        action: 'start',
+      })
+      await reloadVisit()
+      notifyChanged()
+      toast(t('operations.visitStarted'))
+      return true
+    } catch {
+      setError(t('operations.unableUpdateVisit'))
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const completeTask = async (task: TaskRecord) => {
     if (!endpoints.upsertTask) {
+      return
+    }
+    if (visit && visitAwaitingStart(visit)) {
+      await startVisit()
+      return
+    }
+    const denied = deniedAssigneeName(task)
+    if (denied) {
+      setError(t('operations.assignedOnly', { user: denied }))
       return
     }
     setError('')
@@ -477,7 +584,38 @@ export function VisitDetailModal({
     setError('')
     setOpenVisitTemplates([])
     setOpenVisitTemplateId('')
+    setTasksRevealed(false)
+    setPlanAssigneeEmail('')
+    setPlanAssigneeName('')
+    setAssigneeReady(false)
   }, [visitId])
+
+  useEffect(() => {
+    let cancelled = false
+    void getCurrentUserEmail().then((email) => {
+      if (!cancelled) {
+        setSessionEmail(email.trim().toLowerCase())
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const node = detailBodyRef.current
+    if (!node) {
+      return
+    }
+    const veiled = Boolean(
+      visit && visitAwaitingStart(visit) && !tasksRevealed,
+    )
+    if (veiled) {
+      node.setAttribute('inert', '')
+    } else {
+      node.removeAttribute('inert')
+    }
+  }, [tasksRevealed, visit])
 
   useEffect(() => {
     setCommentsDraft(visit?.comments ?? '')
@@ -530,11 +668,16 @@ export function VisitDetailModal({
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
       setPlanYallaUser('')
+      setPlanAssigneeEmail('')
+      setPlanAssigneeName('')
       return
     }
     if (!isCleaningVisitType(visit.visitTypeId)) {
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
+      if (!isMaintenanceVisitType(visit.visitTypeId)) {
+        setAssigneeReady(true)
+      }
       return
     }
     setMaintenanceAssigneeBadge(null)
@@ -544,8 +687,12 @@ export function VisitDetailModal({
       setCleaningTypeBadge(null)
       setCleanerBadge(null)
       setPlanYallaUser('')
+      setPlanAssigneeEmail('')
+      setPlanAssigneeName('')
+      setAssigneeReady(true)
       return
     }
+    setAssigneeReady(false)
     let cancelled = false
     const cleanersUrl = endpoints.cleaners
       ? `${endpoints.cleaners}${
@@ -597,6 +744,11 @@ export function VisitDetailModal({
           cleanerId,
         )
         setPlanYallaUser(yallaUserLabel(person))
+        setPlanAssigneeEmail(person?.cognitoEmail ?? '')
+        setPlanAssigneeName(
+          person?.cognitoEmail ? yallaUserLabel(person) || person.name : '',
+        )
+        setAssigneeReady(true)
       })
       .catch(() => {
         if (!cancelled) {
@@ -606,6 +758,9 @@ export function VisitDetailModal({
           })
           setCleanerBadge(null)
           setPlanYallaUser('')
+          setPlanAssigneeEmail('')
+          setPlanAssigneeName('')
+          setAssigneeReady(true)
         }
       })
     return () => {
@@ -629,8 +784,10 @@ export function VisitDetailModal({
       } else {
         setMaintenanceAssigneeBadge(null)
       }
+      setAssigneeReady(true)
       return
     }
+    setAssigneeReady(false)
     let cancelled = false
     const agentsUrl = endpoints.maintenanceAgents
       ? `${endpoints.maintenanceAgents}${
@@ -659,6 +816,9 @@ export function VisitDetailModal({
         if (!isMaintenanceVisitType(visit.visitTypeId) && !isOnPlan) {
           setMaintenanceAssigneeBadge(null)
           setPlanYallaUser('')
+          setPlanAssigneeEmail('')
+          setPlanAssigneeName('')
+          setAssigneeReady(true)
           return
         }
         const isReady =
@@ -676,6 +836,11 @@ export function VisitDetailModal({
         const assignedName = agentId ? nameById.get(agentId)?.trim() ?? '' : ''
         const person = linkedPersonById(agentsPayload.items ?? []).get(agentId)
         setPlanYallaUser(yallaUserLabel(person))
+        setPlanAssigneeEmail(person?.cognitoEmail ?? '')
+        setPlanAssigneeName(
+          person?.cognitoEmail ? yallaUserLabel(person) || person.name : '',
+        )
+        setAssigneeReady(true)
         if (isReady && assignedName) {
           setMaintenanceAssigneeBadge({ pending: false, label: assignedName })
           return
@@ -697,6 +862,7 @@ export function VisitDetailModal({
         } else {
           setMaintenanceAssigneeBadge(null)
         }
+        setAssigneeReady(true)
       })
     return () => {
       cancelled = true
@@ -1063,6 +1229,15 @@ export function VisitDetailModal({
     if (!visit) {
       return
     }
+    if (visitAwaitingStart(visit)) {
+      void startVisit()
+      return
+    }
+    const denied = deniedAssigneeName()
+    if (denied) {
+      setError(t('operations.assignedOnly', { user: denied }))
+      return
+    }
     if (isFutureMadridDate(visit.scheduledDate)) {
       setError(t('operations.cannotCompleteFutureVisit'))
       return
@@ -1199,7 +1374,10 @@ export function VisitDetailModal({
             <YlIcon name="xmark" size={16} />
           </button>
         </div>
-        <div className="modal-body operations-detail-body">
+        <div
+          className="modal-body operations-detail-body"
+          ref={detailBodyRef}
+        >
           {!isEditOpen &&
           !isCompleteOpen &&
           !isCancelOpen &&
@@ -1253,7 +1431,26 @@ export function VisitDetailModal({
                 >
                   <YlIcon name="pencil" size={16} />
                 </button>
-                {canCompleteVisit ? (
+                {canChangeStatus && visitAwaitingStart(visit) ? (
+                  <button
+                    type="button"
+                    className="btn-icon btn-icon-ghost operations-complete-visit-btn"
+                    disabled={isSaving || isRefreshing || !assigneeReady || isFutureVisit}
+                    aria-label={
+                      isFutureVisit
+                        ? t('operations.cannotStartFutureVisit')
+                        : t('operations.startVisit')
+                    }
+                    title={
+                      isFutureVisit
+                        ? t('operations.cannotStartFutureVisit')
+                        : t('operations.startVisit')
+                    }
+                    onClick={() => void startVisit()}
+                  >
+                    <YlIcon name="play" size={16} />
+                  </button>
+                ) : canCompleteVisit ? (
                   <button
                     type="button"
                     className="btn-icon btn-icon-ghost operations-complete-visit-btn"
@@ -1402,6 +1599,8 @@ export function VisitDetailModal({
                     visit.status === 'COMPLETED' || visit.status === 'CANCELLED'
                   }
                   canAct={Boolean(endpoints.upsertTask)}
+                  awaitingStart={visitAwaitingStart(visit)}
+                  onStart={() => void startVisit()}
                   onComplete={(task) => void completeTask(task)}
                 />
               </CollapsibleVisitTasks>
@@ -1422,6 +1621,19 @@ export function VisitDetailModal({
             </>
           ) : null}
         </div>
+        {visit && visitAwaitingStart(visit) && !tasksRevealed ? (
+          <VisitStartVeil
+            busy={isSaving || !assigneeReady}
+            disabled={isFutureVisit}
+            label={t('operations.start')}
+            revealLabel={t('operations.showTasks')}
+            notice={error}
+            dismissLabel={t('common.close')}
+            onDismissNotice={error ? () => setError('') : undefined}
+            onStart={() => void startVisit()}
+            onReveal={() => setTasksRevealed(true)}
+          />
+        ) : null}
       </div>
     </div>
   )

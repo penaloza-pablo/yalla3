@@ -13,6 +13,7 @@ import {
   applyPermissionCatalog,
   isKnownRoleId,
   withAdminLockedPages,
+  withDefaultActOnOthers,
 } from './rbac-catalog';
 import {
   DEFAULT_TODAY_VIEWS,
@@ -123,8 +124,12 @@ export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
   const id = typeof item.id === 'string' ? item.id : '';
   const permissions = withAdminLockedPages(
     id,
-    applyPermissionCatalog(
-      asStringArray(item.permissions),
+    withDefaultActOnOthers(
+      id,
+      applyPermissionCatalog(
+        asStringArray(item.permissions),
+        item.permissionsCatalogVersion,
+      ),
       item.permissionsCatalogVersion,
     ),
   );

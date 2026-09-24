@@ -1125,6 +1125,14 @@
     "createVisit": "Create visit",
     "editVisit": "Edit visit",
     "completeVisit": "Complete visit",
+    "startVisit": "Start visit",
+    "start": "Start",
+    "showTasks": "Show tasks",
+    "visitStarted": "Visit started.",
+    "cannotStartFutureVisit": "A visit scheduled for a future date cannot be started.",
+    "assignedUserFallback": "the assigned user",
+    "assignedOnly": "This can only be completed by {{user}} or a Yalla! administrator.",
+    "assignedOnlyStart": "This can only be started by {{user}} or a Yalla! administrator.",
     "cancelVisit": "Cancel visit",
     "hours": "Hours",
     "poolOfHours": "Pool of hours",
@@ -2321,7 +2329,8 @@
       "cleaningBillingEdit": "Edit in Cleaning / Billing month tables",
       "cleaningBillingPrices": "Cleaning prices visibility",
       "createTasks": "Create tasks",
-      "dashboardConfigureWidgets": "Configure dashboard widgets"
+      "dashboardConfigureWidgets": "Configure dashboard widgets",
+      "actOnOthersVisits": "Start and complete visits or tasks assigned to another user"
     }
   },
   "spotCheck": {

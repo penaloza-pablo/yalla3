@@ -39,6 +39,8 @@ export type VisitRecord = {
   actualDurationHours?: number
   appliesToHourBank: boolean
   specialHours?: boolean
+  startedAt?: string
+  closedAt?: string
   guestyTaskId?: string
   taskCountTotal?: number
   taskCountCompleted?: number

@@ -116,6 +116,7 @@ export const ACTION_KEYS = {
   cleaningBillingPrices: 'action:cleaningBilling.prices',
   createTasks: 'action:createTasks',
   dashboardConfigureWidgets: 'action:dashboard.configureWidgets',
+  actOnOthersVisits: 'action:visits.actOnOthers',
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -173,6 +174,10 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
     key: ACTION_KEYS.dashboardConfigureWidgets,
     i18nKey: 'rbac.actions.dashboardConfigureWidgets',
   },
+  {
+    key: ACTION_KEYS.actOnOthersVisits,
+    i18nKey: 'rbac.actions.actOnOthersVisits',
+  },
 ]
 
 export const DASHBOARD_CARD_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -226,7 +231,34 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 6
+export const PERMISSIONS_CATALOG_VERSION = 7
+
+const ACT_ON_OTHERS_ROLE_IDS = [
+  ADMIN_ROLE_ID,
+  KNOCK_KNOCK_SUPERVISOR_ROLE_ID,
+] as const
+
+/** Roles saved before catalog v7 keep this action only for admin and Knock-Knock supervisor. */
+export const withDefaultActOnOthers = (
+  roleId: string,
+  permissions: string[],
+  storedVersion?: unknown,
+) => {
+  const from =
+    typeof storedVersion === 'number' && Number.isFinite(storedVersion)
+      ? Math.floor(storedVersion)
+      : 1
+  if (from >= 7) {
+    return permissions
+  }
+  if (!(ACT_ON_OTHERS_ROLE_IDS as readonly string[]).includes(roleId)) {
+    return permissions
+  }
+  if (permissions.includes(ACTION_KEYS.actOnOthersVisits)) {
+    return permissions
+  }
+  return [...permissions, ACTION_KEYS.actOnOthersVisits]
+}
 
 export const applyPermissionCatalog = (
   permissions: string[],
