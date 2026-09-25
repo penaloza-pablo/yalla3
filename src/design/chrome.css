@@ -112,6 +112,16 @@
   white-space: nowrap;
 }
 
+.yl-day-page-actions .btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.yl-day-page-actions .notice {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
 .btn-primary {
   background: var(--yl-go);
   color: #ffffff;

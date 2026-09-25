@@ -2337,7 +2337,8 @@
       "cleaningBillingPrices": "Visibilidad de precios de limpieza",
       "createTasks": "Crear tareas",
       "dashboardConfigureWidgets": "Configurar widgets del panel",
-      "actOnOthersVisits": "Iniciar y completar visitas o tareas asignadas a otro usuario"
+      "actOnOthersVisits": "Iniciar y completar visitas o tareas asignadas a otro usuario",
+      "cleaningPlanOverrideSchedule": "Cambiar el Cleaning Plan después de las 10:30 y definir cualquier hora de inicio"
     }
   },
   "spotCheck": {
@@ -2423,6 +2424,9 @@
     "reopened": "Plan reabierto para edición.",
     "incompleteReady": "Asigna una limpiadora y una hora de inicio a cada visita antes de marcar el día como listo.",
     "overlapReady": "{{name}} no puede cubrir {{first}} ({{firstTime}}) y {{second}} ({{secondTime}}) con la duración configurada. {{second}} debe empezar a las {{earliest}} o más tarde.",
+    "overlapOverrideTitle": "Solape de limpiadora",
+    "overlapOverrideWarning": "{{name}} tiene asignadas {{first}} ({{firstTime}}) y {{second}} ({{secondTime}}) a la vez.",
+    "overlapOverrideConfirm": "¿Quieres marcar el día como listo de todas formas?",
     "syncPartial": "Plan guardado, pero {{count}} horas de inicio no se pudieron sincronizar con Guesty.",
     "draftOnlyFuture": "Los días con más de dos días de antelación solo se pueden guardar como borrador.",
     "missingEndpoint": "Falta el endpoint del plan de limpieza. Vuelve a desplegar el backend o configura VITE_GET_CLEANING_PLAN_URL.",
@@ -2442,7 +2446,9 @@
     "kitCost": "Costo",
     "kitTotal": "Total del kit: {{amount}}",
     "earlyCheckInWarning": "Esta limpieza tiene entrada temprana. Por favor programar a primera hora.",
-    "skipEarlyCheckIn": "Omitir"
+    "skipEarlyCheckIn": "Omitir",
+    "editAfterCutoff": "Para cambiar el plan después de las 10:30 debes solicitarlo a un administrador de Yalla.",
+    "startTimeWindow": "Solo puedes definir horas de inicio de limpieza entre las 11:00 y las 16:00."
   },
   "maintenancePlan": {
     "eyebrow": "Mantenimiento / Plan",

@@ -2337,7 +2337,8 @@
       "cleaningBillingPrices": "Cleaning prices visibility",
       "createTasks": "Create tasks",
       "dashboardConfigureWidgets": "Configure dashboard widgets",
-      "actOnOthersVisits": "Start and complete visits or tasks assigned to another user"
+      "actOnOthersVisits": "Start and complete visits or tasks assigned to another user",
+      "cleaningPlanOverrideSchedule": "Change the Cleaning Plan after 10:30 and set any start time"
     }
   },
   "spotCheck": {
@@ -2423,6 +2424,9 @@
     "reopened": "Plan reopened for editing.",
     "incompleteReady": "Assign a cleaner and a start time to every visit before marking the day as ready.",
     "overlapReady": "{{name}} cannot cover {{first}} ({{firstTime}}) and {{second}} ({{secondTime}}) with the configured cleaning duration. {{second}} must start at {{earliest}} or later.",
+    "overlapOverrideTitle": "Cleaner overlap",
+    "overlapOverrideWarning": "{{name}} is assigned to {{first}} ({{firstTime}}) and {{second}} ({{secondTime}}) at the same time.",
+    "overlapOverrideConfirm": "Do you want to mark the day as ready anyway?",
     "syncPartial": "Plan saved, but {{count}} start times could not sync to Guesty.",
     "draftOnlyFuture": "Days more than two days ahead can only be saved as a draft.",
     "missingEndpoint": "Missing cleaning plan endpoint. Redeploy the backend or set VITE_GET_CLEANING_PLAN_URL.",
@@ -2442,7 +2446,9 @@
     "kitCost": "Cost",
     "kitTotal": "Kit total: {{amount}}",
     "earlyCheckInWarning": "This cleaning has an early check-in. Please schedule it first thing in the morning.",
-    "skipEarlyCheckIn": "Skip"
+    "skipEarlyCheckIn": "Skip",
+    "editAfterCutoff": "To change the plan after 10:30, ask a Yalla administrator.",
+    "startTimeWindow": "You can only set cleaning start times between 11:00 and 16:00."
   },
   "maintenancePlan": {
     "eyebrow": "Maintenance / Plan",

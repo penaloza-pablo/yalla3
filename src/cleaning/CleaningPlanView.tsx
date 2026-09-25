@@ -8,10 +8,21 @@ import {
   formatDateOnlyLabel,
   formatDayMonthLabel,
   getMadridMonthRange,
+  getMadridTime,
   getTodayMadrid,
   getTomorrowMadrid,
   isPlanDateTooFarAhead,
 } from '../operations/dateHelpers'
+import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
+import { usePermissions } from '../rbac/PermissionsProvider'
+import {
+  CLEANING_PLAN_EDIT_LOCKED,
+  CLEANING_PLAN_RESTRICTED_START_MAX,
+  CLEANING_PLAN_RESTRICTED_START_MIN,
+  CLEANING_PLAN_START_WINDOW,
+  isPastCleaningPlanEditCutoff,
+  isStartTimeWithinRestrictedWindow,
+} from '../../amplify/functions/shared/cleaning-plan-edit-policy'
 import type { PropertyOption } from '../operations/types'
 import type {
   AmenitiesKit,
@@ -231,6 +242,12 @@ export function CleaningPlanView({
   onInitialPlanDateConsumed,
 }: Props) {
   const { t, i18n } = useTranslation()
+  const { can } = usePermissions()
+  const canOverridePlan = can(ACTION_KEYS.cleaningPlanOverrideSchedule)
+  const [madridNow, setMadridNow] = useState(() => ({
+    date: getTodayMadrid(),
+    time: getMadridTime(),
+  }))
   const currentMonth = useMemo(() => getMadridMonthRange(0), [])
   const endpoints = useMemo(
     () => ({
@@ -277,11 +294,16 @@ export function CleaningPlanView({
     title: string
     resumeAction?: 'save' | 'ready'
   } | null>(null)
+  const [overlapWarning, setOverlapWarning] = useState<string[] | null>(null)
 
-  const today = getTodayMadrid()
+  const today = madridNow.date
   const tomorrow = getTomorrowMadrid()
   const isReady = status === 'READY'
   const canMarkReady = !isPlanDateTooFarAhead(plannedDate, today)
+  const editLocked =
+    isReady &&
+    !canOverridePlan &&
+    isPastCleaningPlanEditCutoff(plannedDate, today, madridNow.time)
   const cleanerById = useMemo(
     () => new Map(cleaners.map((cleaner) => [cleaner.id, cleaner])),
     [cleaners],
@@ -383,6 +405,14 @@ export function CleaningPlanView({
   }, [isDayModalOpen, loadCleaners, loadHistory, loadPlan, plannedDate, t])
 
   useEffect(() => {
+    const update = () =>
+      setMadridNow({ date: getTodayMadrid(), time: getMadridTime() })
+    update()
+    const id = window.setInterval(update, 30_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  useEffect(() => {
     void loadCleaners().catch(() => {
       setError(t('cleaningPlan.missingCleaners'))
     })
@@ -399,6 +429,7 @@ export function CleaningPlanView({
     setError('')
     setSkippedEarlyVisitIds(new Set())
     setEarlyWarning(null)
+    setOverlapWarning(null)
     await loadPlan(date)
   }
 
@@ -417,6 +448,7 @@ export function CleaningPlanView({
     setOpenVisitId('')
     setIsDayModalOpen(false)
     setMessage('')
+    setOverlapWarning(null)
   }
 
   const updateRow = (
@@ -438,6 +470,7 @@ export function CleaningPlanView({
     startTime: string,
     skipped: Set<string>,
   ) =>
+    !canOverridePlan &&
     Boolean(row.bookingContext?.earlyCheckInApplies) &&
     isAfterEarlyCutoff(startTime) &&
     !skipped.has(row.visitId)
@@ -446,6 +479,7 @@ export function CleaningPlanView({
     action: 'save' | 'ready' | 'reopen',
     rowsOverride?: CleaningPlanRow[],
     skippedOverride?: Set<string>,
+    acknowledgeOverlap = false,
   ) => {
     if (!endpoints.upsertPlan) {
       setError(t('cleaningPlan.missingWrite'))
@@ -453,6 +487,20 @@ export function CleaningPlanView({
     }
     const planRows = rowsOverride ?? rows
     const skipped = skippedOverride ?? skippedEarlyVisitIds
+    if (action === 'reopen' && editLocked) {
+      setError(t('cleaningPlan.editAfterCutoff'))
+      return
+    }
+    if (action !== 'reopen' && !canOverridePlan) {
+      const outsideWindow = planRows.find(
+        (row) =>
+          row.startTime && !isStartTimeWithinRestrictedWindow(row.startTime),
+      )
+      if (outsideWindow) {
+        setError(t('cleaningPlan.startTimeWindow'))
+        return
+      }
+    }
     if (action !== 'reopen') {
       const pendingEarly = planRows.find((row) =>
         needsEarlyWarning(row, row.startTime, skipped),
@@ -493,7 +541,20 @@ export function CleaningPlanView({
         ]
       })
       const overlaps = findPlanResourceOverlaps(overlapSlots)
-      if (overlaps.length > 0) {
+      if (overlaps.length > 0 && !(canOverridePlan && acknowledgeOverlap)) {
+        if (canOverridePlan) {
+          setOverlapWarning(
+            overlaps.map((overlap) => {
+              const cleanerName =
+                cleanerById.get(overlap.resourceId)?.name || overlap.resourceId
+              return t(
+                'cleaningPlan.overlapOverrideWarning',
+                overlapMessageParams(overlap, cleanerName),
+              )
+            }),
+          )
+          return
+        }
         const overlap = overlaps[0]
         const cleanerName =
           cleanerById.get(overlap.resourceId)?.name || overlap.resourceId
@@ -515,6 +576,7 @@ export function CleaningPlanView({
         body: JSON.stringify({
           plannedDate,
           action,
+          ...(acknowledgeOverlap ? { acknowledgeOverlap: true } : {}),
           items: planRows.map((row) => ({
             visitId: row.visitId,
             cleanerId: row.cleanerId,
@@ -543,11 +605,15 @@ export function CleaningPlanView({
       await loadHistory()
       await loadPlan(plannedDate)
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : t('cleaningPlan.saveError'),
-      )
+      const message =
+        requestError instanceof Error ? requestError.message : ''
+      if (message === CLEANING_PLAN_EDIT_LOCKED) {
+        setError(t('cleaningPlan.editAfterCutoff'))
+      } else if (message === CLEANING_PLAN_START_WINDOW) {
+        setError(t('cleaningPlan.startTimeWindow'))
+      } else {
+        setError(message || t('cleaningPlan.saveError'))
+      }
     } finally {
       setIsSaving(false)
     }
@@ -686,9 +752,26 @@ export function CleaningPlanView({
             <input
               type="time"
               value={row.startTime}
+              min={
+                canOverridePlan ? undefined : CLEANING_PLAN_RESTRICTED_START_MIN
+              }
+              max={
+                canOverridePlan ? undefined : CLEANING_PLAN_RESTRICTED_START_MAX
+              }
               disabled={isReady}
+              title={
+                canOverridePlan ? undefined : t('cleaningPlan.startTimeWindow')
+              }
               onChange={(event) => {
                 const startTime = event.target.value
+                if (
+                  startTime &&
+                  !canOverridePlan &&
+                  !isStartTimeWithinRestrictedWindow(startTime)
+                ) {
+                  setError(t('cleaningPlan.startTimeWindow'))
+                  return
+                }
                 updateRow(row.visitId, { startTime })
                 if (needsEarlyWarning(row, startTime, skippedEarlyVisitIds)) {
                   setEarlyWarning({
@@ -1058,6 +1141,9 @@ export function CleaningPlanView({
           {!isReady && !canMarkReady ? (
             <p className="notice">{t('cleaningPlan.draftOnlyFuture')}</p>
           ) : null}
+          {!isReady && !canOverridePlan ? (
+            <p className="notice">{t('cleaningPlan.startTimeWindow')}</p>
+          ) : null}
           <div className="table-wrap">
             <table className="data-table yl-day-page-table">
               <thead>
@@ -1073,11 +1159,18 @@ export function CleaningPlanView({
             </table>
           </div>
           <div className="yl-day-page-actions">
+            {editLocked ? (
+              <p className="notice" id="cleaning-plan-edit-lock">
+                {t('cleaningPlan.editAfterCutoff')}
+              </p>
+            ) : null}
             {isReady ? (
               <button
                 className="btn-secondary"
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || editLocked}
+                title={editLocked ? t('cleaningPlan.editAfterCutoff') : undefined}
+                aria-describedby={editLocked ? 'cleaning-plan-edit-lock' : undefined}
                 onClick={() => void savePlan('reopen')}
               >
                 {t('cleaningPlan.editPlan')}
@@ -1168,6 +1261,44 @@ export function CleaningPlanView({
                 }}
               >
                 {t('common.accept')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {overlapWarning ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <h3 className="modal-title">
+                {t('cleaningPlan.overlapOverrideTitle')}
+              </h3>
+            </div>
+            <div className="modal-body">
+              <ul>
+                {overlapWarning.map((line, index) => (
+                  <li key={`${index}-${line}`}>{line}</li>
+                ))}
+              </ul>
+              <p>{t('cleaningPlan.overlapOverrideConfirm')}</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setOverlapWarning(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setOverlapWarning(null)
+                  void savePlan('ready', rows, skippedEarlyVisitIds, true)
+                }}
+              >
+                {t('common.confirm')}
               </button>
             </div>
           </div>

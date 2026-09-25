@@ -43,8 +43,18 @@ import {
   visitSlackLabel,
   type LatePlanVisit,
 } from '../shared/slack-plan-late-visit';
+import { getActorEmail } from '../shared/cognito-auth';
+import {
+  CLEANING_PLAN_EDIT_LOCKED,
+  CLEANING_PLAN_START_WINDOW,
+  isPastCleaningPlanEditCutoff,
+  isStartTimeWithinRestrictedWindow,
+} from '../shared/cleaning-plan-edit-policy';
+import { ACTION_KEYS } from '../shared/rbac-catalog';
+import { resolvePermissions } from '../shared/rbac-store';
 import {
   docClient,
+  getNowTimeInMadrid,
   getTodayInMadrid,
   patchUserOriginatedRecord,
   putItem,
@@ -61,6 +71,7 @@ type PlanItemInput = {
 type PlanPayload = {
   plannedDate?: string;
   action?: 'save' | 'ready' | 'reopen';
+  acknowledgeOverlap?: boolean;
   items?: PlanItemInput[];
 };
 
@@ -94,6 +105,28 @@ const invokeGuestyStartTimeSync = async (visitId: string) =>
     tableName: process.env.VISITS_TABLE || 'yalla-visits',
     id: visitId,
   });
+
+const callerCanOverrideCleaningPlan = async (event: {
+  headers?: Record<string, string | string[] | undefined>;
+}) => {
+  const tableName = process.env.RBAC_TABLE_NAME;
+  if (!tableName) {
+    return false;
+  }
+  try {
+    const email = await getActorEmail(event);
+    if (!email || email === 'system') {
+      return true;
+    }
+    const resolved = await resolvePermissions(tableName, email);
+    return resolved.permissions.includes(
+      ACTION_KEYS.cleaningPlanOverrideSchedule,
+    );
+  } catch (error) {
+    console.error('Failed to resolve cleaning plan override permission', error);
+    return false;
+  }
+};
 
 export const handler = async (event: {
   requestContext?: { http?: { method?: string } };
@@ -144,6 +177,19 @@ export const handler = async (event: {
       return buildHttpResponse(400, {
         message: 'Ready plans cannot be edited. Reopen the plan first.',
       });
+    }
+
+    if (
+      action === 'reopen' &&
+      currentStatus === 'READY' &&
+      isPastCleaningPlanEditCutoff(
+        plannedDate as string,
+        getTodayInMadrid(),
+        getNowTimeInMadrid(),
+      ) &&
+      !(await callerCanOverrideCleaningPlan(event))
+    ) {
+      return buildHttpResponse(403, { message: CLEANING_PLAN_EDIT_LOCKED });
     }
 
     if (
@@ -226,6 +272,22 @@ export const handler = async (event: {
       });
     }
 
+    if (action !== 'reopen') {
+      const outsideWindow = normalizedItems.find(
+        (item) =>
+          item.startTime && !isStartTimeWithinRestrictedWindow(item.startTime),
+      );
+      if (
+        outsideWindow &&
+        !(await callerCanOverrideCleaningPlan(event))
+      ) {
+        return buildHttpResponse(400, {
+          message: CLEANING_PLAN_START_WINDOW,
+          visitId: outsideWindow.visitId,
+        });
+      }
+    }
+
     if (action === 'ready') {
       const missing = visits.filter((visit) => {
         const visitId = typeof visit.id === 'string' ? visit.id : '';
@@ -257,7 +319,10 @@ export const handler = async (event: {
         ];
       });
       const overlaps = findPlanResourceOverlaps(overlapSlots);
-      if (overlaps.length > 0) {
+      const canSkipOverlap =
+        payload.acknowledgeOverlap === true &&
+        (await callerCanOverrideCleaningPlan(event));
+      if (overlaps.length > 0 && !canSkipOverlap) {
         const overlap = overlaps[0];
         const cleaner = await loadCleaner(cleanersTable, overlap.resourceId);
         const cleanerName =

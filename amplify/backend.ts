@@ -1168,6 +1168,11 @@ backend.upsertCleaningPlan.addEnvironment(
   cleaningPlansTable.tableName,
 );
 backend.upsertCleaningPlan.addEnvironment(
+  'RBAC_TABLE_NAME',
+  rbacTable.tableName,
+);
+rbacTable.grantReadWriteData(backend.upsertCleaningPlan.resources.lambda);
+backend.upsertCleaningPlan.addEnvironment(
   'CLEANERS_TABLE',
   cleanersTable.tableName,
 );
