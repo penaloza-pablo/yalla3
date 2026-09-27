@@ -18,6 +18,7 @@ import {
   shouldWritePlannerToGuesty,
   toDateOnly,
 } from './bookings-planner';
+import { applyVikeyOpeningLinkToBooking } from './vikey-access';
 import { listPlannerWindowBookings } from './bookings-planner-window';
 import { nowIso } from './dynamo-http';
 import { reopenCleaningPlansForBookingContextChange } from './cleaning-plan-booking-change';
@@ -235,11 +236,12 @@ export const applyPlannerToReservation = async ({
   notifyCleaningPlan?: boolean;
   previous?: BookingPlannerItem | null;
 }) => {
-  const current =
+  const hydrated =
     item ?? (await hydrateBooking(bookingsTable, reservationId));
-  if (!current) {
+  if (!hydrated) {
     return { ok: false as const, reason: 'not_found' };
   }
+  const current = applyVikeyOpeningLinkToBooking(hydrated);
 
   const reopenFromBookingContext = async () => {
     if (!notifyCleaningPlan || overrides) {
@@ -325,9 +327,9 @@ export const applyPlannerToReservation = async ({
   const notesFrozen =
     !overrides &&
     isGiftCardFrozen(toDateOnly(current.CheckInDate), today, nowTime);
-  const booking = current as BookingPlannerItem;
-  const fieldsChanged = plannerFieldsChanged(booking, patch);
-  const stateChanged = plannerStateChanged(booking, patch);
+  const original = hydrated as BookingPlannerItem;
+  const fieldsChanged = plannerFieldsChanged(original, patch);
+  const stateChanged = plannerStateChanged(original, patch);
   const hasOverrides = Boolean(overrides);
   const canTouchGuesty =
     syncGuesty &&

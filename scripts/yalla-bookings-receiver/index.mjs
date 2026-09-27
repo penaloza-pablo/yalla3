@@ -10,6 +10,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { reconcileReservation } from "../shared/reconcile-booking-cleanings.mjs";
+import { resolveEsperanza9Access } from "../shared/vikey-access.mjs";
 
 const ddb = new DynamoDBClient({});
 const lambda = new LambdaClient({});
@@ -948,7 +949,12 @@ export const handler = async (event) => {
         )
       ),
       Access: s(
-        pickStoredString(getAccessValue(reservation), existing, "Access")
+        resolveEsperanza9Access({
+          listingId,
+          listingNickname,
+          access: pickStoredString(getAccessValue(reservation), existing, "Access"),
+          reservation
+        })
       ),
       Currency: s(currency),
 

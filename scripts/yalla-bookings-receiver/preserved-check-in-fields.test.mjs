@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { resolveEsperanza9Access } from "../shared/vikey-access.mjs";
 
 const PRESERVED_FIELDS = [
   "CheckInAccessGranted",
@@ -25,4 +26,29 @@ test("bookings receiver copies check-in tracker flags across Guesty PutItem", ()
       new RegExp(`copyExistingAttribute\\(item, existing, "${field}"\\)`)
     );
   }
+});
+
+test("bookings receiver copies Vikey opening link into Access for Esperanza 9", () => {
+  const source = fs.readFileSync(new URL("./index.mjs", import.meta.url), "utf8");
+  assert.match(source, /resolveEsperanza9Access/);
+  assert.equal(
+    resolveEsperanza9Access({
+      listingId: "6835cef04af0d8002845abdd",
+      listingNickname: "Esperanza 9",
+      access: "",
+      reservation: {
+        customFields: [
+          {
+            fieldId: "6ab9046c5f0554002a3d33ee",
+            value: "https://guest.vikey.it/reservations/NTMI3LI6"
+          },
+          {
+            fieldId: "6ab9046d5f0554002a3d33fc",
+            value: "https://guest.vikey.it/checkin/NTMI3LI6"
+          }
+        ]
+      }
+    }),
+    "https://guest.vikey.it/reservations/NTMI3LI6"
+  );
 });
