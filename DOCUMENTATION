@@ -138,6 +138,9 @@ UI behavior
 - Form entry uses two steps: details first, restock/consumption second.
 - Item ID, Last updated, and Status are auto-generated on save.
 - Form fields include Rebuy quantity, Unit price, Tolerance, and Consumption rules.
+- Pricing on the restock step mirrors Purchases: VAT %, VAT €, net/gross totals,
+  and net/gross unit prices. Entering any price field recalculates the others using
+  the item quantity and selected VAT rate.
 - Consumption rules must be valid JSON to save.
 - Sorting is triggered by clicking table headers for Item name and Status.
 - Filters icon opens a modal with multi-select options for Location, Status, and Category.
@@ -249,7 +252,10 @@ Overview
 UI behavior
 - Purchases lives under Ops > Inventory and mirrors the Inventory layout.
 - Inventory rows include a purchase action to open the purchase wizard.
-- Wizard captures vendor, units, total price, and delivery date.
+- Wizard captures vendor, units, net/gross unit and total prices (linked by
+  VAT % and units), invoice received, and delivery date.
+- Filling any of net unit, gross unit, net total, or gross total recalculates
+  the other three using the selected VAT rate and units.
 - Purchases table shows Item name, Location, Status, Delivery date by default.
 - Table is always sorted by Delivery date, newest to oldest.
 - Hidden fields (expand row): Purchase date, Purchase ID, Item ID, Vendor, Units,

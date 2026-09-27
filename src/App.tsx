@@ -128,13 +128,14 @@ import { ExportScopeModal } from './ExportScopeModal'
 import { downloadFromResponse } from './lib/download'
 import {
   UnitPriceVatDetails,
-  UnitPriceVatFields,
 } from './inventory/UnitPriceVatFields'
+import { PurchasePriceVatFields } from './inventory/PurchasePriceVatFields'
 import {
-  emptyUnitPriceVat,
-  resolvedUnitPriceVat,
-  unitPriceVatFromStored,
-  type UnitPriceVatValue,
+  applyPurchasePriceUnits,
+  emptyPurchasePriceVat,
+  purchasePriceVatFromStored,
+  resolvedPurchasePriceVat,
+  type PurchasePriceVatValue,
 } from './inventory/unitPriceVat'
 import { YlIcon, YlSortIcon, YlDisclosureIcon } from './design/icons'
 import './App.css'
@@ -233,7 +234,7 @@ type InventoryFormState = {
   locationOther: string
   quantity: string
   rebuyQty: string
-  unitPriceVat: UnitPriceVatValue
+  unitPriceVat: PurchasePriceVatValue
   tolerance: string
 }
 
@@ -244,7 +245,7 @@ type PurchaseFormState = {
   location: string
   vendor: string
   units: string
-  unitPriceVat: UnitPriceVatValue
+  priceVat: PurchasePriceVatValue
   totalPrice: string
   deliveryDate: string
   purchaseDate: string
@@ -1682,7 +1683,7 @@ const emptyFormState: InventoryFormState = {
   locationOther: '',
   quantity: '',
   rebuyQty: '',
-  unitPriceVat: emptyUnitPriceVat(),
+  unitPriceVat: emptyPurchasePriceVat(),
   tolerance: '',
 }
 
@@ -1693,7 +1694,7 @@ const emptyPurchaseFormState: PurchaseFormState = {
   location: '',
   vendor: '',
   units: '',
-  unitPriceVat: emptyUnitPriceVat(),
+  priceVat: emptyPurchasePriceVat(),
   totalPrice: '',
   deliveryDate: '',
   purchaseDate: '',
@@ -3354,7 +3355,7 @@ function App() {
       location: row.location,
       status: '',
       direct: false,
-      unitPriceVat: unitPriceVatFromStored({
+      priceVat: purchasePriceVatFromStored({
         net: row.unitPrice,
         gross: row.grossUnitPrice,
         vatRate: row.vatRate,
@@ -3412,11 +3413,13 @@ function App() {
       location: row.location === '—' ? '' : row.location,
       vendor: row.vendor === '—' ? '' : row.vendor,
       units: row.units ? String(row.units) : '',
-      unitPriceVat: unitPriceVatFromStored({
+      priceVat: purchasePriceVatFromStored({
         net: row.unitPrice,
         gross: row.grossUnitPrice,
         vatRate: row.vatRate,
         fallbackUnit: getPurchaseUnitPrice(row),
+        totalGross: row.totalPrice,
+        units: row.units,
       }),
       totalPrice: row.totalPrice ? String(row.totalPrice) : '',
       deliveryDate: formatDateForInput(row.deliveryDateRaw),
@@ -3462,10 +3465,11 @@ function App() {
       locationOther: resolvedLocationChoice === OTHER_OPTION ? row.location : '',
       quantity: row.quantity ? String(row.quantity) : '',
       rebuyQty: row.rebuyQty ? String(row.rebuyQty) : '',
-      unitPriceVat: unitPriceVatFromStored({
+      unitPriceVat: purchasePriceVatFromStored({
         net: row.unitPrice,
         gross: row.grossUnitPrice,
         vatRate: row.vatRate,
+        units: row.quantity,
       }),
       tolerance: row.tolerance ? String(row.tolerance) : '',
     })
@@ -4145,6 +4149,13 @@ function App() {
       setFormError(t('inventory.quantityRequired'))
       return
     }
+    setFormValues((current) => ({
+      ...current,
+      unitPriceVat: applyPurchasePriceUnits(
+        current.unitPriceVat,
+        current.quantity,
+      ),
+    }))
     setFormStep('restock')
   }
 
@@ -4267,7 +4278,10 @@ function App() {
       }
     }
     if (!purchaseFormValues.direct) {
-      const vatPricing = resolvedUnitPriceVat(purchaseFormValues.unitPriceVat)
+      const vatPricing = resolvedPurchasePriceVat(
+        purchaseFormValues.priceVat,
+        purchaseFormValues.units,
+      )
       if (!vatPricing) {
         setPurchaseFormError(t('purchases.totalPriceRequired'))
         return
@@ -4294,7 +4308,10 @@ function App() {
     )
     const unitVat = purchaseFormValues.direct
       ? null
-      : resolvedUnitPriceVat(purchaseFormValues.unitPriceVat)
+      : resolvedPurchasePriceVat(
+          purchaseFormValues.priceVat,
+          purchaseFormValues.units,
+        )
     const purchaseTotalPrice = unitVat
       ? roundMoney(unitsValue * unitVat.gross)
       : Number(purchaseFormValues.totalPrice) || 0
@@ -4921,7 +4938,10 @@ function App() {
       unitPrice: Number(formValues.unitPriceVat.net) || 0,
       vatRate: formValues.unitPriceVat.vatRate,
       grossUnitPrice:
-        resolvedUnitPriceVat(formValues.unitPriceVat)?.gross ?? 0,
+        resolvedPurchasePriceVat(
+          formValues.unitPriceVat,
+          formValues.quantity,
+        )?.gross ?? 0,
       Tolerance: Number(formValues.tolerance) || 0,
       createdBy,
     }
@@ -9361,19 +9381,24 @@ function App() {
                         type="number"
                         min="0"
                         value={formValues.quantity}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const nextQuantity = event.target.value
                           setFormValues((current) => ({
                             ...current,
-                            quantity: event.target.value,
+                            quantity: nextQuantity,
+                            unitPriceVat: applyPurchasePriceUnits(
+                              current.unitPriceVat,
+                              nextQuantity,
+                            ),
                           }))
-                        }
+                        }}
                         placeholder="0"
                       />
                     </label>
                   </div>
                 ) : (
                   <div className="form-grid">
-                    <label className="form-field">
+                    <label className="form-field form-field-span">
                       <span>{t('common.rebuyQty')}</span>
                       <input
                         type="number"
@@ -9388,8 +9413,9 @@ function App() {
                         placeholder="0"
                       />
                     </label>
-                    <UnitPriceVatFields
+                    <PurchasePriceVatFields
                       value={formValues.unitPriceVat}
+                      units={formValues.quantity}
                       onChange={(unitPriceVat) =>
                         setFormValues((current) => ({
                           ...current,
@@ -9712,45 +9738,45 @@ function App() {
                         type="number"
                         min="0"
                         value={purchaseFormValues.units}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const nextUnits = event.target.value
                           setPurchaseFormValues((current) => ({
                             ...current,
-                            units: event.target.value,
+                            units: nextUnits,
+                            priceVat: applyPurchasePriceUnits(
+                              current.priceVat,
+                              nextUnits,
+                            ),
                           }))
-                        }
+                        }}
                         placeholder="0"
                       />
                     </label>
-                    <UnitPriceVatFields
-                      value={purchaseFormValues.unitPriceVat}
-                      onChange={(unitPriceVat) =>
+                    <PurchasePriceVatFields
+                      value={purchaseFormValues.priceVat}
+                      units={purchaseFormValues.units}
+                      onChange={(priceVat) =>
                         setPurchaseFormValues((current) => ({
                           ...current,
-                          unitPriceVat,
+                          priceVat,
                         }))
                       }
                     />
-                    {(() => {
-                      const pricing = resolvedUnitPriceVat(
-                        purchaseFormValues.unitPriceVat,
-                      )
-                      const units = Number(purchaseFormValues.units)
-                      if (
-                        !pricing ||
-                        !Number.isFinite(units) ||
-                        units <= 0
-                      ) {
-                        return null
-                      }
-                      return (
-                        <div className="form-field">
-                          <span>{t('common.totalPrice')}</span>
-                          <p className="detail-value">
-                            {formatUnitPrice(roundMoney(units * pricing.gross))}
-                          </p>
-                        </div>
-                      )
-                    })()}
+                    <label className="form-field">
+                      <span>{t('purchases.invoiceReceived')}</span>
+                      <div className="planner-switch compact">
+                        <YallaSwitch
+                          on={purchaseFormValues.invoice}
+                          label={t('purchases.invoiceReceived')}
+                          onToggle={() =>
+                            setPurchaseFormValues((current) => ({
+                              ...current,
+                              invoice: !current.invoice,
+                            }))
+                          }
+                        />
+                      </div>
+                    </label>
                     <label className="form-field">
                       <span>{t('common.deliveryDate')}</span>
                       <input
@@ -9766,6 +9792,7 @@ function App() {
                     </label>
                   </div>
                 )}
+                {purchaseFormValues.direct ? (
                 <label className="form-field">
                   <span>{t('purchases.invoiceReceived')}</span>
                   <div className="planner-switch compact">
@@ -9781,6 +9808,7 @@ function App() {
                     />
                   </div>
                 </label>
+                ) : null}
                 {purchaseFormValues.id ? (
                   <label className="form-field-checkbox">
                     <input

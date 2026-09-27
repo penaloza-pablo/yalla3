@@ -127,3 +127,244 @@ export const resolvedUnitPriceVat = (value: UnitPriceVatValue) => {
     vatRate: synced.vatRate,
   }
 }
+
+export type PurchasePriceEdit = 'net' | 'gross' | 'totalNet' | 'totalGross'
+
+export type PurchasePriceVatValue = {
+  net: string
+  gross: string
+  totalNet: string
+  totalGross: string
+  vatRate: IvaRate
+  lastEdited: PurchasePriceEdit
+}
+
+export const emptyPurchasePriceVat = (
+  vatRate: IvaRate = 21,
+): PurchasePriceVatValue => ({
+  net: '',
+  gross: '',
+  totalNet: '',
+  totalGross: '',
+  vatRate,
+  lastEdited: 'net',
+})
+
+const parsePositiveUnits = (units: string) => {
+  const parsed = Number(units)
+  if (units.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
+    return null
+  }
+  return parsed
+}
+
+export const syncPurchaseFromNet = (
+  net: string,
+  units: string,
+  vatRate: IvaRate,
+): PurchasePriceVatValue => {
+  const parsed = Number(net)
+  if (net.trim() === '' || !Number.isFinite(parsed)) {
+    return {
+      net,
+      gross: '',
+      totalNet: '',
+      totalGross: '',
+      vatRate,
+      lastEdited: 'net',
+    }
+  }
+  const gross = occurrencePriceWithIva(parsed, vatRate)
+  const unitsValue = parsePositiveUnits(units)
+  return {
+    net,
+    gross: formatAmount(gross),
+    totalNet: unitsValue ? formatAmount(roundMoney(parsed * unitsValue)) : '',
+    totalGross: unitsValue ? formatAmount(roundMoney(gross * unitsValue)) : '',
+    vatRate,
+    lastEdited: 'net',
+  }
+}
+
+export const syncPurchaseFromGross = (
+  gross: string,
+  units: string,
+  vatRate: IvaRate,
+): PurchasePriceVatValue => {
+  const parsed = Number(gross)
+  if (gross.trim() === '' || !Number.isFinite(parsed)) {
+    return {
+      net: '',
+      gross,
+      totalNet: '',
+      totalGross: '',
+      vatRate,
+      lastEdited: 'gross',
+    }
+  }
+  const net = priceFromGross(parsed, vatRate)
+  const unitsValue = parsePositiveUnits(units)
+  return {
+    net: formatAmount(net),
+    gross,
+    totalNet: unitsValue ? formatAmount(roundMoney(net * unitsValue)) : '',
+    totalGross: unitsValue ? formatAmount(roundMoney(parsed * unitsValue)) : '',
+    vatRate,
+    lastEdited: 'gross',
+  }
+}
+
+export const syncPurchaseFromTotalNet = (
+  totalNet: string,
+  units: string,
+  vatRate: IvaRate,
+): PurchasePriceVatValue => {
+  const parsed = Number(totalNet)
+  if (totalNet.trim() === '' || !Number.isFinite(parsed)) {
+    return {
+      net: '',
+      gross: '',
+      totalNet,
+      totalGross: '',
+      vatRate,
+      lastEdited: 'totalNet',
+    }
+  }
+  const totalGross = occurrencePriceWithIva(parsed, vatRate)
+  const unitsValue = parsePositiveUnits(units)
+  return {
+    net: unitsValue ? formatAmount(roundMoney(parsed / unitsValue)) : '',
+    gross: unitsValue ? formatAmount(roundMoney(totalGross / unitsValue)) : '',
+    totalNet,
+    totalGross: formatAmount(totalGross),
+    vatRate,
+    lastEdited: 'totalNet',
+  }
+}
+
+export const syncPurchaseFromTotalGross = (
+  totalGross: string,
+  units: string,
+  vatRate: IvaRate,
+): PurchasePriceVatValue => {
+  const parsed = Number(totalGross)
+  if (totalGross.trim() === '' || !Number.isFinite(parsed)) {
+    return {
+      net: '',
+      gross: '',
+      totalNet: '',
+      totalGross,
+      vatRate,
+      lastEdited: 'totalGross',
+    }
+  }
+  const totalNet = priceFromGross(parsed, vatRate)
+  const unitsValue = parsePositiveUnits(units)
+  return {
+    net: unitsValue ? formatAmount(roundMoney(totalNet / unitsValue)) : '',
+    gross: unitsValue ? formatAmount(roundMoney(parsed / unitsValue)) : '',
+    totalNet: formatAmount(totalNet),
+    totalGross,
+    vatRate,
+    lastEdited: 'totalGross',
+  }
+}
+
+export const applyPurchasePriceUnits = (
+  current: PurchasePriceVatValue,
+  units: string,
+): PurchasePriceVatValue => {
+  if (current.lastEdited === 'gross') {
+    return syncPurchaseFromGross(current.gross, units, current.vatRate)
+  }
+  if (current.lastEdited === 'totalNet') {
+    return syncPurchaseFromTotalNet(current.totalNet, units, current.vatRate)
+  }
+  if (current.lastEdited === 'totalGross') {
+    return syncPurchaseFromTotalGross(current.totalGross, units, current.vatRate)
+  }
+  return syncPurchaseFromNet(current.net, units, current.vatRate)
+}
+
+export const applyPurchasePriceVatRate = (
+  current: PurchasePriceVatValue,
+  vatRate: IvaRate,
+  units: string,
+): PurchasePriceVatValue =>
+  applyPurchasePriceUnits({ ...current, vatRate }, units)
+
+export const purchaseVatEuro = (value: PurchasePriceVatValue) => {
+  const totalNet = Number(value.totalNet)
+  const totalGross = Number(value.totalGross)
+  if (
+    value.totalNet.trim() !== '' &&
+    value.totalGross.trim() !== '' &&
+    Number.isFinite(totalNet) &&
+    Number.isFinite(totalGross)
+  ) {
+    return roundMoney(totalGross - totalNet)
+  }
+  return unitPriceVatEuro({
+    net: value.net,
+    gross: value.gross,
+    vatRate: value.vatRate,
+    lastEdited:
+      value.lastEdited === 'gross' || value.lastEdited === 'totalGross'
+        ? 'gross'
+        : 'net',
+  })
+}
+
+export const purchasePriceVatFromStored = (params: {
+  net?: number
+  gross?: number
+  vatRate?: unknown
+  fallbackUnit?: number
+  totalGross?: number
+  units?: number | string
+}): PurchasePriceVatValue => {
+  const units =
+    params.units === undefined || params.units === null
+      ? ''
+      : String(params.units)
+  const vatRate = parseIvaRate(params.vatRate) ?? 0
+  if (
+    Number.isFinite(params.totalGross) &&
+    (params.totalGross ?? 0) > 0 &&
+    parsePositiveUnits(units)
+  ) {
+    return syncPurchaseFromTotalGross(
+      formatAmount(Number(params.totalGross)),
+      units,
+      vatRate,
+    )
+  }
+  const unit = unitPriceVatFromStored(params)
+  if (unit.lastEdited === 'gross' && unit.gross.trim()) {
+    return syncPurchaseFromGross(unit.gross, units, unit.vatRate)
+  }
+  if (unit.net.trim()) {
+    return syncPurchaseFromNet(unit.net, units, unit.vatRate)
+  }
+  return emptyPurchasePriceVat(vatRate)
+}
+
+export const toUnitPriceVatValue = (
+  value: PurchasePriceVatValue,
+): UnitPriceVatValue => ({
+  net: value.net,
+  gross: value.gross,
+  vatRate: value.vatRate,
+  lastEdited:
+    value.lastEdited === 'gross' || value.lastEdited === 'totalGross'
+      ? 'gross'
+      : 'net',
+})
+
+export const resolvedPurchasePriceVat = (
+  value: PurchasePriceVatValue,
+  units: string,
+) => {
+  const synced = applyPurchasePriceUnits(value, units)
+  return resolvedUnitPriceVat(toUnitPriceVatValue(synced))
+}
