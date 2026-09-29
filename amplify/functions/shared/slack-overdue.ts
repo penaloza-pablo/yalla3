@@ -21,6 +21,50 @@ const timeToMinutes = (value: string) => {
   return hours * 60 + minutes;
 };
 
+const minutesToClock = (total: number) => {
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+export const SNOOZE_INTERVAL_MINUTES = 15;
+export const SNOOZE_MAX_MINUTES = 60;
+
+export const addClockMinutes = (time: string, minutes: number) => {
+  const start = timeToMinutes(time);
+  if (start === null) {
+    return '';
+  }
+  const next = start + minutes;
+  if (next < 0 || next > 23 * 60 + 59) {
+    return '';
+  }
+  return minutesToClock(next);
+};
+
+export const snoozeTimeOptions = (anchorTime: string) => {
+  const start = timeToMinutes(anchorTime);
+  if (start === null) {
+    return [] as string[];
+  }
+  const times: string[] = [];
+  for (
+    let offset = 0;
+    offset <= SNOOZE_MAX_MINUTES;
+    offset += SNOOZE_INTERVAL_MINUTES
+  ) {
+    const total = start + offset;
+    if (total > 23 * 60 + 59) {
+      break;
+    }
+    times.push(minutesToClock(total));
+  }
+  return times;
+};
+
+export const isAllowedSnoozeTime = (anchorTime: string, selectedTime: string) =>
+  snoozeTimeOptions(anchorTime).includes(selectedTime);
+
 export const isPastOverdueGrace = (options: {
   scheduledDate: string;
   endTime: string;

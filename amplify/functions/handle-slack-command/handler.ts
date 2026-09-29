@@ -14,6 +14,10 @@ import {
   startCleaningFromSlack,
 } from '../shared/slack-cleaning';
 import { normalizeStartTime } from '../shared/cleaning-plan';
+import {
+  addClockMinutes,
+  OVERDUE_GRACE_MINUTES,
+} from '../shared/slack-overdue';
 import { getNowTimeInMadrid } from '../shared/visit-task-utils';
 import {
   decodeHttpBody,
@@ -96,14 +100,16 @@ const handleBlockActions = async (payload: Record<string, unknown>) => {
 
   if (actionId === SNOOZE_ACTION_ID || actionId === START_SNOOZE_ACTION_ID) {
     const visit = await loadVisit(visitsTable, visitId);
+    const scheduledTime = normalizeStartTime(
+      asString(
+        actionId === START_SNOOZE_ACTION_ID
+          ? visit?.scheduledStartTime
+          : visit?.scheduledEndTime,
+      ),
+    );
     const initialTime =
-      normalizeStartTime(
-        asString(
-          actionId === START_SNOOZE_ACTION_ID
-            ? visit?.scheduledStartTime
-            : visit?.scheduledEndTime,
-        ),
-      ) || getNowTimeInMadrid();
+      addClockMinutes(scheduledTime, OVERDUE_GRACE_MINUTES) ||
+      getNowTimeInMadrid();
     await slackApi('views.open', {
       trigger_id: triggerId,
       view: snoozeModalView({
@@ -169,8 +175,12 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
     meta = {};
   }
   const values = asRecord(asRecord(view?.state)?.values);
-  const selectedTime = asString(
-    asRecord(asRecord(values?.end_time)?.scheduled_end_time)?.selected_time,
+  const timeValue = asRecord(asRecord(values?.end_time)?.scheduled_end_time);
+  const selectedTime =
+    asString(asRecord(timeValue?.selected_option)?.value) ||
+    asString(timeValue?.selected_time);
+  const reason = asString(
+    asRecord(asRecord(values?.reason)?.motivo)?.value,
   );
   const result =
     asString(meta.kind) === 'start'
@@ -180,6 +190,8 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
           newStartTime: selectedTime,
           channelId: asString(meta.channelId),
           messageTs: asString(meta.messageTs),
+          reason,
+          anchorTime: asString(meta.anchorTime),
         })
       : await snoozeCleaningFromSlack({
           visitsTable,
@@ -187,6 +199,8 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
           newEndTime: selectedTime,
           channelId: asString(meta.channelId),
           messageTs: asString(meta.messageTs),
+          reason,
+          anchorTime: asString(meta.anchorTime),
         });
   if (!result.ok) {
     return slackJsonResponse(200, {

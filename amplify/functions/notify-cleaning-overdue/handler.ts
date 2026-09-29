@@ -10,6 +10,8 @@ import {
   loadPropertyNickname,
   notStartedCleaningBlocks,
   notStartedCleaningMessage,
+  notStartedMaintenanceBlocks,
+  notStartedMaintenanceMessage,
   overdueCleaningBlocks,
   overdueCleaningMessage,
   overdueLookbackDates,
@@ -355,13 +357,13 @@ export const handler = async (event?: unknown) => {
         teamId,
         teamNames.get(teamId) ?? asString(visit.team),
       );
-      if (teamKind !== 'cleaning') {
+      if (teamKind !== 'cleaning' && teamKind !== 'maintenance') {
         continue;
       }
       const nickname = await loadPropertyNickname(detailsTable, visit);
       const title = asString(visit.title) || nickname;
       const channel = resolveOverdueChannel({
-        teamKind: 'cleaning',
+        teamKind,
         nickname,
         propertyId: asString(visit.propertyId),
         title,
@@ -369,7 +371,7 @@ export const handler = async (event?: unknown) => {
       });
       if (!channel) {
         console.error(
-          `Slack not-started notify skipped for ${visitId}: missing cleaning channel.`,
+          `Slack not-started notify skipped for ${visitId}: missing channel for team ${teamKind}.`,
         );
         continue;
       }
@@ -377,11 +379,16 @@ export const handler = async (event?: unknown) => {
         console.log(
           `Posting not-started ${visitId} to Slack secret key ${channel.key}`,
         );
-        const text = notStartedCleaningMessage(title);
+        const isMaintenance = teamKind === 'maintenance';
+        const text = isMaintenance
+          ? notStartedMaintenanceMessage(title)
+          : notStartedCleaningMessage(title);
         const posted = await slackApi('chat.postMessage', {
           channel: channel.channelId,
           text,
-          blocks: notStartedCleaningBlocks(visitId, title),
+          blocks: isMaintenance
+            ? notStartedMaintenanceBlocks(visitId, title)
+            : notStartedCleaningBlocks(visitId, title),
         });
         const setFields: Record<string, string> = {
           [SLACK_NOT_STARTED_FIELD]: notifyKey,

@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  addClockMinutes,
+  isAllowedSnoozeTime,
   isPastOverdueGrace,
   isPastStartGrace,
   notStartedResolvedInYallaText,
   overdueCompletedInYallaText,
   overdueLookbackDates,
   overdueNotifyKey,
+  snoozeTimeOptions,
 } from './slack-overdue';
 
 test('overdue waits 15 minutes after scheduled end on the same day', () => {
@@ -69,4 +72,19 @@ test('notify key stays unique per visit schedule', () => {
     overdueCompletedInYallaText('Clean Fe'),
     'Clean Fe: esta visita fue completada en Yalla.',
   );
+});
+
+test('postpone options start at the Slack fire time and stop at one hour', () => {
+  assert.equal(addClockMinutes('11:00', 15), '11:15');
+  assert.deepEqual(snoozeTimeOptions('11:15'), [
+    '11:15',
+    '11:30',
+    '11:45',
+    '12:00',
+    '12:15',
+  ]);
+  assert.equal(isAllowedSnoozeTime('11:15', '12:15'), true);
+  assert.equal(isAllowedSnoozeTime('11:15', '12:30'), false);
+  assert.equal(isAllowedSnoozeTime('11:15', '11:00'), false);
+  assert.deepEqual(snoozeTimeOptions('23:45'), ['23:45']);
 });

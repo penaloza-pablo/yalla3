@@ -15,6 +15,15 @@ export const isCleaningVisitType = (visitTypeId?: unknown) => {
   );
 };
 
+export const isMaintenanceVisitType = (visitTypeId?: unknown) => {
+  const id =
+    typeof visitTypeId === 'string' ? visitTypeId.trim().toLowerCase() : '';
+  if (!id) {
+    return false;
+  }
+  return id.includes('maintenance') || id.includes('manten');
+};
+
 export const CLEANING_SETTINGS_ID = 'GLOBAL';
 
 export const isCleaningSettingsRecord = (item: Record<string, unknown>) => {
