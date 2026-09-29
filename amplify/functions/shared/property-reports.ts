@@ -63,6 +63,7 @@ export {
   isIncomeAllocation,
   isLineAllocation,
   parseLineAllocations,
+  parseCleaningMovedToExpenses,
   mergeDefaultLineAllocations,
   toIncomeAllocation,
   type CostAllocation,

@@ -1886,6 +1886,7 @@ backend.getPropertyReport.addEnvironment(
   'PURCHASES_TABLE',
   purchasesTable.tableName,
 );
+backend.getPropertyReport.addEnvironment('REVIEWS_TABLE', reviewsTable.tableName);
 backend.getFinanceMovements.addEnvironment(
   'TABLE_NAME',
   financeMovementsTable.tableName,
@@ -1931,6 +1932,7 @@ propertyReportsTable.grantReadWriteData(
   backend.upsertPropertyReport.resources.lambda,
 );
 bookingsTable.grantReadData(backend.getPropertyReport.resources.lambda);
+reviewsTable.grantReadData(backend.getPropertyReport.resources.lambda);
 backend.getPropertyReport.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: [

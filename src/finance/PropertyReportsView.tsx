@@ -42,6 +42,7 @@ import {
   isIncomeAllocation,
   mergeDefaultLineAllocations,
   parseLineAllocations,
+  parseCleaningMovedToExpenses,
   toIncomeAllocation,
   type LineAllocation,
 } from '../../amplify/functions/shared/property-report-allocations'
@@ -59,6 +60,10 @@ import {
   sumPayoutField,
 } from '../../amplify/functions/shared/property-report-payouts'
 import { computePropertyReportMetrics } from './property-report-metrics'
+import {
+  summarizeReportReviews,
+  type PropertyReportReview,
+} from '../../amplify/functions/shared/property-report-reviews'
 import { YlIcon, YlDisclosureIcon } from '../design/icons'
 
 type Props = {
@@ -214,6 +219,27 @@ const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
 
 const grossFromNet = (net: number, ivaRate: IvaRate) =>
   roundMoney(net + ivaEuroFromNet(net, ivaRate))
+
+const CLEANING_EXPENSE_ORIGIN = 'cleaning'
+
+const isCleaningExpenseLine = (line: ExpenseLine) =>
+  line.origin === CLEANING_EXPENSE_ORIGIN
+
+const expenseRowId = (line: ExpenseLine) =>
+  isCleaningExpenseLine(line) ? `cleaning:${line.id}` : `expense:${line.id}`
+
+const toCleaningExpenseLine = (line: CleaningLine): ExpenseLine => {
+  const net = roundMoney((line.price ?? 0) + (line.kitCost || 0))
+  return {
+    id: line.id,
+    origin: CLEANING_EXPENSE_ORIGIN,
+    itemName: line.cleaningTypeName || '—',
+    date: line.date,
+    amountExclIva: net,
+    amountInclIva: grossFromNet(net, line.ivaRate),
+    ivaRate: line.ivaRate,
+  }
+}
 
 const inferIvaRate = (net: number, gross: number, fallback: IvaRate = 21): IvaRate => {
   if (!Number.isFinite(net) || !Number.isFinite(gross)) {
@@ -465,12 +491,14 @@ export function PropertyReportsView({
   const [months, setMonths] = useState<ReportMonth[]>([])
   const [report, setReport] = useState<ReportMonth | null>(null)
   const [bookings, setBookings] = useState<ReportBooking[]>([])
+  const [reviews, setReviews] = useState<PropertyReportReview[]>([])
   const [cleaningClosed, setCleaningClosed] = useState(false)
   const [maintenanceClosed, setMaintenanceClosed] = useState(false)
   const [cleaningLines, setCleaningLines] = useState<CleaningLine[]>([])
+  const [cleaningMovedToExpenses, setCleaningMovedToExpenses] = useState<
+    string[]
+  >([])
   const [maintenanceLines, setMaintenanceLines] = useState<MaintenanceLine[]>([])
-  const [cleaningTotal, setCleaningTotal] = useState(0)
-  const [cleaningKitCost, setCleaningKitCost] = useState(0)
   const [maintenanceTotal, setMaintenanceTotal] = useState(0)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [incomes, setIncomes] = useState<ExpenseLine[]>([])
@@ -548,15 +576,53 @@ export function PropertyReportsView({
     }),
     [bookings, payoutRows],
   )
+  const reviewTotals = useMemo(
+    () => summarizeReportReviews(reviews),
+    [reviews],
+  )
+  const movedCleaningIdSet = useMemo(
+    () => new Set(cleaningMovedToExpenses),
+    [cleaningMovedToExpenses],
+  )
+  const visibleCleaningLines = useMemo(
+    () =>
+      cleaningLines.filter((line) => !movedCleaningIdSet.has(line.id)),
+    [cleaningLines, movedCleaningIdSet],
+  )
+  const movedCleaningExpenseLines = useMemo(
+    () =>
+      cleaningLines
+        .filter((line) => movedCleaningIdSet.has(line.id))
+        .map(toCleaningExpenseLine),
+    [cleaningLines, movedCleaningIdSet],
+  )
+  const displayExpenses = useMemo(
+    () => [...expenses, ...movedCleaningExpenseLines],
+    [expenses, movedCleaningExpenseLines],
+  )
+  const cleaningNetTotal = useMemo(
+    () =>
+      roundMoney(
+        visibleCleaningLines.reduce((sum, line) => sum + (line.price ?? 0), 0),
+      ),
+    [visibleCleaningLines],
+  )
+  const cleaningKitCost = useMemo(
+    () =>
+      roundMoney(
+        visibleCleaningLines.reduce((sum, line) => sum + (line.kitCost || 0), 0),
+      ),
+    [visibleCleaningLines],
+  )
   const cleaningIvaTotal = useMemo(
     () =>
       roundMoney(
-        cleaningLines.reduce(
+        visibleCleaningLines.reduce(
           (sum, line) => sum + ivaEuroFromNet(line.price ?? 0, line.ivaRate),
           0,
         ),
       ),
-    [cleaningLines],
+    [visibleCleaningLines],
   )
   const maintenanceIvaTotal = useMemo(
     () =>
@@ -571,12 +637,12 @@ export function PropertyReportsView({
   const cleaningGrossTotal = useMemo(
     () =>
       roundMoney(
-        cleaningLines.reduce(
+        visibleCleaningLines.reduce(
           (sum, line) => sum + grossFromNet(line.price ?? 0, line.ivaRate),
           0,
         ),
       ),
-    [cleaningLines],
+    [visibleCleaningLines],
   )
   const maintenanceGrossTotal = useMemo(
     () =>
@@ -600,8 +666,8 @@ export function PropertyReportsView({
     totalCostWithIva: lines.reduce((sum, line) => sum + line.amountInclIva, 0),
   })
   const expenseTotals = useMemo(
-    () => summarizeMoneyLines(expenses),
-    [expenses],
+    () => summarizeMoneyLines(displayExpenses),
+    [displayExpenses],
   )
   const incomeTotals = useMemo(() => summarizeMoneyLines(incomes), [incomes])
   const serviceTotals = useMemo(
@@ -628,6 +694,9 @@ export function PropertyReportsView({
     }
     if (origin === 'purchase') {
       return t('propertyReports.originPurchase')
+    }
+    if (origin === CLEANING_EXPENSE_ORIGIN) {
+      return t('propertyReports.originCleaning')
     }
     return origin
   }
@@ -716,6 +785,7 @@ export function PropertyReportsView({
         months?: Record<string, unknown>[]
         report?: Record<string, unknown>
         bookings?: ReportBooking[]
+        reviews?: PropertyReportReview[]
         cleaning?: {
           closed?: boolean
           lines?: Record<string, unknown>[]
@@ -738,6 +808,7 @@ export function PropertyReportsView({
           lines?: ServiceLine[]
         }
         lineAllocations?: Record<string, unknown>
+        cleaningMovedToExpenses?: unknown
         settings?: Record<string, unknown>
       }>(
         `${endpoints.get}?propertyId=${encodeURIComponent(propertyId)}&month=${encodeURIComponent(monthId)}`,
@@ -745,6 +816,15 @@ export function PropertyReportsView({
       setMonths((payload.months ?? []).map(mapMonth))
       setReport(payload.report ? mapMonth(payload.report) : null)
       setBookings(payload.bookings ?? [])
+      setReviews(
+        (payload.reviews ?? []).map((item) => ({
+          id: String(item.id ?? ''),
+          reservationId: String(item.reservationId ?? ''),
+          guestName: String(item.guestName ?? '—'),
+          status: String(item.status ?? ''),
+          rating: Number(item.rating ?? 0),
+        })),
+      )
       setCleaningClosed(Boolean(payload.cleaning?.closed))
       setMaintenanceClosed(Boolean(payload.maintenance?.closed))
       setCleaningLines(
@@ -774,8 +854,6 @@ export function PropertyReportsView({
           ivaRate: parseIvaRate((item as MaintenanceLine).ivaRate) ?? 21,
         })),
       )
-      setCleaningTotal(Number(payload.cleaning?.total ?? 0))
-      setCleaningKitCost(Number(payload.cleaning?.kitCost ?? 0))
       setMaintenanceTotal(Number(payload.maintenance?.total ?? 0))
       const mapMoneyLine = (item: ExpenseLine): ExpenseLine => ({
         ...item,
@@ -812,6 +890,9 @@ export function PropertyReportsView({
             })),
           ],
         ),
+      )
+      setCleaningMovedToExpenses(
+        parseCleaningMovedToExpenses(payload.cleaningMovedToExpenses),
       )
       if (payload.settings) {
         setReportSettings(
@@ -1030,6 +1111,55 @@ export function PropertyReportsView({
     }
   }
 
+  const persistCleaningMoves = async (nextIds: string[]) => {
+    if (report && isReportFrozen(report.status)) {
+      return
+    }
+    const previous = cleaningMovedToExpenses
+    setCleaningMovedToExpenses(nextIds)
+    setOpenTables((current) => ({ ...current, expenses: true }))
+    if (!endpoints.upsert || !selectedPropertyId || !selectedMonthId) {
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    try {
+      await fetchJson(endpoints.upsert, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: selectedPropertyId,
+          monthId: selectedMonthId,
+          action: 'allocate',
+          lineAllocations,
+          cleaningMovedToExpenses: nextIds,
+        }),
+      })
+    } catch (saveError) {
+      setCleaningMovedToExpenses(previous)
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('propertyReports.saveError'),
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const moveCleaningToExpenses = (lineId: string) => {
+    if (movedCleaningIdSet.has(lineId)) {
+      return
+    }
+    void persistCleaningMoves([...cleaningMovedToExpenses, lineId])
+  }
+
+  const restoreCleaningFromExpenses = (lineId: string) => {
+    void persistCleaningMoves(
+      cleaningMovedToExpenses.filter((id) => id !== lineId),
+    )
+  }
+
   const openMovementForm = (kind: MovementKind) => {
     if (!selectedMonthId) {
       return
@@ -1114,8 +1244,8 @@ export function PropertyReportsView({
   const missingServiceCharges = serviceLines.filter(
     (line) => !isCharged(`service:${line.id}`),
   ).length
-  const missingExpenseCharges = expenses.filter(
-    (line) => !isCharged(`expense:${line.id}`),
+  const missingExpenseCharges = displayExpenses.filter(
+    (line) => !isCharged(expenseRowId(line)),
   ).length
   const missingIncomeCharges = incomes.filter(
     (line) => !isCharged(`income:${line.id}`, 'income'),
@@ -1234,7 +1364,7 @@ export function PropertyReportsView({
         accommodationGross: bookingTotals.accommodationGross,
         accommodationPayoutVat: bookingTotals.accommodationPayoutVat,
         accommodationNet: bookingTotals.accommodationNet,
-        cleaningNet: cleaningTotal,
+        cleaningNet: cleaningNetTotal,
         cleaningKit: cleaningKitCost,
         cleaningIva: cleaningIvaTotal,
         maintenanceNet: maintenanceTotal,
@@ -1246,8 +1376,12 @@ export function PropertyReportsView({
         otherIncomesIva: incomeTotals.totalIva,
         bookingCount: bookingTotals.count,
         nights: bookingTotals.nights,
+        fiveStarReviewCount: reviewTotals.fiveStarReviewCount,
+        underFiveStarReviewCount: reviewTotals.underFiveStarReviewCount,
+        rescuedUnderFiveStarReviewPercent:
+          reviewTotals.rescuedUnderFiveStarReviewPercent,
         allocatedLines: [
-          ...cleaningLines.map((line) => ({
+          ...visibleCleaningLines.map((line) => ({
             section: 'cleaning' as const,
             net: line.price ?? 0,
             iva: ivaEuroFromNet(line.price ?? 0, line.ivaRate),
@@ -1265,11 +1399,11 @@ export function PropertyReportsView({
             iva: ivaEuroFromNet(line.price, line.ivaRate),
             allocation: lineAllocations[`service:${line.id}`] ?? '',
           })),
-          ...expenses.map((line) => ({
+          ...displayExpenses.map((line) => ({
             section: 'expense' as const,
             net: line.amountExclIva,
             iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
-            allocation: lineAllocations[`expense:${line.id}`] ?? '',
+            allocation: lineAllocations[expenseRowId(line)] ?? '',
           })),
           ...incomes.map((line) => ({
             section: 'income' as const,
@@ -1285,10 +1419,9 @@ export function PropertyReportsView({
       bookingTotals,
       cleaningIvaTotal,
       cleaningKitCost,
-      cleaningLines,
-      cleaningTotal,
+      cleaningNetTotal,
+      displayExpenses,
       expenseTotals,
-      expenses,
       incomeTotals,
       incomes,
       lineAllocations,
@@ -1296,8 +1429,10 @@ export function PropertyReportsView({
       maintenanceLines,
       maintenanceTotal,
       reportSettings,
+      reviewTotals,
       serviceLines,
       serviceTotals,
+      visibleCleaningLines,
     ],
   )
 
@@ -1476,10 +1611,15 @@ export function PropertyReportsView({
                   </tr>
                 ) : (
                   lines.map((line) => {
-                    const rowId = `${rowPrefix}:${line.id}`
+                    const rowId =
+                      tableKey === 'expenses'
+                        ? expenseRowId(line)
+                        : `${rowPrefix}:${line.id}`
                     const isExpanded = expandedRowIds.has(rowId)
+                    const fromCleaning =
+                      tableKey === 'expenses' && isCleaningExpenseLine(line)
                     return (
-                      <Fragment key={`${tableKey}-${line.id}`}>
+                      <Fragment key={`${tableKey}-${line.origin}-${line.id}`}>
                         <tr
                           className={
                             isCharged(
@@ -1523,9 +1663,31 @@ export function PropertyReportsView({
                                   },
                                 ]}
                                 onChange={(ivaRate) =>
-                                  updateLineIva(setLines, line.id, ivaRate)
+                                  fromCleaning
+                                    ? setCleaningLines((current) =>
+                                        current.map((entry) =>
+                                          entry.id === line.id
+                                            ? { ...entry, ivaRate }
+                                            : entry,
+                                        ),
+                                      )
+                                    : updateLineIva(setLines, line.id, ivaRate)
                                 }
                               />
+                              {fromCleaning ? (
+                                <div className="report-detail-actions">
+                                  <button
+                                    type="button"
+                                    className="btn-ghost report-row-text-action"
+                                    disabled={allocationsLocked}
+                                    onClick={() =>
+                                      restoreCleaningFromExpenses(line.id)
+                                    }
+                                  >
+                                    {t('propertyReports.moveExpenseToCleaning')}
+                                  </button>
+                                </div>
+                              ) : null}
                             </td>
                           </tr>
                         ) : null}
@@ -1649,11 +1811,13 @@ export function PropertyReportsView({
                     setSelectedMonthId('')
                     setReport(null)
                     setBookings([])
+                    setReviews([])
                     setExpenses([])
                     setIncomes([])
                     setServiceLines([])
                     setMovementDraft(null)
                     setLineAllocations({})
+                    setCleaningMovedToExpenses([])
                     setIsClosedReportOpen(false)
                     return
                   }
@@ -1874,7 +2038,7 @@ export function PropertyReportsView({
               accommodationPayoutVat: row.accommodationPayoutVat ?? 0,
               accommodationNet: row.accommodationNet ?? 0,
             })),
-            cleaning: cleaningLines.map((line) => ({
+            cleaning: visibleCleaningLines.map((line) => ({
               id: line.id,
               title: line.cleaningTypeName || '—',
               net: line.price ?? 0,
@@ -1896,12 +2060,12 @@ export function PropertyReportsView({
               iva: ivaEuroFromNet(line.price, line.ivaRate),
               allocation: lineAllocations[`service:${line.id}`] ?? '',
             })),
-            expenses: expenses.map((line) => ({
-              id: line.id,
+            expenses: displayExpenses.map((line) => ({
+              id: `${line.origin}:${line.id}`,
               title: line.itemName || '—',
               net: line.amountExclIva,
               iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
-              allocation: lineAllocations[`expense:${line.id}`] ?? '',
+              allocation: lineAllocations[expenseRowId(line)] ?? '',
             })),
             incomes: incomes.map((line) => ({
               id: line.id,
@@ -1910,6 +2074,7 @@ export function PropertyReportsView({
               iva: ivaEuroFromNet(line.amountExclIva, line.ivaRate),
               allocation: lineAllocations[`income:${line.id}`] ?? '',
             })),
+            reviews,
             settings: reportSettings,
           }}
         />
@@ -2128,11 +2293,11 @@ export function PropertyReportsView({
                     <p className="card-label">
                       {t('propertyReports.cleaningsCount')}
                     </p>
-                    <p className="card-value">{cleaningLines.length}</p>
+                    <p className="card-value">{visibleCleaningLines.length}</p>
                   </div>
                   <div className="report-metric">
                     <p className="card-label">{t('propertyReports.net')}</p>
-                    <p className="card-value">{money.format(cleaningTotal)}</p>
+                    <p className="card-value">{money.format(cleaningNetTotal)}</p>
                   </div>
                   <div className="report-metric">
                     <p className="card-label">{t('propertyReports.iva')}</p>
@@ -2188,12 +2353,12 @@ export function PropertyReportsView({
                     </tr>
                   </thead>
                   <tbody>
-                    {cleaningLines.length === 0 ? (
+                    {visibleCleaningLines.length === 0 ? (
                       <tr>
                         <td colSpan={6}>{t('propertyReports.emptyCleaning')}</td>
                       </tr>
                     ) : (
-                      cleaningLines.map((line) => {
+                      visibleCleaningLines.map((line) => {
                         const rowId = `cleaning:${line.id}`
                         const isExpanded = expandedRowIds.has(rowId)
                         return (
@@ -2237,6 +2402,18 @@ export function PropertyReportsView({
                                       )
                                     }
                                   />
+                                  <div className="report-detail-actions">
+                                    <button
+                                      type="button"
+                                      className="btn-ghost report-row-text-action"
+                                      disabled={allocationsLocked}
+                                      onClick={() =>
+                                        moveCleaningToExpenses(line.id)
+                                      }
+                                    >
+                                      {t('propertyReports.moveCleaningToExpenses')}
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ) : null}
@@ -2520,7 +2697,7 @@ export function PropertyReportsView({
 
           {renderMoneyLinesCard(
             'expenses',
-            expenses,
+            displayExpenses,
             expenseTotals,
             setExpenses,
           )}

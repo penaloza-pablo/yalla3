@@ -33,6 +33,7 @@ import {
   isReportableMonth,
   listProperties,
   parseLineAllocations,
+  parseCleaningMovedToExpenses,
   previousReportStatus,
   reportScopeForProperty,
   resolveReportProperty,
@@ -67,6 +68,7 @@ type Payload = {
   accommodationVat?: number | string | null;
   airbnbFeePercent?: number | string | null;
   visibility?: unknown;
+  cleaningMovedToExpenses?: unknown;
   conditions?: unknown[];
   marketManagementFee?: number | string | null;
 };
@@ -362,6 +364,9 @@ export const handler = async (event: {
 
   let nextStatus: PropertyReportStatus = currentStatus;
   let nextAllocations = parseLineAllocations(existing?.lineAllocations);
+  let nextCleaningMovedToExpenses = parseCleaningMovedToExpenses(
+    existing?.cleaningMovedToExpenses,
+  );
   if (action === 'ready') {
     if (currentStatus !== 'IN_PROGRESS') {
       return buildHttpResponse(400, {
@@ -422,6 +427,11 @@ export const handler = async (event: {
       });
     }
     nextAllocations = parseLineAllocations(payload.lineAllocations);
+    if (payload.cleaningMovedToExpenses !== undefined) {
+      nextCleaningMovedToExpenses = parseCleaningMovedToExpenses(
+        payload.cleaningMovedToExpenses,
+      );
+    }
   } else {
     return buildHttpResponse(400, {
       message:
@@ -436,6 +446,7 @@ export const handler = async (event: {
     monthId,
     status: nextStatus,
     lineAllocations: nextAllocations,
+    cleaningMovedToExpenses: nextCleaningMovedToExpenses,
     updatedAt: timestamp,
   };
   if (nextStatus === 'READY_TO_PUBLISH' || nextStatus === 'PUBLISHED') {

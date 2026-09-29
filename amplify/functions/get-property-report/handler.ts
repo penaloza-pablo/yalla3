@@ -25,6 +25,7 @@ import {
   mapReportBooking,
   mergeDefaultLineAllocations,
   parseLineAllocations,
+  parseCleaningMovedToExpenses,
   payoutOverrideReservationIdsForMonth,
   payoutReportMonthOverride,
   queryBookingsByCheckInDate,
@@ -35,6 +36,8 @@ import {
   resolveReportProperty,
   roundMoney,
 } from '../shared/property-reports';
+import { reviewsForReservationIds } from '../shared/property-report-reviews';
+import { scanReviewsForReport } from '../shared/property-report-reviews-store';
 import {
   fetchGuestyReservation,
   loadGuestyClient,
@@ -57,6 +60,7 @@ const loadPayoutBookings = async (
   monthId: string,
 ) => {
   const seen = new Set<string>();
+  const monthReservationIds = new Set<string>();
   const candidates: Array<{
     item: Record<string, unknown>;
     reservation: Record<string, unknown> | null;
@@ -66,11 +70,6 @@ const loadPayoutBookings = async (
     for (const summary of page) {
       const reservationId = asString(summary.ReservationID);
       if (!reservationId || seen.has(reservationId)) {
-        continue;
-      }
-      const overrideMonth = payoutReportMonthOverride(reservationId);
-      if (overrideMonth && overrideMonth !== monthId) {
-        seen.add(reservationId);
         continue;
       }
       const listingKnown =
@@ -87,6 +86,11 @@ const loadPayoutBookings = async (
       const item =
         (await getBookingById(bookingsTable, reservationId)) ?? summary;
       if (!listingMatchesProperty(item, property)) {
+        continue;
+      }
+      monthReservationIds.add(reservationId);
+      const overrideMonth = payoutReportMonthOverride(reservationId);
+      if (overrideMonth && overrideMonth !== monthId) {
         continue;
       }
       candidates.push({
@@ -134,7 +138,7 @@ const loadPayoutBookings = async (
     }
     return left.bookingId.localeCompare(right.bookingId);
   });
-  return bookings;
+  return { bookings, monthReservationIds };
 };
 
 export const handler = async (event: HttpEvent) => {
@@ -162,6 +166,7 @@ export const handler = async (event: HttpEvent) => {
   const movementsTable = process.env.MOVEMENTS_TABLE;
   const servicesTable = process.env.SERVICES_TABLE;
   const purchasesTable = process.env.PURCHASES_TABLE;
+  const reviewsTable = process.env.REVIEWS_TABLE;
 
   if (
     !reportsTable ||
@@ -267,13 +272,14 @@ export const handler = async (event: HttpEvent) => {
     const storedLineAllocations = parseLineAllocations(stored?.lineAllocations);
 
     const [
-      bookings,
+      payoutResult,
       cleaningDetail,
       maintenanceDetail,
       subtractionExpenses,
       financeMovements,
       serviceLines,
       purchaseExpenses,
+      reviewItems,
     ] = await Promise.all([
       loadPayoutBookings(bookingsTable, property, monthId),
       buildCleaningMonthDetail({
@@ -300,7 +306,16 @@ export const handler = async (event: HttpEvent) => {
       loadFinanceMovements(movementsTable, property, monthId),
       loadFinanceServices(servicesTable, property, monthId),
       loadDirectPurchases(purchasesTable, property, monthId),
+      reviewsTable
+        ? scanReviewsForReport(reviewsTable)
+        : Promise.resolve([] as Record<string, unknown>[]),
     ]);
+
+    const { bookings, monthReservationIds } = payoutResult;
+    const reviews = reviewsForReservationIds(
+      reviewItems,
+      monthReservationIds,
+    );
 
     const expenses = [
       ...subtractionExpenses,
@@ -357,7 +372,11 @@ export const handler = async (event: HttpEvent) => {
       report,
       settings: await loadSettings(),
       lineAllocations,
+      cleaningMovedToExpenses: parseCleaningMovedToExpenses(
+        stored?.cleaningMovedToExpenses,
+      ),
       bookings,
+      reviews,
       cleaning: {
         status: cleaningDetail.month.status,
         closed: cleaningClosed,

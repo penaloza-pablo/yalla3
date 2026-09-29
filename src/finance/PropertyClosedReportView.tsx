@@ -34,8 +34,16 @@ const TAB_ICONS: Record<ReportTabId, YlIconName> = {
   owner: 'person.crop.circle',
 }
 
-const COUNT_IDS = new Set(['bookingCount', 'nights'])
-const PERCENT_IDS = new Set(['marketManagementFee'])
+const COUNT_IDS = new Set([
+  'bookingCount',
+  'nights',
+  'fiveStarReviewCount',
+  'underFiveStarReviewCount',
+])
+const PERCENT_IDS = new Set([
+  'marketManagementFee',
+  'rescuedUnderFiveStarReviewPercent',
+])
 const CARD_DRAG_MIME = 'application/x-yalla-report-metric'
 
 const formatMetric = (

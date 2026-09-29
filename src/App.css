@@ -1801,6 +1801,16 @@ button.today-card {
   gap: 8px;
 }
 
+.report-row-text-action {
+  white-space: nowrap;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+}
+
+.report-detail-actions {
+  margin-top: 12px;
+}
+
 .data-table tr.is-charge-missing td {
   background: #fffcf5;
 }

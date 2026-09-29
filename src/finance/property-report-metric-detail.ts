@@ -1,5 +1,10 @@
 import type { LineAllocation } from '../../amplify/functions/shared/property-report-allocations'
 import {
+  isFiveStarReview,
+  isRescuedReview,
+  type PropertyReportReview,
+} from '../../amplify/functions/shared/property-report-reviews'
+import {
   resolveMarketManagementFee,
   resolveMarkupPercent,
   type PropertyReportSettings,
@@ -60,6 +65,7 @@ export type MetricDetailSources = {
   services: MetricDetailAllocatedLine[]
   expenses: MetricDetailAllocatedLine[]
   incomes: MetricDetailAllocatedLine[]
+  reviews: PropertyReportReview[]
   settings?: PropertyReportSettings | null
 }
 
@@ -105,6 +111,16 @@ const allocatedRows = (
     amount: roundMoney(amount(line)),
   }))
 
+const reviewRows = (
+  reviews: PropertyReportReview[],
+  match: (row: PropertyReportReview) => boolean,
+): MetricDetailRow[] =>
+  reviews.filter(match).map((row) => ({
+    id: row.id,
+    title: row.guestName,
+    amount: 1,
+  }))
+
 const section = (
   id: string,
   titleKey: string,
@@ -126,6 +142,7 @@ export const buildMetricDetailSections = (
   const servicesName = 'propertyReports.servicesTitle'
   const expensesName = 'propertyReports.expensesTitle'
   const incomesName = 'propertyReports.incomesTitle'
+  const reviewsName = 'propertyReports.reviewsTitle'
 
   const markupAmount = (net: number) => roundMoney(net * markupRate)
 
@@ -142,6 +159,35 @@ export const buildMetricDetailSections = (
           payoutRows(sources.payouts, (row) =>
             row.nights > 0 ? roundMoney(row.guestPay / row.nights) : 0,
           ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'fiveStarReviewCount':
+      return [
+        section(
+          reviewsName,
+          reviewsName,
+          reviewRows(sources.reviews ?? [], (row) =>
+            isFiveStarReview(row.status, row.rating),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'underFiveStarReviewCount':
+      return [
+        section(
+          reviewsName,
+          reviewsName,
+          reviewRows(
+            sources.reviews ?? [],
+            (row) => !isFiveStarReview(row.status, row.rating),
+          ),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'rescuedUnderFiveStarReviewPercent':
+      return [
+        section(
+          reviewsName,
+          reviewsName,
+          reviewRows(sources.reviews ?? [], (row) => isRescuedReview(row.status)),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'channelFee':

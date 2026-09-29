@@ -51,6 +51,9 @@ export type PropertyReportMetricInputs = {
   otherIncomesIva: number
   bookingCount: number
   nights: number
+  fiveStarReviewCount: number
+  underFiveStarReviewCount: number
+  rescuedUnderFiveStarReviewPercent: number
   allocatedLines: AllocatedReportLine[]
 }
 
@@ -220,6 +223,25 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     unit: 'money',
     role: 'indicator',
     formula: 'paidByGuest / nights',
+  },
+  {
+    id: 'fiveStarReviewCount',
+    unit: 'count',
+    role: 'indicator',
+    formula: 'count(reviews where status = 5 stars)',
+  },
+  {
+    id: 'underFiveStarReviewCount',
+    unit: 'count',
+    role: 'indicator',
+    formula: 'count(reviews where status != 5 stars)',
+  },
+  {
+    id: 'rescuedUnderFiveStarReviewPercent',
+    unit: 'percent',
+    role: 'indicator',
+    formula:
+      'count(reviews where status = Closed - Review deleted) / underFiveStarReviewCount',
   },
   {
     id: 'managementFee',
@@ -544,6 +566,10 @@ export const computePropertyReportMetrics = (
   const nights = inputs.nights
   const averageRatePerNight =
     nights > 0 ? roundMoney(roundMoney(inputs.paidByGuest) / nights) : 0
+  const fiveStarReviewCount = inputs.fiveStarReviewCount
+  const underFiveStarReviewCount = inputs.underFiveStarReviewCount
+  const rescuedUnderFiveStarReviewPercent =
+    inputs.rescuedUnderFiveStarReviewPercent
   const formulaValues = {
     paidByGuest: roundMoney(inputs.paidByGuest),
     channelFee,
@@ -572,6 +598,9 @@ export const computePropertyReportMetrics = (
     bookingCount: inputs.bookingCount,
     nights,
     averageRatePerNight,
+    fiveStarReviewCount,
+    underFiveStarReviewCount,
+    rescuedUnderFiveStarReviewPercent,
     income,
     cleaningMargin,
     maintenance: roundMoney(inputs.maintenanceNet),
@@ -676,6 +705,9 @@ export const computePropertyReportMetrics = (
     bookingCount: inputs.bookingCount,
     nights,
     averageRatePerNight,
+    fiveStarReviewCount,
+    underFiveStarReviewCount,
+    rescuedUnderFiveStarReviewPercent,
     fixedRent: roundMoney(settings?.fixedRent ?? 0),
   }
 }

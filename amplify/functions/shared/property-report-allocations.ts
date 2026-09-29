@@ -66,6 +66,25 @@ export const parseLineAllocations = (value: unknown) => {
   return next;
 };
 
+export const parseIdList = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const entry of value) {
+    const id = String(entry ?? '').trim();
+    if (!id || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    next.push(id);
+  }
+  return next;
+};
+
+export const parseCleaningMovedToExpenses = parseIdList;
+
 export const mergeDefaultLineAllocations = (
   stored: Record<string, LineAllocation>,
   lines: { rowId: string; allocation?: string }[],
