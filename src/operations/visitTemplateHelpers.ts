@@ -87,6 +87,20 @@ export const activeTemplatesForProperty = (
     (template) => template.active && templateMatchesProperty(template, propertyId),
   )
 
+export const templatesForPropertyAndVisitType = (
+  templates: VisitTemplateRecord[],
+  propertyId: string,
+  visitTypeId: string,
+) => {
+  const typeId = visitTypeId.trim()
+  if (!propertyId.trim() || !typeId) {
+    return []
+  }
+  return activeTemplatesForProperty(templates, propertyId).filter(
+    (template) => template.visitTypeId === typeId,
+  )
+}
+
 export const templateTasksToDrafts = (
   template: VisitTemplateRecord,
 ): VisitDraftTask[] =>

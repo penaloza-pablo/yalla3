@@ -74,6 +74,7 @@ import {
   emptyDraftTask,
   taskRecordToDraft,
   templateTasksToDrafts,
+  templatesForPropertyAndVisitType,
 } from './visitTemplateHelpers'
 import {
   addDaysToDateString,
@@ -517,7 +518,10 @@ export function DailyOperationsView({
   const [propertyTemplates, setPropertyTemplates] = useState<VisitTemplateRecord[]>(
     [],
   )
+  const [loadedTemplatePropertyId, setLoadedTemplatePropertyId] = useState('')
+  const [createTemplatesLoading, setCreateTemplatesLoading] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const createTemplateFilterKeyRef = useRef('')
   const [draftVisitTasks, setDraftVisitTasks] = useState<VisitDraftTask[]>([])
   const [editVisitTaskIds, setEditVisitTaskIds] = useState<string[]>([])
   const [editingDraftIndex, setEditingDraftIndex] = useState<number | null>(null)
@@ -1460,10 +1464,13 @@ export function DailyOperationsView({
   const openCreateVisit = () => {
     setVisitForm(emptyVisitForm())
     setSelectedTemplateId('')
+    createTemplateFilterKeyRef.current = ''
     setDraftVisitTasks([])
     setEditVisitTaskIds([])
     setEditingDraftIndex(null)
     setPropertyTemplates([])
+    setLoadedTemplatePropertyId('')
+    setCreateTemplatesLoading(false)
     setIsVisitFormOpen(true)
   }
 
@@ -1485,10 +1492,13 @@ export function DailyOperationsView({
       scheduledDate,
     })
     setSelectedTemplateId('')
+    createTemplateFilterKeyRef.current = ''
     setDraftVisitTasks([])
     setEditVisitTaskIds([])
     setEditingDraftIndex(null)
     setPropertyTemplates([])
+    setLoadedTemplatePropertyId('')
+    setCreateTemplatesLoading(false)
     setIsVisitFormOpen(true)
   }
 
@@ -1501,11 +1511,11 @@ export function DailyOperationsView({
     setAgendaAnchorDate((current) => addDaysToDateString(current, deltaDays))
   }
 
-  const applyVisitTemplate = (template: VisitTemplateRecord) => {
+  const applyVisitTemplate = useCallback((template: VisitTemplateRecord) => {
     setVisitForm((current) => ({
       ...current,
-      propertyId: template.propertyId,
-      visitTypeId: template.visitTypeId,
+      propertyId: current.propertyId || template.propertyId,
+      visitTypeId: current.visitTypeId || template.visitTypeId,
       teamId: template.teamId,
       assignedUserId: template.assignedUserId,
       scheduledStartTime: template.scheduledStartTime,
@@ -1519,7 +1529,7 @@ export function DailyOperationsView({
     }))
     setDraftVisitTasks(templateTasksToDrafts(template))
     setEditingDraftIndex(null)
-  }
+  }, [])
 
   const applyTemplateToSelectedVisit = async () => {
     if (!selectedVisit || !openVisitTemplateId || !endpoints.upsertVisit) {
@@ -1592,19 +1602,39 @@ export function DailyOperationsView({
     const property = propertyOptions.find(
       (entry) => entry.id === visitForm.propertyId,
     )
+    const generatedTitle = visitTypeId
+      ? `${visitType?.name ?? 'Visit'} - ${
+          property ? getPropertyLabel(property) : 'Property'
+        }`
+      : ''
+    if (isCreatingVisit) {
+      setSelectedTemplateId('')
+      setDraftVisitTasks([])
+      setEditingDraftIndex(null)
+    }
     setVisitForm((current) => ({
       ...current,
       visitTypeId,
-      teamId: resolveTeamIdForVisitType(visitType, teams, current.teamId),
+      teamId: resolveTeamIdForVisitType(
+        visitType,
+        teams,
+        isCreatingVisit ? '' : current.teamId,
+      ),
       estimatedDurationMinutes: visitType?.defaultDurationMinutes
         ? String(visitType.defaultDurationMinutes)
-        : current.estimatedDurationMinutes,
+        : isCreatingVisit
+          ? ''
+          : current.estimatedDurationMinutes,
       appliesToHourBank: visitType?.appliesToHourBank ?? current.appliesToHourBank,
-      title:
-        current.title.trim() ||
-        `${visitType?.name ?? 'Visit'} - ${
-          property ? getPropertyLabel(property) : 'Property'
-        }`,
+      title: isCreatingVisit ? generatedTitle : current.title.trim() || generatedTitle,
+      ...(isCreatingVisit
+        ? {
+            description: '',
+            assignedUserId: '',
+            scheduledStartTime: '11:00',
+            scheduledEndTime: '12:00',
+          }
+        : {}),
     }))
   }
 
@@ -2350,22 +2380,111 @@ export function DailyOperationsView({
       !templatesEndpoint
     ) {
       setPropertyTemplates([])
+      setLoadedTemplatePropertyId('')
+      setCreateTemplatesLoading(false)
       return
     }
-    void getVisitTemplatesForProperty(templatesEndpoint, visitForm.propertyId)
+    let cancelled = false
+    const propertyId = visitForm.propertyId
+    setCreateTemplatesLoading(true)
+    void getVisitTemplatesForProperty(templatesEndpoint, propertyId)
       .then((items) => {
+        if (cancelled) {
+          return
+        }
         setPropertyTemplates(items)
+        setLoadedTemplatePropertyId(propertyId)
       })
       .catch(() => {
+        if (cancelled) {
+          return
+        }
         setPropertyTemplates([])
+        setLoadedTemplatePropertyId(propertyId)
         setError(t('operations.unableLoadTemplates'))
       })
+      .finally(() => {
+        if (!cancelled) {
+          setCreateTemplatesLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [
     endpoints.visitTemplates,
     isCreatingVisit,
     isVisitFormOpen,
     t,
     visitForm.propertyId,
+  ])
+
+  const createTemplatesReady =
+    isCreatingVisit &&
+    Boolean(visitForm.propertyId) &&
+    Boolean(visitForm.visitTypeId) &&
+    loadedTemplatePropertyId === visitForm.propertyId &&
+    !createTemplatesLoading
+
+  const createVisitTemplates = useMemo(
+    () =>
+      createTemplatesReady
+        ? templatesForPropertyAndVisitType(
+            propertyTemplates,
+            visitForm.propertyId,
+            visitForm.visitTypeId,
+          )
+        : [],
+    [
+      createTemplatesReady,
+      propertyTemplates,
+      visitForm.propertyId,
+      visitForm.visitTypeId,
+    ],
+  )
+
+  useEffect(() => {
+    if (!isVisitFormOpen || !isCreatingVisit) {
+      createTemplateFilterKeyRef.current = ''
+      return
+    }
+    if (!visitForm.propertyId || !visitForm.visitTypeId || !createTemplatesReady) {
+      if (!visitForm.propertyId || !visitForm.visitTypeId) {
+        createTemplateFilterKeyRef.current = ''
+      }
+      return
+    }
+    const filterKey = `${visitForm.propertyId}\0${visitForm.visitTypeId}`
+    if (createTemplateFilterKeyRef.current !== filterKey) {
+      createTemplateFilterKeyRef.current = filterKey
+      const onlyTemplate = createVisitTemplates[0]
+      if (createVisitTemplates.length === 1 && onlyTemplate) {
+        setSelectedTemplateId(onlyTemplate.id)
+        applyVisitTemplate(onlyTemplate)
+      } else {
+        setSelectedTemplateId('')
+        setDraftVisitTasks([])
+        setEditingDraftIndex(null)
+      }
+      return
+    }
+    if (
+      selectedTemplateId &&
+      !createVisitTemplates.some((template) => template.id === selectedTemplateId)
+    ) {
+      setSelectedTemplateId('')
+      setDraftVisitTasks([])
+      setEditingDraftIndex(null)
+    }
+  }, [
+    applyVisitTemplate,
+    createTemplatesReady,
+    createVisitTemplates,
+    isCreatingVisit,
+    isVisitFormOpen,
+    selectedTemplateId,
+    visitForm.propertyId,
+    visitForm.visitTypeId,
   ])
 
   useEffect(() => {
@@ -3397,14 +3516,38 @@ export function DailyOperationsView({
                 <select
                   value={visitForm.propertyId}
                   onChange={(event) => {
+                    const propertyId = event.target.value
                     setSelectedTemplateId('')
                     if (isCreatingVisit) {
                       setDraftVisitTasks([])
+                      setEditingDraftIndex(null)
                     }
-                    setVisitForm((c) => ({
-                      ...c,
-                      propertyId: event.target.value,
-                    }))
+                    setVisitForm((current) => {
+                      if (!isCreatingVisit) {
+                        return { ...current, propertyId }
+                      }
+                      const visitType = visitTypes.find(
+                        (entry) => entry.id === current.visitTypeId,
+                      )
+                      const property = propertyOptions.find(
+                        (entry) => entry.id === propertyId,
+                      )
+                      return {
+                        ...current,
+                        propertyId,
+                        assignedUserId: '',
+                        description: '',
+                        scheduledStartTime: '11:00',
+                        scheduledEndTime: '12:00',
+                        estimatedDurationMinutes: visitType?.defaultDurationMinutes
+                          ? String(visitType.defaultDurationMinutes)
+                          : '',
+                        title:
+                          current.visitTypeId && property
+                            ? `${visitType?.name ?? 'Visit'} - ${getPropertyLabel(property)}`
+                            : '',
+                      }
+                    })
                   }}
                 >
                   <option value="">{t('templateAutoAssign.selectProperty')}</option>
@@ -3415,33 +3558,6 @@ export function DailyOperationsView({
                   ))}
                 </select>
               </label>
-              {isCreatingVisit && visitForm.propertyId ? (
-                <label>
-                  {t('operations.useTemplate')}
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(event) => {
-                      const templateId = event.target.value
-                      setSelectedTemplateId(templateId)
-                      const template = propertyTemplates.find(
-                        (entry) => entry.id === templateId,
-                      )
-                      if (template) {
-                        applyVisitTemplate(template)
-                      } else {
-                        setDraftVisitTasks([])
-                      }
-                    }}
-                  >
-                    <option value="">{t('operations.noTemplate')}</option>
-                    {propertyTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
               <label>
                 {t('operations.visitType')}
                 <select
@@ -3456,6 +3572,34 @@ export function DailyOperationsView({
                   ))}
                 </select>
               </label>
+              {createVisitTemplates.length > 0 ? (
+                <label>
+                  {t('operations.useTemplate')}
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(event) => {
+                      const templateId = event.target.value
+                      setSelectedTemplateId(templateId)
+                      const template = createVisitTemplates.find(
+                        (entry) => entry.id === templateId,
+                      )
+                      if (template) {
+                        applyVisitTemplate(template)
+                      } else {
+                        setDraftVisitTasks([])
+                        setEditingDraftIndex(null)
+                      }
+                    }}
+                  >
+                    <option value="">{t('operations.noTemplate')}</option>
+                    {createVisitTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label>
                 {t('common.date')}
                 <input
