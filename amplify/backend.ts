@@ -64,6 +64,8 @@ import { getFinanceMovements } from './functions/get-finance-movements/resource'
 import { upsertFinanceMovement } from './functions/upsert-finance-movement/resource';
 import { getFinanceServices } from './functions/get-finance-services/resource';
 import { upsertFinanceService } from './functions/upsert-finance-service/resource';
+import { getFinanceHistoric } from './functions/get-finance-historic/resource';
+import { upsertFinanceHistoricEvent } from './functions/upsert-finance-historic-event/resource';
 import { upsertVisitType } from './functions/upsert-visit-type/resource';
 import { proxyGuestyListings } from './functions/proxy-guesty-listings/resource';
 import { proxyGuestyReviewsSync } from './functions/proxy-guesty-reviews-sync/resource';
@@ -151,6 +153,8 @@ const backend = defineBackend({
   upsertFinanceMovement,
   getFinanceServices,
   upsertFinanceService,
+  getFinanceHistoric,
+  upsertFinanceHistoricEvent,
   upsertVisitType,
   proxyGuestyListings,
   proxyGuestyReviewsSync,
@@ -370,6 +374,13 @@ financeServicesTable.addGlobalSecondaryIndex({
   indexName: 'propertyId-index',
   partitionKey: { name: 'propertyId', type: AttributeType.STRING },
   projectionType: ProjectionType.ALL,
+});
+const financeHistoricTable = new Table(dataStack, 'FinanceHistoricTable', {
+  tableName: 'yalla-finance-historic',
+  partitionKey: { name: 'propertyId', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
 });
 const inventoryBucket = Bucket.fromBucketName(
   dataStack,
@@ -1911,6 +1922,38 @@ backend.upsertFinanceService.addEnvironment(
   'PROPERTIES_TABLE',
   propertiesTable.tableName,
 );
+backend.getFinanceHistoric.addEnvironment(
+  'TABLE_NAME',
+  financeHistoricTable.tableName,
+);
+backend.getFinanceHistoric.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
+backend.getFinanceHistoric.addEnvironment(
+  'BOOKINGS_TABLE',
+  bookingsTable.tableName,
+);
+backend.getFinanceHistoric.addEnvironment(
+  'REVIEWS_TABLE',
+  reviewsTable.tableName,
+);
+backend.getFinanceHistoric.addEnvironment(
+  'REPORTS_TABLE',
+  propertyReportsTable.tableName,
+);
+backend.upsertFinanceHistoricEvent.addEnvironment(
+  'TABLE_NAME',
+  financeHistoricTable.tableName,
+);
+backend.upsertFinanceHistoricEvent.addEnvironment(
+  'PROPERTIES_TABLE',
+  propertiesTable.tableName,
+);
+backend.upsertPropertyReport.addEnvironment(
+  'HISTORIC_TABLE',
+  financeHistoricTable.tableName,
+);
 backend.upsertPropertyReport.addEnvironment(
   'TABLE_NAME',
   propertyReportsTable.tableName,
@@ -2004,6 +2047,20 @@ financeServicesTable.grantReadWriteData(
   backend.upsertFinanceService.resources.lambda,
 );
 propertiesTable.grantReadData(backend.upsertFinanceService.resources.lambda);
+financeHistoricTable.grantReadData(backend.getFinanceHistoric.resources.lambda);
+financeHistoricTable.grantReadWriteData(
+  backend.upsertFinanceHistoricEvent.resources.lambda,
+);
+financeHistoricTable.grantReadWriteData(
+  backend.upsertPropertyReport.resources.lambda,
+);
+propertiesTable.grantReadData(backend.getFinanceHistoric.resources.lambda);
+propertiesTable.grantReadData(
+  backend.upsertFinanceHistoricEvent.resources.lambda,
+);
+bookingsTable.grantReadData(backend.getFinanceHistoric.resources.lambda);
+reviewsTable.grantReadData(backend.getFinanceHistoric.resources.lambda);
+propertyReportsTable.grantReadData(backend.getFinanceHistoric.resources.lambda);
 
 maintenanceProvidersTable.grantReadWriteData(
   backend.getMaintenanceProviders.resources.lambda,
@@ -2323,6 +2380,14 @@ const upsertFinanceServiceUrl =
   backend.upsertFinanceService.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
+const getFinanceHistoricUrl =
+  backend.getFinanceHistoric.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
+const upsertFinanceHistoricEventUrl =
+  backend.upsertFinanceHistoricEvent.resources.lambda.addFunctionUrl({
+    authType: FunctionUrlAuthType.NONE,
+  });
 const upsertVisitTypeUrl = backend.upsertVisitType.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -2513,6 +2578,8 @@ backend.addOutput({
     upsertFinanceMovementUrl: upsertFinanceMovementUrl.url,
     getFinanceServicesUrl: getFinanceServicesUrl.url,
     upsertFinanceServiceUrl: upsertFinanceServiceUrl.url,
+    getFinanceHistoricUrl: getFinanceHistoricUrl.url,
+    upsertFinanceHistoricEventUrl: upsertFinanceHistoricEventUrl.url,
     upsertVisitTypeUrl: upsertVisitTypeUrl.url,
     proxyGuestyListingsUrl: proxyGuestyListingsUrl.url,
     proxyGuestyReviewsSyncUrl: proxyGuestyReviewsSyncUrl.url,

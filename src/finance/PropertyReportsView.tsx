@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   IVA_RATES,
@@ -521,6 +521,7 @@ export function PropertyReportsView({
     useState<PropertyReportSettings | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const historicMetricsRef = useRef<Record<string, number> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [openTables, setOpenTables] = useState({
@@ -1061,6 +1062,9 @@ export function PropertyReportsView({
           propertyId: selectedPropertyId,
           monthId: selectedMonthId,
           action,
+          ...(action === 'close' && historicMetricsRef.current
+            ? { historicMetrics: historicMetricsRef.current }
+            : {}),
         }),
       })
       if (action === 'reopen') {
@@ -1435,6 +1439,7 @@ export function PropertyReportsView({
       visibleCleaningLines,
     ],
   )
+  historicMetricsRef.current = closedReportMetrics
 
   const markupPercent = resolveMarkupPercent(reportSettings)
 

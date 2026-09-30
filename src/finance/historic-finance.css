@@ -1,0 +1,76 @@
+.historic-finance {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.historic-finance-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.historic-finance-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  color: var(--yl-text-2);
+  font-size: 13px;
+}
+
+.historic-finance-filters select,
+.historic-finance-filters input {
+  min-height: 36px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 8px;
+  background: var(--yl-surface);
+  color: var(--yl-text);
+  padding: 6px 8px;
+}
+
+.historic-chart {
+  width: 100%;
+  height: 320px;
+}
+
+.historic-note {
+  color: var(--yl-text-2);
+  font-size: 13px;
+}
+
+.historic-favorable {
+  color: var(--yl-go);
+}
+
+.historic-unfavorable {
+  color: var(--yl-energy);
+}
+
+.historic-events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.historic-events form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.historic-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.historic-event-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--yl-stroke);
+}

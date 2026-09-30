@@ -20,6 +20,15 @@ import {
   deriveMonthStatus as deriveMaintenanceMonthStatus,
   getMonthRecord as getMaintenanceMonthRecord,
 } from '../shared/maintenance-billing';
+import {
+  NATIVE_PERIOD_START,
+  isPilotSnapshotNickname,
+  snapshotMetricsFromNative,
+} from '../shared/finance-historic';
+import {
+  emptyActualItem,
+  writeCurrentActual,
+} from '../shared/finance-historic-store';
 import { docClient, putItem } from '../shared/visit-task-utils';
 import {
   asString,
@@ -71,6 +80,7 @@ type Payload = {
   cleaningMovedToExpenses?: unknown;
   conditions?: unknown[];
   marketManagementFee?: number | string | null;
+  historicMetrics?: Record<string, unknown>;
 };
 
 const monthIsClosed = async (
@@ -483,6 +493,58 @@ export const handler = async (event: {
 
   try {
     await putItem(tableName, item);
+    let historicSnapshot: {
+      ok: boolean;
+      status?: string;
+      message?: string;
+    } | null = null;
+    if (
+      action === 'close' &&
+      monthId >= NATIVE_PERIOD_START &&
+      isPilotSnapshotNickname(asString(property.nickname))
+    ) {
+      const historicTable = process.env.HISTORIC_TABLE;
+      const nativeMetrics =
+        payload.historicMetrics && typeof payload.historicMetrics === 'object'
+          ? snapshotMetricsFromNative(payload.historicMetrics)
+          : null;
+      if (!historicTable) {
+        historicSnapshot = {
+          ok: false,
+          message: 'HISTORIC_TABLE is not configured.',
+        };
+      } else if (!nativeMetrics || Object.keys(nativeMetrics).length === 0) {
+        historicSnapshot = {
+          ok: false,
+          message: 'Native close metrics were not included.',
+        };
+      } else {
+        try {
+          const status = await writeCurrentActual(
+            historicTable,
+            emptyActualItem({
+              propertyId,
+              period: monthId,
+              dataOrigin: 'yalla_native',
+              metrics: nativeMetrics,
+              qualityFlags: [],
+              nickname: asString(property.nickname),
+              provenance: { reportMonthId: monthId },
+              updatedAt: timestamp,
+            }),
+          );
+          historicSnapshot = { ok: true, status };
+        } catch (snapshotError) {
+          historicSnapshot = {
+            ok: false,
+            message:
+              snapshotError instanceof Error
+                ? snapshotError.message
+                : String(snapshotError),
+          };
+        }
+      }
+    }
     const name = `${reportScopeForProperty(property).name} ${monthId}`;
     await recordActivityLog(event, {
       feature: LOG_FEATURES.PROPERTY_REPORTS,
@@ -505,7 +567,7 @@ export const handler = async (event: {
                 ? `marked property report ready ${quoted(name)}`
                 : `reopened property report ${quoted(name)}`,
     });
-    return buildHttpResponse(200, { item });
+    return buildHttpResponse(200, { item, historicSnapshot });
   } catch (error) {
     return buildHttpResponse(500, {
       message: 'Failed to update the property report.',

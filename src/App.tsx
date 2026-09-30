@@ -71,6 +71,7 @@ import { MaintenancePlanView } from './maintenance/MaintenancePlanView'
 import { MaintenanceBillingView } from './maintenance/MaintenanceBillingView'
 import { MaintenanceSettingsView } from './maintenance/MaintenanceSettingsView'
 import { PropertyReportsView } from './finance/PropertyReportsView'
+import { HistoricFinanceView } from './finance/HistoricFinanceView'
 import { FinanceReportsSettingsView } from './finance/FinanceReportsSettingsView'
 import { PropertyGroupsView } from './finance/PropertyGroupsView'
 import { MovementsView } from './finance/MovementsView'
@@ -2230,6 +2231,21 @@ function App() {
           mtlPrincipalId: row.mtlPrincipalId,
           memberIds: row.memberIds,
         })),
+    [propertyRows],
+  )
+
+  const historicPropertyOptions = useMemo(
+    () =>
+      propertyRows
+        .filter((row) => isManagedProperty(row) && !isReportGroupType(row.type))
+        .map((row) => ({
+          id: row.id,
+          nickname: row.nickname,
+          title: row.title,
+          listingNickname: row.listingNickname || row.nickname,
+          active: row.active,
+        }))
+        .sort((left, right) => left.nickname.localeCompare(right.nickname)),
     [propertyRows],
   )
 
@@ -9108,6 +9124,12 @@ function App() {
             getEndpoint={getEndpoint}
             propertyOptions={activeManagedPropertyOptions}
             onNavigate={navigateToPage}
+          />
+        ) : activePage === 'Historic table' || activePage === 'Historic Charts' ? (
+          <HistoricFinanceView
+            mode={activePage === 'Historic Charts' ? 'charts' : 'table'}
+            getEndpoint={getEndpoint}
+            properties={historicPropertyOptions}
           />
         ) : activePage === 'Reports Settings' ? (
           <FinanceReportsSettingsView getEndpoint={getEndpoint} />
