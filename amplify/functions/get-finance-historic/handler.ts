@@ -90,7 +90,7 @@ export const handler = async (event: HttpEvent) => {
   const propertiesTable = process.env.PROPERTIES_TABLE;
   const bookingsTable = process.env.BOOKINGS_TABLE;
   const reviewsTable = process.env.REVIEWS_TABLE;
-  const reportsTable = process.env.REPORTS_TABLE;
+  const reportsTable = process.env.REPORTS_TABLE || process.env.TABLE_NAME;
   if (!tableName || !propertiesTable || !bookingsTable || !reviewsTable) {
     return buildHttpResponse(500, {
       message: 'Historic tables are not configured.',
