@@ -2939,7 +2939,8 @@
     }
   },
   "historicFinance": {
-    "tableSubtitle": "Each selected metric is a column. From August 2026 the values come from Finance Reports.",
+    "tableSubtitle": "Each selected metric is a column. Drag a header to change its order. From August 2026 the values come from Finance Reports.",
+    "dragColumn": "Drag {{name}} to change the column order",
     "chartsSubtitle": "Choose the metrics to plot. Different units use separate scales. Gaps are months without data.",
     "property": "Property",
     "metric": "Metric",
@@ -2967,6 +2968,8 @@
     "loadError": "Could not load history.",
     "missingEndpoint": "Missing Historic endpoint. Redeploy the backend.",
     "period": "Month",
+    "sortMonthsNewest": "Months from newest to oldest",
+    "sortMonthsOldest": "Months from oldest to newest",
     "actual": "Actual",
     "reference": "Reference",
     "deviation": "Deviation",

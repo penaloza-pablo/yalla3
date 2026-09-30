@@ -2939,7 +2939,8 @@
     }
   },
   "historicFinance": {
-    "tableSubtitle": "Cada métrica seleccionada es una columna. Desde agosto de 2026 los valores salen de Informes.",
+    "tableSubtitle": "Cada métrica seleccionada es una columna. Arrastra un encabezado para cambiar su orden. Desde agosto de 2026 los valores salen de Informes.",
+    "dragColumn": "Arrastrar {{name}} para cambiar el orden de la columna",
     "chartsSubtitle": "Elige las métricas del gráfico. Unidades distintas usan escalas separadas. Los huecos son meses sin dato.",
     "property": "Propiedad",
     "metric": "Métrica",
@@ -2967,6 +2968,8 @@
     "loadError": "No se pudo cargar el histórico.",
     "missingEndpoint": "Falta el endpoint de Historic. Vuelve a desplegar el backend.",
     "period": "Mes",
+    "sortMonthsNewest": "Meses del más reciente al más antiguo",
+    "sortMonthsOldest": "Meses del más antiguo al más reciente",
     "actual": "Real",
     "reference": "Referencia",
     "deviation": "Desviación",

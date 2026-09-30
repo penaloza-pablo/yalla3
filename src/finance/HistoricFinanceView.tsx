@@ -12,7 +12,7 @@ import {
   rescuedPercentWindow,
   sumWindow,
 } from '../../amplify/functions/shared/finance-historic'
-import { YlIcon } from '../design/icons'
+import { YlIcon, YlSortIcon } from '../design/icons'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { DismissibleNotice } from '../operations/DismissibleNotice'
 import { fetchJson } from '../operations/api'
@@ -99,6 +99,17 @@ const metricIds = [
 ]
 
 const FILTERS_KEY = 'yalla-historic-filters'
+const COLUMN_DRAG_MIME = 'application/x-yalla-historic-column'
+
+const reorderMetricIds = (ids: string[], fromId: string, toId: string) => {
+  const from = ids.indexOf(fromId)
+  const to = ids.indexOf(toId)
+  if (from < 0 || to < 0 || from === to) return ids
+  const next = [...ids]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
 
 const defaultFilters = (propertyId = ''): Filters => ({
   propertyId,
@@ -196,6 +207,9 @@ export function HistoricFinanceView({
   const [eventTitle, setEventTitle] = useState('')
   const [eventNote, setEventNote] = useState('')
   const [eventMessage, setEventMessage] = useState<string | null>(null)
+  const [draggingMetricId, setDraggingMetricId] = useState<string | null>(null)
+  const [dropMetricId, setDropMetricId] = useState<string | null>(null)
+  const [monthOrder, setMonthOrder] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     if (filters.propertyId) {
@@ -314,6 +328,22 @@ export function HistoricFinanceView({
   }, [load])
 
   const selectedMetrics = filters.metricIds.length > 0 ? filters.metricIds : ['paidByGuest']
+  const tableMonths = useMemo(() => {
+    const months = [...(payload?.months ?? [])].sort((left, right) =>
+      left.period.localeCompare(right.period),
+    )
+    return monthOrder === 'asc' ? months : months.reverse()
+  }, [monthOrder, payload?.months])
+  const canReorderColumns = selectedMetrics.length > 1
+
+  const moveMetricColumn = (fromId: string, toId: string) => {
+    setFilters((current) => {
+      const ids = current.metricIds.length > 0 ? current.metricIds : ['paidByGuest']
+      const metricIds = reorderMetricIds(ids, fromId, toId)
+      if (metricIds === ids) return current
+      return { ...current, metricIds }
+    })
+  }
   const benchmark = payload?.benchmarks.find(
     (item) => item.benchmarkKey === filters.benchmarkKey,
   )
@@ -915,17 +945,128 @@ export function HistoricFinanceView({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>{t('historicFinance.period')}</th>
-                    {selectedMetrics.map((metricId) => (
-                      <th key={metricId} title={metricHelp(metricId) || undefined}>
-                        {metricLabel(metricId)}
-                      </th>
-                    ))}
+                    <th
+                      scope="col"
+                      aria-sort={monthOrder === 'desc' ? 'descending' : 'ascending'}
+                    >
+                      <button
+                        className="btn-sort is-active"
+                        type="button"
+                        aria-label={t(
+                          monthOrder === 'desc'
+                            ? 'historicFinance.sortMonthsNewest'
+                            : 'historicFinance.sortMonthsOldest',
+                        )}
+                        onClick={() =>
+                          setMonthOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
+                        }
+                      >
+                        {t('historicFinance.period')}
+                        <span className="sort-indicator">
+                          <YlSortIcon direction={monthOrder} />
+                        </span>
+                      </button>
+                    </th>
+                    {selectedMetrics.map((metricId) => {
+                      const label = metricLabel(metricId)
+                      const help = metricHelp(metricId)
+                      const isDragging = draggingMetricId === metricId
+                      const isDropTarget =
+                        dropMetricId === metricId && draggingMetricId !== metricId
+                      return (
+                        <th
+                          key={metricId}
+                          className={
+                            isDropTarget ? 'historic-column-head is-drop-target' : undefined
+                          }
+                          title={help || undefined}
+                        >
+                          <span
+                            className={`historic-column-grip${isDragging ? ' is-dragging' : ''}`}
+                            draggable={canReorderColumns}
+                            role={canReorderColumns ? 'button' : undefined}
+                            tabIndex={canReorderColumns ? 0 : undefined}
+                            aria-grabbed={canReorderColumns ? isDragging : undefined}
+                            aria-label={
+                              canReorderColumns
+                                ? t('historicFinance.dragColumn', { name: label })
+                                : undefined
+                            }
+                            onDragStart={
+                              canReorderColumns
+                                ? (event) => {
+                                    event.dataTransfer.setData(COLUMN_DRAG_MIME, metricId)
+                                    event.dataTransfer.effectAllowed = 'move'
+                                    setDraggingMetricId(metricId)
+                                  }
+                                : undefined
+                            }
+                            onDragEnd={
+                              canReorderColumns
+                                ? () => {
+                                    setDraggingMetricId(null)
+                                    setDropMetricId(null)
+                                  }
+                                : undefined
+                            }
+                            onDragOver={
+                              canReorderColumns
+                                ? (event) => {
+                                    event.preventDefault()
+                                    event.dataTransfer.dropEffect = 'move'
+                                    if (dropMetricId !== metricId) setDropMetricId(metricId)
+                                  }
+                                : undefined
+                            }
+                            onDragLeave={
+                              canReorderColumns
+                                ? () => {
+                                    setDropMetricId((current) =>
+                                      current === metricId ? null : current,
+                                    )
+                                  }
+                                : undefined
+                            }
+                            onDrop={
+                              canReorderColumns
+                                ? (event) => {
+                                    event.preventDefault()
+                                    const fromId =
+                                      event.dataTransfer.getData(COLUMN_DRAG_MIME) ||
+                                      draggingMetricId
+                                    setDropMetricId(null)
+                                    setDraggingMetricId(null)
+                                    if (fromId) moveMetricColumn(fromId, metricId)
+                                  }
+                                : undefined
+                            }
+                            onKeyDown={
+                              canReorderColumns
+                                ? (event) => {
+                                    const index = selectedMetrics.indexOf(metricId)
+                                    const targetId =
+                                      event.key === 'ArrowLeft'
+                                        ? selectedMetrics[index - 1]
+                                        : event.key === 'ArrowRight'
+                                          ? selectedMetrics[index + 1]
+                                          : ''
+                                    if (!targetId) return
+                                    event.preventDefault()
+                                    moveMetricColumn(metricId, targetId)
+                                  }
+                                : undefined
+                            }
+                          >
+                            {label}
+                          </span>
+                        </th>
+                      )
+                    })}
                     <th>{t('historicFinance.eventsTitle')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {payload.months.map((month) => {
+                  {tableMonths.map((month) => {
                     const metrics = metricsFor(month)
                     const warning = warningFor(month)
                     const warningOverlay = reportByPeriod[month.period]
