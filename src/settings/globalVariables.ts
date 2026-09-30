@@ -68,7 +68,19 @@ export const listGlobalVariableIds = () => {
 
 export const usagesForVariable = (variableId: string): GlobalVariableUsage[] => {
   const usages: GlobalVariableUsage[] = []
-  if ((CALENDAR_METRIC_IDS as readonly string[]).includes(variableId)) {
+  if (
+    variableId === 'expensesAndServicesVat' ||
+    variableId === 'expensesAndServicesGross'
+  ) {
+    usages.push({
+      id: 'property-reports',
+      labelKey: 'globalVariables.usageFinance',
+    })
+    usages.push({
+      id: 'historic',
+      labelKey: 'globalVariables.usageHistoric',
+    })
+  } else if ((CALENDAR_METRIC_IDS as readonly string[]).includes(variableId)) {
     usages.push({
       id: 'historic-calendar',
       labelKey: 'globalVariables.usageHistoric',

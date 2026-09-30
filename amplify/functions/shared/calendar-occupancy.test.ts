@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { FORMULA_CATALOG_VARIABLES } from './property-report-formula'
-import { defaultReportVisibility } from './property-report-settings'
+import { defaultReportVisibility, parseVisibility } from './property-report-settings'
 import { includePayoutInReportMonth } from './property-reports'
 import {
   CALENDAR_METRIC_IDS,
@@ -449,6 +449,66 @@ test('no mezcla otra moneda y no usa el excel como importe de calendario', () =>
   assert.equal(legacy.nights, '3')
   assert.equal(legacy.calendarOccupiedNights, '7')
   assert.equal(legacy.calendarPaidByGuest, '700.00')
+})
+
+test('el IVA y el bruto de expenses and services no cambian el neto', () => {
+  const metrics = computePropertyReportMetrics(
+    reportInputs({
+      servicesNet: 100,
+      servicesIva: 21,
+      otherExpensesNet: 50,
+      otherExpensesIva: 10.5,
+      paidByGuest: 1800,
+      nights: 18,
+      bookingCount: 1,
+    }),
+  )
+  assert.equal(metrics.expensesAndServices, 150)
+  assert.equal(metrics.expensesAndServicesVat, 31.5)
+  assert.equal(metrics.expensesAndServicesGross, 181.5)
+  assert.equal(metrics.paidByGuest, 1800)
+  assert.equal(metrics.averageRatePerNight, 100)
+
+  const visibility = defaultReportVisibility()
+  assert.equal(
+    visibility.property.metrics.includes('expensesAndServicesVat'),
+    true,
+  )
+  assert.equal(
+    visibility.property.metrics.includes('expensesAndServicesGross'),
+    true,
+  )
+  assert.equal(
+    visibility.management.metrics.includes('expensesAndServicesVat'),
+    true,
+  )
+  assert.equal(visibility.owner.metrics.includes('expensesAndServicesVat'), false)
+
+  const stored = parseVisibility({
+    property: {
+      visible: true,
+      primary: 'propertyContribution',
+      metricsVersion: 2,
+      metrics: ['propertyContribution', 'expensesAndServices', 'income'],
+    },
+    management: {
+      visible: true,
+      primary: 'ourProfit',
+      metricsVersion: 2,
+      metrics: ['ourProfit', 'expensesAndServices'],
+    },
+    owner: {
+      visible: true,
+      primary: 'netEarnings',
+      metricsVersion: 2,
+      metrics: ['netEarnings', 'income'],
+    },
+  })
+  const propertyMetrics = stored?.property.metrics ?? []
+  const expensesAt = propertyMetrics.indexOf('expensesAndServices')
+  assert.equal(propertyMetrics[expensesAt + 1], 'expensesAndServicesVat')
+  assert.equal(propertyMetrics[expensesAt + 2], 'expensesAndServicesGross')
+  assert.equal(stored?.owner.metrics.includes('expensesAndServicesVat'), false)
 })
 
 test('el pago medio sin cleaning fee resta la limpieza antes de dividir', () => {

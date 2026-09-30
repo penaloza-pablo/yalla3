@@ -1693,6 +1693,8 @@
       "markupVat": "Markup VAT",
       "iva": "IVA",
       "expensesAndServices": "Expenses & Services",
+      "expensesAndServicesVat": "Expenses & Services VAT",
+      "expensesAndServicesGross": "Expenses & Services Gross",
       "commission": "Comisión Knock Knock %",
       "fixedRent": "Renta fija",
       "incomesDoNotSend": "Other incomes direct to us",
@@ -1845,6 +1847,10 @@
       "ivaHelp": "Cleaning IVA + Maintenance IVA + Services IVA + Other expenses IVA − Other incomes IVA.",
       "expensesAndServices": "Expenses & Services",
       "expensesAndServicesHelp": "Services net más Other expenses net.",
+      "expensesAndServicesVat": "Expenses & Services VAT",
+      "expensesAndServicesVatHelp": "IVA de los services y other expenses que forman Expenses & Services.",
+      "expensesAndServicesGross": "Expenses & Services Gross",
+      "expensesAndServicesGrossHelp": "Expenses & Services más el IVA de cada uno de esos ítems.",
       "bookingCount": "Booking Count",
       "bookingCountHelp": "Número de payouts del mes.",
       "nights": "Nights",
@@ -3037,7 +3043,9 @@
       "calendarAveragePaidPerNight": "Pago medio del huésped por noche",
       "calendarAveragePaidPerNightAfterCleaning": "Pago medio del huésped por noche sin cleaning fee",
       "calendarAccommodationRevenue": "Ingresos de alojamiento del mes",
-      "calendarADR": "Tarifa media de alojamiento"
+      "calendarADR": "Tarifa media de alojamiento",
+      "expensesAndServicesVat": "Expenses & Services VAT",
+      "expensesAndServicesGross": "Expenses & Services Gross"
     },
     "metricHelp": {
       "calendarOccupiedNights": "Noches que una reserva válida pasó en ese mes. La noche de salida no cuenta. Una vivienda de una sola unidad no cuenta el mismo día dos veces.",
@@ -3045,7 +3053,9 @@
       "calendarAveragePaidPerNight": "Pago medio del huésped por noche. Solo se muestra si todas las noches ocupadas tienen importe. No es la tarifa media de alojamiento.",
       "calendarAveragePaidPerNightAfterCleaning": "Resta el cleaning fee del total paid by guest y lo divide entre las noches de la estancia. Con 200 €, 88 € de limpieza y 5 noches, el resultado es 22,40 €. Solo se muestra si todas las noches ocupadas tienen ambos importes.",
       "calendarAccommodationRevenue": "Solo la tarifa de alojamiento identificada en la reserva, repartida entre sus noches. La limpieza, los impuestos y el payout del anfitrión no se usan como sustituto. Si falta esa tarifa, se muestra un guion.",
-      "calendarADR": "Tarifa media de alojamiento de las noches con ese importe. Las estancias gratuitas no entran en este cálculo. Si el dato es un reparto, es una estimación y no una tarifa nocturna real."
+      "calendarADR": "Tarifa media de alojamiento de las noches con ese importe. Las estancias gratuitas no entran en este cálculo. Si el dato es un reparto, es una estimación y no una tarifa nocturna real.",
+      "expensesAndServicesVat": "Suma del IVA de los services y other expenses que entran en Expenses & Services.",
+      "expensesAndServicesGross": "Expenses & Services más el IVA de cada uno de esos ítems."
     }
   }
 }

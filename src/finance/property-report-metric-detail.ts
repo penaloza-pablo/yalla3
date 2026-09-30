@@ -496,6 +496,32 @@ export const buildMetricDetailSections = (
           allocatedRows(sources.expenses, (line) => line.net),
         ),
       ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'expensesAndServicesVat':
+      return [
+        section(
+          servicesName,
+          servicesName,
+          allocatedRows(sources.services, (line) => line.iva),
+        ),
+        section(
+          expensesName,
+          expensesName,
+          allocatedRows(sources.expenses, (line) => line.iva),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
+    case 'expensesAndServicesGross':
+      return [
+        section(
+          servicesName,
+          servicesName,
+          allocatedRows(sources.services, (line) => line.net + line.iva),
+        ),
+        section(
+          expensesName,
+          expensesName,
+          allocatedRows(sources.expenses, (line) => line.net + line.iva),
+        ),
+      ].filter((item): item is MetricDetailSection => Boolean(item))
     case 'expensesAndServicesCoverByOwner':
       return [
         section(

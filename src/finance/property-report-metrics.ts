@@ -337,6 +337,18 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     formula: 'servicesNet + otherExpensesNet',
   },
   {
+    id: 'expensesAndServicesVat',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'servicesIva + otherExpensesIva',
+  },
+  {
+    id: 'expensesAndServicesGross',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'expensesAndServices + expensesAndServicesVat',
+  },
+  {
     id: 'expensesAndServicesCoverByOwner',
     unit: 'money',
     role: 'indicator',
@@ -559,6 +571,12 @@ export const computePropertyReportMetrics = (
   const expensesAndServices = roundMoney(
     inputs.servicesNet + inputs.otherExpensesNet,
   )
+  const expensesAndServicesVat = roundMoney(
+    inputs.servicesIva + inputs.otherExpensesIva,
+  )
+  const expensesAndServicesGross = roundMoney(
+    expensesAndServices + expensesAndServicesVat,
+  )
   const expensesAndServicesCoverByOwner = sumAllocated(
     inputs.allocatedLines,
     (line) =>
@@ -648,6 +666,8 @@ export const computePropertyReportMetrics = (
     markupVat,
     iva,
     expensesAndServices,
+    expensesAndServicesVat,
+    expensesAndServicesGross,
     expensesAndServicesCoverByOwner,
     expensesAndServicesCoverByOwnerVat,
     expensesAndServicesCoverByUs,
@@ -731,6 +751,8 @@ export const computePropertyReportMetrics = (
     markupVat,
     iva,
     expensesAndServices,
+    expensesAndServicesVat,
+    expensesAndServicesGross,
     expensesAndServicesCoverByOwner,
     expensesAndServicesCoverByOwnerVat,
     expensesAndServicesCoverByUs,

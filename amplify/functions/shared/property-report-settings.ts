@@ -36,7 +36,7 @@ export type ReportCondition = {
   bearFirstAmount: number | null;
 };
 
-export const VISIBILITY_METRICS_VERSION = 2;
+export const VISIBILITY_METRICS_VERSION = 3;
 
 export type ReportTabVisibility = {
   visible: boolean;
@@ -158,6 +158,8 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'markup',
       'iva',
       'expensesAndServices',
+      'expensesAndServicesVat',
+      'expensesAndServicesGross',
       'expensesAndServicesCoverByOwner',
       'expensesAndServicesCoverByUs',
       'amountTransferred',
@@ -174,6 +176,8 @@ export const defaultReportVisibility = (): ReportVisibility => ({
       'markup',
       'income',
       'expensesAndServices',
+      'expensesAndServicesVat',
+      'expensesAndServicesGross',
       'expensesAndServicesCoverByOwner',
       'expensesAndServicesCoverByUs',
       'iva',
@@ -200,6 +204,8 @@ const NEW_DEFAULT_METRICS = [
   'expensesAndServicesCoverByOwner',
   'expensesAndServicesCoverByUs',
   'amountTransferred',
+  'expensesAndServicesVat',
+  'expensesAndServicesGross',
 ] as const;
 
 const injectNewDefaultMetrics = (

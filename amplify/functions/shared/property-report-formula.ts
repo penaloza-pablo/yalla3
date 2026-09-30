@@ -58,6 +58,8 @@ export const FORMULA_CATALOG_VARIABLES = [
   'markupVat',
   'iva',
   'expensesAndServices',
+  'expensesAndServicesVat',
+  'expensesAndServicesGross',
   'expensesAndServicesCoverByOwner',
   'expensesAndServicesCoverByOwnerVat',
   'expensesAndServicesCoverByUs',

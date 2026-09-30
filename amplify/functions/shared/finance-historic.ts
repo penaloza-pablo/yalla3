@@ -57,6 +57,8 @@ const COST_IDS = new Set<string>([
   'maintenance',
   'maintenanceNet',
   'expensesAndServices',
+  'expensesAndServicesVat',
+  'expensesAndServicesGross',
   'iva',
   'underFiveStarReviewCount',
 ]);

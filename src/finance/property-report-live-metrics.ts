@@ -33,6 +33,16 @@ const roundMoney = (value: number) => Math.round(value * 100) / 100
 const ivaEuroFromNet = (net: number, ivaRate: IvaRate) =>
   roundMoney(net * (ivaRate / 100))
 
+const inferIvaRate = (net: number, gross: number, fallback: IvaRate = 0): IvaRate => {
+  if (!Number.isFinite(net) || !Number.isFinite(gross)) return fallback
+  if (Math.abs(net) < 0.005) return Math.abs(gross) < 0.005 ? 0 : fallback
+  const ratio = (gross - net) / net
+  if (Math.abs(ratio - 0.21) < 0.02) return 21
+  if (Math.abs(ratio - 0.1) < 0.02) return 10
+  if (Math.abs(ratio) < 0.02) return 0
+  return fallback
+}
+
 type BookingRow = {
   hostPayout: number | null
   fareCleaning: number | null
@@ -166,10 +176,13 @@ export const metricsFromPropertyReportPayload = (
   const serviceLines: MoneyRow[] = Array.isArray(serviceSource?.lines)
     ? serviceSource.lines.map((item) => {
         const row = asRecord(item) ?? {}
+        const price = asNumber(row.price) ?? 0
+        const priceWithIva = asNumber(row.priceWithIva) ?? price
         return {
           id: String(row.id ?? ''),
-          price: asNumber(row.price) ?? 0,
-          ivaRate: parseIvaRate(row.ivaRate) ?? 21,
+          price,
+          ivaRate:
+            parseIvaRate(row.ivaRate) ?? inferIvaRate(price, priceWithIva, 0),
           allocation: String(row.allocation ?? ''),
         }
       })
@@ -179,10 +192,14 @@ export const metricsFromPropertyReportPayload = (
   const expenseLines: ExpenseRow[] = Array.isArray(expenseSource?.lines)
     ? expenseSource.lines.map((item) => {
         const row = asRecord(item) ?? {}
+        const amountExclIva = asNumber(row.amountExclIva) ?? 0
+        const amountInclIva = asNumber(row.amountInclIva) ?? amountExclIva
         return {
           id: String(row.id ?? ''),
-          amountExclIva: asNumber(row.amountExclIva) ?? 0,
-          ivaRate: parseIvaRate(row.ivaRate) ?? 21,
+          amountExclIva,
+          ivaRate:
+            parseIvaRate(row.ivaRate) ??
+            inferIvaRate(amountExclIva, amountInclIva, 0),
         }
       })
     : []
@@ -191,10 +208,14 @@ export const metricsFromPropertyReportPayload = (
   const incomeLines: ExpenseRow[] = Array.isArray(incomeSource?.lines)
     ? incomeSource.lines.map((item) => {
         const row = asRecord(item) ?? {}
+        const amountExclIva = asNumber(row.amountExclIva) ?? 0
+        const amountInclIva = asNumber(row.amountInclIva) ?? amountExclIva
         return {
           id: String(row.id ?? ''),
-          amountExclIva: asNumber(row.amountExclIva) ?? 0,
-          ivaRate: parseIvaRate(row.ivaRate) ?? 21,
+          amountExclIva,
+          ivaRate:
+            parseIvaRate(row.ivaRate) ??
+            inferIvaRate(amountExclIva, amountInclIva, 0),
         }
       })
     : []
