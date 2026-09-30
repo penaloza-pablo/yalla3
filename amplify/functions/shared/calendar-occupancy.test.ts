@@ -387,6 +387,33 @@ test('un solapamiento en la misma unidad no duplica la noche ni inventa el impor
   assert.equal(units.metrics.calendarPaidByGuest, '200.00')
 })
 
+test('una reserva closed no ocupa ni anula el importe de la confirmada', () => {
+  const confirmed = stay({
+    reservationId: 'confirmed-stay',
+    checkIn: '2026-08-27',
+    checkOut: '2026-09-01',
+    hostPayout: 597.55,
+    hostServiceFee: 105.45,
+    fareAccommodation: 615,
+  })
+  const closedTwin = stay({
+    reservationId: 'closed-stay',
+    status: 'closed',
+    checkIn: '2026-08-27',
+    checkOut: '2026-09-01',
+    hostPayout: null,
+    hostServiceFee: null,
+    fareAccommodation: null,
+  })
+  const august = month('2026-08', [confirmed, closedTwin])
+  assert.equal(august.metrics.calendarOccupiedNights, '5')
+  assert.equal(august.metrics.calendarPaidByGuest, '703.00')
+  assert.equal(august.metrics.calendarAccommodationRevenue, '615.00')
+  assert.equal(august.qualityFlags.includes('calendarOverlap'), false)
+  assert.equal(august.reservations.length, 1)
+  assert.equal(august.reservations[0].reservationId, 'confirmed-stay')
+})
+
 test('cancelaciones, bloqueos y estados desconocidos no cuentan como ocupación', () => {
   const august = month('2026-08', [
     stay({ status: 'canceled' }),

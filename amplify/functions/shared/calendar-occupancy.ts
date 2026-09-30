@@ -15,7 +15,6 @@ export type CalendarMetricId = (typeof CALENDAR_METRIC_IDS)[number];
 const OCCUPIED_STATUSES = new Set([
   'confirmed',
   'reserved',
-  'closed',
   'checked_in',
   'checked-in',
   'checkedin',
@@ -27,6 +26,7 @@ const EXCLUDED_STATUSES = new Set([
   'expired',
   'canceled',
   'cancelled',
+  'closed',
   'no_show',
   'no-show',
   'noshow',
