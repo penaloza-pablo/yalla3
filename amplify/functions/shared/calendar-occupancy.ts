@@ -6,6 +6,7 @@ export const CALENDAR_METRIC_IDS = [
   'calendarOccupiedNights',
   'calendarPaidByGuest',
   'calendarAveragePaidPerNight',
+  'calendarAveragePaidPerNightAfterCleaning',
   'calendarAccommodationRevenue',
   'calendarADR',
 ] as const;
@@ -258,6 +259,7 @@ type PreparedStay = {
   paidCents: number | null;
   accommodationCents: number | null;
   paidByNight: Array<number | null>;
+  paidAfterCleaningByNight: Array<number | null>;
   accommodationByNight: Array<number | null>;
   complimentary: boolean;
   method: 'prorated' | 'nightly' | 'mixed' | 'none';
@@ -268,6 +270,7 @@ const moneySignature = (stay: CalendarStayInput) =>
   JSON.stringify({
     hostPayout: stay.hostPayout,
     hostServiceFee: stay.hostServiceFee,
+    fareCleaning: stay.fareCleaning,
     fareAccommodation: stay.fareAccommodation,
     currency: stay.currency || 'EUR',
     nightly: stay.nightlyAccommodation,
@@ -299,6 +302,7 @@ const prepareStay = (
       paidCents: null,
       accommodationCents: null,
       paidByNight: [],
+      paidAfterCleaningByNight: [],
       accommodationByNight: [],
       complimentary: false,
       method: 'none',
@@ -326,6 +330,11 @@ const prepareStay = (
   const paidCents = paidKnown
     ? toCents((first.hostPayout ?? 0) + (first.hostServiceFee ?? 0))
     : null;
+  const cleaningCents =
+    !currencyBlocked && moneyKeys.size === 1 && first.fareCleaning !== null
+      ? toCents(first.fareCleaning)
+      : null;
+  if (paidCents !== null && cleaningCents === null) issues.push('cleaning_missing');
   const accommodationCents =
     !currencyBlocked && moneyKeys.size === 1 && first.fareAccommodation !== null
       ? toCents(first.fareAccommodation)
@@ -372,6 +381,10 @@ const prepareStay = (
   } else if (paidCents !== null) {
     paidByNight = takeRealized(spreadCents(paidCents, allNights.length));
   }
+  const paidAfterCleaningByNight =
+    paidCents !== null && cleaningCents !== null
+      ? takeRealized(spreadCents(paidCents - cleaningCents, allNights.length))
+      : realized.map(() => null);
   const usedNightly = nightlyMatchesAccommodation || nightlyMatchesPaid;
   const usedProrate =
     (accommodationCents !== null && !nightlyMatchesAccommodation) ||
@@ -393,6 +406,7 @@ const prepareStay = (
     paidCents,
     accommodationCents,
     paidByNight,
+    paidAfterCleaningByNight,
     accommodationByNight,
     complimentary,
     method,
@@ -404,6 +418,7 @@ const emptyMetrics = (): Record<CalendarMetricId, string | null> => ({
   calendarOccupiedNights: '0',
   calendarPaidByGuest: null,
   calendarAveragePaidPerNight: null,
+  calendarAveragePaidPerNightAfterCleaning: null,
   calendarAccommodationRevenue: null,
   calendarADR: null,
 });
@@ -430,6 +445,7 @@ export const calendarMetricsForMonth = (input: {
     unitId: string;
     date: string;
     paidCents: number | null;
+    paidAfterCleaningCents: number | null;
     accommodationCents: number | null;
     complimentary: boolean;
     method: PreparedStay['method'];
@@ -446,6 +462,9 @@ export const calendarMetricsForMonth = (input: {
         paidCents: stay.issues.includes('contradictory')
           ? null
           : stay.paidByNight[index],
+        paidAfterCleaningCents: stay.issues.includes('contradictory')
+          ? null
+          : stay.paidAfterCleaningByNight[index],
         accommodationCents: stay.issues.includes('contradictory')
           ? null
           : stay.accommodationByNight[index],
@@ -472,8 +491,10 @@ export const calendarMetricsForMonth = (input: {
   let accommodationCoveredNights = 0;
   let adrNights = 0;
   let paidTotal = 0;
+  let afterCleaningTotal = 0;
   let accommodationTotal = 0;
   let paidComplete = true;
+  let afterCleaningComplete = true;
   let accommodationComplete = true;
   let adrComplete = true;
   const reservationTotals = new Map<
@@ -488,6 +509,7 @@ export const calendarMetricsForMonth = (input: {
     ];
     for (const row of uniqueReservations) {
       const paidCents = overlap ? null : row.paidCents;
+      const paidAfterCleaningCents = overlap ? null : row.paidAfterCleaningCents;
       const accommodationCents = overlap ? null : row.accommodationCents;
       const complimentary = row.complimentary && !overlap;
       if (paidCents === null) paidComplete = false;
@@ -495,6 +517,8 @@ export const calendarMetricsForMonth = (input: {
         paidCoveredNights += 1;
         paidTotal += paidCents;
       }
+      if (paidAfterCleaningCents === null) afterCleaningComplete = false;
+      else afterCleaningTotal += paidAfterCleaningCents;
       if (!complimentary) {
         if (accommodationCents === null) {
           accommodationComplete = false;
@@ -535,6 +559,11 @@ export const calendarMetricsForMonth = (input: {
     metrics.calendarPaidByGuest = centsToDecimal(paidTotal);
     metrics.calendarAveragePaidPerNight = centsToDecimal(
       Math.round(paidTotal / occupiedNights),
+    );
+  }
+  if (occupiedNights > 0 && afterCleaningComplete) {
+    metrics.calendarAveragePaidPerNightAfterCleaning = centsToDecimal(
+      Math.round(afterCleaningTotal / occupiedNights),
     );
   }
   const nonComplimentaryNights = [...byUnitDate.values()].filter((grouped) => {
@@ -584,6 +613,9 @@ export const calendarMetricsForMonth = (input: {
   const qualityFlags: string[] = [];
   if (issueSet.has('overlap')) qualityFlags.push('calendarOverlap');
   if (occupiedNights > 0 && !paidComplete) qualityFlags.push('calendarPriceIncomplete');
+  if (issueSet.has('cleaning_missing')) {
+    qualityFlags.push('calendarCleaningIncomplete');
+  }
   if (nonComplimentaryNights > 0 && !accommodationComplete) {
     qualityFlags.push('calendarAccommodationIncomplete');
   }

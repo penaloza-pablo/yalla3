@@ -65,6 +65,7 @@ const DERIVED_IDS = new Set<string>([
   'rescuedUnderFiveStarReviewPercent',
   'averageRatePerNight',
   'calendarAveragePaidPerNight',
+  'calendarAveragePaidPerNightAfterCleaning',
   'calendarADR',
   'marketManagementFee',
 ]);

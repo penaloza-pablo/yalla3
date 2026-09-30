@@ -560,6 +560,7 @@
       "calendarOccupiedNights": "Noches que una reserva válida ocupó dentro de ese mes. La salida no cuenta. No es el número de noches de los payouts del informe.",
       "calendarPaidByGuest": "Importe comparable al total paid by guest, repartido entre las noches de la estancia. Es una atribución analítica: no cambia el payout ni el mes en el que se declaró.",
       "calendarAveragePaidPerNight": "Pago medio del huésped por noche. Solo aparece si todas las noches ocupadas del mes tienen importe. Si falta información, queda sin dato y no se muestra un cero.",
+      "calendarAveragePaidPerNightAfterCleaning": "Pago medio del huésped por noche después de restar el cleaning fee. Con 200 €, 88 € de limpieza y 5 noches, el valor es 22,40 €. Si falta el cleaning fee, queda sin dato.",
       "calendarAccommodationRevenue": "Ingresos de alojamiento de esas noches. No incluye limpieza ni otros cargos. Si la reserva no separa el alojamiento, el mes queda sin dato.",
       "calendarADR": "Tarifa media de alojamiento. No es el pago medio del huésped. Solo usa noches con alojamiento identificado y deja fuera las estancias gratuitas."
     }
@@ -3006,6 +3007,7 @@
       "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "La fecha de la referencia AirDNA no está confirmada.",
       "calendarOverlap": "Dos reservas ocupan la misma unidad el mismo día. Esa noche se cuenta una vez y su importe queda pendiente.",
       "calendarPriceIncomplete": "Falta el importe de alguna noche ocupada. El pago medio no se publica.",
+      "calendarCleaningIncomplete": "Falta el cleaning fee de alguna noche ocupada. El pago medio sin limpieza no se publica.",
       "calendarAccommodationIncomplete": "No se puede separar el alojamiento de todas las noches. La tarifa media de alojamiento no se publica.",
       "calendarContradictory": "La misma reserva tiene fechas, estados o importes que no coinciden, o el intervalo de estancia no es válido. No se elige un dato al azar.",
       "calendarUnknownStatus": "Hay una reserva con un estado que no sabemos si representa ocupación. Esas noches no se cuentan.",
@@ -3030,6 +3032,7 @@
       "calendarOccupiedNights": "Noches ocupadas del mes",
       "calendarPaidByGuest": "Importe del huésped atribuido al mes",
       "calendarAveragePaidPerNight": "Pago medio del huésped por noche",
+      "calendarAveragePaidPerNightAfterCleaning": "Pago medio del huésped por noche sin cleaning fee",
       "calendarAccommodationRevenue": "Ingresos de alojamiento del mes",
       "calendarADR": "Tarifa media de alojamiento"
     },
@@ -3037,6 +3040,7 @@
       "calendarOccupiedNights": "Noches que una reserva válida pasó en ese mes. La noche de salida no cuenta. Una vivienda de una sola unidad no cuenta el mismo día dos veces.",
       "calendarPaidByGuest": "Parte del total paid by guest que corresponde a las noches de ese mes. Si no hay tarifa por noche, se reparte a partes iguales y es una estimación. No es el dinero cobrado en el mes.",
       "calendarAveragePaidPerNight": "Pago medio del huésped por noche. Solo se muestra si todas las noches ocupadas tienen importe. No es la tarifa media de alojamiento.",
+      "calendarAveragePaidPerNightAfterCleaning": "Resta el cleaning fee del total paid by guest y lo divide entre las noches de la estancia. Con 200 €, 88 € de limpieza y 5 noches, el resultado es 22,40 €. Solo se muestra si todas las noches ocupadas tienen ambos importes.",
       "calendarAccommodationRevenue": "Solo la tarifa de alojamiento identificada en la reserva, repartida entre sus noches. La limpieza, los impuestos y el payout del anfitrión no se usan como sustituto. Si falta esa tarifa, se muestra un guion.",
       "calendarADR": "Tarifa media de alojamiento de las noches con ese importe. Las estancias gratuitas no entran en este cálculo. Si el dato es un reparto, es una estimación y no una tarifa nocturna real."
     }

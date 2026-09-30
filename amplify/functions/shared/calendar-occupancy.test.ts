@@ -181,6 +181,8 @@ test('del 25 de agosto al 12 de septiembre reparte 7 y 11 noches y 700 y 1100 eu
   assert.equal(september.metrics.calendarPaidByGuest, '1100.00')
   assert.equal(august.metrics.calendarAveragePaidPerNight, '100.00')
   assert.equal(september.metrics.calendarAveragePaidPerNight, '100.00')
+  assert.equal(august.metrics.calendarAveragePaidPerNightAfterCleaning, '100.00')
+  assert.equal(september.metrics.calendarAveragePaidPerNightAfterCleaning, '100.00')
   assert.equal(august.metrics.calendarAccommodationRevenue, '700.00')
   assert.equal(september.metrics.calendarAccommodationRevenue, '1100.00')
   assert.equal(august.methods[0], 'prorated')
@@ -304,6 +306,9 @@ test('los datos incompletos no publican un promedio', () => {
     stay({ fareCleaning: null, fareAccommodation: null }),
   ])
   assert.equal(noCleaning.metrics.calendarPaidByGuest, '700.00')
+  assert.equal(noCleaning.metrics.calendarAveragePaidPerNight, '100.00')
+  assert.equal(noCleaning.metrics.calendarAveragePaidPerNightAfterCleaning, null)
+  assert.equal(noCleaning.qualityFlags.includes('calendarCleaningIncomplete'), true)
   assert.equal(noCleaning.metrics.calendarAccommodationRevenue, null)
   assert.equal(noCleaning.metrics.calendarADR, null)
   assert.equal(
@@ -444,4 +449,44 @@ test('no mezcla otra moneda y no usa el excel como importe de calendario', () =>
   assert.equal(legacy.nights, '3')
   assert.equal(legacy.calendarOccupiedNights, '7')
   assert.equal(legacy.calendarPaidByGuest, '700.00')
+})
+
+test('el pago medio sin cleaning fee resta la limpieza antes de dividir', () => {
+  const reservation = stay({
+    checkIn: '2026-08-01',
+    checkOut: '2026-08-06',
+    hostPayout: 200,
+    hostServiceFee: 0,
+    fareCleaning: 88,
+    fareAccommodation: 112,
+  })
+  const august = month('2026-08', [reservation])
+  assert.equal(august.metrics.calendarOccupiedNights, '5')
+  assert.equal(august.metrics.calendarPaidByGuest, '200.00')
+  assert.equal(august.metrics.calendarAveragePaidPerNight, '40.00')
+  assert.equal(august.metrics.calendarAveragePaidPerNightAfterCleaning, '22.40')
+  assert.equal(august.qualityFlags.includes('calendarCleaningIncomplete'), false)
+
+  const crossing = stay({
+    checkIn: '2026-08-29',
+    checkOut: '2026-09-03',
+    hostPayout: 200,
+    hostServiceFee: 0,
+    fareCleaning: 88,
+    fareAccommodation: 112,
+  })
+  assert.equal(month('2026-08', [crossing]).metrics.calendarAveragePaidPerNightAfterCleaning, '22.40')
+  assert.equal(month('2026-09', [crossing]).metrics.calendarAveragePaidPerNightAfterCleaning, '22.40')
+
+  const missingCleaning = stay({
+    reservationId: 'without-cleaning',
+    checkIn: '2026-08-10',
+    checkOut: '2026-08-12',
+    hostPayout: 100,
+    fareCleaning: null,
+  })
+  const mixed = month('2026-08', [reservation, missingCleaning])
+  assert.equal(mixed.metrics.calendarAveragePaidPerNight, '42.86')
+  assert.equal(mixed.metrics.calendarAveragePaidPerNightAfterCleaning, null)
+  assert.equal(mixed.qualityFlags.includes('calendarCleaningIncomplete'), true)
 })

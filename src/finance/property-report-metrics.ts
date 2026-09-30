@@ -411,6 +411,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     formula: 'calendarPaidByGuest / calendarOccupiedNights',
   },
   {
+    id: 'calendarAveragePaidPerNightAfterCleaning',
+    unit: 'money',
+    role: 'indicator',
+    formula: '(paidByGuest - cleaningFee) / calendarOccupiedNights',
+  },
+  {
     id: 'calendarAccommodationRevenue',
     unit: 'money',
     role: 'indicator',

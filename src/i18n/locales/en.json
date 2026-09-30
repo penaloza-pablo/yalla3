@@ -560,6 +560,7 @@
       "calendarOccupiedNights": "Nights a valid reservation occupied inside that month. Checkout is excluded. This is not the night count of the report payouts.",
       "calendarPaidByGuest": "Amount comparable to total paid by guest, spread across the stay nights. It is an analytical attribution and does not change the payout or the month it was reported in.",
       "calendarAveragePaidPerNight": "Average guest payment per night. It appears only when every occupied night in the month has an amount. Missing information stays blank and is not shown as zero.",
+      "calendarAveragePaidPerNightAfterCleaning": "Average guest payment per night after subtracting the cleaning fee. 200, an 88 cleaning fee and 5 nights give 22.40. A missing cleaning fee stays blank.",
       "calendarAccommodationRevenue": "Accommodation revenue for those nights. Cleaning and other charges are excluded. If the stay does not separate accommodation, the month has no figure.",
       "calendarADR": "Average accommodation rate. It is not the average guest payment. It uses only nights with identified accommodation and leaves complimentary stays out."
     }
@@ -3006,6 +3007,7 @@
       "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "The AirDNA reference date is not confirmed.",
       "calendarOverlap": "Two reservations occupy the same unit on the same day. That night is counted once and its amount stays pending.",
       "calendarPriceIncomplete": "Some occupied night has no amount. The average guest payment is not published.",
+      "calendarCleaningIncomplete": "An occupied night is missing its cleaning fee. The average guest payment after cleaning is not published.",
       "calendarAccommodationIncomplete": "Accommodation cannot be separated for every night. The average accommodation rate is not published.",
       "calendarContradictory": "The same reservation has dates, statuses or amounts that do not agree, or the stay interval is not valid. No value is chosen arbitrarily.",
       "calendarUnknownStatus": "A reservation has a status we cannot treat as occupancy. Those nights are not counted.",
@@ -3030,6 +3032,7 @@
       "calendarOccupiedNights": "Occupied nights in the month",
       "calendarPaidByGuest": "Guest amount attributed to the month",
       "calendarAveragePaidPerNight": "Average guest payment per night",
+      "calendarAveragePaidPerNightAfterCleaning": "Average guest payment per night after cleaning fee",
       "calendarAccommodationRevenue": "Accommodation revenue for the month",
       "calendarADR": "Average accommodation rate"
     },
@@ -3037,6 +3040,7 @@
       "calendarOccupiedNights": "Nights a valid reservation spent in that month. The checkout night is not counted. A single-unit home cannot count the same date twice.",
       "calendarPaidByGuest": "The part of total paid by guest that belongs to the nights of that month. Without a nightly rate, it is split evenly and is an estimate. It is not cash received in the month.",
       "calendarAveragePaidPerNight": "Average guest payment per night. It is shown only when every occupied night has an amount. It is not the average accommodation rate.",
+      "calendarAveragePaidPerNightAfterCleaning": "Subtracts the cleaning fee from total paid by guest and divides by the stay nights. 200, an 88 cleaning fee and 5 nights give 22.40. It is shown only when every occupied night has both amounts.",
       "calendarAccommodationRevenue": "Only the accommodation fare identified on the reservation, spread across its nights. Cleaning, taxes and the host payout are not used as a substitute. A dash means that fare is missing.",
       "calendarADR": "Average accommodation rate for nights with that amount. Complimentary stays are excluded. An even split is an estimate, not a real nightly rate."
     }
