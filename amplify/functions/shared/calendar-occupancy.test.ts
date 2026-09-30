@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { FORMULA_CATALOG_VARIABLES } from './property-report-formula.ts'
-import { defaultReportVisibility } from './property-report-settings.ts'
-import { includePayoutInReportMonth } from './property-reports.ts'
+import { FORMULA_CATALOG_VARIABLES } from './property-report-formula'
+import { defaultReportVisibility } from './property-report-settings'
+import { includePayoutInReportMonth } from './property-reports'
 import {
   CALENDAR_METRIC_IDS,
   applyCalendarMetrics,
   calendarMetricsForMonth,
   stayNights,
   type CalendarStayInput,
-} from './calendar-occupancy.ts'
+} from './calendar-occupancy'
 import {
   computePropertyReportMetrics,
   type PropertyReportMetricInputs,
-} from '../../../src/finance/property-report-metrics.ts'
+} from '../../../src/finance/property-report-metrics'
 
 const UPDATED_AT = '2026-09-30T12:00:00.000Z'
 const TODAY = '2026-09-30'
