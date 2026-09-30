@@ -74,3 +74,82 @@
   padding: 8px 0;
   border-bottom: 1px solid var(--yl-stroke);
 }
+
+.historic-month-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.historic-tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.historic-tip-bubble {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 8;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--yl-text);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.historic-tip:hover .historic-tip-bubble,
+.historic-tip:focus-within .historic-tip-bubble {
+  display: block;
+}
+
+.historic-tip.is-warning .btn-page-info {
+  color: var(--yl-warning, #b54708);
+}
+
+.historic-metric-options {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.historic-edit-input {
+  width: 100%;
+  min-width: 96px;
+  min-height: 32px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 8px;
+  background: var(--yl-surface);
+  color: var(--yl-text);
+  padding: 4px 8px;
+}
+
+.historic-stage {
+  position: relative;
+}
+
+.historic-stage.is-loading .historic-stage-body {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.historic-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.historic-finance .table-wrap {
+  overflow-x: auto;
+}

@@ -14,6 +14,8 @@ import {
   overlayReviewMetrics,
   partitionBenchmarks,
   partitionSnapshots,
+  legacyEditAllowed,
+  normalizeEditedMetrics,
   planActualWrite,
   rescuedPercentWindow,
   resolvePropertyByNickname,
@@ -108,6 +110,21 @@ test('maps source metrics once and keeps nulls', () => {
   assert.equal(mapped.channelFee, '549.32');
   assert.equal(SOURCE_FIELD_MAP.cleaningPaidByGuest, 'cleaningPaidByGuest');
   assert.equal(SOURCE_FIELD_MAP.totalExpenses, 'totalExpenses');
+});
+
+test('manual edits stay on imported months before August 2026', () => {
+  assert.equal(legacyEditAllowed('2025-01', 'legacy_excel'), true);
+  assert.equal(legacyEditAllowed('2026-07', 'legacy_excel'), true);
+  assert.equal(legacyEditAllowed('2026-08', 'legacy_excel'), false);
+  assert.equal(legacyEditAllowed('2025-01', 'yalla_native'), false);
+  assert.deepEqual(normalizeEditedMetrics({ paidByGuest: '1,5', totalExpenses: null }), {
+    paidByGuest: '1.5',
+    totalExpenses: null,
+  });
+  assert.throws(
+    () => normalizeEditedMetrics({ fiveStarReviewCount: '2' }),
+    /cannot be edited/,
+  );
 });
 
 test('a second identical actual is skipped and a native month blocks legacy', () => {

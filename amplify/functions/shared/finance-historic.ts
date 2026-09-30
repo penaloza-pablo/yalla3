@@ -177,6 +177,52 @@ export const planActualWrite = (
   return 'revise';
 };
 
+export class HistoricEditError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HistoricEditError';
+  }
+}
+
+/** Manual edits stay on imported months. Yalla months come from Reports. */
+export const legacyEditAllowed = (period: string, dataOrigin: string) =>
+  isMonthId(period) &&
+  period < EXTERNAL_PERIOD_EXCLUSIVE_END &&
+  dataOrigin === 'legacy_excel';
+
+const EDITABLE_METRIC_KEY = /^[A-Za-z][A-Za-z0-9]{0,80}$/;
+
+export const normalizeEditedMetrics = (
+  incoming: Record<string, unknown>,
+) => {
+  const next: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(incoming)) {
+    if (!EDITABLE_METRIC_KEY.test(key)) {
+      throw new HistoricEditError(`Unknown metric ${key}.`);
+    }
+    if ((REVIEW_METRIC_IDS as readonly string[]).includes(key)) {
+      throw new HistoricEditError('Review metrics stay live and cannot be edited.');
+    }
+    if (value == null || value === '') {
+      next[key] = null;
+      continue;
+    }
+    const text =
+      typeof value === 'number'
+        ? String(value)
+        : String(value).trim().replace(',', '.');
+    const parsed = parseDecimal(text);
+    if (parsed == null) {
+      throw new HistoricEditError(`Invalid amount for ${key}.`);
+    }
+    next[key] = amountToDecimalString(parsed);
+  }
+  if (Object.keys(next).length === 0) {
+    throw new HistoricEditError('At least one metric is required.');
+  }
+  return next;
+};
+
 export const mapSourceMetrics = (
   metrics: Record<string, number | null | undefined>,
 ) => {

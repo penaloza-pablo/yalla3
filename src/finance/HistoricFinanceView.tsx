@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  NATIVE_PERIOD_START,
   REVIEW_METRIC_IDS,
   SOURCE_FIELD_MAP,
+  amountToDecimalString,
   annualSeries,
-  compareToReference,
   ltmPeriods,
   metricAggregation,
-  metricPolarity,
   parseDecimal,
   rescuedPercentWindow,
   sumWindow,
 } from '../../amplify/functions/shared/finance-historic'
+import { YlIcon } from '../design/icons'
+import { MobileBodyPortal } from '../MobileBodyPortal'
+import { DismissibleNotice } from '../operations/DismissibleNotice'
 import { fetchJson } from '../operations/api'
-import { PROPERTY_REPORT_FIELD_CATALOG } from './property-report-metrics'
 import { HistoricCharts } from './HistoricCharts'
+import {
+  loadGlobalReportSettings,
+  metricsFromPropertyReportPayload,
+} from './property-report-live-metrics'
+import { PROPERTY_REPORT_FIELD_CATALOG } from './property-report-metrics'
 import './historic-finance.css'
 
 type HistoricProperty = {
@@ -57,11 +64,27 @@ type HistoricResponse = {
   blockedExternalPeriods: string[]
 }
 
+type ReportOverlay = {
+  metrics: Record<string, string | null> | null
+  warning: 'open' | 'ready' | 'missing' | 'grouped' | 'error' | null
+  detail?: string
+}
+
+type Filters = {
+  propertyId: string
+  metricIds: string[]
+  from: string
+  to: string
+  benchmarkKey: string
+}
+
 type Props = {
   mode: 'table' | 'charts'
   getEndpoint: (key: string, fallback?: string) => string | undefined
   properties: HistoricProperty[]
 }
+
+const SERIES_COLORS = ['#3d5b58', '#c45c4e', '#415364', '#7a8a96', '#2e90fa', '#b54708']
 
 const metricIds = [
   ...Object.values(SOURCE_FIELD_MAP),
@@ -74,6 +97,36 @@ const metricIds = [
   ),
 ]
 
+const FILTERS_KEY = 'yalla-historic-filters'
+
+const defaultFilters = (propertyId = ''): Filters => ({
+  propertyId,
+  metricIds: ['paidByGuest'],
+  from: '2025-01',
+  to: '2026-09',
+  benchmarkKey: '',
+})
+
+const readFilters = (propertyId: string): Filters => {
+  try {
+    const raw = sessionStorage.getItem(FILTERS_KEY)
+    if (!raw) return defaultFilters(propertyId)
+    const parsed = JSON.parse(raw) as Partial<Filters>
+    if (!parsed.propertyId || !Array.isArray(parsed.metricIds) || parsed.metricIds.length === 0) {
+      return defaultFilters(propertyId)
+    }
+    return {
+      propertyId: parsed.propertyId,
+      metricIds: parsed.metricIds.filter((id) => typeof id === 'string'),
+      from: typeof parsed.from === 'string' ? parsed.from : '2025-01',
+      to: typeof parsed.to === 'string' ? parsed.to : '2026-09',
+      benchmarkKey: typeof parsed.benchmarkKey === 'string' ? parsed.benchmarkKey : '',
+    }
+  } catch {
+    return defaultFilters(propertyId)
+  }
+}
+
 const unitOf = (metricId: string) => {
   if (metricId === 'cleaningPaidByGuest' || metricId === 'totalExpenses') {
     return 'money' as const
@@ -84,55 +137,164 @@ const unitOf = (metricId: string) => {
   )
 }
 
+const isReviewMetric = (metricId: string) =>
+  (REVIEW_METRIC_IDS as readonly string[]).includes(metricId)
+
+const MonthTip = ({
+  icon,
+  label,
+  text,
+  warning = false,
+}: {
+  icon: 'info.circle' | 'exclamationmark.triangle'
+  label: string
+  text: string
+  warning?: boolean
+}) => (
+  <span className={`historic-tip ${warning ? 'is-warning' : ''}`}>
+    <button type="button" className="btn-page-info" aria-label={label}>
+      <YlIcon name={icon} size={14} />
+    </button>
+    <span className="historic-tip-bubble" role="tooltip">
+      {text}
+    </span>
+  </span>
+)
+
 export function HistoricFinanceView({
   mode,
   getEndpoint,
   properties,
 }: Props) {
-  const { t } = useTranslation()
-  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
-  const [metricId, setMetricId] = useState('paidByGuest')
-  const [from, setFrom] = useState('2025-01')
-  const [to, setTo] = useState('2026-09')
-  const [benchmarkKey, setBenchmarkKey] = useState('')
+  const { t, i18n } = useTranslation()
+  const [filters, setFilters] = useState<Filters>(() =>
+    readFilters(properties[0]?.id ?? ''),
+  )
+  const [draft, setDraft] = useState<Filters>(() =>
+    readFilters(properties[0]?.id ?? ''),
+  )
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const [payload, setPayload] = useState<HistoricResponse | null>(null)
+  const [reportByPeriod, setReportByPeriod] = useState<Record<string, ReportOverlay>>(
+    {},
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editDraft, setEditDraft] = useState<Record<string, Record<string, string>>>(
+    {},
+  )
+  const [savingEdits, setSavingEdits] = useState(false)
+  const [editMessage, setEditMessage] = useState<string | null>(null)
+  const [editTone, setEditTone] = useState<'error' | 'success'>('success')
   const [eventDate, setEventDate] = useState('2025-01-01')
   const [eventTitle, setEventTitle] = useState('')
   const [eventNote, setEventNote] = useState('')
   const [eventMessage, setEventMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!propertyId && properties[0]) setPropertyId(properties[0].id)
-  }, [properties, propertyId])
+    if (filters.propertyId) {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify(filters))
+    }
+  }, [filters])
+
+  useEffect(() => {
+    if (!filters.propertyId && properties[0]) {
+      const next = defaultFilters(properties[0].id)
+      setFilters(next)
+      setDraft(next)
+    }
+  }, [filters.propertyId, properties])
 
   const load = useCallback(async () => {
-    const endpoint = getEndpoint('getFinanceHistoricUrl')
-    if (!endpoint || !propertyId) {
+    const endpoint =
+      getEndpoint('getFinanceHistoricUrl') || getEndpoint('getPropertyReportUrl')
+    if (!endpoint) {
       setError(t('historicFinance.missingEndpoint'))
       return
     }
+    if (!filters.propertyId) return
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
-        propertyId,
-        from,
-        to,
+        propertyId: filters.propertyId,
+        from: filters.from,
+        to: filters.to,
         historic: '1',
       })
       const next = await fetchJson<HistoricResponse>(
         `${endpoint}?${params.toString()}`,
       )
+      const reportUrl = getEndpoint('getPropertyReportUrl') || endpoint
+      const nativeMonths = next.months.filter(
+        (month) => month.period >= NATIVE_PERIOD_START,
+      )
+      const overlays: Record<string, ReportOverlay> = {}
+      if (reportUrl && nativeMonths.length > 0) {
+        const globalSettings = await loadGlobalReportSettings(reportUrl, fetchJson)
+        const pages = []
+        for (let index = 0; index < nativeMonths.length; index += 2) {
+          pages.push(nativeMonths.slice(index, index + 2))
+        }
+        for (const page of pages) {
+          await Promise.all(
+            page.map(async (month) => {
+              try {
+                const report = await fetchJson<Record<string, unknown>>(
+                  `${reportUrl}?propertyId=${encodeURIComponent(filters.propertyId)}&month=${encodeURIComponent(month.period)}`,
+                )
+                const computed = metricsFromPropertyReportPayload(
+                  report,
+                  month.period,
+                  globalSettings,
+                )
+                const metrics: Record<string, string | null> = {}
+                for (const [key, value] of Object.entries(computed.values)) {
+                  if (typeof value === 'number' && Number.isFinite(value)) {
+                    metrics[key] = amountToDecimalString(value)
+                  }
+                }
+                overlays[month.period] = {
+                  metrics,
+                  warning: computed.closed
+                    ? null
+                    : computed.status === 'READY_TO_CLOSE'
+                      ? 'ready'
+                      : 'open',
+                }
+              } catch (reportError) {
+                const message =
+                  reportError instanceof Error ? reportError.message : ''
+                const grouped = message.match(/reported together under (.+?)\.?$/i)
+                overlays[month.period] = {
+                  metrics: null,
+                  warning: grouped
+                    ? 'grouped'
+                    : /not available/i.test(message)
+                      ? 'missing'
+                      : 'error',
+                  detail: grouped?.[1],
+                }
+              }
+            }),
+          )
+        }
+      }
+      setReportByPeriod(overlays)
       setPayload(next)
-      setBenchmarkKey((current) =>
-        next.benchmarks.some((item) => item.benchmarkKey === current)
+      setFilters((current) =>
+        next.benchmarks.some((item) => item.benchmarkKey === current.benchmarkKey)
           ? current
-          : (next.benchmarks[0]?.benchmarkKey ?? ''),
+          : {
+              ...current,
+              benchmarkKey: next.benchmarks[0]?.benchmarkKey ?? '',
+            },
       )
     } catch (loadError) {
       setPayload(null)
+      setReportByPeriod({})
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -141,74 +303,130 @@ export function HistoricFinanceView({
     } finally {
       setLoading(false)
     }
-  }, [from, getEndpoint, propertyId, t, to])
+  }, [filters.from, filters.propertyId, filters.to, getEndpoint, t])
 
   useEffect(() => {
     void load()
   }, [load])
 
+  const selectedMetrics = filters.metricIds.length > 0 ? filters.metricIds : ['paidByGuest']
   const benchmark = payload?.benchmarks.find(
-    (item) => item.benchmarkKey === benchmarkKey,
+    (item) => item.benchmarkKey === filters.benchmarkKey,
   )
-  const referenceValue = parseDecimal(benchmark?.metrics[metricId])
-  const unit = unitOf(metricId)
-  const polarity = metricPolarity(metricId)
 
-  const formatValue = useCallback(
-    (value: number | null) => {
+  const metricLabel = useCallback(
+    (id: string) =>
+      t(`historicFinance.metrics.${id}`, {
+        defaultValue: t(`propertyReports.formulaVars.${id}`, { defaultValue: id }),
+      }),
+    [t],
+  )
+
+  const formatMetric = useCallback(
+    (metricId: string, value: number | null) => {
       if (value == null) return '—'
+      const locale = i18n.language.startsWith('es') ? 'es-ES' : 'en-GB'
+      const unit = unitOf(metricId)
       if (unit === 'percent') {
-        return `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value)} %`
+        return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)} %`
       }
       if (unit === 'count') {
-        return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(
+        return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
           value,
         )
       }
-      return new Intl.NumberFormat('es-ES', {
+      return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: 'EUR',
       }).format(value)
     },
-    [unit],
+    [i18n.language],
   )
 
-  const points = useMemo(
-    () =>
+  const metricsFor = useCallback(
+    (month: MonthRow) => {
+      const overlay = reportByPeriod[month.period]
+      if (!overlay?.metrics) return month.metrics
+      return { ...month.metrics, ...overlay.metrics }
+    },
+    [reportByPeriod],
+  )
+
+  const warningFor = (month: MonthRow) => {
+    if (month.period < NATIVE_PERIOD_START) return null
+    return reportByPeriod[month.period]?.warning ?? null
+  }
+
+  const warningText = (overlay: ReportOverlay | undefined) => {
+    const code = overlay?.warning
+    if (code === 'ready') return t('historicFinance.reportReady')
+    if (code === 'missing') return t('historicFinance.reportMissing')
+    if (code === 'grouped') {
+      return t('historicFinance.reportGrouped', { name: overlay?.detail ?? '' })
+    }
+    if (code === 'error') return t('historicFinance.reportError')
+    if (code === 'open') return t('historicFinance.reportOpen')
+    return ''
+  }
+
+  const points = useMemo(() => {
+    const rows = payload?.months ?? []
+    return rows.map((month) => {
+      const metrics = metricsFor(month)
+      const row: Record<string, string | number | null> = { period: month.period }
+      for (const metricId of selectedMetrics) {
+        row[metricId] = parseDecimal(metrics[metricId])
+        row[`ref:${metricId}`] = parseDecimal(benchmark?.metrics[metricId])
+      }
+      return row
+    })
+  }, [benchmark?.metrics, metricsFor, payload?.months, selectedMetrics])
+
+  const chartSeries = selectedMetrics.map((metricId, index) => ({
+    id: metricId,
+    label: metricLabel(metricId),
+    unit: unitOf(metricId),
+    color: SERIES_COLORS[index % SERIES_COLORS.length],
+    reference: parseDecimal(benchmark?.metrics[metricId]),
+  }))
+
+  const annuals = selectedMetrics.map((metricId) => {
+    const annual = annualSeries(
       (payload?.months ?? []).map((month) => ({
         period: month.period,
-        actual: parseDecimal(month.metrics[metricId]),
-        reference: referenceValue,
+        value: parseDecimal(metricsFor(month)[metricId]),
       })),
-    [metricId, payload?.months, referenceValue],
-  )
+    )
+    return {
+      id: metricId,
+      title: `${t('historicFinance.annualTitle')} · ${metricLabel(metricId)}`,
+      rows: annual.rows,
+      years: annual.years,
+      formatValue: (value: number | null) => formatMetric(metricId, value),
+    }
+  })
 
-  const annual = useMemo(
-    () =>
-      annualSeries(
-        points.map((point) => ({ period: point.period, value: point.actual })),
-      ),
-    [points],
-  )
+  const activeFilterCount = useMemo(() => {
+    const defaults = defaultFilters(properties[0]?.id ?? '')
+    const metricsChanged =
+      selectedMetrics.length !== 1 || selectedMetrics[0] !== 'paidByGuest'
+    return (
+      (filters.propertyId && filters.propertyId !== defaults.propertyId ? 1 : 0) +
+      (metricsChanged ? 1 : 0) +
+      (filters.from !== defaults.from ? 1 : 0) +
+      (filters.to !== defaults.to ? 1 : 0)
+    )
+  }, [filters.from, filters.propertyId, filters.to, properties, selectedMetrics])
 
-  const window = sumWindow(points.map((point) => point.actual))
-  const ltm = sumWindow(
-    ltmPeriods(to)
-      .filter((period) => period >= from)
-      .map(
-        (period) =>
-          points.find((point) => point.period === period)?.actual ?? null,
-      ),
-  )
-  const rescuedWindow = rescuedPercentWindow(
-    (payload?.months ?? []).map((month) => month.rescuedUnderFiveStarReviewCount),
-    (payload?.months ?? []).map((month) =>
-      parseDecimal(month.metrics.underFiveStarReviewCount),
-    ),
+  const dirtyCount = Object.values(editDraft).reduce(
+    (sum, fields) => sum + Object.keys(fields).length,
+    0,
   )
 
   const saveEvent = async () => {
-    const endpoint = getEndpoint('upsertFinanceHistoricEventUrl')
+    const endpoint =
+      getEndpoint('upsertFinanceHistoricEventUrl') ||
+      getEndpoint('upsertPropertyReportUrl')
     if (!endpoint) {
       setEventMessage(t('historicFinance.missingEndpoint'))
       return
@@ -218,7 +436,7 @@ export function HistoricFinanceView({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          propertyId,
+          propertyId: filters.propertyId,
           action: 'historic-event',
           eventAction: 'create',
           date: eventDate,
@@ -240,111 +458,400 @@ export function HistoricFinanceView({
   }
 
   const deleteEvent = async (event: HistoricEvent) => {
-    const endpoint = getEndpoint('upsertFinanceHistoricEventUrl')
+    const endpoint =
+      getEndpoint('upsertFinanceHistoricEventUrl') ||
+      getEndpoint('upsertPropertyReportUrl')
     if (!endpoint) return
     await fetchJson(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          propertyId,
-          action: 'historic-event',
-          eventAction: 'delete',
-          eventId: event.eventId,
-          date: event.date,
-          title: event.title,
-        }),
+      body: JSON.stringify({
+        propertyId: filters.propertyId,
+        action: 'historic-event',
+        eventAction: 'delete',
+        eventId: event.eventId,
+        date: event.date,
+        title: event.title,
+      }),
     })
     await load()
   }
 
-  const metricLabel = (id: string) =>
-    t(`historicFinance.metrics.${id}`, {
-      defaultValue: t(`propertyReports.formulaVars.${id}`, { defaultValue: id }),
-    })
+  const saveEdits = async () => {
+    const endpoint =
+      getEndpoint('upsertFinanceHistoricEventUrl') ||
+      getEndpoint('upsertPropertyReportUrl')
+    if (!endpoint) {
+      setEditMessage(t('historicFinance.missingEndpoint'))
+      return
+    }
+    setSavingEdits(true)
+    setEditMessage(null)
+    try {
+      for (const [period, fields] of Object.entries(editDraft)) {
+        if (Object.keys(fields).length === 0) continue
+        await fetchJson(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            action: 'historic-values',
+            propertyId: filters.propertyId,
+            period,
+            metrics: fields,
+          }),
+        })
+      }
+      setEditing(false)
+      setEditDraft({})
+      setEditTone('success')
+      setEditMessage(t('historicFinance.editSaved'))
+      await load()
+    } catch (saveError) {
+      setEditTone('error')
+      setEditMessage(
+        saveError instanceof Error
+          ? saveError.message
+          : t('historicFinance.editError'),
+      )
+    } finally {
+      setSavingEdits(false)
+    }
+  }
 
-  const nativeLabel = (value: string | null) => {
-    if (value === 'missing') return t('historicFinance.nativeMissing')
-    if (value === 'open') return t('historicFinance.nativeOpen')
-    if (value === 'closed_without_snapshot') return t('historicFinance.nativePending')
-    return null
+  const openFilters = () => {
+    setDraft({
+      ...filters,
+      metricIds: [...selectedMetrics],
+    })
+    setFilterOpen(true)
+  }
+
+  const toggleMetric = (metricId: string, checked: boolean) => {
+    setDraft((current) => {
+      const metricIds = checked
+        ? [...current.metricIds, metricId]
+        : current.metricIds.filter((id) => id !== metricId)
+      return { ...current, metricIds }
+    })
   }
 
   return (
     <section className="historic-finance">
-      <header>
-        <h1 className="page-title">
-          {mode === 'table' ? 'Historic table' : 'Historic Charts'}
-        </h1>
-        <p className="subtitle">
-          {mode === 'table'
-            ? t('historicFinance.tableSubtitle')
-            : t('historicFinance.chartsSubtitle')}
-        </p>
-      </header>
-      <div className="historic-finance-filters">
-        <label>
-          {t('historicFinance.property')}
-          <select
-            value={propertyId}
-            onChange={(event) => setPropertyId(event.target.value)}
-          >
-            {properties.map((property) => (
-              <option key={property.id} value={property.id}>
-                {property.nickname} (
-                {property.active
-                  ? t('historicFinance.active')
-                  : t('historicFinance.inactive')}
-                )
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('historicFinance.metric')}
-          <select
-            value={metricId}
-            onChange={(event) => setMetricId(event.target.value)}
-          >
-            {metricIds.map((id) => (
-              <option key={id} value={id}>
-                {metricLabel(id)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('historicFinance.from')}
-          <input
-            type="month"
-            value={from}
-            onChange={(event) => setFrom(event.target.value)}
-          />
-        </label>
-        <label>
-          {t('historicFinance.to')}
-          <input
-            type="month"
-            value={to}
-            onChange={(event) => setTo(event.target.value)}
-          />
-        </label>
-        {payload && payload.benchmarks.length > 0 ? (
-          <label>
-            {t('historicFinance.benchmark')}
-            <select
-              value={benchmarkKey}
-              onChange={(event) => setBenchmarkKey(event.target.value)}
+      <header className="page-header">
+        <div className="page-header-leading">
+          <div className="page-title-row">
+            <h1 className="page-title">
+              {mode === 'table' ? 'Historic table' : 'Historic Charts'}
+            </h1>
+            <button
+              type="button"
+              className={`btn-page-info ${summaryOpen ? 'is-active' : ''}`}
+              aria-label={
+                summaryOpen ? t('common.hideSummaryInfo') : t('common.showSummaryInfo')
+              }
+              aria-expanded={summaryOpen}
+              onClick={() => setSummaryOpen((current) => !current)}
             >
-              {payload.benchmarks.map((item) => (
-                <option key={item.benchmarkKey} value={item.benchmarkKey}>
-                  {item.label}
-                  {item.asOfDateLabel ? ` (${item.asOfDateLabel})` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </div>
+              <YlIcon name="info.circle" size={14} />
+            </button>
+          </div>
+          <p className="subtitle">
+            {mode === 'table'
+              ? t('historicFinance.tableSubtitle')
+              : t('historicFinance.chartsSubtitle')}
+          </p>
+        </div>
+        <MobileBodyPortal>
+          <div className="page-action-bar">
+            <div className="header-actions">
+              {mode === 'table' && editing ? (
+                <>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    aria-label={t('historicFinance.cancelEdits')}
+                    title={t('historicFinance.cancelEdits')}
+                    onClick={() => {
+                      setEditing(false)
+                      setEditDraft({})
+                    }}
+                    disabled={savingEdits}
+                  >
+                    <YlIcon name="xmark" size={16} />
+                  </button>
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    aria-label={t('historicFinance.saveEdits')}
+                    title={t('historicFinance.saveEdits')}
+                    onClick={() => void saveEdits()}
+                    disabled={savingEdits || dirtyCount === 0}
+                  >
+                    <YlIcon name="checkmark" size={16} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={`btn-ghost btn-filter ${filterOpen ? 'is-active' : ''}`}
+                    type="button"
+                    aria-label={t('common.filters')}
+                    onClick={openFilters}
+                    disabled={loading}
+                  >
+                    <YlIcon name="line.3.horizontal.decrease" size={16} />
+                    {activeFilterCount > 0 ? (
+                      <span className="filter-badge">{activeFilterCount}</span>
+                    ) : null}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    aria-label={t('common.refresh')}
+                    title={t('common.refresh')}
+                    onClick={() => void load()}
+                    disabled={loading}
+                  >
+                    <YlIcon name="arrow.clockwise" size={16} />
+                  </button>
+                  {mode === 'table' ? (
+                    <button
+                      className="btn-primary"
+                      type="button"
+                      aria-label={t('historicFinance.edit')}
+                      title={t('historicFinance.edit')}
+                      onClick={() => {
+                        setEditing(true)
+                        setEditDraft({})
+                        setEditMessage(null)
+                      }}
+                      disabled={loading || !payload}
+                    >
+                      <YlIcon name="pencil" size={16} />
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </MobileBodyPortal>
+      </header>
+
+      {error ? (
+        <DismissibleNotice dismissLabel={t('common.close')} onDismiss={() => setError(null)}>
+          {error}
+        </DismissibleNotice>
+      ) : null}
+      {editMessage ? (
+        <DismissibleNotice
+          variant={editTone}
+          dismissLabel={t('common.close')}
+          onDismiss={() => setEditMessage(null)}
+        >
+          {editMessage}
+        </DismissibleNotice>
+      ) : null}
+
+      {summaryOpen && payload ? (
+        <section className="summary-cards is-open">
+          {selectedMetrics.map((metricId) => {
+            const values = (payload.months ?? []).map((month) =>
+              parseDecimal(metricsFor(month)[metricId]),
+            )
+            const window = sumWindow(values)
+            const ltm = sumWindow(
+              ltmPeriods(filters.to)
+                .filter((period) => period >= filters.from)
+                .map(
+                  (period) =>
+                    values[
+                      (payload.months ?? []).findIndex((month) => month.period === period)
+                    ] ?? null,
+                ),
+            )
+            const rescued =
+              metricId === 'rescuedUnderFiveStarReviewPercent'
+                ? rescuedPercentWindow(
+                    (payload.months ?? []).map(
+                      (month) => month.rescuedUnderFiveStarReviewCount,
+                    ),
+                    (payload.months ?? []).map((month) =>
+                      parseDecimal(metricsFor(month).underFiveStarReviewCount),
+                    ),
+                  )
+                : null
+            return (
+              <div className="card card-compact" key={metricId}>
+                <p className="card-label">{metricLabel(metricId)}</p>
+                <p className="card-value">
+                  {rescued
+                    ? formatMetric(metricId, rescued.percent)
+                    : metricAggregation(metricId) === 'sum'
+                      ? formatMetric(metricId, window.total)
+                      : formatMetric(metricId, window.average)}
+                </p>
+                <p className="card-meta">
+                  {t('historicFinance.monthsAvailable', {
+                    available: window.monthsAvailable,
+                    total: window.monthsInWindow,
+                  })}
+                  . {t('historicFinance.ltm')}: {ltm.monthsAvailable}/{ltm.monthsInWindow}
+                </p>
+              </div>
+            )
+          })}
+        </section>
+      ) : null}
+
+      {filterOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal modal-scrollable">
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">{t('common.filters')}</h3>
+                <p className="modal-subtitle">{t('historicFinance.filterSubtitle')}</p>
+              </div>
+              <button
+                className="btn-icon"
+                type="button"
+                onClick={() => setFilterOpen(false)}
+                aria-label={t('common.closeFilters')}
+              >
+                <YlIcon name="xmark" size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <p className="filter-title">{t('historicFinance.property')}</p>
+                  <label className="form-field">
+                    <span>{t('historicFinance.property')}</span>
+                    <select
+                      className="select-input"
+                      value={draft.propertyId}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          propertyId: event.target.value,
+                        }))
+                      }
+                    >
+                      {properties.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {property.nickname} (
+                          {property.active
+                            ? t('historicFinance.active')
+                            : t('historicFinance.inactive')}
+                          )
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('historicFinance.metricsLabel')}</p>
+                  <div className="filter-options historic-metric-options">
+                    {metricIds.map((id) => (
+                      <label className="filter-option" key={id}>
+                        <input
+                          type="checkbox"
+                          checked={draft.metricIds.includes(id)}
+                          onChange={(event) => toggleMetric(id, event.target.checked)}
+                        />
+                        <span>{metricLabel(id)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <p className="filter-title">{t('historicFinance.from')}</p>
+                  <div className="filter-options">
+                    <label className="form-field">
+                      <span>{t('historicFinance.from')}</span>
+                      <input
+                        type="month"
+                        value={draft.from}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            from: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>{t('historicFinance.to')}</span>
+                      <input
+                        type="month"
+                        value={draft.to}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            to: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+                {payload && payload.benchmarks.length > 0 ? (
+                  <div className="filter-group">
+                    <p className="filter-title">{t('historicFinance.benchmark')}</p>
+                    <label className="form-field">
+                      <span>{t('historicFinance.benchmark')}</span>
+                      <select
+                        className="select-input"
+                        value={draft.benchmarkKey}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            benchmarkKey: event.target.value,
+                          }))
+                        }
+                      >
+                        {payload.benchmarks.map((item) => (
+                          <option key={item.benchmarkKey} value={item.benchmarkKey}>
+                            {item.label}
+                            {item.asOfDateLabel ? ` (${item.asOfDateLabel})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() =>
+                  setDraft(defaultFilters(properties[0]?.id ?? filters.propertyId))
+                }
+              >
+                {t('common.clear')}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={draft.metricIds.length === 0 || draft.from > draft.to}
+                onClick={() => {
+                  setFilters({
+                    ...draft,
+                    metricIds: [...draft.metricIds],
+                  })
+                  setEditing(false)
+                  setEditDraft({})
+                  setFilterOpen(false)
+                }}
+              >
+                {t('common.applyFilters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {payload?.blockedExternalPeriods.length ? (
         <p className="historic-note">
           {t('historicFinance.blockedExternal', {
@@ -352,139 +859,150 @@ export function HistoricFinanceView({
           })}
         </p>
       ) : null}
-      {loading ? <p className="historic-note">{t('historicFinance.loading')}</p> : null}
-      {error ? <p className="historic-note">{error}</p> : null}
-      {!loading && payload && payload.months.length === 0 ? (
-        <p className="historic-note">{t('historicFinance.empty')}</p>
-      ) : null}
-      {payload ? (
-        <p className="historic-note">
-          {t('historicFinance.window')}: {t('historicFinance.calendarYear')}{' '}
-          {from.slice(0, 4)}–{to.slice(0, 4)}. {t('historicFinance.ltm')}:{' '}
-          {t('historicFinance.monthsAvailable', {
-            available: ltm.monthsAvailable,
-            total: ltm.monthsInWindow,
-          })}
-          .{' '}
-          {metricAggregation(metricId) === 'sum' ? (
-            <>
-              {t('historicFinance.total')} {formatValue(window.total)}. {' '}
-              {t('historicFinance.average')} {formatValue(window.average)} (
-              {t('historicFinance.monthsAvailable', {
-                available: window.monthsAvailable,
-                total: window.monthsInWindow,
-              })}
-              ).
-            </>
-          ) : metricId === 'rescuedUnderFiveStarReviewPercent' ? (
-            <>
-              {t('historicFinance.average')} {formatValue(rescuedWindow.percent)} (
-              {t('historicFinance.monthsAvailable', {
-                available: rescuedWindow.monthsAvailable,
-                total: payload.months.length,
-              })}
-              ).
-            </>
-          ) : null}{' '}
-          {t('historicFinance.reviewsLive')}
-        </p>
-      ) : null}
+      {editing ? <p className="historic-note">{t('historicFinance.editHint')}</p> : null}
+
       {mode === 'charts' && payload ? (
         <HistoricCharts
           points={points}
-          annualRows={annual.rows}
-          years={annual.years}
+          series={chartSeries}
+          annuals={annuals}
           eventMarks={(payload.events ?? [])
-            .filter((event) => event.date.slice(0, 7) >= from && event.date.slice(0, 7) <= to)
+            .filter(
+              (event) =>
+                event.date.slice(0, 7) >= filters.from &&
+                event.date.slice(0, 7) <= filters.to,
+            )
             .map((event) => ({
               period: event.date.slice(0, 7),
               label: event.title,
             }))}
-          formatValue={formatValue}
           evolutionTitle={t('historicFinance.evolutionTitle')}
-          annualTitle={t('historicFinance.annualTitle')}
-          actualLabel={t('historicFinance.actual')}
           referenceLabel={t('historicFinance.reference')}
+          formatValue={formatMetric}
+          loading={loading}
+          loadingLabel={t('historicFinance.loading')}
         />
       ) : null}
-      {payload ? (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('historicFinance.period')}</th>
-                <th>{t('historicFinance.actual')}</th>
-                <th>{t('historicFinance.reference')}</th>
-                <th>{t('historicFinance.deviation')}</th>
-                <th>{t('historicFinance.deviationPercent')}</th>
-                <th>{t('historicFinance.eventsTitle')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payload.months.map((month) => {
-                const actual = parseDecimal(month.metrics[metricId])
-                const deviation = compareToReference(
-                  actual,
-                  referenceValue,
-                  polarity,
-                )
-                const events = (payload.events ?? []).filter(
-                  (event) => event.date.slice(0, 7) === month.period,
-                )
-                const note = nativeLabel(month.nativeClose)
-                return (
-                  <tr key={month.period}>
-                    <td>
-                      {month.period}
-                      {month.qualityFlags.map((flag) => (
-                        <div key={flag} className="historic-note">
-                          {t(`historicFinance.quality.${flag}`, {
-                            defaultValue: flag,
-                          })}
-                        </div>
-                      ))}
-                      {note ? <div className="historic-note">{note}</div> : null}
-                    </td>
-                    <td>{formatValue(actual)}</td>
-                    <td>
-                      {referenceValue == null
-                        ? t('historicFinance.noReference')
-                        : formatValue(referenceValue)}
-                    </td>
-                    <td
-                      className={
-                        deviation.favorable == null
-                          ? undefined
-                          : deviation.favorable
-                            ? 'historic-favorable'
-                            : 'historic-unfavorable'
-                      }
-                    >
-                      {formatValue(deviation.amount)}
-                      {deviation.favorable == null
-                        ? ''
-                        : ` (${deviation.favorable ? t('historicFinance.favorable') : t('historicFinance.unfavorable')})`}
-                    </td>
-                    <td>
-                      {deviation.percent == null
-                        ? t('historicFinance.percentUnavailable')
-                        : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(deviation.percent)} %`}
-                    </td>
-                    <td>
-                      {events.map((event) => (
-                        <div key={event.eventId}>
-                          {event.date.slice(8)} {event.title}
-                          {event.note ? `: ${event.note}` : ''}
-                        </div>
-                      ))}
-                    </td>
+
+      {mode === 'table' ? (
+        <div className={`historic-stage ${loading ? 'is-loading' : ''}`}>
+          {loading ? (
+            <div className="historic-loading" role="status">
+              <div className="page-loader-spinner" />
+              <p>{t('historicFinance.loading')}</p>
+            </div>
+          ) : null}
+          <div className="historic-stage-body table-wrap">
+            {!loading && payload && payload.months.length === 0 ? (
+              <p className="historic-note">{t('historicFinance.empty')}</p>
+            ) : null}
+            {payload ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('historicFinance.period')}</th>
+                    {selectedMetrics.map((metricId) => (
+                      <th key={metricId}>{metricLabel(metricId)}</th>
+                    ))}
+                    <th>{t('historicFinance.eventsTitle')}</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {payload.months.map((month) => {
+                    const metrics = metricsFor(month)
+                    const warning = warningFor(month)
+                    const warningOverlay = reportByPeriod[month.period]
+                    const flags = month.qualityFlags
+                    const editable =
+                      editing && month.dataOrigin === 'legacy_excel'
+                    const events = (payload.events ?? []).filter(
+                      (event) => event.date.slice(0, 7) === month.period,
+                    )
+                    return (
+                      <tr key={month.period}>
+                        <td>
+                          <span className="historic-month-label">
+                            {month.period}
+                            {warning ? (
+                              <MonthTip
+                                icon="exclamationmark.triangle"
+                                warning
+                                label={t('historicFinance.reportWarning')}
+                                text={warningText(warningOverlay)}
+                              />
+                            ) : null}
+                            {flags.length > 0 ? (
+                              <MonthTip
+                                icon="info.circle"
+                                label={t('historicFinance.qualityInfo')}
+                                text={flags
+                                  .map((flag) =>
+                                    t(`historicFinance.quality.${flag}`, {
+                                      defaultValue: flag,
+                                    }),
+                                  )
+                                  .join('\n')}
+                              />
+                            ) : null}
+                          </span>
+                        </td>
+                        {selectedMetrics.map((metricId) => {
+                          const stored = metrics[metricId] ?? ''
+                          const draftValue = editDraft[month.period]?.[metricId]
+                          if (editable && !isReviewMetric(metricId)) {
+                            return (
+                              <td key={metricId}>
+                                <input
+                                  className="historic-edit-input"
+                                  inputMode="decimal"
+                                  aria-label={`${month.period} ${metricLabel(metricId)}`}
+                                  value={draftValue ?? stored}
+                                  onChange={(event) => {
+                                    const value = event.target.value
+                                    setEditDraft((current) => {
+                                      const fields = { ...(current[month.period] ?? {}) }
+                                      if (value === stored) {
+                                        delete fields[metricId]
+                                      } else {
+                                        fields[metricId] = value
+                                      }
+                                      const next = { ...current }
+                                      if (Object.keys(fields).length === 0) {
+                                        delete next[month.period]
+                                      } else {
+                                        next[month.period] = fields
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                />
+                              </td>
+                            )
+                          }
+                          return (
+                            <td key={metricId}>
+                              {formatMetric(metricId, parseDecimal(stored || null))}
+                            </td>
+                          )
+                        })}
+                        <td>
+                          {events.map((event) => (
+                            <div key={event.eventId}>
+                              {event.date.slice(8)} {event.title}
+                              {event.note ? `: ${event.note}` : ''}
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
         </div>
       ) : null}
+
       {mode === 'charts' ? (
         <section className="card historic-events">
           <h2 className="page-title">{t('historicFinance.eventsTitle')}</h2>

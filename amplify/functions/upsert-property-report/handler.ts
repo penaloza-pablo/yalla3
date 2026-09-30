@@ -30,7 +30,10 @@ import {
   writeCurrentActual,
 } from '../shared/finance-historic-store';
 import { docClient, putItem } from '../shared/visit-task-utils';
-import { handler as upsertFinanceHistoricEvent } from '../upsert-finance-historic-event/handler';
+import {
+  editHistoricValues,
+  handler as upsertFinanceHistoricEvent,
+} from '../upsert-finance-historic-event/handler';
 import {
   asString,
   currentReportMonthId,
@@ -111,8 +114,12 @@ export const handler = async (event: {
     if (denied) return denied;
   }
   const earlyPayload = parseBody<{ action?: string }>(event.body);
-  if (asString(earlyPayload?.action).toLowerCase() === 'historic-event') {
+  const earlyAction = asString(earlyPayload?.action).toLowerCase();
+  if (earlyAction === 'historic-event') {
     return upsertFinanceHistoricEvent(event);
+  }
+  if (earlyAction === 'historic-values') {
+    return editHistoricValues(event);
   }
 
   const tableName = process.env.TABLE_NAME;

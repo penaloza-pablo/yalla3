@@ -3293,6 +3293,8 @@ function App() {
       activePage === 'Template Auto Assign' ||
       activePage === 'Job scheduler' ||
       activePage === 'Property Reports' ||
+      activePage === 'Historic table' ||
+      activePage === 'Historic Charts' ||
       activePage === 'Property Groups' ||
       activePage === 'Movements' ||
       activePage === 'Services & Subscriptions' ||

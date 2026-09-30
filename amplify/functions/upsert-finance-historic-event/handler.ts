@@ -9,12 +9,21 @@ import {
 } from '../shared/dynamo-http';
 import {
   HISTORIC_ACCOUNT_ID,
+  HistoricEditError,
+  actualSortKey,
   eventSortKey,
   isIsoDate,
+  isMonthId,
+  legacyEditAllowed,
+  normalizeEditedMetrics,
+  stripReviewMetrics,
 } from '../shared/finance-historic';
 import {
   deleteHistoricEvent,
+  emptyActualItem,
+  getHistoricItem,
   putHistoricEvent,
+  writeCurrentActual,
 } from '../shared/finance-historic-store';
 import { docClient } from '../shared/visit-task-utils';
 
@@ -119,6 +128,102 @@ export const handler = async (event: HttpEvent) => {
   } catch (error) {
     return buildHttpResponse(500, {
       message: 'Failed to save the historic event.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+const asMetricMap = (value: unknown) => {
+  const metrics: Record<string, string | null> = {};
+  if (!value || typeof value !== 'object') return metrics;
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    metrics[key] = typeof entry === 'string' ? entry : null;
+  }
+  return metrics;
+};
+
+const asFlags = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+
+export const editHistoricValues = async (event: HttpEvent) => {
+  const tableName = process.env.HISTORIC_TABLE;
+  const propertiesTable = process.env.PROPERTIES_TABLE;
+  if (!tableName || !propertiesTable) {
+    return buildHttpResponse(500, {
+      message: 'Historic tables are not configured.',
+    });
+  }
+  const payload = parseBody<{
+    propertyId?: string;
+    period?: string;
+    metrics?: Record<string, unknown>;
+  }>(event.body);
+  const propertyId = asString(payload?.propertyId);
+  const period = asString(payload?.period);
+  if (!propertyId || !isMonthId(period)) {
+    return buildHttpResponse(400, {
+      message: 'propertyId and period (YYYY-MM) are required.',
+    });
+  }
+  if (!payload?.metrics || typeof payload.metrics !== 'object') {
+    return buildHttpResponse(400, { message: 'metrics are required.' });
+  }
+
+  try {
+    const property = await docClient.send(
+      new GetCommand({
+        TableName: propertiesTable,
+        Key: { id: propertyId },
+      }),
+    );
+    if (!property.Item) {
+      return buildHttpResponse(404, { message: 'Property was not found.' });
+    }
+    const existing = await getHistoricItem(
+      tableName,
+      propertyId,
+      actualSortKey(period),
+    );
+    const dataOrigin = asString(existing?.dataOrigin);
+    if (!existing || !legacyEditAllowed(period, dataOrigin)) {
+      return buildHttpResponse(409, {
+        message: 'Only imported months before August 2026 can be edited.',
+      });
+    }
+    const edited = normalizeEditedMetrics(payload.metrics);
+    const metrics = stripReviewMetrics({
+      ...asMetricMap(existing.metrics),
+      ...edited,
+    });
+    const provenance =
+      existing.provenance && typeof existing.provenance === 'object'
+        ? { ...(existing.provenance as Record<string, unknown>) }
+        : {};
+    provenance.manualEditAt = nowIso();
+    await writeCurrentActual(
+      tableName,
+      emptyActualItem({
+        propertyId,
+        period,
+        dataOrigin: 'legacy_excel',
+        metrics,
+        qualityFlags: asFlags(existing.qualityFlags),
+        provenance,
+        propertyKey: asString(existing.propertyKey) || undefined,
+        nickname: asString(existing.nickname) || asString(property.Item.nickname),
+        sourceSha256: asString(existing.sourceSha256) || undefined,
+        updatedAt: nowIso(),
+      }),
+    );
+    return buildHttpResponse(200, { propertyId, period, metrics });
+  } catch (error) {
+    if (error instanceof HistoricEditError) {
+      return buildHttpResponse(400, { message: error.message });
+    }
+    return buildHttpResponse(500, {
+      message: 'Failed to save the historic values.',
       details: error instanceof Error ? error.message : String(error),
     });
   }
