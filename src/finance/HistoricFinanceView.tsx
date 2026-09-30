@@ -116,7 +116,12 @@ export function HistoricFinanceView({
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ propertyId, from, to })
+      const params = new URLSearchParams({
+        propertyId,
+        from,
+        to,
+        historic: '1',
+      })
       const next = await fetchJson<HistoricResponse>(
         `${endpoint}?${params.toString()}`,
       )
@@ -214,7 +219,8 @@ export function HistoricFinanceView({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           propertyId,
-          action: 'create',
+          action: 'historic-event',
+          eventAction: 'create',
           date: eventDate,
           title: eventTitle,
           note: eventNote,
@@ -239,13 +245,14 @@ export function HistoricFinanceView({
     await fetchJson(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        propertyId,
-        action: 'delete',
-        eventId: event.eventId,
-        date: event.date,
-        title: event.title,
-      }),
+        body: JSON.stringify({
+          propertyId,
+          action: 'historic-event',
+          eventAction: 'delete',
+          eventId: event.eventId,
+          date: event.date,
+          title: event.title,
+        }),
     })
     await load()
   }

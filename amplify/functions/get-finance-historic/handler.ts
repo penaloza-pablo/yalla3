@@ -86,7 +86,7 @@ export const handler = async (event: HttpEvent) => {
     if (denied) return denied;
   }
 
-  const tableName = process.env.TABLE_NAME;
+  const tableName = process.env.HISTORIC_TABLE;
   const propertiesTable = process.env.PROPERTIES_TABLE;
   const bookingsTable = process.env.BOOKINGS_TABLE;
   const reviewsTable = process.env.REVIEWS_TABLE;

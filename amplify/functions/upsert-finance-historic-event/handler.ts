@@ -25,6 +25,7 @@ type HttpEvent = {
 
 type Payload = {
   propertyId?: string;
+  eventAction?: string;
   action?: string;
   eventId?: string;
   date?: string;
@@ -45,7 +46,7 @@ export const handler = async (event: HttpEvent) => {
     if (denied) return denied;
   }
 
-  const tableName = process.env.TABLE_NAME;
+  const tableName = process.env.HISTORIC_TABLE;
   const propertiesTable = process.env.PROPERTIES_TABLE;
   if (!tableName || !propertiesTable) {
     return buildHttpResponse(500, {
@@ -58,7 +59,7 @@ export const handler = async (event: HttpEvent) => {
     return buildHttpResponse(400, { message: 'Payload is required.' });
   }
   const propertyId = asString(payload.propertyId);
-  const action = asString(payload.action).toLowerCase();
+  const action = asString(payload.eventAction || payload.action).toLowerCase();
   const date = asString(payload.date);
   const title = asString(payload.title);
   const note = asString(payload.note);

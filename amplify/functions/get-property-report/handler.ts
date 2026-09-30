@@ -4,6 +4,7 @@ import {
   isHttpRequest,
   rejectIfUnauthenticated,
 } from '../shared/dynamo-http';
+import { handler as getFinanceHistoric } from '../get-finance-historic/handler';
 import { buildMonthDetail as buildCleaningMonthDetail } from '../shared/cleaning-billing';
 import { buildMonthDetail as buildMaintenanceMonthDetail } from '../shared/maintenance-billing';
 import {
@@ -149,6 +150,9 @@ export const handler = async (event: HttpEvent) => {
   if (isHttp) {
     const denied = await rejectIfUnauthenticated(event);
     if (denied) return denied;
+  }
+  if (event.queryStringParameters?.historic === '1') {
+    return getFinanceHistoric(event);
   }
 
   const reportsTable = process.env.TABLE_NAME;
