@@ -21,13 +21,20 @@ import {
 } from '../shared/property-report-reviews';
 import { scanReviewsForReport } from '../shared/property-report-reviews-store';
 import {
+  applyCalendarMetrics,
+  calendarMetricsForMonth,
+  calendarQueryDates,
+  calendarStayFromBooking,
+} from '../shared/calendar-occupancy';
+import {
   asString,
   datesInReportMonth,
+  getBookingById,
   getReportRecord,
   listingMatchesProperty,
   queryBookingsByCheckInDate,
 } from '../shared/property-reports';
-import { docClient } from '../shared/visit-task-utils';
+import { docClient, getTodayInMadrid } from '../shared/visit-task-utils';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -74,6 +81,47 @@ const reservationIdsForMonth = async (
     }
   }
   return ids;
+};
+
+const bookingsForCalendar = async (
+  bookingsTable: string,
+  property: Record<string, unknown>,
+  propertyId: string,
+  from: string,
+  to: string,
+) => {
+  const reservationIds: string[] = [];
+  const dates = calendarQueryDates(from, to);
+  for (let index = 0; index < dates.length; index += 8) {
+    const pages = await Promise.all(
+      dates
+        .slice(index, index + 8)
+        .map((date) => queryBookingsByCheckInDate(bookingsTable, date)),
+    );
+    for (const page of pages) {
+      for (const item of page) {
+        const reservationId = asString(item.ReservationID);
+        if (!reservationId || reservationIds.includes(reservationId)) continue;
+        if (!listingMatchesProperty(item, property)) continue;
+        reservationIds.push(reservationId);
+      }
+    }
+  }
+  const stays = new Map<string, NonNullable<ReturnType<typeof calendarStayFromBooking>>>();
+  for (let index = 0; index < reservationIds.length; index += 8) {
+    const items = await Promise.all(
+      reservationIds
+        .slice(index, index + 8)
+        .map((reservationId) => getBookingById(bookingsTable, reservationId)),
+    );
+    for (const item of items) {
+      if (!item || !listingMatchesProperty(item, property)) continue;
+      const stay = calendarStayFromBooking(item, propertyId);
+      if (!stay || stays.has(stay.reservationId)) continue;
+      stays.set(stay.reservationId, stay);
+    }
+  }
+  return [...stays.values()];
 };
 
 export const handler = async (event: HttpEvent) => {
@@ -156,6 +204,23 @@ export const handler = async (event: HttpEvent) => {
       );
     }
 
+    let calendarStays: ReturnType<typeof calendarStayFromBooking>[] = [];
+    let calendarUnavailable = false;
+    try {
+      calendarStays = await bookingsForCalendar(
+        bookingsTable,
+        property,
+        propertyId,
+        from,
+        to,
+      );
+    } catch (calendarError) {
+      calendarUnavailable = true;
+      console.warn('Calendar occupancy was not calculated', calendarError);
+    }
+    const calendarToday = getTodayInMadrid();
+    const calendarUpdatedAt = new Date().toISOString();
+
     const monthRows = [];
     for (const period of months) {
       const stored = visibleByPeriod.get(period);
@@ -174,11 +239,40 @@ export const handler = async (event: HttpEvent) => {
               ? 'open'
               : 'missing';
       }
+      const calendar = calendarUnavailable
+        ? null
+        : calendarMetricsForMonth({
+            propertyId,
+            period,
+            stays: calendarStays.filter(
+              (stay): stay is NonNullable<typeof stay> => stay !== null,
+            ),
+            today: calendarToday,
+            updatedAt: calendarUpdatedAt,
+          });
       monthRows.push({
         period,
         dataOrigin: stored?.dataOrigin ?? null,
-        metrics: overlay.metrics,
-        qualityFlags: stored?.qualityFlags ?? [],
+        metrics: calendar
+          ? applyCalendarMetrics(overlay.metrics, calendar)
+          : overlay.metrics,
+        qualityFlags: [
+          ...new Set([
+            ...(stored?.qualityFlags ?? []),
+            ...(calendar?.qualityFlags ?? []),
+            ...(calendarUnavailable ? ['calendarUnavailable'] : []),
+          ]),
+        ],
+        calendar: calendar
+          ? {
+              version: calendar.version,
+              updatedAt: calendar.updatedAt,
+              coverage: calendar.coverage,
+              methods: calendar.methods,
+              issues: calendar.issues,
+              reservations: calendar.reservations,
+            }
+          : null,
         reviewsLive: overlay.reviewsLive,
         rescuedUnderFiveStarReviewCount: overlay.reviewsLive
           ? overlay.rescuedUnderFiveStarReviewCount

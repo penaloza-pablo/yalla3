@@ -542,6 +542,7 @@
     "usageCount_one": "{{count}} uso",
     "usageCount_other": "{{count}} usos",
     "usageFinance": "Informes de finanzas",
+    "usageHistoric": "Historic table y Historic Charts",
     "usageWidget": "Widget \"{{name}}\"",
     "noUsages": "Ninguna funcionalidad está usando esta variable todavía.",
     "empty": "No hay variables definidas.",
@@ -555,7 +556,12 @@
     "saved": "Variable global guardada.",
     "invalidPercent": "Indica un porcentaje entre 0 y 100.",
     "descriptions": {
-      "marketManagementFee": "Esto no corresponde al fee de Knock Knock, sino a un estándar de mercado que se utilizará para validar el desempeño de cada propiedad independientemente del acuerdo comercial conseguido."
+      "marketManagementFee": "Esto no corresponde al fee de Knock Knock, sino a un estándar de mercado que se utilizará para validar el desempeño de cada propiedad independientemente del acuerdo comercial conseguido.",
+      "calendarOccupiedNights": "Noches que una reserva válida ocupó dentro de ese mes. La salida no cuenta. No es el número de noches de los payouts del informe.",
+      "calendarPaidByGuest": "Importe comparable al total paid by guest, repartido entre las noches de la estancia. Es una atribución analítica: no cambia el payout ni el mes en el que se declaró.",
+      "calendarAveragePaidPerNight": "Pago medio del huésped por noche. Solo aparece si todas las noches ocupadas del mes tienen importe. Si falta información, queda sin dato y no se muestra un cero.",
+      "calendarAccommodationRevenue": "Ingresos de alojamiento de esas noches. No incluye limpieza ni otros cargos. Si la reserva no separa el alojamiento, el mes queda sin dato.",
+      "calendarADR": "Tarifa media de alojamiento. No es el pago medio del huésped. Solo usa noches con alojamiento identificado y deja fuera las estancias gratuitas."
     }
   },
   "cases": {
@@ -2991,11 +2997,22 @@
     "eventDelete": "Quitar",
     "eventSaved": "Hito guardado.",
     "eventError": "No se pudo guardar el hito.",
+    "calendarNote": "Las cifras de calendario cuentan las noches de cada mes de estancia. El total paid by guest del informe sigue siendo el de los payouts de ese mes y no se reparte.",
+    "insufficient": "Sin datos suficientes para publicar este promedio.",
     "quality": {
       "REPEATED_Q1_VALUES_KEEP_AS_MONTHLY": "Enero, febrero y marzo repiten los mismos importes y se conservan como meses distintos.",
       "NET_BRIDGE_REVIEW": "El neto no coincide con una resta simple de las partidas visibles. Se conserva el importe original.",
       "IVA_RATIO_REVIEW": "El IVA no coincide con el 21% de la comisión. Se conserva el importe registrado.",
-      "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "La fecha de la referencia AirDNA no está confirmada."
+      "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "La fecha de la referencia AirDNA no está confirmada.",
+      "calendarOverlap": "Dos reservas ocupan la misma unidad el mismo día. Esa noche se cuenta una vez y su importe queda pendiente.",
+      "calendarPriceIncomplete": "Falta el importe de alguna noche ocupada. El pago medio no se publica.",
+      "calendarAccommodationIncomplete": "No se puede separar el alojamiento de todas las noches. La tarifa media de alojamiento no se publica.",
+      "calendarContradictory": "La misma reserva tiene fechas, estados o importes que no coinciden, o el intervalo de estancia no es válido. No se elige un dato al azar.",
+      "calendarUnknownStatus": "Hay una reserva con un estado que no sabemos si representa ocupación. Esas noches no se cuentan.",
+      "calendarNightlyMismatch": "El detalle por noche no cuadra con el alojamiento de la reserva. El importe se reparte a partes iguales y es una estimación.",
+      "calendarCurrency": "Hay un importe en una moneda distinta de euro. No se mezcla con el resto.",
+      "calendarComplimentary": "Hay una estancia gratuita. Cuenta como noche ocupada y como pago cero, pero no entra en la tarifa media de alojamiento.",
+      "calendarUnavailable": "No se pudieron calcular las noches del mes en esta carga."
     },
     "metrics": {
       "paidByGuest": "Total paid by guest",
@@ -3009,7 +3026,19 @@
       "ourProfit": "Our profit",
       "fiveStarReviewCount": "Cantidad de reseñas 5 estrellas",
       "underFiveStarReviewCount": "Cantidad de reseñas menores de 5 estrellas recibidas",
-      "rescuedUnderFiveStarReviewPercent": "Porcentaje de reseñas menores de 5 estrellas que logramos rescatar"
+      "rescuedUnderFiveStarReviewPercent": "Porcentaje de reseñas menores de 5 estrellas que logramos rescatar",
+      "calendarOccupiedNights": "Noches ocupadas del mes",
+      "calendarPaidByGuest": "Importe del huésped atribuido al mes",
+      "calendarAveragePaidPerNight": "Pago medio del huésped por noche",
+      "calendarAccommodationRevenue": "Ingresos de alojamiento del mes",
+      "calendarADR": "Tarifa media de alojamiento"
+    },
+    "metricHelp": {
+      "calendarOccupiedNights": "Noches que una reserva válida pasó en ese mes. La noche de salida no cuenta. Una vivienda de una sola unidad no cuenta el mismo día dos veces.",
+      "calendarPaidByGuest": "Parte del total paid by guest que corresponde a las noches de ese mes. Si no hay tarifa por noche, se reparte a partes iguales y es una estimación. No es el dinero cobrado en el mes.",
+      "calendarAveragePaidPerNight": "Pago medio del huésped por noche. Solo se muestra si todas las noches ocupadas tienen importe. No es la tarifa media de alojamiento.",
+      "calendarAccommodationRevenue": "Solo la tarifa de alojamiento identificada en la reserva, repartida entre sus noches. La limpieza, los impuestos y el payout del anfitrión no se usan como sustituto. Si falta esa tarifa, se muestra un guion.",
+      "calendarADR": "Tarifa media de alojamiento de las noches con ese importe. Las estancias gratuitas no entran en este cálculo. Si el dato es un reparto, es una estimación y no una tarifa nocturna real."
     }
   }
 }

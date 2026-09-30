@@ -542,6 +542,7 @@
     "usageCount_one": "{{count}} usage",
     "usageCount_other": "{{count}} usages",
     "usageFinance": "Finance reports",
+    "usageHistoric": "Historic table and Historic Charts",
     "usageWidget": "Widget \"{{name}}\"",
     "noUsages": "No feature is using this variable yet.",
     "empty": "No variables defined.",
@@ -555,7 +556,12 @@
     "saved": "Global variable saved.",
     "invalidPercent": "Enter a percentage between 0 and 100.",
     "descriptions": {
-      "marketManagementFee": "This is not the Knock Knock fee. It is a market-standard rate used to benchmark each property independently of the commercial agreement in place."
+      "marketManagementFee": "This is not the Knock Knock fee. It is a market-standard rate used to benchmark each property independently of the commercial agreement in place.",
+      "calendarOccupiedNights": "Nights a valid reservation occupied inside that month. Checkout is excluded. This is not the night count of the report payouts.",
+      "calendarPaidByGuest": "Amount comparable to total paid by guest, spread across the stay nights. It is an analytical attribution and does not change the payout or the month it was reported in.",
+      "calendarAveragePaidPerNight": "Average guest payment per night. It appears only when every occupied night in the month has an amount. Missing information stays blank and is not shown as zero.",
+      "calendarAccommodationRevenue": "Accommodation revenue for those nights. Cleaning and other charges are excluded. If the stay does not separate accommodation, the month has no figure.",
+      "calendarADR": "Average accommodation rate. It is not the average guest payment. It uses only nights with identified accommodation and leaves complimentary stays out."
     }
   },
   "cases": {
@@ -2991,11 +2997,22 @@
     "eventDelete": "Remove",
     "eventSaved": "Milestone saved.",
     "eventError": "Could not save the milestone.",
+    "calendarNote": "Calendar figures count the nights of each stay month. Total paid by guest in the report remains the payouts assigned to that month and is not split here.",
+    "insufficient": "Not enough data to publish this average.",
     "quality": {
       "REPEATED_Q1_VALUES_KEEP_AS_MONTHLY": "January, February and March repeat the same amounts and stay as separate months.",
       "NET_BRIDGE_REVIEW": "Net earnings do not match a simple subtraction of the visible lines. The original amount is kept.",
       "IVA_RATIO_REVIEW": "VAT does not match 21% of the management fee. The recorded amount is kept.",
-      "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "The AirDNA reference date is not confirmed."
+      "BENCHMARK_DATE_FORMAT_UNCONFIRMED": "The AirDNA reference date is not confirmed.",
+      "calendarOverlap": "Two reservations occupy the same unit on the same day. That night is counted once and its amount stays pending.",
+      "calendarPriceIncomplete": "Some occupied night has no amount. The average guest payment is not published.",
+      "calendarAccommodationIncomplete": "Accommodation cannot be separated for every night. The average accommodation rate is not published.",
+      "calendarContradictory": "The same reservation has dates, statuses or amounts that do not agree, or the stay interval is not valid. No value is chosen arbitrarily.",
+      "calendarUnknownStatus": "A reservation has a status we cannot treat as occupancy. Those nights are not counted.",
+      "calendarNightlyMismatch": "The nightly detail does not match the stay accommodation. The amount is split evenly and is an estimate.",
+      "calendarCurrency": "An amount is in a currency other than euro. It is not mixed with the rest.",
+      "calendarComplimentary": "There is a complimentary stay. It counts as an occupied night and as zero payment, but it is left out of the average accommodation rate.",
+      "calendarUnavailable": "Calendar nights could not be calculated for this load."
     },
     "metrics": {
       "paidByGuest": "Total paid by guest",
@@ -3009,7 +3026,19 @@
       "ourProfit": "Our profit",
       "fiveStarReviewCount": "5-star reviews",
       "underFiveStarReviewCount": "Under 5-star reviews received",
-      "rescuedUnderFiveStarReviewPercent": "Rescued under 5-star reviews %"
+      "rescuedUnderFiveStarReviewPercent": "Rescued under 5-star reviews %",
+      "calendarOccupiedNights": "Occupied nights in the month",
+      "calendarPaidByGuest": "Guest amount attributed to the month",
+      "calendarAveragePaidPerNight": "Average guest payment per night",
+      "calendarAccommodationRevenue": "Accommodation revenue for the month",
+      "calendarADR": "Average accommodation rate"
+    },
+    "metricHelp": {
+      "calendarOccupiedNights": "Nights a valid reservation spent in that month. The checkout night is not counted. A single-unit home cannot count the same date twice.",
+      "calendarPaidByGuest": "The part of total paid by guest that belongs to the nights of that month. Without a nightly rate, it is split evenly and is an estimate. It is not cash received in the month.",
+      "calendarAveragePaidPerNight": "Average guest payment per night. It is shown only when every occupied night has an amount. It is not the average accommodation rate.",
+      "calendarAccommodationRevenue": "Only the accommodation fare identified on the reservation, spread across its nights. Cleaning, taxes and the host payout are not used as a substitute. A dash means that fare is missing.",
+      "calendarADR": "Average accommodation rate for nights with that amount. Complimentary stays are excluded. An even split is an estimate, not a real nightly rate."
     }
   }
 }

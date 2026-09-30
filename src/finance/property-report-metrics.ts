@@ -392,6 +392,36 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     role: 'source',
     formula: 'settings.fixedRent',
   },
+  {
+    id: 'calendarOccupiedNights',
+    unit: 'count',
+    role: 'indicator',
+    formula: 'occupied nights inside the calendar month',
+  },
+  {
+    id: 'calendarPaidByGuest',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'paidByGuest attributed to calendar nights',
+  },
+  {
+    id: 'calendarAveragePaidPerNight',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'calendarPaidByGuest / calendarOccupiedNights',
+  },
+  {
+    id: 'calendarAccommodationRevenue',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'accommodation gross attributed to calendar nights',
+  },
+  {
+    id: 'calendarADR',
+    unit: 'money',
+    role: 'indicator',
+    formula: 'calendarAccommodationRevenue / calendarOccupiedNights',
+  },
 ] as const
 
 export type PropertyReportFieldId =

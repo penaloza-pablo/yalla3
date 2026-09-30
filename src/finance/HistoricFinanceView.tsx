@@ -21,6 +21,7 @@ import {
   loadGlobalReportSettings,
   metricsFromPropertyReportPayload,
 } from './property-report-live-metrics'
+import { CALENDAR_METRIC_IDS } from '../../amplify/functions/shared/calendar-occupancy'
 import { PROPERTY_REPORT_FIELD_CATALOG } from './property-report-metrics'
 import './historic-finance.css'
 
@@ -139,6 +140,9 @@ const unitOf = (metricId: string) => {
 
 const isReviewMetric = (metricId: string) =>
   (REVIEW_METRIC_IDS as readonly string[]).includes(metricId)
+
+const isCalendarMetric = (metricId: string) =>
+  (CALENDAR_METRIC_IDS as readonly string[]).includes(metricId)
 
 const MonthTip = ({
   icon,
@@ -318,6 +322,14 @@ export function HistoricFinanceView({
     (id: string) =>
       t(`historicFinance.metrics.${id}`, {
         defaultValue: t(`propertyReports.formulaVars.${id}`, { defaultValue: id }),
+      }),
+    [t],
+  )
+
+  const metricHelp = useCallback(
+    (id: string) =>
+      t(`historicFinance.metricHelp.${id}`, {
+        defaultValue: '',
       }),
     [t],
   )
@@ -758,7 +770,7 @@ export function HistoricFinanceView({
                           checked={draft.metricIds.includes(id)}
                           onChange={(event) => toggleMetric(id, event.target.checked)}
                         />
-                        <span>{metricLabel(id)}</span>
+                        <span title={metricHelp(id) || undefined}>{metricLabel(id)}</span>
                       </label>
                     ))}
                   </div>
@@ -860,6 +872,9 @@ export function HistoricFinanceView({
         </p>
       ) : null}
       {editing ? <p className="historic-note">{t('historicFinance.editHint')}</p> : null}
+      {selectedMetrics.some(isCalendarMetric) ? (
+        <p className="historic-note">{t('historicFinance.calendarNote')}</p>
+      ) : null}
 
       {mode === 'charts' && payload ? (
         <HistoricCharts
@@ -902,7 +917,9 @@ export function HistoricFinanceView({
                   <tr>
                     <th>{t('historicFinance.period')}</th>
                     {selectedMetrics.map((metricId) => (
-                      <th key={metricId}>{metricLabel(metricId)}</th>
+                      <th key={metricId} title={metricHelp(metricId) || undefined}>
+                        {metricLabel(metricId)}
+                      </th>
                     ))}
                     <th>{t('historicFinance.eventsTitle')}</th>
                   </tr>
@@ -949,7 +966,7 @@ export function HistoricFinanceView({
                         {selectedMetrics.map((metricId) => {
                           const stored = metrics[metricId] ?? ''
                           const draftValue = editDraft[month.period]?.[metricId]
-                          if (editable && !isReviewMetric(metricId)) {
+                          if (editable && !isReviewMetric(metricId) && !isCalendarMetric(metricId)) {
                             return (
                               <td key={metricId}>
                                 <input
@@ -979,9 +996,15 @@ export function HistoricFinanceView({
                               </td>
                             )
                           }
+                          const numeric = parseDecimal(stored || null)
+                          const help = metricHelp(metricId)
+                          const title =
+                            help && numeric == null && isCalendarMetric(metricId)
+                              ? `${help} ${t('historicFinance.insufficient')}`
+                              : help || undefined
                           return (
-                            <td key={metricId}>
-                              {formatMetric(metricId, parseDecimal(stored || null))}
+                            <td key={metricId} title={title}>
+                              {formatMetric(metricId, numeric)}
                             </td>
                           )
                         })}

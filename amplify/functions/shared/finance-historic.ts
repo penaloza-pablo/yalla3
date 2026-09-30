@@ -40,6 +40,9 @@ const BENEFIT_IDS = new Set<string>([
   'amountTransferred',
   'fiveStarReviewCount',
   'rescuedUnderFiveStarReviewPercent',
+  'calendarOccupiedNights',
+  'calendarPaidByGuest',
+  'calendarAccommodationRevenue',
 ]);
 
 const COST_IDS = new Set<string>([
@@ -61,6 +64,8 @@ const COST_IDS = new Set<string>([
 const DERIVED_IDS = new Set<string>([
   'rescuedUnderFiveStarReviewPercent',
   'averageRatePerNight',
+  'calendarAveragePaidPerNight',
+  'calendarADR',
   'marketManagementFee',
 ]);
 

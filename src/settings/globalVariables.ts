@@ -1,3 +1,4 @@
+import { CALENDAR_METRIC_IDS } from '../../amplify/functions/shared/calendar-occupancy'
 import {
   VISIBILITY_METRIC_IDS,
 } from '../../amplify/functions/shared/property-report-formula'
@@ -10,12 +11,16 @@ export const WRITABLE_GLOBAL_VARIABLE_IDS = ['marketManagementFee'] as const
 
 export const FINANCE_VARIABLE_IDS = [
   ...VISIBILITY_METRIC_IDS,
+  ...CALENDAR_METRIC_IDS,
   'commission',
 ] as const
 
 export type GlobalVariableUsage = {
   id: string
-  labelKey: 'globalVariables.usageFinance' | 'globalVariables.usageWidget'
+  labelKey:
+    | 'globalVariables.usageFinance'
+    | 'globalVariables.usageHistoric'
+    | 'globalVariables.usageWidget'
   widgetTitleKey?: string
 }
 
@@ -63,7 +68,12 @@ export const listGlobalVariableIds = () => {
 
 export const usagesForVariable = (variableId: string): GlobalVariableUsage[] => {
   const usages: GlobalVariableUsage[] = []
-  if ((FINANCE_VARIABLE_IDS as readonly string[]).includes(variableId)) {
+  if ((CALENDAR_METRIC_IDS as readonly string[]).includes(variableId)) {
+    usages.push({
+      id: 'historic-calendar',
+      labelKey: 'globalVariables.usageHistoric',
+    })
+  } else if ((FINANCE_VARIABLE_IDS as readonly string[]).includes(variableId)) {
     usages.push({
       id: 'property-reports',
       labelKey: 'globalVariables.usageFinance',
