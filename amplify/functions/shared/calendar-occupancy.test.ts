@@ -436,6 +436,31 @@ test('cancelaciones, bloqueos y estados desconocidos no cuentan como ocupación'
   assert.equal(august.metrics.calendarPaidByGuest, null)
 })
 
+test('antes de agosto conserva el calendario importado, incluido un null', () => {
+  const live = month('2026-07', [
+    stay({
+      checkIn: '2026-07-01',
+      checkOut: '2026-07-04',
+      hostPayout: 300,
+      fareAccommodation: 300,
+    }),
+  ])
+  const stored = {
+    paidByGuest: '2828.40',
+    calendarOccupiedNights: '26',
+    calendarAveragePaidPerNight: '135.24',
+    calendarAveragePaidPerNightAfterCleaning: null,
+  }
+  const kept = applyCalendarMetrics(stored, live, { preserveStored: true })
+  assert.equal(kept.paidByGuest, '2828.40')
+  assert.equal(kept.calendarOccupiedNights, '26')
+  assert.equal(kept.calendarAveragePaidPerNight, '135.24')
+  assert.equal(kept.calendarAveragePaidPerNightAfterCleaning, null)
+  assert.equal(kept.calendarPaidByGuest, live.metrics.calendarPaidByGuest)
+  const replaced = applyCalendarMetrics(stored, live)
+  assert.equal(replaced.calendarOccupiedNights, live.metrics.calendarOccupiedNights)
+})
+
 test('no mezcla otra moneda y no usa el excel como importe de calendario', () => {
   const foreign = month('2026-08', [stay({ currency: 'USD' })])
   assert.equal(foreign.metrics.calendarOccupiedNights, '7')

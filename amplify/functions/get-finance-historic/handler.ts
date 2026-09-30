@@ -254,7 +254,9 @@ export const handler = async (event: HttpEvent) => {
         period,
         dataOrigin: stored?.dataOrigin ?? null,
         metrics: calendar
-          ? applyCalendarMetrics(overlay.metrics, calendar)
+          ? applyCalendarMetrics(overlay.metrics, calendar, {
+              preserveStored: period < NATIVE_PERIOD_START,
+            })
           : overlay.metrics,
         qualityFlags: [
           ...new Set([

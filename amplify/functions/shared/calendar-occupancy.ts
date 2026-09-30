@@ -660,9 +660,16 @@ export const calendarMetricsForMonth = (input: {
 export const applyCalendarMetrics = (
   metrics: Record<string, string | null>,
   result: CalendarMonthResult,
+  options?: { preserveStored?: boolean },
 ) => {
   const next = { ...metrics };
   for (const id of CALENDAR_METRIC_IDS) {
+    if (
+      options?.preserveStored &&
+      Object.prototype.hasOwnProperty.call(metrics, id)
+    ) {
+      continue;
+    }
     next[id] = result.metrics[id];
   }
   return next;
