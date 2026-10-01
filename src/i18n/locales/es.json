@@ -2778,6 +2778,7 @@
     "invoiceOnly": "Solo en factura",
     "yallaOnly": "Solo en Yalla",
     "invoiceCorrelated": "Correlacionados",
+    "invoiceInterpreted": "Interpretados",
     "invoiceReview": "Pendiente de revisar",
     "invoiceExVatShort": "factura",
     "yallaExVatShort": "Yalla",

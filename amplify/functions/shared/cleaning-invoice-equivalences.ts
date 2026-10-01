@@ -230,7 +230,7 @@ const APARTMENT_EXACT: InvoiceMappingRule[] = [
   {
     group: 'apartments',
     folded: foldInvoiceText('Desplazamiento Keynest'),
-    targets: [{ propertyKey: 'keynest', typeKey: 'keynest' }],
+    targets: [{ propertyKey: '*', typeKey: 'keynest' }],
   },
   {
     group: 'apartments',
@@ -355,6 +355,9 @@ export const yallaTypeMatches = (cleaningTypeName: string, typeKey: InvoiceTypeK
       return false;
     }
     if (typeKey === 'p2_refresh' && includesAny(folded, ['room refresh', 'light', 'bath'])) {
+      return false;
+    }
+    if (typeKey === 'travel' && includesAny(folded, ['keynest'])) {
       return false;
     }
     return true;

@@ -98,7 +98,12 @@ const fromStoredAgent = (item: Record<string, unknown>): AgentDefinition => {
           )
         : allowedTools,
   };
-  const memoryPolicy: MemoryPolicy = { kind: 'none' };
+  const memoryPolicy: MemoryPolicy =
+    asString(
+      (item.memoryPolicy as { kind?: string } | undefined)?.kind,
+    ) === 'learned_equivalences'
+      ? { kind: 'learned_equivalences' }
+      : { kind: 'none' };
   const publishedVersionRaw = Number(item.publishedVersion);
   const draftVersion = Number(item.draftVersion) || 1;
   const status =
@@ -265,6 +270,26 @@ export const seedAgents = async () => {
   for (const agent of AGENT_CATALOG) {
     const existing = await getItem(agent.id);
     if (existing) {
+      const storedVersion = Number(existing.catalogVersion) || 0;
+      if (storedVersion < agent.catalogVersion) {
+        const createdAt = asString(existing.createdAt) || nowIso();
+        const next = {
+          ...agent,
+          createdAt,
+          updatedAt: nowIso(),
+          publishedAt: asString(existing.publishedAt) || createdAt,
+        };
+        await putItem({
+          ...existing,
+          ...next,
+          recordType: 'agent',
+        });
+        await writeAgentSnapshot(
+          { ...fromStoredAgent({ ...existing, ...next }), ...next },
+          next.publishedVersion || 1,
+        );
+        continue;
+      }
       await ensureAgentVersioning(existing, {
         ...fromStoredAgent(existing),
         id: agent.id,

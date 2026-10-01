@@ -7,7 +7,9 @@ export const toolVersionId = (name: string, version: number) =>
   `tool::${name}::v${version}`;
 
 export const isAgentHeadId = (id: string) =>
-  !id.startsWith('tool::') && !id.includes('::v');
+  !id.startsWith('tool::') &&
+  !id.startsWith('memory::') &&
+  !id.includes('::v');
 
 export const isToolHeadId = (id: string) =>
   id.startsWith('tool::') && !id.includes('::v');

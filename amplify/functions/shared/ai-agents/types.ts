@@ -21,9 +21,9 @@ export type RuntimeLimits = {
   maxToolCalls: number;
 };
 
-export type MemoryPolicy = {
-  kind: 'none';
-};
+export type MemoryPolicy =
+  | { kind: 'none' }
+  | { kind: 'learned_equivalences' };
 
 export type PermissionPolicy = {
   allowedTools: string[];

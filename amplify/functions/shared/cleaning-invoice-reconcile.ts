@@ -9,6 +9,17 @@ import {
   type InvoicePropertyGroup,
   type InvoiceTypeKey,
 } from './cleaning-invoice-equivalences';
+import {
+  collectLearnedFromMatches,
+  loadInvoiceEquivalenceMemory,
+  saveInvoiceEquivalenceMemory,
+  type LearnedInvoiceEquivalence,
+} from './cleaning-invoice-memory';
+import {
+  isCoreOccupancyType,
+  proposeInvoiceLeftoverPairs,
+  type InterpretedPairProposal,
+} from './cleaning-invoice-interpret';
 import { loadInvoiceBytes } from './cleaning-invoice-verify';
 import {
   asInvoiceGroup,
@@ -25,7 +36,7 @@ export type YallaInvoiceLine = {
 };
 
 export type ReconcileMatch = {
-  mode: 'map' | 'price' | 'aggregate';
+  mode: 'map' | 'price' | 'aggregate' | 'interpreted';
   invoiceDescription: string;
   invoiceUnits: number;
   invoiceSubtotal: number;
@@ -42,6 +53,8 @@ export type ReconcileNetted = {
 
 export type ReconcileSummaryRow = {
   status: 'matched' | 'mismatch' | 'invoice_only' | 'yalla_only' | 'netted';
+  origin?: 'invoice' | 'yalla';
+  interpreted?: boolean;
   invoiceLabel?: string;
   yallaLabel?: string;
   invoiceUnits?: number;
@@ -60,6 +73,7 @@ export type CleaningInvoiceReconcileResult = {
   invoiceOnly: Array<{
     description: string;
     units: number;
+    unitPrice?: number;
     subtotal: number;
   }>;
   yallaOnly: YallaInvoiceLine[];
@@ -123,6 +137,8 @@ const matchRank = (invoiceLine: ParsedInvoiceLine, group: InvoicePropertyGroup) 
       target.typeKey === 'studio_sofa' || target.typeKey === 'one_bedroom_sofa',
   );
   const storage = targets.some((target) => target.typeKey === 'storage');
+  const keynest = targets.some((target) => target.typeKey === 'keynest');
+  const travel = targets.some((target) => target.typeKey === 'travel');
   const twoBedroom = targets.some((target) => target.typeKey === 'two_bedroom');
   const studio = targets.some((target) => target.typeKey === 'studio');
   const oneBedroom = targets.some((target) => target.typeKey === 'one_bedroom');
@@ -131,6 +147,9 @@ const matchRank = (invoiceLine: ParsedInvoiceLine, group: InvoicePropertyGroup) 
   }
   if (specific) {
     return 10;
+  }
+  if (keynest) {
+    return 15;
   }
   if (sofa) {
     return 20;
@@ -143,6 +162,9 @@ const matchRank = (invoiceLine: ParsedInvoiceLine, group: InvoicePropertyGroup) 
   }
   if (oneBedroom) {
     return 50;
+  }
+  if (travel) {
+    return 70;
   }
   if (storage) {
     return 80;
@@ -164,6 +186,39 @@ const UNIT_PRICE_TYPES = new Set<InvoiceTypeKey>([
 
 const isSofaType = (typeKey: InvoiceTypeKey) =>
   typeKey === 'studio_sofa' || typeKey === 'one_bedroom_sofa';
+
+const isStrictAmountType = (typeKey: InvoiceTypeKey) =>
+  typeKey === 'travel' || typeKey === 'keynest';
+
+const preferAmountAligned = (
+  matches: YallaInvoiceLine[],
+  invoiceLine: ParsedInvoiceLine,
+  typeKey: InvoiceTypeKey,
+) => {
+  if (matches.length === 0) {
+    return matches;
+  }
+  const byUnit = invoiceLine.unitPrice
+    ? matches.filter((line) => moneyEquals(line.price, invoiceLine.unitPrice))
+    : [];
+  if (byUnit.length > 0) {
+    return byUnit;
+  }
+  const bySubtotal = matches.filter((line) =>
+    moneyEquals(line.price, invoiceLine.subtotal),
+  );
+  if (bySubtotal.length > 0) {
+    return bySubtotal;
+  }
+  const sum = roundMoney(matches.reduce((total, line) => total + line.price, 0));
+  if (moneyEquals(sum, invoiceLine.subtotal)) {
+    return matches;
+  }
+  if (isStrictAmountType(typeKey)) {
+    return [] as YallaInvoiceLine[];
+  }
+  return matches;
+};
 
 const takeMatchingYalla = (
   remaining: YallaInvoiceLine[],
@@ -203,10 +258,66 @@ const takeMatchingYalla = (
         matches = priced;
       }
     }
-    taken.push(...matches);
+    taken.push(...preferAmountAligned(matches, invoiceLine, target.typeKey));
   }
   const unique = new Map(taken.map((line) => [line.id, line]));
   return [...unique.values()];
+};
+
+const takeLearnedYalla = (
+  remaining: YallaInvoiceLine[],
+  invoiceLine: ParsedInvoiceLine,
+  group: InvoicePropertyGroup,
+  learned: LearnedInvoiceEquivalence[],
+) => {
+  const invoiceFolded = foldInvoiceText(invoiceLine.description);
+  const rules = learned.filter(
+    (rule) => rule.group === group && rule.invoiceFolded === invoiceFolded,
+  );
+  if (rules.length === 0) {
+    return [] as YallaInvoiceLine[];
+  }
+  return remaining.filter((line) => {
+    const typeFolded = foldInvoiceText(line.cleaningTypeName);
+    return rules.some(
+      (rule) =>
+        rule.yallaTypeFolded === typeFolded &&
+        (rule.unitPrice == null ||
+          moneyEquals(line.price, rule.unitPrice) ||
+          moneyEquals(line.price, invoiceLine.unitPrice) ||
+          moneyEquals(line.price, invoiceLine.subtotal)),
+    );
+  });
+};
+
+const takeUnitPriceLeftovers = (
+  remaining: YallaInvoiceLine[],
+  invoiceLine: ParsedInvoiceLine,
+  group: InvoicePropertyGroup,
+) => {
+  const targets = mapInvoiceDescription(invoiceLine.description, group);
+  const allowsLoosePrice = targets.some(
+    (target) => target.typeKey === 'travel' || target.typeKey === 'extra_hours',
+  );
+  if (!allowsLoosePrice || !invoiceLine.unitPrice) {
+    return [] as YallaInvoiceLine[];
+  }
+  const priced = remaining.filter((line) =>
+    moneyEquals(line.price, invoiceLine.unitPrice),
+  );
+  if (priced.length === 0) {
+    return [] as YallaInvoiceLine[];
+  }
+  const takeCount = Math.max(1, Math.round(invoiceLine.units) || priced.length);
+  const taken = priced.slice(0, Math.min(takeCount, priced.length));
+  const sum = roundMoney(taken.reduce((total, line) => total + line.price, 0));
+  if (
+    moneyEquals(sum, invoiceLine.subtotal) ||
+    taken.length === takeCount
+  ) {
+    return taken;
+  }
+  return [] as YallaInvoiceLine[];
 };
 
 const removeIds = (lines: YallaInvoiceLine[], taken: YallaInvoiceLine[]) => {
@@ -263,6 +374,7 @@ const groupYallaLeftovers = (lines: YallaInvoiceLine[]): ReconcileSummaryRow[] =
     .sort((left, right) => left.type.localeCompare(right.type) || left.total - right.total)
     .map((group) => ({
       status: 'yalla_only' as const,
+      origin: 'yalla' as const,
       yallaLabel: `${group.count} × ${group.type}`,
       yallaCount: group.count,
       invoiceAmount: 0,
@@ -281,6 +393,7 @@ export const buildReconcileSummary = (
     const aligned = moneyEquals(entry.invoiceSubtotal, entry.yallaTotal);
     rows.push({
       status: aligned ? 'matched' : 'mismatch',
+      interpreted: entry.mode === 'interpreted',
       invoiceLabel: entry.invoiceDescription,
       yallaLabel: summarizeYallaLines(entry.yallaLines),
       invoiceUnits: entry.invoiceUnits,
@@ -300,6 +413,7 @@ export const buildReconcileSummary = (
   for (const line of invoiceOnly) {
     rows.push({
       status: 'invoice_only',
+      origin: 'invoice',
       invoiceLabel: line.description,
       invoiceUnits: line.units,
       invoiceAmount: line.subtotal,
@@ -321,11 +435,104 @@ const groupRemainingByType = (lines: YallaInvoiceLine[]) => {
   return [...groups.values()];
 };
 
+export const applyInterpretedPairs = (
+  invoiceLines: ParsedInvoiceLine[],
+  yallaLines: YallaInvoiceLine[],
+  proposals: InterpretedPairProposal[],
+) => {
+  let remainingInvoice = [...invoiceLines];
+  let remainingYalla = [...yallaLines];
+  const matched: ReconcileMatch[] = [];
+  for (const proposal of proposals) {
+    const invoiceIndex = remainingInvoice.findIndex(
+      (line) =>
+        foldInvoiceText(line.description) ===
+        foldInvoiceText(proposal.invoiceDescription),
+    );
+    if (invoiceIndex < 0) {
+      continue;
+    }
+    const invoiceLine = remainingInvoice[invoiceIndex];
+    const wanted = new Set(
+      proposal.yallaTypeNames.map((name) => foldInvoiceText(name)).filter(Boolean),
+    );
+    const candidates = remainingYalla.filter((line) => {
+      const folded = foldInvoiceText(line.cleaningTypeName);
+      return wanted.has(folded) && !isCoreOccupancyType(line.cleaningTypeName);
+    });
+    if (candidates.length === 0) {
+      continue;
+    }
+    const byUnit = invoiceLine.unitPrice
+      ? candidates.filter((line) => moneyEquals(line.price, invoiceLine.unitPrice))
+      : [];
+    const takeCount = Math.max(1, Math.round(invoiceLine.units) || byUnit.length);
+    const takenByUnit = byUnit.slice(0, Math.min(takeCount, byUnit.length));
+    const unitSum = roundMoney(
+      takenByUnit.reduce((total, line) => total + line.price, 0),
+    );
+    const taken =
+      takenByUnit.length > 0 && moneyEquals(unitSum, invoiceLine.subtotal)
+        ? takenByUnit
+        : moneyEquals(
+            roundMoney(candidates.reduce((total, line) => total + line.price, 0)),
+            invoiceLine.subtotal,
+          )
+          ? candidates
+          : [];
+    if (taken.length === 0) {
+      continue;
+    }
+    const yallaTotal = roundMoney(
+      taken.reduce((total, line) => total + line.price, 0),
+    );
+    if (!moneyEquals(yallaTotal, invoiceLine.subtotal)) {
+      continue;
+    }
+    pushMatch(matched, invoiceLine, taken, 'interpreted');
+    remainingYalla = removeIds(remainingYalla, taken);
+    remainingInvoice.splice(invoiceIndex, 1);
+  }
+  return { matched, remainingInvoice, remainingYalla };
+};
+
+const mergeInterpretedResult = (
+  result: Omit<
+    CleaningInvoiceReconcileResult,
+    'monthId' | 'group' | 's3Key' | 'invoiceNumber'
+  >,
+  applied: ReturnType<typeof applyInterpretedPairs>,
+) => {
+  if (applied.matched.length === 0) {
+    return result;
+  }
+  const matched = [...result.matched, ...applied.matched];
+  const invoiceOnly = applied.remainingInvoice.map((line) => ({
+    description: line.description,
+    units: line.units,
+    unitPrice: line.unitPrice,
+    subtotal: line.subtotal,
+  }));
+  return {
+    ...result,
+    matched,
+    invoiceOnly,
+    yallaOnly: applied.remainingYalla,
+    summary: buildReconcileSummary(
+      matched,
+      result.netted,
+      invoiceOnly,
+      applied.remainingYalla,
+    ),
+  };
+};
+
 export const reconcileInvoiceAgainstYalla = (
   invoiceLines: ParsedInvoiceLine[],
   yallaLines: YallaInvoiceLine[],
   group: InvoicePropertyGroup,
   invoiceSubtotal: number,
+  learned: LearnedInvoiceEquivalence[] = [],
 ): Omit<
   CleaningInvoiceReconcileResult,
   'monthId' | 'group' | 's3Key' | 'invoiceNumber'
@@ -358,6 +565,31 @@ export const reconcileInvoiceAgainstYalla = (
 
   for (let index = remainingInvoice.length - 1; index >= 0; index -= 1) {
     const invoiceLine = remainingInvoice[index];
+    const taken = takeLearnedYalla(remainingYalla, invoiceLine, group, learned);
+    if (taken.length === 0) {
+      continue;
+    }
+    pushMatch(matched, invoiceLine, taken, 'map');
+    remainingYalla = removeIds(remainingYalla, taken);
+    remainingInvoice.splice(index, 1);
+  }
+
+  for (let index = remainingInvoice.length - 1; index >= 0; index -= 1) {
+    const invoiceLine = remainingInvoice[index];
+    const taken = takeUnitPriceLeftovers(remainingYalla, invoiceLine, group);
+    if (taken.length === 0) {
+      continue;
+    }
+    pushMatch(matched, invoiceLine, taken, 'price');
+    remainingYalla = removeIds(remainingYalla, taken);
+    remainingInvoice.splice(index, 1);
+  }
+
+  for (let index = remainingInvoice.length - 1; index >= 0; index -= 1) {
+    const invoiceLine = remainingInvoice[index];
+    if (mapInvoiceDescription(invoiceLine.description, group).length === 0) {
+      continue;
+    }
     const typeGroups = groupRemainingByType(remainingYalla);
     const byType = typeGroups.find((lines) =>
       moneyEquals(
@@ -406,20 +638,6 @@ export const reconcileInvoiceAgainstYalla = (
     }
     pushMatch(matched, invoiceLine, priced, 'price');
     remainingYalla = removeIds(remainingYalla, priced);
-    remainingInvoice.splice(index, 1);
-  }
-
-  for (let index = remainingInvoice.length - 1; index >= 0; index -= 1) {
-    const invoiceLine = remainingInvoice[index];
-    const bySubtotal = remainingYalla.filter((line) =>
-      moneyEquals(line.price, invoiceLine.subtotal),
-    );
-    if (bySubtotal.length === 0) {
-      continue;
-    }
-    const taken = bySubtotal.slice(0, Math.max(1, Math.round(invoiceLine.units) || 1));
-    pushMatch(matched, invoiceLine, taken, 'price');
-    remainingYalla = removeIds(remainingYalla, taken);
     remainingInvoice.splice(index, 1);
   }
 
@@ -486,6 +704,7 @@ export const reconcileInvoiceAgainstYalla = (
   const invoiceOnly = remainingInvoice.map((line) => ({
     description: line.description,
     units: line.units,
+    unitPrice: line.unitPrice,
     subtotal: line.subtotal,
   }));
   const yallaExVat = roundMoney(
@@ -545,11 +764,36 @@ export const reconcileCleaningInvoice = async (
   const yallaLines = filterBillingLinesForGroup(detail.lines, group)
     .map(toYallaLine)
     .filter((line): line is YallaInvoiceLine => Boolean(line));
-  const result = reconcileInvoiceAgainstYalla(
+  const learned = await loadInvoiceEquivalenceMemory();
+  let result = reconcileInvoiceAgainstYalla(
     invoice.lines,
     yallaLines,
     group,
     invoice.subtotal,
+    learned,
+  );
+  if (result.invoiceOnly.length > 0 && result.yallaOnly.length > 0) {
+    try {
+      const leftoverInvoice = result.invoiceOnly.map((line) => ({
+        description: line.description,
+        units: line.units,
+        unitPrice: line.unitPrice ?? 0,
+        subtotal: line.subtotal,
+      }));
+      const proposals = await proposeInvoiceLeftoverPairs(
+        leftoverInvoice,
+        result.yallaOnly,
+      );
+      result = mergeInterpretedResult(
+        result,
+        applyInterpretedPairs(leftoverInvoice, result.yallaOnly, proposals),
+      );
+    } catch {
+      // Fail soft: keep deterministic leftovers if interpretation is unavailable.
+    }
+  }
+  await saveInvoiceEquivalenceMemory(
+    collectLearnedFromMatches(group, invoice.invoiceNumber, result.matched),
   );
   return {
     monthId,

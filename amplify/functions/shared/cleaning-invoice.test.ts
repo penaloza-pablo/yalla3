@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   foldCompanyName,
+  foldInvoiceText,
   mapInvoiceDescription,
   moneyEquals,
   yallaPropertyMatches,
@@ -17,7 +18,15 @@ import {
   parseCleaningInvoiceText,
 } from './cleaning-invoice-parse';
 import { billingPropertyGroupOf } from './cleaning-property-groups';
-import { reconcileInvoiceAgainstYalla } from './cleaning-invoice-reconcile';
+import {
+  applyInterpretedPairs,
+  reconcileInvoiceAgainstYalla,
+} from './cleaning-invoice-reconcile';
+import { parseInterpretedPairProposals } from './cleaning-invoice-interpret';
+import {
+  collectLearnedFromMatches,
+  mergeInvoiceEquivalenceMemory,
+} from './cleaning-invoice-memory';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -286,6 +295,7 @@ test('Regular visits and Trastero storage are grouped, leftovers stay compact', 
   const leftovers = result.summary.filter((row) => row.status === 'yalla_only');
   assert.equal(leftovers.length, 1);
   assert.equal(leftovers[0]?.yallaLabel, '1 × Reparto cubrecama doble');
+  assert.equal(leftovers[0]?.origin, 'yalla');
 });
 
 test('P2 Refresh lines correlate with Repasos general', () => {
@@ -315,7 +325,292 @@ test('P2 Refresh lines correlate with Repasos general', () => {
   assert.equal(result.summary[0]?.status, 'mismatch');
 });
 
+test('Keynest displacement matches Desplazamiento keynest, not generic Desplazamiento', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [
+      {
+        description: 'Desplazamiento keynest',
+        units: 5,
+        unitPrice: 7,
+        subtotal: 35,
+      },
+      {
+        description: 'Desplazamiento',
+        units: 2,
+        unitPrice: 11,
+        subtotal: 22,
+      },
+    ],
+    [
+      {
+        id: 'kn',
+        propertyId: 'rodas',
+        property: 'Rodas',
+        cleaningTypeName: 'Keynest displacement',
+        price: 35,
+      },
+      {
+        id: 'sh',
+        propertyId: 'almendro',
+        property: 'Almendro',
+        cleaningTypeName: 'Reparto champu, gel de baño y jabón de manos',
+        price: 11,
+      },
+      {
+        id: 'cv',
+        propertyId: 'rodas',
+        property: 'Rodas',
+        cleaningTypeName: 'Reparto cubrecama doble',
+        price: 11,
+      },
+    ],
+    'apartments',
+    57,
+  );
+  const keynest = result.matched.find((entry) =>
+    /keynest/i.test(entry.invoiceDescription),
+  );
+  const travel = result.matched.find(
+    (entry) => foldInvoiceText(entry.invoiceDescription) === 'desplazamiento',
+  );
+  assert.equal(keynest?.yallaCount, 1);
+  assert.equal(keynest?.yallaLines[0]?.id, 'kn');
+  assert.ok(moneyEquals(keynest?.yallaTotal ?? 0, 35));
+  assert.equal(travel?.yallaCount, 2);
+  assert.ok(moneyEquals(travel?.yallaTotal ?? 0, 22));
+  assert.equal(result.invoiceOnly.length, 0);
+  assert.equal(result.yallaOnly.length, 0);
+  assert.equal(
+    result.summary.some((row) => row.status === 'yalla_only'),
+    false,
+  );
+});
+
+test('review leftovers include invoice or Yalla origin', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [{ description: 'Concepto factura', units: 1, unitPrice: 5, subtotal: 5 }],
+    [
+      {
+        id: 'extra',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'Reparto cubrecama doble',
+        price: 11,
+      },
+    ],
+    'apartments',
+    5,
+  );
+  assert.equal(result.summary.find((row) => row.status === 'invoice_only')?.origin, 'invoice');
+  assert.equal(result.summary.find((row) => row.status === 'yalla_only')?.origin, 'yalla');
+});
+
+test('learned equivalences pick the remembered Yalla type among same-price leftovers', () => {
+  const invoice = [
+    {
+      description: 'Cargo especial',
+      units: 1,
+      unitPrice: 20,
+      subtotal: 20,
+    },
+  ];
+  const yalla = [
+    {
+      id: 'other',
+      propertyId: 'fe',
+      property: 'Fe',
+      cleaningTypeName: 'Otro extra',
+      price: 20,
+    },
+    {
+      id: 'kit',
+      propertyId: 'fe',
+      property: 'Fe',
+      cleaningTypeName: 'Kit bienvenida extra',
+      price: 20,
+    },
+  ];
+  const withoutMemory = reconcileInvoiceAgainstYalla(
+    invoice,
+    yalla,
+    'apartments',
+    20,
+  );
+  assert.equal(withoutMemory.matched.length, 0);
+  assert.equal(withoutMemory.invoiceOnly.length, 1);
+  assert.equal(withoutMemory.yallaOnly.length, 2);
+  const learned = mergeInvoiceEquivalenceMemory(
+    [],
+    collectLearnedFromMatches('apartments', '26-001', [
+      {
+        invoiceDescription: 'Cargo especial',
+        invoiceSubtotal: 20,
+        yallaTotal: 20,
+        yallaLines: [{ cleaningTypeName: 'Kit bienvenida extra', price: 20 }],
+      },
+    ]),
+  );
+  const withMemory = reconcileInvoiceAgainstYalla(
+    invoice,
+    yalla,
+    'apartments',
+    20,
+    learned,
+  );
+  assert.equal(withMemory.matched[0]?.yallaLines[0]?.id, 'kit');
+  assert.equal(withMemory.yallaOnly[0]?.id, 'other');
+});
+
 test('billing filter keeps p2 rooms out of apartments', () => {
   assert.equal(billingPropertyGroupOf('211', '693c3ad20c4f0500133cd017'), 'p2');
   assert.equal(billingPropertyGroupOf('Concepcion Arenal', 'apt-1'), 'apartments');
+});
+
+test('interpreted leftovers pair monthly extras when amounts match', () => {
+  const towels = applyInterpretedPairs(
+    [{ description: 'envio toallas', units: 1, unitPrice: 8, subtotal: 8 }],
+    [
+      {
+        id: 'extra',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'desplazamiento extras',
+        price: 8,
+      },
+    ],
+    [
+      {
+        invoiceDescription: 'envio toallas',
+        yallaTypeNames: ['desplazamiento extras'],
+      },
+    ],
+  );
+  assert.equal(towels.matched[0]?.mode, 'interpreted');
+  assert.equal(towels.remainingInvoice.length, 0);
+  assert.equal(towels.remainingYalla.length, 0);
+
+  const kit = applyInterpretedPairs(
+    [{ description: 'desplazamiento', units: 1, unitPrice: 12, subtotal: 12 }],
+    [
+      {
+        id: 'kit',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'llevar kit baño',
+        price: 12,
+      },
+    ],
+    [
+      {
+        invoiceDescription: 'desplazamiento',
+        yallaTypeNames: ['llevar kit baño'],
+      },
+    ],
+  );
+  assert.equal(kit.matched[0]?.mode, 'interpreted');
+  assert.ok(moneyEquals(kit.matched[0]?.yallaTotal ?? 0, 12));
+});
+
+test('interpreted leftovers refuse occupancy types and amount mismatches', () => {
+  const occupancy = applyInterpretedPairs(
+    [{ description: 'Rodas Regular', units: 8, unitPrice: 39, subtotal: 312 }],
+    [
+      {
+        id: 'r1',
+        propertyId: 'rodas',
+        property: 'Rodas',
+        cleaningTypeName: 'Regular',
+        price: 39,
+      },
+    ],
+    [{ invoiceDescription: 'Rodas Regular', yallaTypeNames: ['Regular'] }],
+  );
+  assert.equal(occupancy.matched.length, 0);
+  assert.equal(occupancy.remainingInvoice.length, 1);
+
+  const mismatch = applyInterpretedPairs(
+    [{ description: 'envio toallas', units: 1, unitPrice: 8, subtotal: 8 }],
+    [
+      {
+        id: 'extra',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'desplazamiento extras',
+        price: 12,
+      },
+    ],
+    [
+      {
+        invoiceDescription: 'envio toallas',
+        yallaTypeNames: ['desplazamiento extras'],
+      },
+    ],
+  );
+  assert.equal(mismatch.matched.length, 0);
+});
+
+test('interpreted pair proposals parse OpenAI JSON', () => {
+  const proposals = parseInterpretedPairProposals({
+    pairs: [
+      {
+        invoiceDescription: 'envio toallas',
+        yallaTypeNames: ['desplazamiento extras'],
+        reason: 'mismo importe extra',
+      },
+    ],
+  });
+  assert.equal(proposals.length, 1);
+  assert.equal(proposals[0]?.invoiceDescription, 'envio toallas');
+});
+
+test('interpreted matches persist as learned equivalences', () => {
+  const learned = collectLearnedFromMatches('apartments', '26-099', [
+    {
+      mode: 'interpreted',
+      invoiceDescription: 'envio toallas',
+      invoiceSubtotal: 8,
+      yallaTotal: 8,
+      yallaLines: [{ cleaningTypeName: 'desplazamiento extras', price: 8 }],
+    },
+  ]);
+  assert.equal(learned[0]?.source, 'interpreted');
+  assert.equal(learned[0]?.invoiceFolded, 'envio toallas');
+  assert.equal(learned[0]?.yallaTypeFolded, 'desplazamiento extras');
+});
+
+test('same leftover labels reuse learned memory without interpretation', () => {
+  const invoice = [
+    { description: 'envio toallas', units: 1, unitPrice: 8, subtotal: 8 },
+  ];
+  const yalla = [
+    {
+      id: 'extra',
+      propertyId: 'fe',
+      property: 'Fe',
+      cleaningTypeName: 'desplazamiento extras',
+      price: 8,
+    },
+  ];
+  const learned = mergeInvoiceEquivalenceMemory(
+    [],
+    collectLearnedFromMatches('apartments', '26-099', [
+      {
+        mode: 'interpreted',
+        invoiceDescription: 'envio toallas',
+        invoiceSubtotal: 8,
+        yallaTotal: 8,
+        yallaLines: [{ cleaningTypeName: 'desplazamiento extras', price: 8 }],
+      },
+    ]),
+  );
+  const result = reconcileInvoiceAgainstYalla(
+    invoice,
+    yalla,
+    'apartments',
+    8,
+    learned,
+  );
+  assert.equal(result.matched[0]?.mode, 'map');
+  assert.equal(result.matched[0]?.yallaLines[0]?.id, 'extra');
+  assert.equal(result.invoiceOnly.length, 0);
 });

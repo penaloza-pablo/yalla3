@@ -27,9 +27,9 @@ export const reconcileCleaningInvoiceTool: AgentTool = {
   id: 'reconcile_cleaning_invoice',
   name: 'reconcile_cleaning_invoice',
   description:
-    'Compares a stored cleaning invoice (ex-VAT subtotal) with Yalla Cleaning Billing lines for apartments or Planta 2. Matching uses the equivalence map, groups correlated invoice concepts (e.g. Trastero vs all Storage lines), P2 Salida/Repaso fallbacks, quantity, price fallback and +X/-X netting. Returns a compact summary of correlated vs leftover discrepancies.',
+    'Compares a stored cleaning invoice (ex-VAT subtotal) with Yalla Cleaning Billing lines for apartments or Planta 2. Matching uses the equivalence map, learned equivalences, amount-aligned Keynest/travel matching, grouped concepts, P2 fallbacks and +X/-X netting. Remaining leftovers are interpreted semantically only when amounts align; Regular/Refresh/Storage leftovers are never reinterpreted. Left-over rows in summary include origin (invoice or Yalla).',
   outputDescription:
-    'JSON with summary[] (matched/mismatch/invoice_only/yalla_only/netted grouped rows), matched[], netted[], invoiceOnly[], yallaOnly[] and totals { invoiceExVat, yallaExVat, delta, favor }. Prefer summary[] when narrating.',
+    'JSON with summary[] (matched/mismatch/invoice_only/yalla_only/netted grouped rows; interpreted:true marks leftover semantic pairs), matched[], netted[], invoiceOnly[], yallaOnly[] and totals { invoiceExVat, yallaExVat, delta, favor }. Prefer summary[] when narrating.',
   riskLevel: 'read',
   requiresApproval: false,
   timeoutMs: 90_000,

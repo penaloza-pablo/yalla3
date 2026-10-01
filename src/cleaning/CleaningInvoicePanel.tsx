@@ -20,6 +20,8 @@ type VerifyOutput = {
 
 type ReconcileSummaryRow = {
   status?: 'matched' | 'mismatch' | 'invoice_only' | 'yalla_only' | 'netted'
+  origin?: 'invoice' | 'yalla'
+  interpreted?: boolean
   invoiceLabel?: string
   yallaLabel?: string
   invoiceUnits?: number
@@ -222,16 +224,21 @@ export function CleaningInvoicePanel({
       return `${invoice} → ${yalla}${counts} · ${t('cleaningBilling.invoiceExVatShort')} ${money.format(Number(row.invoiceAmount ?? 0))} / ${t('cleaningBilling.yallaExVatShort')} ${money.format(Number(row.yallaAmount ?? 0))}`
     }
     if (row.status === 'invoice_only') {
-      return `${invoice} — ${money.format(Number(row.invoiceAmount ?? 0))}`
+      return `${invoice} — ${money.format(Number(row.invoiceAmount ?? 0))} (${t('cleaningBilling.invoiceExVatShort')})`
     }
     if (row.status === 'yalla_only') {
-      return `${yalla} — ${money.format(Number(row.yallaAmount ?? 0))}`
+      return `${yalla} — ${money.format(Number(row.yallaAmount ?? 0))} (${t('cleaningBilling.yallaExVatShort')})`
     }
     return `${invoice || yalla} — ${money.format(Number(row.invoiceAmount ?? 0))}`
   }
 
   const summaryRows = reconcile?.summary ?? []
-  const correlated = summaryRows.filter((row) => row.status === 'matched')
+  const correlated = summaryRows.filter(
+    (row) => row.status === 'matched' && !row.interpreted,
+  )
+  const interpreted = summaryRows.filter(
+    (row) => row.status === 'matched' && row.interpreted,
+  )
   const review = summaryRows.filter(
     (row) =>
       row.status === 'mismatch' ||
@@ -312,6 +319,20 @@ export function CleaningInvoicePanel({
                   <ul>
                     {correlated.map((row, index) => (
                       <li key={`matched-${index}`}>{formatSummaryRow(row)}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {interpreted.length > 0 ? (
+                <>
+                  <h3 className="card-title">
+                    {t('cleaningBilling.invoiceInterpreted')}
+                  </h3>
+                  <ul>
+                    {interpreted.map((row, index) => (
+                      <li key={`interpreted-${index}`}>
+                        {formatSummaryRow(row)}
+                      </li>
                     ))}
                   </ul>
                 </>
