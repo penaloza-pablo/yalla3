@@ -106,6 +106,34 @@ test('ignores identical booking context', () => {
   );
 });
 
+test('same-day booking includes the checkout cleaning day', () => {
+  const dates = candidateCleaningPlanDatesForBookingChange({
+    currentCheckIn: '2026-10-01',
+    currentCheckOut: '2026-10-02',
+    lookbackDays: 4,
+    today: '2026-10-01',
+  });
+  assert.deepEqual(dates, ['2026-10-01', '2026-10-02']);
+});
+
+test('checkout after 10:00 still covers a future cleaning plan', () => {
+  const dates = candidateCleaningPlanDatesForBookingChange({
+    currentCheckIn: '2026-10-01',
+    currentCheckOut: '2026-10-02',
+    lookbackDays: 4,
+    today: '2026-10-01',
+  });
+  assert.ok(dates.includes('2026-10-02'));
+  assert.equal(
+    canReopenCleaningPlanForBookingChange({
+      plannedDate: '2026-10-02',
+      today: '2026-10-01',
+      nowTime: '19:07',
+    }),
+    true,
+  );
+});
+
 test('does not reopen yesterday when the webhook is for today check-in', () => {
   const dates = candidateCleaningPlanDatesForBookingChange({
     currentCheckIn: '2026-09-22',
@@ -183,6 +211,28 @@ test('future cleaning plans can reopen after 10:00', () => {
       nowTime: '18:00',
     }),
     true,
+  );
+});
+
+test('new listing visit not yet stamped on a closed plan is still selected', () => {
+  const selected = selectPlanVisitsForBookingContextChange(
+    [
+      {
+        id: 'GST-6abe936911bed888095431d8',
+        title: 'Cleaning P2 - 204',
+        propertyId: '693c58109994960014f58732',
+      },
+    ],
+    [
+      {
+        visitId: 'GST-other',
+        propertyId: '6835c21193742a002b128465',
+      },
+    ],
+  );
+  assert.deepEqual(
+    selected.map((visit) => visit.id),
+    ['GST-6abe936911bed888095431d8'],
   );
 });
 

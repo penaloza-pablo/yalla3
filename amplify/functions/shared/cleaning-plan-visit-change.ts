@@ -56,9 +56,9 @@ const reopenReadyPlan = async (
         TableName: plansTable,
         Key: { id: plannedDate },
         UpdateExpression:
-          'SET #status = :draft, items = :items, slackSnapshot = :snapshot, updatedAt = :now, reopenedAt = :now, reopenedReason = :reason',
+          'SET #status = :draft, #items = :items, slackSnapshot = :snapshot, updatedAt = :now, reopenedAt = :now, reopenedReason = :reason',
         ConditionExpression: '#status = :ready',
-        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeNames: { '#status': 'status', '#items': 'items' },
         ExpressionAttributeValues: {
           ':draft': 'DRAFT',
           ':ready': 'READY',
@@ -180,11 +180,29 @@ export const reopenCleaningPlansForVisitChange = async (
   const today = getTodayInMadrid();
   const nowTime = getNowTimeInMadrid();
   const reopenedDates: string[] = [];
-  for (const date of datesToReopenForVisitChange(
+  const candidateDates = datesToReopenForVisitChange(
     resolvedChange.previousDate,
     resolvedChange.nextDate,
-  )) {
+  );
+  if (candidateDates.length === 0) {
+    console.log(
+      'Cleaning plan visit change skipped: no date-only previous/next date',
+      {
+        visitId: asString(resolvedChange.visitId),
+        previousDate: resolvedChange.previousDate,
+        nextDate: resolvedChange.nextDate,
+        isCreate: resolvedChange.isCreate === true,
+      },
+    );
+  }
+  for (const date of candidateDates) {
     if (!canReopenCleaningPlanForBookingChange({ plannedDate: date, today, nowTime })) {
+      console.log('Cleaning plan visit change skipped: outside reopen window', {
+        visitId: asString(resolvedChange.visitId),
+        plannedDate: date,
+        today,
+        nowTime,
+      });
       continue;
     }
     const result = await reopenReadyPlan(
@@ -192,6 +210,12 @@ export const reopenCleaningPlansForVisitChange = async (
       date,
       asString(resolvedChange.visitId),
     );
+    console.log('Cleaning plan visit change reopen result', {
+      visitId: asString(resolvedChange.visitId),
+      plannedDate: date,
+      reopened: result.reopened,
+      reason: 'reason' in result ? result.reason : undefined,
+    });
     if (result.reopened) {
       reopenedDates.push(date);
     }
@@ -207,6 +231,13 @@ export const reopenCleaningPlansForVisitChange = async (
   } catch (error) {
     console.error('Failed to notify Slack of cleaning plan visit change', error);
   }
+
+  console.log('Cleaning plan visit change finished', {
+    visitId: asString(resolvedChange.visitId),
+    reopenedDates,
+    notified,
+    isCreate: resolvedChange.isCreate === true,
+  });
 
   return { reopenedDates, notified };
 };

@@ -54,6 +54,10 @@ export const handler = async (event: {
 
   const visitId = payload.visitId?.trim() ?? '';
   if (!visitId) {
+    console.warn('Cleaning plan visit change missing visitId', {
+      hasBody: Boolean(event.body),
+      keys: Object.keys(event),
+    });
     return buildHttpResponse(400, { message: 'visitId is required.' });
   }
 
@@ -70,6 +74,14 @@ export const handler = async (event: {
       previousStatus: payload.previousStatus,
       nextStatus: payload.nextStatus,
       isCreate: payload.isCreate === true,
+    });
+    console.log('Cleaning plan visit change handler result', {
+      visitId,
+      previousDate: payload.previousDate,
+      nextDate: payload.nextDate,
+      isCreate: payload.isCreate === true,
+      reopenedDates: result.reopenedDates,
+      notified: result.notified,
     });
     return buildHttpResponse(200, result);
   } catch (error) {

@@ -101,6 +101,35 @@ const snapshotFromContext = (
   };
 };
 
+const snapshotFromPlannerFields = (
+  fields: ReturnType<typeof plannerCleaningFields> | null,
+): VisitBookingContextSnapshot | null => {
+  if (!fields || !isActivePlannerStatus(fields.status)) {
+    return null;
+  }
+  return {
+    confirmationCode: fields.confirmationCode,
+    checkInDate: fields.checkInDate,
+    checkOutDate: fields.checkOutDate,
+    guestCount: fields.guestCount,
+    giftCardLabel: fields.giftCard,
+    hasBookingGap: false,
+    sofaBedYes: false,
+  };
+};
+
+const bookingTouchesPlannedDate = (
+  plannedDate: string,
+  currentFields: ReturnType<typeof plannerCleaningFields>,
+  previousFields: ReturnType<typeof plannerCleaningFields> | null,
+) =>
+  [
+    currentFields.checkInDate,
+    currentFields.checkOutDate,
+    previousFields?.checkInDate,
+    previousFields?.checkOutDate,
+  ].includes(plannedDate);
+
 const toExtraBooking = (
   previous?: BookingPlannerItem | null,
   fallbackReservationId = '',
@@ -304,6 +333,8 @@ export const reopenCleaningPlansForBookingContextChange = async ({
   const candidateDates = candidateCleaningPlanDatesForBookingChange({
     currentCheckIn: toDateOnly(current.CheckInDate),
     previousCheckIn: toDateOnly(previous?.CheckInDate),
+    currentCheckOut: toDateOnly(current.CheckOutDate),
+    previousCheckOut: toDateOnly(previous?.CheckOutDate),
     lookbackDays,
     today,
   });
@@ -315,6 +346,7 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       {
         reservationId: asString(current.ReservationID),
         checkIn: toDateOnly(current.CheckInDate),
+        checkOut: toDateOnly(current.CheckOutDate),
         previousCheckIn: toDateOnly(previous?.CheckInDate),
         lookbackDays,
         listing: asString(current.ListingNickname) || asString(current.ListingID),
@@ -330,6 +362,7 @@ export const reopenCleaningPlansForBookingContextChange = async ({
     {
       reservationId: asString(current.ReservationID),
       checkIn: toDateOnly(current.CheckInDate),
+      checkOut: toDateOnly(current.CheckOutDate),
       lookbackDays,
       candidateDates,
       listing: asString(current.ListingNickname) || asString(current.ListingID),
@@ -405,15 +438,53 @@ export const reopenCleaningPlansForBookingContextChange = async ({
       },
     );
     if (visits.length === 0) {
+      if (
+        !bookingTouchesPlannedDate(plannedDate, currentFields, previousFields)
+      ) {
+        debugBookingPlan(
+          'C',
+          'cleaning-plan-booking-change.ts:visits',
+          'READY plan has no matching listing visits',
+          {
+            plannedDate,
+            listing:
+              asString(current.ListingNickname) || asString(current.ListingID),
+          },
+        );
+        continue;
+      }
+      const listingLabel =
+        currentFields.listingNickname || currentFields.listingId || 'Limpieza';
+      const block = describeVisitBookingContextChanges(
+        listingLabel,
+        snapshotFromPlannerFields(previousFields),
+        snapshotFromPlannerFields(currentFields),
+      );
+      if (!block) {
+        debugBookingPlan(
+          'D',
+          'cleaning-plan-booking-change.ts:diff',
+          'Plan date has no visit yet and booking snapshot did not change',
+          { plannedDate, listing: listingLabel },
+        );
+        continue;
+      }
+      const result = await reopenReadyPlanKeepingItems(plansTable, plannedDate);
       debugBookingPlan(
-        'C',
-        'cleaning-plan-booking-change.ts:visits',
-        'READY plan has no matching listing visits',
+        'E',
+        'cleaning-plan-booking-change.ts:reopen',
+        'Attempted to reopen READY plan for new booking visit',
         {
           plannedDate,
-          listing: asString(current.ListingNickname) || asString(current.ListingID),
+          reopened: result.reopened,
+          changeBlocks: [block],
         },
       );
+      if (!result.reopened) {
+        continue;
+      }
+      reopenedDates.push(plannedDate);
+      changeBlocks.push(block);
       continue;
     }
 

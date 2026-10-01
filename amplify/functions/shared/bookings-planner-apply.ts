@@ -411,6 +411,8 @@ export const applyPlannerToReservation = async ({
         const checkInDates = [
           toDateOnly(current.CheckInDate),
           toDateOnly(before.CheckInDate),
+          toDateOnly(current.CheckOutDate),
+          toDateOnly(before.CheckOutDate),
         ];
         const listingLabel =
           String(current.ListingNickname ?? '').trim() ||

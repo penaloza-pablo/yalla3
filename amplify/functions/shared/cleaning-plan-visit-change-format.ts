@@ -14,15 +14,21 @@ export type CleaningPlanVisitChange = {
   isCreate?: boolean;
 };
 
+export const toCleaningPlanDateOnly = (value?: string) => {
+  const match = asString(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] || '';
+};
+
 export const datesToReopenForVisitChange = (
   previousDate?: string,
   nextDate?: string,
 ) =>
   [
     ...new Set(
-      [asString(previousDate), asString(nextDate)].filter((date) =>
-        /^\d{4}-\d{2}-\d{2}$/.test(date),
-      ),
+      [
+        toCleaningPlanDateOnly(previousDate),
+        toCleaningPlanDateOnly(nextDate),
+      ].filter(Boolean),
     ),
   ];
 

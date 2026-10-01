@@ -48,41 +48,63 @@ export const canReopenCleaningPlanForBookingChange = ({
   return nowTime < CLEANING_PLAN_REOPEN_CUTOFF_TIME;
 };
 
+const dateOnly = (value?: string) => {
+  const text = asString(value);
+  return DATE_ONLY.test(text) ? text : '';
+};
+
 export const candidateCleaningPlanDatesForBookingChange = ({
   currentCheckIn,
   previousCheckIn,
+  currentCheckOut,
+  previousCheckOut,
   lookbackDays = DEFAULT_LOOKBACK_DAYS,
   today,
 }: {
   currentCheckIn?: string;
   previousCheckIn?: string;
+  currentCheckOut?: string;
+  previousCheckOut?: string;
   lookbackDays?: number;
   today: string;
 }) => {
-  const checkIns = [asString(currentCheckIn), asString(previousCheckIn)].filter(
-    (value) => DATE_ONLY.test(value),
+  const checkIns = [dateOnly(currentCheckIn), dateOnly(previousCheckIn)].filter(
+    Boolean,
   );
-  if (checkIns.length === 0 || !DATE_ONLY.test(today)) {
+  const checkOuts = [
+    dateOnly(currentCheckOut),
+    dateOnly(previousCheckOut),
+  ].filter(Boolean);
+  if ((checkIns.length === 0 && checkOuts.length === 0) || !DATE_ONLY.test(today)) {
     return [] as string[];
   }
-  const minCheckIn = checkIns.reduce((left, right) =>
-    left < right ? left : right,
-  );
-  const maxCheckIn = checkIns.reduce((left, right) =>
-    left > right ? left : right,
-  );
-  const lookback = Math.max(0, Math.min(lookbackDays, MAX_CANDIDATE_DATES));
-  const windowStart = addDaysToDateString(minCheckIn, -lookback);
-  const earliest = today;
-  const from = windowStart < earliest ? earliest : windowStart;
-  if (from > maxCheckIn) {
-    return [];
+  const dates = new Set<string>();
+  if (checkIns.length > 0) {
+    const minCheckIn = checkIns.reduce((left, right) =>
+      left < right ? left : right,
+    );
+    const maxCheckIn = checkIns.reduce((left, right) =>
+      left > right ? left : right,
+    );
+    const lookback = Math.max(0, Math.min(lookbackDays, MAX_CANDIDATE_DATES));
+    const windowStart = addDaysToDateString(minCheckIn, -lookback);
+    const from = windowStart < today ? today : windowStart;
+    if (from <= maxCheckIn) {
+      for (const date of listDatesInRange(from, maxCheckIn)) {
+        dates.add(date);
+      }
+    }
   }
-  const dates = listDatesInRange(from, maxCheckIn);
-  if (dates.length <= MAX_CANDIDATE_DATES) {
-    return dates;
+  for (const date of checkOuts) {
+    if (date >= today) {
+      dates.add(date);
+    }
   }
-  return dates.slice(dates.length - MAX_CANDIDATE_DATES);
+  const sorted = [...dates].sort();
+  if (sorted.length <= MAX_CANDIDATE_DATES) {
+    return sorted;
+  }
+  return sorted.slice(sorted.length - MAX_CANDIDATE_DATES);
 };
 
 const gapLabel = (hasGap: boolean) =>
@@ -262,19 +284,8 @@ export const selectPlanVisitsForBookingContextChange = (
   const planVisitIds = new Set(
     planItems.map((item) => visitIdOf(item)).filter(Boolean),
   );
-  const planListingKeys = new Set(
-    planItems.map((item) => listingKeyOf(item)).filter(Boolean),
-  );
-  const matching = visits.filter((visit) => {
-    const visitId = visitIdOf(visit);
-    const listingKey = listingKeyOf(visit);
-    return (
-      (visitId && planVisitIds.has(visitId)) ||
-      (listingKey && planListingKeys.has(listingKey))
-    );
-  });
   const uniqueByListing = new Map<string, Record<string, unknown>>();
-  for (const visit of matching) {
+  for (const visit of visits) {
     const key = listingKeyOf(visit);
     if (!key) {
       continue;
