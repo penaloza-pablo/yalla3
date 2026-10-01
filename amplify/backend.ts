@@ -935,6 +935,9 @@ const aiAgentsFn = new NodejsFunction(aiAgentsStack, 'AiAgents', {
     BOOKINGS_TABLE: 'yalla-bookings',
     LOGS_TABLE: activityLogsTable.tableName,
     OPENAI_SECRET_ID: 'yalla/openai',
+    BUCKET_NAME: 'yalla-s3storage',
+    VISITS_TABLE: 'yalla-visits',
+    CLEANING_VISIT_TYPE_ID: 'visit_type_cleaning',
   },
 });
 aiAgentsTable.grantReadWriteData(aiAgentsFn);
@@ -1244,6 +1247,28 @@ backend.getCleaningBilling.addEnvironment(
 backend.exportCleaningBilling.addEnvironment(
   'TABLE_NAME',
   cleaningBillingTable.tableName,
+);
+aiAgentsFn.addEnvironment('CLEANING_BILLING_TABLE', cleaningBillingTable.tableName);
+aiAgentsFn.addEnvironment('CLEANING_PLANS_TABLE', cleaningPlansTable.tableName);
+aiAgentsFn.addEnvironment(
+  'PROPERTY_CLEANING_DETAILS_TABLE',
+  propertyCleaningDetailsTable.tableName,
+);
+cleaningBillingTable.grantReadWriteData(aiAgentsFn);
+visitsTable.grantReadData(aiAgentsFn);
+aiAgentsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${visitsTable.tableArn}/index/*`],
+  }),
+);
+cleaningPlansTable.grantReadData(aiAgentsFn);
+propertyCleaningDetailsTable.grantReadData(aiAgentsFn);
+aiAgentsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['s3:PutObject', 's3:GetObject'],
+    resources: ['arn:aws:s3:::yalla-s3storage/cleaning/invoices/*'],
+  }),
 );
 backend.upsertCleaningBilling.addEnvironment(
   'TABLE_NAME',

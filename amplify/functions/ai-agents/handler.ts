@@ -74,6 +74,16 @@ const asToolArguments = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+const withoutFilePayload = (args: Record<string, unknown>) => {
+  if (typeof args.fileBase64 !== 'string') {
+    return args;
+  }
+  return {
+    ...args,
+    fileBase64: `[base64 ${args.fileBase64.length} chars]`,
+  };
+};
+
 export const handler = async (event: HttpEvent) => {
   const isHttp = isHttpRequest(event);
   if (isHttp && event.requestContext?.http?.method === 'OPTIONS') {
@@ -262,7 +272,7 @@ export const handler = async (event: HttpEvent) => {
               at: startedAt,
               type: 'TOOL_CALL' as const,
               name: toolName,
-              input: toolArguments,
+              input: withoutFilePayload(toolArguments),
             },
             {
               id: crypto.randomUUID(),

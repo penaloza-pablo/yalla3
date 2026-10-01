@@ -22,6 +22,7 @@ import { translateVisitStatus } from '../i18n/display'
 import { VisitDetailModal } from '../operations/VisitDetailModal'
 import type { PropertyOption } from '../operations/types'
 import { PropertyGroupChips } from './PropertyGroupChips'
+import { CleaningInvoicePanel } from './CleaningInvoicePanel'
 import { BILLING_PROPERTY_GROUP_CHIPS, billingPropertyGroupOf } from './propertyGroups'
 import {
   OTHER_CLEANING_TYPE_ID,
@@ -29,6 +30,7 @@ import {
   type CleaningBillingMonth,
   type CleaningBillingPropertyGroup,
   type CleaningBillingWarning,
+  type CleaningInvoiceMeta,
   type PropertyCleaningDetailsRecord,
   type PropertyCleaningType,
 } from './types'
@@ -87,18 +89,52 @@ const emptyDraft = (monthId: string): LineDraft => ({
   isOther: false,
 })
 
-const mapMonth = (item: Record<string, unknown>): CleaningBillingMonth => ({
-  id: String(item.id ?? ''),
-  status: (String(item.status ?? 'CURRENT') as CleaningBillingMonth['status']),
-  lineCount: Number(item.lineCount ?? 0),
-  completedCount: Number(item.completedCount ?? 0),
-  warningCount: Number(item.warningCount ?? 0),
-  total: Number(item.total ?? 0),
-  canClose: Boolean(item.canClose),
-  canReopen: Boolean(item.canReopen),
-  canEdit: item.canEdit !== false,
-  closedAt: typeof item.closedAt === 'string' ? item.closedAt : undefined,
-})
+const mapInvoiceMeta = (value: unknown): CleaningInvoiceMeta | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  const item = value as Record<string, unknown>
+  const s3Key = String(item.s3Key ?? '').trim()
+  if (!s3Key) {
+    return undefined
+  }
+  return {
+    s3Key,
+    invoiceNumber: typeof item.invoiceNumber === 'string' ? item.invoiceNumber : undefined,
+    billedTo: typeof item.billedTo === 'string' ? item.billedTo : undefined,
+    cif: typeof item.cif === 'string' ? item.cif : undefined,
+    comments: Array.isArray(item.comments)
+      ? item.comments.filter((entry): entry is string => typeof entry === 'string')
+      : undefined,
+    verifiedAt: typeof item.verifiedAt === 'string' ? item.verifiedAt : undefined,
+    monthOk: typeof item.monthOk === 'boolean' ? item.monthOk : undefined,
+    entityOk: typeof item.entityOk === 'boolean' ? item.entityOk : undefined,
+    fileName: typeof item.fileName === 'string' ? item.fileName : undefined,
+  }
+}
+
+const mapMonth = (item: Record<string, unknown>): CleaningBillingMonth => {
+  const invoicesRaw =
+    item.invoices && typeof item.invoices === 'object' && !Array.isArray(item.invoices)
+      ? (item.invoices as Record<string, unknown>)
+      : {}
+  return {
+    id: String(item.id ?? ''),
+    status: (String(item.status ?? 'CURRENT') as CleaningBillingMonth['status']),
+    lineCount: Number(item.lineCount ?? 0),
+    completedCount: Number(item.completedCount ?? 0),
+    warningCount: Number(item.warningCount ?? 0),
+    total: Number(item.total ?? 0),
+    canClose: Boolean(item.canClose),
+    canReopen: Boolean(item.canReopen),
+    canEdit: item.canEdit !== false,
+    closedAt: typeof item.closedAt === 'string' ? item.closedAt : undefined,
+    invoices: {
+      apartments: mapInvoiceMeta(invoicesRaw.apartments),
+      p2: mapInvoiceMeta(invoicesRaw.p2),
+    },
+  }
+}
 
 const mapLine = (item: Record<string, unknown>): CleaningBillingLine => ({
   id: String(item.id ?? ''),
@@ -153,6 +189,8 @@ export function CleaningBillingView({
   const { can } = usePermissions()
   const confirmAction = useConfirm()
   const canSeePrices = can(ACTION_KEYS.cleaningBillingPrices)
+  const canManageInvoices =
+    canSeePrices || can(ACTION_KEYS.cleaningBillingEdit)
   const endpoints = useMemo(
     () => ({
       getBilling: getEndpoint(
@@ -171,6 +209,7 @@ export function CleaningBillingView({
         'exportCleaningBillingUrl',
         import.meta.env.VITE_EXPORT_CLEANING_BILLING_URL,
       ),
+      agents: getEndpoint('aiAgentsUrl', import.meta.env.VITE_AI_AGENTS_URL),
     }),
     [getEndpoint],
   )
@@ -186,6 +225,7 @@ export function CleaningBillingView({
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [propertyIds, setPropertyIds] = useState<string[]>([])
   const [propertyDraft, setPropertyDraft] = useState<string[]>([])
   const [cleaningTypeKeys, setCleaningTypeKeys] = useState<string[]>([])
@@ -785,6 +825,16 @@ export function CleaningBillingView({
                       <YlIcon name="plus" size={16} />
                     </button>
                   ) : null}
+                  {canManageInvoices && month?.canEdit ? (
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      onClick={() => setIsInvoiceOpen(true)}
+                      aria-label={t('cleaningBilling.uploadInvoice')}
+                    >
+                      <YlIcon name="square.and.arrow.up" size={16} />
+                    </button>
+                  ) : null}
                 </>
               ) : null}
               <button
@@ -851,6 +901,20 @@ export function CleaningBillingView({
         </section>
       )}
 
+      {selectedMonthId && canManageInvoices ? (
+        <CleaningInvoicePanel
+          monthId={selectedMonthId}
+          canEdit={Boolean(month?.canEdit)}
+          invoices={month?.invoices}
+          agentsEndpoint={endpoints.agents}
+          money={money}
+          isOpen={isInvoiceOpen}
+          onOpen={() => setIsInvoiceOpen(true)}
+          onClose={() => setIsInvoiceOpen(false)}
+          onVerified={() => void refreshMonth()}
+        />
+      ) : null}
+
       {selectedMonthId ? (
         <section className="card">
           <div className="card-header">
@@ -859,6 +923,15 @@ export function CleaningBillingView({
               <p className="card-subtitle">{t('cleaningBilling.linesSubtitle')}</p>
             </div>
             <div className="table-actions">
+              {canManageInvoices && month?.canEdit ? (
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setIsInvoiceOpen(true)}
+                >
+                  {t('cleaningBilling.uploadInvoice')}
+                </button>
+              ) : null}
               {month?.canClose && can(ACTION_KEYS.cleaningCloseMonth) ? (
                 <button
                   className="btn-primary"

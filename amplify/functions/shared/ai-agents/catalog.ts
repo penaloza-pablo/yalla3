@@ -2,10 +2,11 @@ import { DEFAULT_OPENAI_MODEL } from './models';
 import { DEFAULT_RUNTIME_LIMITS } from './limits';
 import type { AgentDefinition } from './types';
 
-export const AI_AGENTS_CATALOG_VERSION = 2;
+export const AI_AGENTS_CATALOG_VERSION = 3;
 
 const MADRID_ARRIVAL_STORY_ID = 'madrid-arrival-story';
 const TODAY_ARRIVALS_BRIEF_ID = 'today-arrivals-brief';
+const CLEANING_INVOICE_REVIEW_ID = 'cleaning-invoice-review';
 
 const sharedSchedule = {
   kind: 'manual' as const,
@@ -86,6 +87,46 @@ Process:
     approvalPolicy: { requireApprovalFor: [] },
     knowledgeSources: [],
   },
+  {
+    id: CLEANING_INVOICE_REVIEW_ID,
+    name: 'Cleaning invoice review',
+    purpose:
+      'Narra en español el resultado de verificar y conciliar una factura de limpieza (Apartamentos o Planta 2) contra Cleaning Billing, sin inventar matches.',
+    instructions: `Eres un agente operativo de Yalla. No eres un asistente de código.
+
+Tu trabajo es resumir en español claro el resultado de las tools deterministas de factura de limpieza.
+
+Proceso:
+1. Si te pasan un PDF o fileBase64, llama verify_cleaning_invoice con monthId y group (apartments o p2).
+2. Si verify.entityOk y verify.monthOk, llama reconcile_cleaning_invoice con el s3Key devuelto.
+3. Resume comentarios de verificación, totales sin IVA, a favor de quién va la diferencia, y lista discrepancias (invoiceOnly y yallaOnly). No recalcules matches: usa solo el JSON de las tools.
+4. Nunca uses el total con IVA. El importe comparable es el subtotal.
+5. No inventes equivalencias de habitaciones ni de tipos de limpieza.`,
+    rules: [
+      'Usa solo verify_cleaning_invoice y reconcile_cleaning_invoice.',
+      'El matching lo hace el código. No propongas equivalencias nuevas.',
+      'Si CIF o mes fallan, di los comentarios y no reconcilies hasta que el usuario lo pida.',
+      'Habla en español. No pegues JSON crudo salvo cifras concretas.',
+      'Factura mayor que Yalla es a favor del proveedor. Factura menor es a favor de Yalla.',
+    ],
+    allowedTools: ['verify_cleaning_invoice', 'reconcile_cleaning_invoice'],
+    provider: 'openai',
+    model: DEFAULT_OPENAI_MODEL,
+    schedule: sharedSchedule,
+    coveragePolicy: { type: 'tool_declared' },
+    enabled: true,
+    catalogVersion: AI_AGENTS_CATALOG_VERSION,
+    status: 'published',
+    draftVersion: 1,
+    publishedVersion: 1,
+    runtimeLimits: DEFAULT_RUNTIME_LIMITS,
+    memoryPolicy: { kind: 'none' },
+    permissionPolicy: {
+      allowedTools: ['verify_cleaning_invoice', 'reconcile_cleaning_invoice'],
+    },
+    approvalPolicy: { requireApprovalFor: [] },
+    knowledgeSources: [],
+  },
 ];
 
 export const getCatalogAgent = (id: string) =>
@@ -93,3 +134,4 @@ export const getCatalogAgent = (id: string) =>
 
 export const MADRID_ARRIVAL_STORY_AGENT_ID = MADRID_ARRIVAL_STORY_ID;
 export const TODAY_ARRIVALS_BRIEF_AGENT_ID = TODAY_ARRIVALS_BRIEF_ID;
+export const CLEANING_INVOICE_REVIEW_AGENT_ID = CLEANING_INVOICE_REVIEW_ID;

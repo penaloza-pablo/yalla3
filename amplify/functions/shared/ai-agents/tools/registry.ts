@@ -1,7 +1,9 @@
 import { getUpcomingReservationAlertsTool } from './get-upcoming-reservation-alerts';
 import { listBookingConversationTool } from './list-booking-conversation';
 import { listTodayCheckinGuestsTool } from './list-today-checkin-guests';
+import { reconcileCleaningInvoiceTool } from './reconcile-cleaning-invoice';
 import { sendBookingConversationMessageTool } from './send-booking-conversation-message';
+import { verifyCleaningInvoiceTool } from './verify-cleaning-invoice';
 import { TOOL_CATALOG_VERSION } from './metadata';
 import type { AgentTool, AgentToolPublic } from '../types';
 
@@ -10,6 +12,8 @@ const TOOLS: Record<string, AgentTool> = {
   [getUpcomingReservationAlertsTool.name]: getUpcomingReservationAlertsTool,
   [listBookingConversationTool.name]: listBookingConversationTool,
   [sendBookingConversationMessageTool.name]: sendBookingConversationMessageTool,
+  [verifyCleaningInvoiceTool.name]: verifyCleaningInvoiceTool,
+  [reconcileCleaningInvoiceTool.name]: reconcileCleaningInvoiceTool,
 };
 
 const toPublic = (tool: AgentTool): AgentToolPublic => ({

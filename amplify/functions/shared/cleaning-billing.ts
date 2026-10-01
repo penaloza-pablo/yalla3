@@ -386,6 +386,11 @@ const summaryFromStored = (stored?: Record<string, unknown>) => {
   return emptyLineSummary();
 };
 
+const invoicesFromStored = (stored?: Record<string, unknown>) =>
+  stored?.invoices && typeof stored.invoices === 'object' && !Array.isArray(stored.invoices)
+    ? stored.invoices
+    : {};
+
 const closedMonthView = (monthId: string, stored?: Record<string, unknown>) => ({
   id: monthId,
   status: 'CLOSED' as const,
@@ -393,6 +398,7 @@ const closedMonthView = (monthId: string, stored?: Record<string, unknown>) => (
   canClose: false,
   canReopen: true,
   canEdit: false,
+  invoices: invoicesFromStored(stored),
   ...summaryFromStored(stored),
 });
 
@@ -503,6 +509,7 @@ export const buildMonthDetail = async (params: {
     canClose,
     canReopen: false,
     canEdit: true,
+    invoices: invoicesFromStored(stored),
     ...summary,
   };
 

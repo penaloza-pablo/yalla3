@@ -146,6 +146,22 @@ export type CleaningBillingMonth = {
   canReopen: boolean
   canEdit: boolean
   closedAt?: string
+  invoices?: {
+    apartments?: CleaningInvoiceMeta
+    p2?: CleaningInvoiceMeta
+  }
+}
+
+export type CleaningInvoiceMeta = {
+  s3Key: string
+  invoiceNumber?: string
+  billedTo?: string
+  cif?: string
+  comments?: string[]
+  verifiedAt?: string
+  monthOk?: boolean
+  entityOk?: boolean
+  fileName?: string
 }
 
 export type CleaningBillingLine = {

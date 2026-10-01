@@ -1,5 +1,17 @@
-import { isP2RoomListingId } from '../../amplify/functions/shared/property-identity'
+import {
+  billingPropertyGroupOf,
+  isOtherPropertyKey,
+  isP2PropertyKey,
+  propertyGroupOf,
+} from '../../amplify/functions/shared/cleaning-property-groups'
 import type { CleaningBillingPropertyGroup } from './types'
+
+export {
+  billingPropertyGroupOf,
+  isOtherPropertyKey,
+  isP2PropertyKey,
+  propertyGroupOf,
+}
 
 export const PROPERTY_GROUP_CHIPS: CleaningBillingPropertyGroup[] = [
   'p2',
@@ -11,51 +23,3 @@ export const BILLING_PROPERTY_GROUP_CHIPS: CleaningBillingPropertyGroup[] = [
   'p2',
   'apartments',
 ]
-
-const P2_KEYS = new Set([
-  'p2',
-  '201',
-  '202',
-  '203',
-  '204',
-  '205',
-  '206',
-  '207',
-  '208',
-  '209',
-  '210',
-  '211',
-  '212',
-])
-
-const normalizeKey = (value: string) => value.trim().toLowerCase()
-
-export const isOtherPropertyKey = (value: string) =>
-  normalizeKey(value) === 'other'
-
-export const isP2PropertyKey = (value: string) => P2_KEYS.has(normalizeKey(value))
-
-export const propertyGroupOf = (
-  label: string,
-  propertyId = '',
-): CleaningBillingPropertyGroup => {
-  if (isOtherPropertyKey(label) || isOtherPropertyKey(propertyId)) {
-    return 'other'
-  }
-  if (
-    isP2PropertyKey(label) ||
-    isP2PropertyKey(propertyId) ||
-    isP2RoomListingId(propertyId)
-  ) {
-    return 'p2'
-  }
-  return 'apartments'
-}
-
-export const billingPropertyGroupOf = (
-  label: string,
-  propertyId = '',
-): 'p2' | 'apartments' => {
-  const group = propertyGroupOf(label, propertyId)
-  return group === 'p2' ? 'p2' : 'apartments'
-}
