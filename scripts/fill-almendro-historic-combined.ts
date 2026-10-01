@@ -2,11 +2,15 @@ import { readFileSync } from 'node:fs'
 import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 import {
   EXTERNAL_PERIOD_EXCLUSIVE_END,
-  amountToDecimalString,
   actualSortKey,
   resolvePropertyByNickname,
   type NicknameCandidate,
 } from '../amplify/functions/shared/finance-historic.ts'
+import {
+  mapCombinedHistoricRecord,
+  mergeCombinedHistoricMonth,
+  type MetricCorrection,
+} from '../amplify/functions/shared/historic-metric-review.ts'
 import {
   getHistoricItem,
   writeCurrentActual,
@@ -14,23 +18,10 @@ import {
 } from '../amplify/functions/shared/finance-historic-store.ts'
 import { docClient } from '../amplify/functions/shared/visit-task-utils.ts'
 
-const FIELD_MAP = {
-  totalPaidByGuests: 'paidByGuest',
-  cleaningFee: 'cleaningPaidByGuest',
-  channelFee: 'channelFee',
-  managementFee: 'managementFee',
-  managementFeeVAT: 'managementFeeVat',
-  netEarnings: 'netEarnings',
-  calendarOccupiedNights: 'calendarOccupiedNights',
-  calendarAveragePaidPerNight: 'calendarAveragePaidPerNight',
-  calendarAverageGuestPaymentPerNightAfterCleaningFee:
-    'calendarAveragePaidPerNightAfterCleaning',
-  expensesAndServicesGross: 'expensesAndServicesGross',
-} as const
-
 type SourceRecord = {
   period?: string
   metrics?: Record<string, number | null>
+  metricReview?: unknown
   flags?: string[]
 }
 
@@ -87,6 +78,7 @@ const main = async () => {
     ),
   ) as {
     propertyNickname?: string
+    schemaVersion?: string
     periodFrom?: string
     periodThrough?: string
     records?: SourceRecord[]
@@ -123,29 +115,40 @@ const main = async () => {
     if (!existing || existing.dataOrigin !== 'legacy_excel') {
       throw new Error(`No hay cierre Excel de Almendro para ${period}.`)
     }
-    const metrics = asMetrics(existing.metrics)
     if ('bookingCount' in (record.metrics ?? {})) {
       throw new Error('El archivo intenta escribir bookingCount.')
     }
-    const before: Record<string, string | null> = {}
-    const after: Record<string, string | null> = {}
-    for (const [sourceKey, fieldId] of Object.entries(FIELD_MAP)) {
-      const value = record.metrics?.[sourceKey]
-      const next = value == null ? null : amountToDecimalString(value)
-      before[fieldId] = Object.prototype.hasOwnProperty.call(metrics, fieldId)
-        ? metrics[fieldId]
-        : null
-      after[fieldId] = next
-      metrics[fieldId] = next
-    }
+    const mapped = mapCombinedHistoricRecord({
+      period,
+      metrics: record.metrics,
+      metricReview: record.metricReview,
+    })
+    const merged = mergeCombinedHistoricMonth({
+      schemaVersion: file.schemaVersion ?? '',
+      incoming: mapped,
+      corrections:
+        existing.metricCorrections && typeof existing.metricCorrections === 'object'
+          ? (existing.metricCorrections as Record<string, MetricCorrection>)
+          : undefined,
+    })
+    const before = asMetrics(existing.metrics)
+    const metrics = { ...before, ...merged.metrics }
     const qualityFlags = [
       ...new Set([...asFlags(existing.qualityFlags), ...(record.flags ?? [])]),
     ]
-    changes.push({ period, before, after, qualityFlags })
+    changes.push({
+      period,
+      conflicts: merged.conflicts,
+      expensesAndServicesGross: metrics.expensesAndServicesGross ?? null,
+      checkInBookingCount: metrics.checkInBookingCount ?? null,
+      bookingCount: metrics.bookingCount ?? null,
+    })
     if (!execute) continue
     const status = await writeCurrentActual(historicTable, {
       ...(existing as HistoricActualItem),
       metrics,
+      metricReview: merged.metricReview,
+      metricCorrections: merged.corrections,
       qualityFlags,
       updatedAt: new Date().toISOString(),
     })
@@ -162,7 +165,7 @@ const main = async () => {
         nickname: resolved.property.nickname,
         months: records.length,
         revised,
-        ignoredSourceField: 'checkInBookingCount',
+        keepsCheckInCountSeparate: true,
         changes,
       },
       null,

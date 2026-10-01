@@ -3009,6 +3009,12 @@
     "eventError": "Could not save the milestone.",
     "calendarNote": "Calendar figures count the nights of each stay month. Total paid by guest in the report remains the payouts assigned to that month and is not split here.",
     "insufficient": "Not enough data to publish this average.",
+    "reviewTag": "Review",
+    "pendingReview": "Pending review",
+    "reviewRow": "This month has figures to review. Only those figures are marked.",
+    "reviewOnly": "Only months with figures to review",
+    "reviewEmpty": "No month in this range has figures to review.",
+    "reviewCoverage": "{{pending}} of {{total}} months include figures to review or still pending. Those gaps are not counted as zero.",
     "quality": {
       "REPEATED_Q1_VALUES_KEEP_AS_MONTHLY": "January, February and March repeat the same amounts and stay as separate months.",
       "NET_BRIDGE_REVIEW": "Net earnings do not match a simple subtraction of the visible lines. The original amount is kept.",
@@ -3045,7 +3051,8 @@
       "calendarAccommodationRevenue": "Accommodation revenue for the month",
       "calendarADR": "Average accommodation rate",
       "expensesAndServicesVat": "Expenses & Services VAT",
-      "expensesAndServicesGross": "Expenses & Services Gross"
+      "expensesAndServicesGross": "Expenses & Services Gross",
+      "checkInBookingCount": "Check-in booking count"
     },
     "metricHelp": {
       "calendarOccupiedNights": "Nights a valid reservation spent in that month. The checkout night is not counted. A single-unit home cannot count the same date twice.",
@@ -3055,7 +3062,8 @@
       "calendarAccommodationRevenue": "Only the accommodation fare identified on the reservation, spread across its nights. Cleaning, taxes and the host payout are not used as a substitute. A dash means that fare is missing.",
       "calendarADR": "Average accommodation rate for nights with that amount. Complimentary stays are excluded. An even split is an estimate, not a real nightly rate.",
       "expensesAndServicesVat": "Sum of the VAT on the services and other expenses included in Expenses & Services.",
-      "expensesAndServicesGross": "Expenses & Services plus the VAT of each of those items."
+      "expensesAndServicesGross": "Expenses & Services plus the VAT of each of those items.",
+      "checkInBookingCount": "Stays whose check-in is in the month. It is not the payout count."
     }
   }
 }

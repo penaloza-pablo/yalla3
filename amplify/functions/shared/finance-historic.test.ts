@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   HistoricImportError,
@@ -23,6 +24,15 @@ import {
   splitReadableActuals,
 } from './finance-historic';
 import { applyPermissionCatalog, pagePermission } from './rbac-catalog';
+import {
+  applyMetricResolution,
+  clearMetricReviewFields,
+  expenseGrossFromIncludedItems,
+  fieldsNeedingReview,
+  mapCombinedHistoricRecord,
+  mergeCombinedHistoricMonth,
+  reviewPresentation,
+} from './historic-metric-review';
 
 const almendroMetrics = {
   totalPaidByGuest: 3662.123333333333,
@@ -334,4 +344,166 @@ test('only the Almendro benchmark is accepted in the pilot', () => {
   assert.equal(result.accepted.length, 1);
   assert.equal(result.outsideAllowlist, 1);
   assert.equal(result.dependentSkipped, 0);
+});
+
+const combinedPackage = (fileName: string) =>
+  JSON.parse(
+    readFileSync(new URL(`../../../${fileName}`, import.meta.url), 'utf8'),
+  ) as {
+    schemaVersion: string;
+    records: {
+      period: string;
+      metrics: Record<string, number | null>;
+      metricReview: Record<string, { needsReview?: boolean; reasons?: { code: string; message: string }[] }>;
+      hasReviewIssues?: boolean;
+      audit?: {
+        expenses?: {
+          items?: { value?: string }[];
+          includedItems?: { value?: string }[];
+          excludedCarriedBalances?: { label?: string; value?: string }[];
+        };
+      };
+    }[];
+  };
+
+test('los gastos v2 excluyen las tres deudas y conservan los motivos', () => {
+  const cases = [
+    {
+      file: 'almendro_historic_2025-01_2026-07.json',
+      period: '2025-05',
+      gross: 587.7,
+      previousGross: 1616.2,
+    },
+    {
+      file: 'rodas_historic_2026-01_2026-07.json',
+      period: '2026-02',
+      gross: 9.4,
+      previousGross: 346.8,
+    },
+    {
+      file: 'mendizabal_historic_2026-05_2026-07.json',
+      period: '2026-06',
+      gross: 20.5,
+      previousGross: 1478.6,
+    },
+  ];
+  for (const item of cases) {
+    const record = combinedPackage(item.file).records.find(
+      (row) => row.period === item.period,
+    );
+    assert.ok(record);
+    const expenses = record.audit?.expenses;
+    assert.ok(expenses?.includedItems?.length);
+    assert.ok(expenses.excludedCarriedBalances?.length);
+    assert.equal(expenseGrossFromIncludedItems(expenses.includedItems), item.gross);
+    assert.notEqual(
+      expenseGrossFromIncludedItems(expenses.items ?? []),
+      item.gross,
+    );
+    assert.equal(
+      Math.round(
+        (Math.abs(Number(expenses.excludedCarriedBalances[0].value)) + item.gross) * 100,
+      ),
+      Math.round(item.previousGross * 100),
+    );
+    const mapped = mapCombinedHistoricRecord(record);
+    assert.equal(mapped.metrics.expensesAndServicesGross, String(item.gross));
+    assert.equal('bookingCount' in mapped.metrics, false);
+    assert.equal(mapped.metrics.checkInBookingCount === mapped.metrics.bookingCount, false);
+    const sourceReview = record.metricReview.expensesAndServicesGross;
+    assert.equal(
+      mapped.metricReview.expensesAndServicesGross?.needsReview,
+      sourceReview?.needsReview === true,
+    );
+    assert.deepEqual(
+      mapped.metricReview.expensesAndServicesGross?.reasons.map((reason) => reason.code),
+      (sourceReview?.reasons ?? []).map((reason) => reason.code),
+    );
+  }
+});
+
+test('un null de calendario no pasa a cero y solo se marcan sus campos', () => {
+  const january = combinedPackage(
+    'almendro_historic_2025-01_2026-07.json',
+  ).records.find((row) => row.period === '2025-01');
+  assert.ok(january);
+  const mapped = mapCombinedHistoricRecord(january);
+  assert.equal(mapped.metrics.calendarOccupiedNights, null);
+  assert.equal(mapped.metrics.paidByGuest, '3662.12');
+  assert.notEqual(mapped.metrics.calendarOccupiedNights, '0');
+  assert.deepEqual(reviewPresentation(null, mapped.metricReview.calendarOccupiedNights), {
+    marked: true,
+    pending: true,
+  });
+  assert.deepEqual(
+    reviewPresentation(mapped.metrics.paidByGuest, mapped.metricReview.paidByGuest),
+    { marked: true, pending: false },
+  );
+  const july = combinedPackage(
+    'almendro_historic_2025-01_2026-07.json',
+  ).records.find((row) => row.period === '2026-07');
+  assert.ok(july?.hasReviewIssues);
+  const julyMapped = mapCombinedHistoricRecord(july);
+  assert.deepEqual(fieldsNeedingReview(julyMapped.metricReview), [
+    'expensesAndServicesGross',
+  ]);
+  assert.equal(
+    reviewPresentation('434.87', julyMapped.metricReview.paidByGuest).marked,
+    false,
+  );
+  assert.throws(
+    () => mapCombinedHistoricRecord({ period: '2026-08', metrics: { netEarnings: 1 } }),
+    /not imported/,
+  );
+});
+
+test('editar un campo quita su revisión y una corrección validada no se pisa', () => {
+  const may = combinedPackage(
+    'almendro_historic_2025-01_2026-07.json',
+  ).records.find((row) => row.period === '2025-05');
+  assert.ok(may);
+  const mapped = mapCombinedHistoricRecord(may);
+  const cleared = clearMetricReviewFields(mapped.metricReview, [
+    'expensesAndServicesGross',
+  ]);
+  assert.equal(cleared.expensesAndServicesGross, undefined);
+  assert.equal(cleared.netEarnings, mapped.metricReview.netEarnings);
+  const partial = applyMetricResolution({
+    review: mapped.metricReview.expensesAndServicesGross,
+    value: '587.7',
+    previousValue: '587.7',
+    reasonCodes: ['EXPENSE_DETAIL_TOTAL_DIFFERENCE'],
+    validatedBy: 'ana',
+    validatedAt: '2026-10-01T08:00:00.000Z',
+    evidence: 'Reporte de mayo',
+    sourceVersion: 'yalla-historic-combined-v2',
+  });
+  assert.equal(partial.review?.needsReview, true);
+  assert.equal(partial.correction, null);
+  const resolved = applyMetricResolution({
+    review: partial.review ?? undefined,
+    value: '587.7',
+    previousValue: '1616.2',
+    reasonCodes: partial.review?.reasons.map((reason) => reason.code) ?? [],
+    validatedBy: 'ana',
+    validatedAt: '2026-10-01T08:00:00.000Z',
+    evidence: 'Reporte de mayo',
+    sourceVersion: 'yalla-historic-combined-v2',
+  });
+  assert.equal(resolved.review, null);
+  assert.ok(resolved.correction);
+  const conflict = mergeCombinedHistoricMonth({
+    schemaVersion: 'yalla-historic-combined-v2',
+    incoming: mapped,
+    corrections: {
+      expensesAndServicesGross: {
+        ...resolved.correction,
+        value: '500',
+      },
+    },
+  });
+  assert.equal(conflict.metrics.expensesAndServicesGross, '500');
+  assert.equal(conflict.metricReview.expensesAndServicesGross, undefined);
+  assert.equal(conflict.conflicts.length, 1);
+  assert.equal(conflict.metrics.paidByGuest, mapped.metrics.paidByGuest);
 });

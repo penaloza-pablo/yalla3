@@ -21,11 +21,16 @@ import {
 } from '../shared/property-report-reviews';
 import { scanReviewsForReport } from '../shared/property-report-reviews-store';
 import {
+  CALENDAR_METRIC_IDS,
   applyCalendarMetrics,
   calendarMetricsForMonth,
   calendarQueryDates,
   calendarStayFromBooking,
 } from '../shared/calendar-occupancy';
+import {
+  fieldsNeedingReview,
+  parseMetricReviewMap,
+} from '../shared/historic-metric-review';
 import {
   asString,
   datesInReportMonth,
@@ -181,6 +186,9 @@ export const handler = async (event: HttpEvent) => {
       metrics: asMetricMap(item.metrics),
       qualityFlags: asFlags(item.qualityFlags),
     }));
+    const metricReviewByPeriod = new Map(
+      actualItems.map((item) => [asString(item.period), item.metricReview]),
+    );
     const { visible, blockedPeriods } = splitReadableActuals(storedActuals);
     const visibleByPeriod = new Map(visible.map((item) => [item.period, item]));
     const months = eachMonth(from, to);
@@ -250,14 +258,21 @@ export const handler = async (event: HttpEvent) => {
             today: calendarToday,
             updatedAt: calendarUpdatedAt,
           });
+      const preserveStoredCalendar = period < NATIVE_PERIOD_START;
+      const metricReview = parseMetricReviewMap(metricReviewByPeriod.get(period));
+      if (!preserveStoredCalendar) {
+        for (const id of CALENDAR_METRIC_IDS) delete metricReview[id];
+      }
       monthRows.push({
         period,
         dataOrigin: stored?.dataOrigin ?? null,
         metrics: calendar
           ? applyCalendarMetrics(overlay.metrics, calendar, {
-              preserveStored: period < NATIVE_PERIOD_START,
+              preserveStored: preserveStoredCalendar,
             })
           : overlay.metrics,
+        metricReview,
+        hasReviewIssues: fieldsNeedingReview(metricReview).length > 0,
         qualityFlags: [
           ...new Set([
             ...(stored?.qualityFlags ?? []),

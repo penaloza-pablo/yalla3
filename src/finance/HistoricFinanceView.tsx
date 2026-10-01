@@ -22,6 +22,10 @@ import {
   metricsFromPropertyReportPayload,
 } from './property-report-live-metrics'
 import { CALENDAR_METRIC_IDS } from '../../amplify/functions/shared/calendar-occupancy'
+import {
+  reviewPresentation,
+  type MetricReviewEntry,
+} from '../../amplify/functions/shared/historic-metric-review'
 import { PROPERTY_REPORT_FIELD_CATALOG } from './property-report-metrics'
 import './historic-finance.css'
 
@@ -37,6 +41,8 @@ type MonthRow = {
   period: string
   dataOrigin: string | null
   metrics: Record<string, string | null>
+  metricReview?: Record<string, MetricReviewEntry>
+  hasReviewIssues?: boolean
   qualityFlags: string[]
   reviewsLive: boolean
   rescuedUnderFiveStarReviewCount: number | null
@@ -89,6 +95,7 @@ const SERIES_COLORS = ['#3d5b58', '#c45c4e', '#415364', '#7a8a96', '#2e90fa', '#
 
 const metricIds = [
   ...Object.values(SOURCE_FIELD_MAP),
+  'checkInBookingCount',
   ...REVIEW_METRIC_IDS,
   ...PROPERTY_REPORT_FIELD_CATALOG.map((field) => field.id).filter(
     (id) =>
@@ -140,6 +147,7 @@ const readFilters = (propertyId: string): Filters => {
 }
 
 const unitOf = (metricId: string) => {
+  if (metricId === 'checkInBookingCount') return 'count' as const
   if (metricId === 'cleaningPaidByGuest' || metricId === 'totalExpenses') {
     return 'money' as const
   }
@@ -210,6 +218,8 @@ export function HistoricFinanceView({
   const [draggingMetricId, setDraggingMetricId] = useState<string | null>(null)
   const [dropMetricId, setDropMetricId] = useState<string | null>(null)
   const [monthOrder, setMonthOrder] = useState<'asc' | 'desc'>('desc')
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [openReviewKey, setOpenReviewKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (filters.propertyId) {
@@ -329,11 +339,11 @@ export function HistoricFinanceView({
 
   const selectedMetrics = filters.metricIds.length > 0 ? filters.metricIds : ['paidByGuest']
   const tableMonths = useMemo(() => {
-    const months = [...(payload?.months ?? [])].sort((left, right) =>
-      left.period.localeCompare(right.period),
-    )
+    const months = [...(payload?.months ?? [])]
+      .filter((month) => !reviewOnly || month.hasReviewIssues)
+      .sort((left, right) => left.period.localeCompare(right.period))
     return monthOrder === 'asc' ? months : months.reverse()
-  }, [monthOrder, payload?.months])
+  }, [monthOrder, payload?.months, reviewOnly])
   const canReorderColumns = selectedMetrics.length > 1
 
   const moveMetricColumn = (fromId: string, toId: string) => {
@@ -419,6 +429,9 @@ export function HistoricFinanceView({
       for (const metricId of selectedMetrics) {
         row[metricId] = parseDecimal(metrics[metricId])
         row[`ref:${metricId}`] = parseDecimal(benchmark?.metrics[metricId])
+        const review = month.metricReview?.[metricId]
+        row[`review:${metricId}`] =
+          review?.needsReview === true ? JSON.stringify(review.reasons) : null
       }
       return row
     })
@@ -431,6 +444,18 @@ export function HistoricFinanceView({
     color: SERIES_COLORS[index % SERIES_COLORS.length],
     reference: parseDecimal(benchmark?.metrics[metricId]),
   }))
+
+  const reviewCoverage = (metricId: string) => {
+    const months = payload?.months ?? []
+    const pending = months.filter(
+      (month) => month.metricReview?.[metricId]?.needsReview === true,
+    ).length
+    if (pending === 0) return ''
+    return t('historicFinance.reviewCoverage', {
+      pending,
+      total: months.length,
+    })
+  }
 
   const annuals = selectedMetrics.map((metricId) => {
     const annual = annualSeries(
@@ -445,6 +470,7 @@ export function HistoricFinanceView({
       rows: annual.rows,
       years: annual.years,
       formatValue: (value: number | null) => formatMetric(metricId, value),
+      reviewNote: reviewCoverage(metricId),
     }
   })
 
@@ -658,6 +684,17 @@ export function HistoricFinanceView({
                   </button>
                   {mode === 'table' ? (
                     <button
+                      className={`btn-ghost historic-review-filter ${reviewOnly ? 'is-active' : ''}`}
+                      type="button"
+                      aria-pressed={reviewOnly}
+                      onClick={() => setReviewOnly((current) => !current)}
+                      disabled={loading || !payload}
+                    >
+                      {t('historicFinance.reviewOnly')}
+                    </button>
+                  ) : null}
+                  {mode === 'table' ? (
+                    <button
                       className="btn-primary"
                       type="button"
                       aria-label={t('historicFinance.edit')}
@@ -739,6 +776,9 @@ export function HistoricFinanceView({
                   })}
                   . {t('historicFinance.ltm')}: {ltm.monthsAvailable}/{ltm.monthsInWindow}
                 </p>
+                {reviewCoverage(metricId) ? (
+                  <p className="historic-review-coverage">{reviewCoverage(metricId)}</p>
+                ) : null}
               </div>
             )
           })}
@@ -909,6 +949,8 @@ export function HistoricFinanceView({
       {mode === 'charts' && payload ? (
         <HistoricCharts
           points={points}
+          reviewLabel={t('historicFinance.reviewTag')}
+          pendingReviewLabel={t('historicFinance.pendingReview')}
           series={chartSeries}
           annuals={annuals}
           eventMarks={(payload.events ?? [])
@@ -940,6 +982,9 @@ export function HistoricFinanceView({
           <div className="historic-stage-body table-wrap">
             {!loading && payload && payload.months.length === 0 ? (
               <p className="historic-note">{t('historicFinance.empty')}</p>
+            ) : null}
+            {!loading && payload && payload.months.length > 0 && tableMonths.length === 0 ? (
+              <p className="historic-note">{t('historicFinance.reviewEmpty')}</p>
             ) : null}
             {payload ? (
               <table className="data-table">
@@ -1089,6 +1134,14 @@ export function HistoricFinanceView({
                                 text={warningText(warningOverlay)}
                               />
                             ) : null}
+                            {month.hasReviewIssues ? (
+                              <MonthTip
+                                icon="exclamationmark.triangle"
+                                warning
+                                label={t('historicFinance.reviewRow')}
+                                text={t('historicFinance.reviewRow')}
+                              />
+                            ) : null}
                             {flags.length > 0 ? (
                               <MonthTip
                                 icon="info.circle"
@@ -1107,7 +1160,7 @@ export function HistoricFinanceView({
                         {selectedMetrics.map((metricId) => {
                           const stored = metrics[metricId] ?? ''
                           const draftValue = editDraft[month.period]?.[metricId]
-                          if (editable && !isReviewMetric(metricId) && !isCalendarMetric(metricId)) {
+                          if (editable && !isReviewMetric(metricId)) {
                             return (
                               <td key={metricId}>
                                 <input
@@ -1139,13 +1192,57 @@ export function HistoricFinanceView({
                           }
                           const numeric = parseDecimal(stored || null)
                           const help = metricHelp(metricId)
+                          const review = month.metricReview?.[metricId]
+                          const presentation = reviewPresentation(stored || null, review)
                           const title =
-                            help && numeric == null && isCalendarMetric(metricId)
+                            help && numeric == null && isCalendarMetric(metricId) && !presentation.pending
                               ? `${help} ${t('historicFinance.insufficient')}`
                               : help || undefined
+                          const reviewKey = `${month.period}:${metricId}`
+                          const reasons = review?.reasons ?? []
                           return (
-                            <td key={metricId} title={title}>
-                              {formatMetric(metricId, numeric)}
+                            <td key={metricId} title={presentation.marked ? undefined : title}>
+                              {presentation.marked ? (
+                                <span className="historic-review-value">
+                                  <span className="historic-review-figure">
+                                    {presentation.pending
+                                      ? t('historicFinance.pendingReview')
+                                      : formatMetric(metricId, numeric)}
+                                  </span>
+                                  <span
+                                    className={`historic-tip is-review ${openReviewKey === reviewKey ? 'is-open' : ''}`}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="historic-review-tag"
+                                      aria-expanded={openReviewKey === reviewKey}
+                                      aria-label={t('historicFinance.reviewTag')}
+                                      onClick={() =>
+                                        setOpenReviewKey((current) =>
+                                          current === reviewKey ? null : reviewKey,
+                                        )
+                                      }
+                                    >
+                                      {t('historicFinance.reviewTag')}
+                                    </button>
+                                    <span className="historic-tip-bubble" role="tooltip">
+                                      {reasons.map((reason) => (
+                                        <span className="historic-review-reason" key={reason.code}>
+                                          {reason.message}
+                                          {reason.suggestedAction ? (
+                                            <>
+                                              {' '}
+                                              {reason.suggestedAction}
+                                            </>
+                                          ) : null}
+                                        </span>
+                                      ))}
+                                    </span>
+                                  </span>
+                                </span>
+                              ) : (
+                                formatMetric(metricId, numeric)
+                              )}
                             </td>
                           )
                         })}

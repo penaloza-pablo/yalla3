@@ -3009,6 +3009,12 @@
     "eventError": "No se pudo guardar el hito.",
     "calendarNote": "Las cifras de calendario cuentan las noches de cada mes de estancia. El total paid by guest del informe sigue siendo el de los payouts de ese mes y no se reparte.",
     "insufficient": "Sin datos suficientes para publicar este promedio.",
+    "reviewTag": "Revisar",
+    "pendingReview": "Pendiente de revisión",
+    "reviewRow": "Este mes tiene cifras por revisar. Solo esas cifras se marcan.",
+    "reviewOnly": "Solo meses con cifras por revisar",
+    "reviewEmpty": "Ningún mes de este rango tiene cifras por revisar.",
+    "reviewCoverage": "{{pending}} de {{total}} meses incluyen cifras por revisar o pendientes. Esos vacíos no cuentan como cero.",
     "quality": {
       "REPEATED_Q1_VALUES_KEEP_AS_MONTHLY": "Enero, febrero y marzo repiten los mismos importes y se conservan como meses distintos.",
       "NET_BRIDGE_REVIEW": "El neto no coincide con una resta simple de las partidas visibles. Se conserva el importe original.",
@@ -3045,7 +3051,8 @@
       "calendarAccommodationRevenue": "Ingresos de alojamiento del mes",
       "calendarADR": "Tarifa media de alojamiento",
       "expensesAndServicesVat": "Expenses & Services VAT",
-      "expensesAndServicesGross": "Expenses & Services Gross"
+      "expensesAndServicesGross": "Expenses & Services Gross",
+      "checkInBookingCount": "Check-in booking count"
     },
     "metricHelp": {
       "calendarOccupiedNights": "Noches que una reserva válida pasó en ese mes. La noche de salida no cuenta. Una vivienda de una sola unidad no cuenta el mismo día dos veces.",
@@ -3055,7 +3062,8 @@
       "calendarAccommodationRevenue": "Solo la tarifa de alojamiento identificada en la reserva, repartida entre sus noches. La limpieza, los impuestos y el payout del anfitrión no se usan como sustituto. Si falta esa tarifa, se muestra un guion.",
       "calendarADR": "Tarifa media de alojamiento de las noches con ese importe. Las estancias gratuitas no entran en este cálculo. Si el dato es un reparto, es una estimación y no una tarifa nocturna real.",
       "expensesAndServicesVat": "Suma del IVA de los services y other expenses que entran en Expenses & Services.",
-      "expensesAndServicesGross": "Expenses & Services más el IVA de cada uno de esos ítems."
+      "expensesAndServicesGross": "Expenses & Services más el IVA de cada uno de esos ítems.",
+      "checkInBookingCount": "Estancias con check-in en el mes. No es el número de payouts."
     }
   }
 }

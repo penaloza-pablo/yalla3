@@ -25,6 +25,12 @@ import {
   putHistoricEvent,
   writeCurrentActual,
 } from '../shared/finance-historic-store';
+import {
+  clearMetricCorrections,
+  clearMetricReviewFields,
+  parseMetricReviewMap,
+  type MetricCorrection,
+} from '../shared/historic-metric-review';
 import { docClient } from '../shared/visit-task-utils';
 
 type HttpEvent = {
@@ -197,6 +203,17 @@ export const editHistoricValues = async (event: HttpEvent) => {
       ...asMetricMap(existing.metrics),
       ...edited,
     });
+    const editedFields = Object.keys(edited);
+    const metricReview = clearMetricReviewFields(
+      parseMetricReviewMap(existing.metricReview),
+      editedFields,
+    );
+    const metricCorrections = clearMetricCorrections(
+      existing.metricCorrections && typeof existing.metricCorrections === 'object'
+        ? (existing.metricCorrections as Record<string, MetricCorrection>)
+        : {},
+      editedFields,
+    );
     const provenance =
       existing.provenance && typeof existing.provenance === 'object'
         ? { ...(existing.provenance as Record<string, unknown>) }
@@ -214,10 +231,12 @@ export const editHistoricValues = async (event: HttpEvent) => {
         propertyKey: asString(existing.propertyKey) || undefined,
         nickname: asString(existing.nickname) || asString(property.Item.nickname),
         sourceSha256: asString(existing.sourceSha256) || undefined,
+        metricReview,
+        metricCorrections,
         updatedAt: nowIso(),
       }),
     );
-    return buildHttpResponse(200, { propertyId, period, metrics });
+    return buildHttpResponse(200, { propertyId, period, metrics, metricReview });
   } catch (error) {
     if (error instanceof HistoricEditError) {
       return buildHttpResponse(400, { message: error.message });

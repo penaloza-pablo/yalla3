@@ -16,6 +16,12 @@ import {
   sourcePartitionKey,
   type ActualWritePlan,
 } from './finance-historic';
+import {
+  metricReviewsEqual,
+  parseMetricReviewMap,
+  type MetricCorrection,
+  type MetricReviewMap,
+} from './historic-metric-review';
 import { docClient } from './visit-task-utils';
 
 type MetricMap = Record<string, string | null>;
@@ -35,6 +41,8 @@ export type HistoricActualItem = {
   propertyKey?: string;
   nickname?: string;
   sourceSha256?: string;
+  metricReview?: MetricReviewMap;
+  metricCorrections?: Record<string, MetricCorrection>;
   updatedAt: string;
 };
 
@@ -126,6 +134,10 @@ export const writeCurrentActual = async (
   item: HistoricActualItem,
 ): Promise<ActualWritePlan> => {
   const existing = await getHistoricItem(tableName, item.propertyId, item.sk);
+  const existingReview = parseMetricReviewMap(existing?.metricReview);
+  const reviewsMatch =
+    item.metricReview === undefined ||
+    metricReviewsEqual(existingReview, item.metricReview);
   const plan = planActualWrite(
     existing
       ? {
@@ -134,6 +146,7 @@ export const writeCurrentActual = async (
         }
       : null,
     { dataOrigin: item.dataOrigin, metrics: item.metrics },
+    { reviewsMatch },
   );
   if (plan === 'skip') return 'skip';
   if (plan === 'revise' && existing) {

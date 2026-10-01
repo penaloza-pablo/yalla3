@@ -168,6 +168,7 @@ export const planActualWrite = (
     dataOrigin: string;
     metrics: Record<string, string | null>;
   },
+  options?: { reviewsMatch?: boolean },
 ): ActualWritePlan => {
   if (!existing) return 'insert';
   if (
@@ -178,7 +179,8 @@ export const planActualWrite = (
   }
   if (
     existing.dataOrigin === incoming.dataOrigin &&
-    metricsEqual(existing.metrics, incoming.metrics)
+    metricsEqual(existing.metrics, incoming.metrics) &&
+    options?.reviewsMatch !== false
   ) {
     return 'skip';
   }

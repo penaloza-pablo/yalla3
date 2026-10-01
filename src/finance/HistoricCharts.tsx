@@ -28,6 +28,7 @@ export type HistoricAnnualChart = {
   rows: AnnualRow[]
   years: string[]
   formatValue: (value: number | null) => string
+  reviewNote?: string
 }
 
 type Point = Record<string, string | number | null>
@@ -40,8 +41,23 @@ type Props = {
   evolutionTitle: string
   referenceLabel: string
   formatValue: (metricId: string, value: number | null) => string
+  reviewLabel: string
+  pendingReviewLabel: string
   loading: boolean
   loadingLabel: string
+}
+
+type ChartReason = { message?: string; suggestedAction?: string }
+
+const reasonsOf = (point: Record<string, unknown> | undefined, metricId: string) => {
+  const raw = point?.[`review:${metricId}`]
+  if (typeof raw !== 'string' || !raw) return []
+  try {
+    const parsed = JSON.parse(raw) as ChartReason[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 const YEAR_COLORS = ['#3d5b58', '#c45c4e', '#a1b1c8', '#415364']
@@ -58,6 +74,8 @@ const TrendChart = ({
   title,
   referenceLabel,
   formatValue,
+  reviewLabel,
+  pendingReviewLabel,
 }: {
   points: Point[]
   series: HistoricChartSeries[]
@@ -65,6 +83,8 @@ const TrendChart = ({
   title: string
   referenceLabel: string
   formatValue: (metricId: string, value: number | null) => string
+  reviewLabel: string
+  pendingReviewLabel: string
 }) => {
   const units = [...new Set(series.map((item) => item.unit))]
   return (
@@ -78,11 +98,36 @@ const TrendChart = ({
             <YAxis yAxisId="left" />
             {units.length > 1 ? <YAxis yAxisId="right" orientation="right" /> : null}
             <Tooltip
-              formatter={(value, _name, item) => {
-                const key = String(item?.dataKey ?? '').replace(/^ref:/, '')
-                return formatValue(
-                  key,
-                  typeof value === 'number' ? value : null,
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const point = payload[0]?.payload as Record<string, unknown> | undefined
+                return (
+                  <div className="historic-chart-tip">
+                    <p className="historic-chart-tip-period">{label}</p>
+                    {series.map((item) => {
+                      const value = point?.[item.id]
+                      const numeric = typeof value === 'number' ? value : null
+                      const reasons = reasonsOf(point, item.id)
+                      const reviewed = reasons.length > 0
+                      return (
+                        <div key={item.id}>
+                          <p className={reviewed ? 'is-review' : undefined}>
+                            {item.label}:{' '}
+                            {numeric == null && reviewed
+                              ? pendingReviewLabel
+                              : formatValue(item.id, numeric)}
+                            {reviewed ? ` · ${reviewLabel}` : ''}
+                          </p>
+                          {reasons.map((reason) => (
+                            <p key={`${item.id}-${reason.message}`} className="is-review">
+                              {reason.message}
+                              {reason.suggestedAction ? ` ${reason.suggestedAction}` : ''}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )
               }}
             />
@@ -96,7 +141,25 @@ const TrendChart = ({
                 name={item.label}
                 stroke={item.color}
                 connectNulls={false}
-                dot
+                dot={(dotProps) => {
+                  const { cx, cy, payload, value } = dotProps
+                  if (cx == null || cy == null || typeof value !== 'number') return <g />
+                  const reviewed = reasonsOf(
+                    payload as Record<string, unknown>,
+                    item.id,
+                  ).length > 0
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={reviewed ? 5 : 3}
+                      fill={reviewed ? '#b42318' : item.color}
+                      stroke={reviewed ? '#b42318' : item.color}
+                    >
+                      {reviewed ? <title>{reviewLabel}</title> : null}
+                    </circle>
+                  )
+                }}
               />
             ))}
             {series
@@ -138,6 +201,8 @@ export function HistoricCharts({
   evolutionTitle,
   referenceLabel,
   formatValue,
+  reviewLabel,
+  pendingReviewLabel,
   loading,
   loadingLabel,
 }: Props) {
@@ -169,11 +234,16 @@ export function HistoricCharts({
             }
             referenceLabel={referenceLabel}
             formatValue={formatValue}
+            reviewLabel={reviewLabel}
+            pendingReviewLabel={pendingReviewLabel}
           />
         ))}
         {annuals.map((annual) => (
           <section className="card" key={annual.id}>
             <h2 className="page-title">{annual.title}</h2>
+            {annual.reviewNote ? (
+              <p className="historic-review-coverage">{annual.reviewNote}</p>
+            ) : null}
             <div className="historic-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={annual.rows}>

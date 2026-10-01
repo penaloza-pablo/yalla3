@@ -114,6 +114,69 @@
   color: var(--yl-warning, #b54708);
 }
 
+.historic-review-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.historic-review-figure,
+.historic-review-tag,
+.historic-chart-tip .is-review,
+.historic-review-coverage {
+  color: var(--yl-danger);
+}
+
+.historic-review-tag {
+  border: 1px solid var(--yl-danger);
+  border-radius: 999px;
+  background: transparent;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.historic-tip.is-review.is-open .historic-tip-bubble,
+.historic-tip.is-review:hover .historic-tip-bubble,
+.historic-tip.is-review:focus-within .historic-tip-bubble {
+  display: block;
+}
+
+.historic-review-reason {
+  display: block;
+}
+
+.historic-review-reason + .historic-review-reason {
+  margin-top: 6px;
+}
+
+.historic-review-filter.is-active {
+  color: var(--yl-danger);
+  border-color: var(--yl-danger);
+}
+
+.historic-chart-tip {
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--yl-stroke);
+  border-radius: 8px;
+  background: var(--yl-surface);
+  color: var(--yl-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.historic-chart-tip-period {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.historic-chart-tip p {
+  margin: 0;
+}
+
 .historic-metric-options {
   max-height: 240px;
   overflow: auto;
