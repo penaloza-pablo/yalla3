@@ -19,7 +19,9 @@ export type InvoiceTypeKey =
   | 'keynest'
   | 'travel'
   | 'extra_hours'
-  | 'emergency';
+  | 'emergency'
+  | 'toilet_paper'
+  | 'linen_delivery';
 
 export type InvoiceMappingTarget = {
   propertyKey: string;
@@ -64,7 +66,13 @@ export const foldCompanyName = (value: string) => {
 
 const TYPE_SYNONYMS: Record<InvoiceTypeKey, string[]> = {
   studio: ['studio', 'estudio'],
-  studio_sofa: ['studio sofa', 'estudio sofa', 'sofa bed studio'],
+  studio_sofa: [
+    'studio sofa',
+    'estudio sofa',
+    'sofa bed studio',
+    'sofa bed',
+    'regular sofa',
+  ],
   one_bedroom: ['1 bedroom', 'one bedroom', '1 habitacion'],
   one_bedroom_sofa: [
     '1 bedroom sofa',
@@ -89,6 +97,8 @@ const TYPE_SYNONYMS: Record<InvoiceTypeKey, string[]> = {
   travel: ['desplazamiento', 'travel', 'displacement'],
   extra_hours: ['hora extra', 'horas extras', 'extra hour', 'extra hours'],
   emergency: ['emergencia', 'emergency'],
+  toilet_paper: ['toilet paper', 'papel higienico'],
+  linen_delivery: ['linen delivery', 'reparto lino', 'entrega lino'],
 };
 
 const PROPERTY_ALIASES: Record<string, string[]> = {
@@ -173,6 +183,16 @@ const P2_EXACT: InvoiceMappingRule[] = [
     group: 'p2',
     folded: foldInvoiceText('Repaso ligero'),
     targets: [{ propertyKey: 'p2', typeKey: 'light_refresh' }],
+  },
+  {
+    group: 'p2',
+    folded: foldInvoiceText('Papel higienico'),
+    targets: [{ propertyKey: '*', typeKey: 'toilet_paper' }],
+  },
+  {
+    group: 'p2',
+    folded: foldInvoiceText('reparto'),
+    targets: [{ propertyKey: '*', typeKey: 'linen_delivery' }],
   },
 ];
 

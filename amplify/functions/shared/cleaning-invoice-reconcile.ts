@@ -242,7 +242,7 @@ const takeMatchingYalla = (
       matches = remaining.filter(
         (line) =>
           yallaPropertyMatches(line.property, line.propertyId, target.propertyKey) &&
-          yallaTypeMatches(line.cleaningTypeName, 'one_bedroom') &&
+          yallaTypeMatches(line.cleaningTypeName, 'one_bedroom_sofa') &&
           moneyEquals(line.price, invoiceLine.unitPrice),
       );
     }
@@ -311,10 +311,7 @@ const takeUnitPriceLeftovers = (
   const takeCount = Math.max(1, Math.round(invoiceLine.units) || priced.length);
   const taken = priced.slice(0, Math.min(takeCount, priced.length));
   const sum = roundMoney(taken.reduce((total, line) => total + line.price, 0));
-  if (
-    moneyEquals(sum, invoiceLine.subtotal) ||
-    taken.length === takeCount
-  ) {
+  if (moneyEquals(sum, invoiceLine.subtotal)) {
     return taken;
   }
   return [] as YallaInvoiceLine[];

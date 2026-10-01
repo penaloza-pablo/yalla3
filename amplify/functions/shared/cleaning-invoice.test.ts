@@ -461,6 +461,128 @@ test('learned equivalences pick the remembered Yalla type among same-price lefto
   assert.equal(withMemory.yallaOnly[0]?.id, 'other');
 });
 
+test('studio sofa at Concepcion matches Regular + sofa bed leftovers', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [
+      {
+        description: 'Limpieza estudio sofa cama concepcion arenal',
+        units: 6,
+        unitPrice: 43,
+        subtotal: 258,
+      },
+      {
+        description: 'Limpiezas 1 habitación sofá cama',
+        units: 2,
+        unitPrice: 57,
+        subtotal: 114,
+      },
+    ],
+    [
+      {
+        id: 'c1',
+        propertyId: 'arenal-verdejo',
+        property: 'Arenal Verdejo',
+        cleaningTypeName: 'Regular + sofa bed',
+        price: 43,
+      },
+      {
+        id: 'c2',
+        propertyId: 'arenal-jerez',
+        property: 'Arenal Jerez',
+        cleaningTypeName: 'Regular + sofa bed',
+        price: 43,
+      },
+      {
+        id: 'o1',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'Regular + sofa bed',
+        price: 57,
+      },
+      {
+        id: 'o2',
+        propertyId: 'almendro',
+        property: 'Almendro',
+        cleaningTypeName: 'Regular + sofa bed',
+        price: 57,
+      },
+    ],
+    'apartments',
+    372,
+  );
+  const concepcion = result.matched.find((entry) =>
+    /concepcion arenal/i.test(entry.invoiceDescription),
+  );
+  const generic = result.matched.find((entry) =>
+    /1 habitaci/i.test(entry.invoiceDescription),
+  );
+  assert.equal(concepcion?.yallaCount, 2);
+  assert.ok(concepcion?.yallaLines.every((line) => line.price === 43));
+  assert.equal(generic?.yallaCount, 2);
+  assert.equal(result.invoiceOnly.length, 0);
+  assert.equal(result.yallaOnly.length, 0);
+});
+
+test('half-hour extras do not steal a different 16 euro leftover', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [{ description: 'Hora extras', units: 0.5, unitPrice: 16, subtotal: 8 }],
+    [
+      {
+        id: 'toilet',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: 'Extra: toilet cleaning',
+        price: 16,
+      },
+      {
+        id: 'wait',
+        propertyId: 'fe',
+        property: 'Fe',
+        cleaningTypeName: '30 min extra, waiting for guest to check out',
+        price: 8,
+      },
+    ],
+    'apartments',
+    8,
+  );
+  assert.ok(!result.matched.some((entry) => entry.yallaLines.some((line) => line.id === 'toilet')));
+  const wait = result.matched.find((entry) =>
+    entry.yallaLines.some((line) => line.id === 'wait'),
+  );
+  assert.ok(wait);
+  assert.ok(moneyEquals(wait?.yallaTotal ?? 0, 8));
+});
+
+test('P2 toilet paper and linen delivery map to Yalla extras', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [
+      { description: 'Papel higiénico', units: 53, unitPrice: 0.3, subtotal: 15.9 },
+      { description: 'reparto', units: 9, unitPrice: 13, subtotal: 117 },
+    ],
+    [
+      {
+        id: 'paper',
+        propertyId: 'p2',
+        property: 'P2',
+        cleaningTypeName: 'Toilet paper',
+        price: 15.9,
+      },
+      {
+        id: 'linen',
+        propertyId: 'p2',
+        property: 'P2',
+        cleaningTypeName: 'Linen delivery',
+        price: 117,
+      },
+    ],
+    'p2',
+    132.9,
+  );
+  assert.equal(result.matched.length, 2);
+  assert.equal(result.invoiceOnly.length, 0);
+  assert.equal(result.yallaOnly.length, 0);
+});
+
 test('billing filter keeps p2 rooms out of apartments', () => {
   assert.equal(billingPropertyGroupOf('211', '693c3ad20c4f0500133cd017'), 'p2');
   assert.equal(billingPropertyGroupOf('Concepcion Arenal', 'apt-1'), 'apartments');
