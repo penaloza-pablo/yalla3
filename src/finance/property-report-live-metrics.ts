@@ -49,6 +49,7 @@ type BookingRow = {
   hostServiceFee: number | null
   checkInDate: string
   checkOutDate: string
+  guestCount: number
 }
 
 type CleaningRow = {
@@ -129,6 +130,7 @@ export const metricsFromPropertyReportPayload = (
           hostServiceFee: asNumber(row.hostServiceFee),
           checkInDate: String(row.checkInDate ?? ''),
           checkOutDate: String(row.checkOutDate ?? ''),
+          guestCount: asNumber(row.guestCount) ?? 0,
         }
       })
     : []
@@ -350,6 +352,7 @@ export const metricsFromPropertyReportPayload = (
       ),
       bookingCount: bookings.length,
       nights: payoutRows.reduce((sum, row) => sum + row.nights, 0),
+      guestCount: bookings.reduce((sum, row) => sum + row.guestCount, 0),
       fiveStarReviewCount: reviewTotals.fiveStarReviewCount,
       underFiveStarReviewCount: reviewTotals.underFiveStarReviewCount,
       rescuedUnderFiveStarReviewPercent:

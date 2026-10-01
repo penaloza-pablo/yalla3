@@ -36,6 +36,10 @@ import {
   type ResolvedReportGroup,
 } from './property-groups';
 import {
+  getReservationGuestCount,
+  toGuestCount,
+} from './bookings-planner';
+import {
   occurrencePriceWithIva,
   resolveIvaRate,
 } from './iva';
@@ -97,6 +101,7 @@ export type PropertyReportBooking = {
   fareCleaning: number | null;
   hostServiceFee: number | null;
   currency: string;
+  guestCount: number;
 };
 
 export type PropertyReportExpenseOrigin = 'subtraction' | 'movement' | 'purchase';
@@ -626,6 +631,18 @@ export const bookingHasPayout = (
   return true;
 };
 
+/** Adults, children and infants on a payout booking. */
+export const payoutGuestCount = (
+  item: Record<string, unknown>,
+  reservation: Record<string, unknown> | null,
+) => {
+  const fromReservation = getReservationGuestCount(reservation);
+  if (fromReservation > 0) {
+    return fromReservation;
+  }
+  return Math.max(0, toGuestCount(item.Guests));
+};
+
 export const mapReportBooking = (
   item: Record<string, unknown>,
   reservation: Record<string, unknown> | null,
@@ -657,6 +674,7 @@ export const mapReportBooking = (
     fareCleaning: money.fareCleaning,
     hostServiceFee: money.hostServiceFee,
     currency: money.currency || asString(item.Currency) || 'EUR',
+    guestCount: payoutGuestCount(item, reservation),
   };
 };
 

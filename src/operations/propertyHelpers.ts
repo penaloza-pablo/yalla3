@@ -75,15 +75,13 @@ export const isMtlPropertyType = (type?: string) => {
   return normalized === 'MTL' || normalized.startsWith('MTL_')
 }
 
+const isSelectableBillingProperty = (property: PropertyOption) =>
+  !isReportGroupType(property.type) &&
+  !isMtlPropertyType(property.type) &&
+  !property.mtlPrincipalId?.trim()
+
 export const filterPropertySelectOptions = (properties: PropertyOption[]) =>
-  sortPropertyOptions(
-    properties.filter(
-      (property) =>
-        !isReportGroupType(property.type) &&
-        !isMtlPropertyType(property.type) &&
-        !property.mtlPrincipalId?.trim(),
-    ),
-  )
+  sortPropertyOptions(properties.filter(isSelectableBillingProperty))
 
 const isMtlPrincipalType = (type?: string) =>
   (type ?? '').trim().toUpperCase() === 'MTL_PRINCIPAL'
@@ -102,6 +100,16 @@ const isP2RoomProperty = (property: PropertyOption) =>
   isP2RoomListingId(property.id) ||
   isP2RoomNickname(property.nickname) ||
   isP2RoomNickname(property.listingNickname)
+
+export const filterCleaningBillingPropertyOptions = (
+  properties: PropertyOption[],
+) =>
+  sortPropertyOptions(
+    properties.filter(
+      (property) =>
+        isP2RoomProperty(property) || isSelectableBillingProperty(property),
+    ),
+  )
 
 export const filterTemplateAutoAssignPropertyOptions = (
   properties: PropertyOption[],

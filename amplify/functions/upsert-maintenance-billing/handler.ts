@@ -32,6 +32,12 @@ import {
   type ManualBillingLine,
   type MergedBillingGroup,
 } from '../shared/maintenance-billing';
+import {
+  distributedLineId,
+  newDistributionId,
+  parseDistributionTargets,
+  splitMoneyEvenly,
+} from '../shared/split-money';
 import { putItem } from '../shared/visit-task-utils';
 
 type Payload = {
@@ -53,6 +59,8 @@ type Payload = {
   hoursDisabled?: boolean;
   billingStatus?: string;
   dismissed?: boolean;
+  distributionId?: string;
+  properties?: unknown;
 };
 
 const billingContext = () => {
@@ -281,21 +289,60 @@ export const handler = async (event: {
         entityName: monthId,
         summary: `updated maintenance billing line ${quoted(visitId)} in ${quoted(monthId)}`,
       });
-    } else if (action === 'advance-manual' || action === 'update-manual' || action === 'add-manual') {
+    } else if (
+      action === 'advance-manual' ||
+      action === 'advance-distributed' ||
+      action === 'update-manual' ||
+      action === 'add-manual'
+    ) {
       const manualLines = asManualLines(stored?.manualLines);
-      if (action === 'advance-manual') {
+      if (action === 'advance-manual' || action === 'advance-distributed') {
         const lineId = asString(payload.lineId);
-        const index = manualLines.findIndex((item) => item.id === lineId);
-        if (index < 0) {
-          return buildHttpResponse(404, { message: 'Manual line not found.' });
+        const distributionId =
+          asString(payload.distributionId) ||
+          manualLines.find((item) => item.id === lineId)?.distributionId ||
+          '';
+        if (action === 'advance-distributed' && !distributionId) {
+          return buildHttpResponse(400, { message: 'distributionId is required.' });
         }
-        const next = nextBillingStatus(manualLines[index].billingStatus);
-        if (!next) {
-          return buildHttpResponse(400, {
-            message: 'Paid is the final billing status.',
+        if (distributionId) {
+          const members = manualLines.filter(
+            (item) => item.distributionId === distributionId,
+          );
+          if (members.length === 0) {
+            return buildHttpResponse(404, { message: 'Distributed cost not found.' });
+          }
+          let advanced = 0;
+          const nextLines = manualLines.map((item) => {
+            if (item.distributionId !== distributionId) {
+              return item;
+            }
+            const next = nextBillingStatus(item.billingStatus);
+            if (!next) {
+              return item;
+            }
+            advanced += 1;
+            return { ...item, billingStatus: next };
           });
+          if (advanced === 0) {
+            return buildHttpResponse(400, {
+              message: 'Paid is the final billing status.',
+            });
+          }
+          manualLines.splice(0, manualLines.length, ...nextLines);
+        } else {
+          const index = manualLines.findIndex((item) => item.id === lineId);
+          if (index < 0) {
+            return buildHttpResponse(404, { message: 'Manual line not found.' });
+          }
+          const next = nextBillingStatus(manualLines[index].billingStatus);
+          if (!next) {
+            return buildHttpResponse(400, {
+              message: 'Paid is the final billing status.',
+            });
+          }
+          manualLines[index] = { ...manualLines[index], billingStatus: next };
         }
-        manualLines[index] = { ...manualLines[index], billingStatus: next };
       } else {
         const date = asString(payload.date).slice(0, 10);
         if (!date.startsWith(`${monthId}-`)) {
@@ -348,6 +395,11 @@ export const handler = async (event: {
           if (index < 0) {
             return buildHttpResponse(404, { message: 'Manual line not found.' });
           }
+          if (manualLines[index].distributionId) {
+            return buildHttpResponse(400, {
+              message: 'Edit a distributed cost from its distributed form.',
+            });
+          }
           manualLines[index] = line;
         } else {
           manualLines.push(line);
@@ -377,6 +429,11 @@ export const handler = async (event: {
       if (selected.some((line) => line.billingStatus !== 'TO_ESTIMATE')) {
         return buildHttpResponse(400, {
           message: 'Only To Estimate lines can be grouped.',
+        });
+      }
+      if (selected.some((line) => line.distributionId)) {
+        return buildHttpResponse(400, {
+          message: 'Distributed costs stay split by property and cannot be grouped.',
         });
       }
       const propertyId = asString(selected[0].propertyId) || selected[0].id;
@@ -545,15 +602,34 @@ export const handler = async (event: {
         entityName: monthId,
         summary: `updated grouped maintenance billing ${quoted(lineId)} in ${quoted(monthId)}`,
       });
-    } else if (action === 'delete-manual') {
+    } else if (action === 'delete-manual' || action === 'delete-distributed') {
+      const existing = asManualLines(stored?.manualLines);
       const lineId = asString(payload.lineId);
-      const manualLines = asManualLines(stored?.manualLines).filter(
-        (item) => item.id !== lineId,
+      const distributionId =
+        asString(payload.distributionId) ||
+        existing.find((item) => item.id === lineId)?.distributionId ||
+        '';
+      if (action === 'delete-distributed' && !distributionId) {
+        return buildHttpResponse(400, { message: 'distributionId is required.' });
+      }
+      if (
+        distributionId &&
+        !existing.some((item) => item.distributionId === distributionId)
+      ) {
+        return buildHttpResponse(404, { message: 'Distributed cost not found.' });
+      }
+      const removedIds = new Set(
+        distributionId
+          ? existing
+              .filter((item) => item.distributionId === distributionId)
+              .map((item) => item.id)
+          : [lineId],
       );
+      const manualLines = existing.filter((item) => !removedIds.has(item.id));
       const mergedGroups = asMergedGroups(stored?.mergedGroups)
         .map((group) => ({
           ...group,
-          manualLineIds: group.manualLineIds.filter((id) => id !== lineId),
+          manualLineIds: group.manualLineIds.filter((id) => !removedIds.has(id)),
         }))
         .filter((group) => group.visitIds.length + group.manualLineIds.length > 0);
       await persistRecord(context.billingTable, monthId, {
@@ -563,9 +639,82 @@ export const handler = async (event: {
       await recordActivityLog(event, {
         feature: LOG_FEATURES.MAINTENANCE_BILLING,
         action: 'delete',
-        entityId: lineId,
+        entityId: distributionId || lineId,
         entityName: monthId,
-        summary: `deleted manual maintenance billing line ${quoted(lineId)}`,
+        summary: distributionId
+          ? `deleted distributed maintenance cost ${quoted(distributionId)}`
+          : `deleted manual maintenance billing line ${quoted(lineId)}`,
+      });
+    } else if (action === 'add-distributed' || action === 'update-distributed') {
+      const date = asString(payload.date).slice(0, 10);
+      if (!date.startsWith(`${monthId}-`)) {
+        return buildHttpResponse(400, {
+          message: 'Manual lines need a date inside the selected month.',
+        });
+      }
+      const title = asString(payload.title);
+      const providerId = asString(payload.providerId);
+      const providerName = asString(payload.providerName) || providerId;
+      const properties = parseDistributionTargets(payload.properties);
+      const price = asNumber(payload.price);
+      if (!title || !providerId || properties.length < 2 || price === null) {
+        return buildHttpResponse(400, {
+          message:
+            'Title, provider, at least two properties, and a total cost are required.',
+        });
+      }
+      const existing = asManualLines(stored?.manualLines);
+      const distributionId =
+        action === 'update-distributed'
+          ? asString(payload.distributionId)
+          : newDistributionId();
+      if (!distributionId) {
+        return buildHttpResponse(400, { message: 'distributionId is required.' });
+      }
+      const currentMembers = existing.filter(
+        (item) => item.distributionId === distributionId,
+      );
+      if (action === 'update-distributed' && currentMembers.length === 0) {
+        return buildHttpResponse(404, { message: 'Distributed cost not found.' });
+      }
+      const shares = splitMoneyEvenly(roundMoney(price), properties.length);
+      const billingStatus = isBillingStatus(payload.billingStatus)
+        ? payload.billingStatus
+        : currentMembers[0]?.billingStatus ?? 'WAITING_APPROVAL';
+      const dismissed =
+        payload.dismissed === undefined
+          ? Boolean(currentMembers[0]?.dismissed)
+          : Boolean(payload.dismissed);
+      const created: ManualBillingLine[] = properties.map((property, index) => ({
+        id: distributedLineId(distributionId, property.propertyId),
+        title,
+        date,
+        propertyId: property.propertyId,
+        property: property.property,
+        providerId,
+        providerName,
+        hours: 0,
+        hoursDisabled: true,
+        price: shares[index] ?? 0,
+        billingStatus,
+        dismissed,
+        distributionId,
+      }));
+      const manualLines = [
+        ...existing.filter((item) => item.distributionId !== distributionId),
+        ...created,
+      ];
+      await persistRecord(context.billingTable, monthId, { manualLines });
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.MAINTENANCE_BILLING,
+        action: action === 'add-distributed' ? 'create' : 'update',
+        entityId: distributionId,
+        entityName: monthId,
+        summary: `${
+          action === 'add-distributed' ? 'added' : 'updated'
+        } distributed maintenance cost ${quoted(title)} across ${
+          properties.length
+        } properties in ${quoted(monthId)}`,
       });
     } else {
       return buildHttpResponse(400, { message: 'Unknown action.' });

@@ -93,6 +93,7 @@ export type ManualBillingLine = {
   price: number;
   billingStatus: MaintenanceBillingStatus;
   dismissed?: boolean;
+  distributionId?: string;
 };
 
 export type MergedBillingGroup = {
@@ -145,6 +146,7 @@ export type MaintenanceBillingLine = {
   billingStatus: MaintenanceBillingStatus;
   isManual: boolean;
   dismissed?: boolean;
+  distributionId?: string;
   members?: MaintenanceBillingMember[];
 };
 
@@ -304,6 +306,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
         item.hoursDisabled === undefined ? true : Boolean(item.hoursDisabled);
       const hours = hoursDisabled ? 0 : (asNumber(item.hours) ?? 0);
       const property = asString(item.property) || asString(item.propertyId);
+      const distributionId = asString(item.distributionId);
       return {
         id,
         title: asString(item.title) || property,
@@ -319,6 +322,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
           ? item.billingStatus
           : 'WAITING_APPROVAL',
         dismissed: Boolean(item.dismissed),
+        ...(distributionId ? { distributionId } : {}),
       };
     })
     .filter((entry): entry is ManualBillingLine => entry !== null);
@@ -816,11 +820,17 @@ export const assembleMaintenanceLines = (
     billingStatus: item.billingStatus,
     isManual: true,
     dismissed: Boolean(item.dismissed),
+    ...(item.distributionId ? { distributionId: item.distributionId } : {}),
   }));
   const mergedGroups = asMergedGroups(stored?.mergedGroups);
+  const distributedManualIds = new Set(
+    manualLines.flatMap((line) => (line.distributionId ? [line.id] : [])),
+  );
   const groupedVisitIds = new Set(mergedGroups.flatMap((group) => group.visitIds));
   const groupedManualIds = new Set(
-    mergedGroups.flatMap((group) => group.manualLineIds),
+    mergedGroups
+      .flatMap((group) => group.manualLineIds)
+      .filter((id) => !distributedManualIds.has(id)),
   );
   const visitById = new Map(visitLines.map((line) => [line.visitId, line]));
   const manualById = new Map(manualLines.map((line) => [line.id, line]));
@@ -830,6 +840,7 @@ export const assembleMaintenanceLines = (
         .map((id) => visitById.get(id))
         .filter((line): line is MaintenanceBillingLine => Boolean(line)),
       ...group.manualLineIds
+        .filter((id) => !distributedManualIds.has(id))
         .map((id) => manualById.get(id))
         .filter((line): line is MaintenanceBillingLine => Boolean(line)),
     ];

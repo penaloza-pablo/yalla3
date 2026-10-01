@@ -42,7 +42,12 @@ import {
   type MaintenanceSettings,
   type ProviderRecord,
 } from './types'
-import { YlIcon, YlDisclosureIcon } from '../design/icons'
+import { YlDisclosureIcon, YlIcon } from '../design/icons'
+import { DistributedCostFields } from '../billing/DistributedCostFields'
+import {
+  distributionTotal,
+  groupDistributedRows,
+} from '../billing/distributed-lines'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -68,6 +73,30 @@ type LineDraft = {
   billingStatus: MaintenanceBillingLineStatus
   dismissed: boolean
 }
+
+type DistributedDraft = {
+  distributionId: string
+  date: string
+  title: string
+  propertyIds: string[]
+  price: string
+  providerId: string
+  providerName: string
+  billingStatus: MaintenanceBillingLineStatus
+  dismissed: boolean
+}
+
+const emptyDistributedDraft = (monthId: string): DistributedDraft => ({
+  distributionId: '',
+  date: `${monthId}-01`,
+  title: '',
+  propertyIds: [],
+  price: '',
+  providerId: '',
+  providerName: '',
+  billingStatus: 'WAITING_APPROVAL',
+  dismissed: false,
+})
 
 const emptyDraft = (monthId: string): LineDraft => ({
   lineId: '',
@@ -155,6 +184,10 @@ const mapLine = (item: Record<string, unknown>): MaintenanceBillingLine => {
     billingStatus: asLineStatus(item.billingStatus),
     isManual: source === 'manual',
     dismissed: Boolean(item.dismissed),
+    distributionId:
+      typeof item.distributionId === 'string' && item.distributionId.trim()
+        ? item.distributionId.trim()
+        : undefined,
     members: Array.isArray(item.members)
       ? item.members.map((entry) =>
           mapMember((entry ?? {}) as Record<string, unknown>),
@@ -241,6 +274,10 @@ export function MaintenanceBillingView({
     useState<CleaningBillingPropertyGroup | ''>('')
   const [showScheduled, setShowScheduled] = useState(false)
   const [draft, setDraft] = useState<LineDraft>(emptyDraft(''))
+  const [formMode, setFormMode] = useState<'line' | 'distributed'>('line')
+  const [distributedDraft, setDistributedDraft] = useState<DistributedDraft>(
+    emptyDistributedDraft(''),
+  )
   const [openVisitId, setOpenVisitId] = useState('')
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set())
   const [isSelecting, setIsSelecting] = useState(false)
@@ -460,9 +497,22 @@ export function MaintenanceBillingView({
     })
   }, [groupFilter, lines, propertyById, propertyIds, showScheduled])
 
-  const filteredTotal = filteredLines
-    .filter((line) => !line.dismissed && isApprovedOrAbove(line.billingStatus))
-    .reduce((sum, line) => sum + (line.price ?? 0), 0)
+  const displayRows = useMemo(
+    () => groupDistributedRows(lines, filteredLines),
+    [filteredLines, lines],
+  )
+
+  const filteredTotal = displayRows.reduce((sum, row) => {
+    const members = row.kind === 'line' ? [row.line] : row.members
+    return (
+      sum +
+      distributionTotal(
+        members.filter(
+          (line) => !line.dismissed && isApprovedOrAbove(line.billingStatus),
+        ),
+      )
+    )
+  }, 0)
 
   const monthRemainingHours =
     settings && month
@@ -513,8 +563,9 @@ export function MaintenanceBillingView({
         [t('maintenanceBilling.property')]:
           propertyById.get(line.propertyId) || line.property,
         [t('maintenanceBilling.date')]: line.date,
-        [t('maintenanceBilling.visitStatus')]:
-          line.source === 'group'
+        [t('maintenanceBilling.visitStatus')]: line.distributionId
+          ? t('distributedCost.source')
+          : line.source === 'group'
             ? t('maintenanceBilling.groupStatus')
             : line.isManual
               ? t('maintenanceBilling.manualStatus')
@@ -523,8 +574,9 @@ export function MaintenanceBillingView({
         [t('maintenanceBilling.hours')]: line.hours ?? 0,
         [t('maintenanceBilling.price')]: line.price ?? '',
         [t('maintenanceBilling.billingStatus')]: lineStatusLabel(line.billingStatus),
-        [t('maintenanceBilling.source')]:
-          line.source === 'group'
+        [t('maintenanceBilling.source')]: line.distributionId
+          ? t('distributedCost.source')
+          : line.source === 'group'
             ? t('maintenanceBilling.sourceGroup')
             : line.isManual
               ? t('maintenanceBilling.sourceManual')
@@ -575,8 +627,15 @@ export function MaintenanceBillingView({
       return
     }
     const bounds = monthBounds(selectedMonthId)
+    setFormMode('line')
     setDraft({
       ...emptyDraft(selectedMonthId),
+      date: bounds.min,
+      providerId: settings?.defaultProviderId ?? '',
+      providerName: settings?.defaultProviderName ?? '',
+    })
+    setDistributedDraft({
+      ...emptyDistributedDraft(selectedMonthId),
       date: bounds.min,
       providerId: settings?.defaultProviderId ?? '',
       providerName: settings?.defaultProviderName ?? '',
@@ -584,7 +643,50 @@ export function MaintenanceBillingView({
     setIsFormOpen(true)
   }
 
+  const openDistributed = (members?: MaintenanceBillingLine[]) => {
+    if (!selectedMonthId) {
+      return
+    }
+    const bounds = monthBounds(selectedMonthId)
+    if (members && members.length > 0) {
+      const first = members[0]
+      setDistributedDraft({
+        distributionId: first.distributionId ?? '',
+        date: first.date,
+        title: first.title,
+        propertyIds: members.map((member) => member.propertyId),
+        price: String(distributionTotal(members)),
+        providerId: first.providerId,
+        providerName: first.providerName,
+        billingStatus: first.billingStatus,
+        dismissed: members.every((member) => member.dismissed),
+      })
+    } else {
+      setDistributedDraft({
+        distributionId: '',
+        date: draft.date || bounds.min,
+        title: draft.title,
+        propertyIds: draft.propertyId ? [draft.propertyId] : [],
+        price: draft.price,
+        providerId: draft.providerId || settings?.defaultProviderId || '',
+        providerName: draft.providerName || settings?.defaultProviderName || '',
+        billingStatus: 'WAITING_APPROVAL',
+        dismissed: false,
+      })
+    }
+    setFormMode('distributed')
+    setIsFormOpen(true)
+  }
+
   const openEdit = (line: MaintenanceBillingLine) => {
+    if (line.distributionId) {
+      const members = lines.filter(
+        (item) => item.distributionId === line.distributionId,
+      )
+      openDistributed(members.length > 0 ? members : [line])
+      return
+    }
+    setFormMode('line')
     setDraft({
       lineId: line.id,
       visitId: line.visitId,
@@ -653,6 +755,57 @@ export function MaintenanceBillingView({
       price,
       billingStatus: draft.billingStatus,
       dismissed: draft.dismissed,
+    })
+    setIsFormOpen(false)
+  }
+
+  const submitDistributed = async () => {
+    if (!selectedMonthId) {
+      return
+    }
+    const title = distributedDraft.title.trim()
+    const price = Number(String(distributedDraft.price).replace(',', '.'))
+    const selected = formPropertyOptions.filter((property) =>
+      distributedDraft.propertyIds.includes(property.id),
+    )
+    const selectedProvider = providers.find(
+      (item) => item.id === distributedDraft.providerId,
+    )
+    if (!title) {
+      setError(t('distributedCost.nameRequired'))
+      return
+    }
+    if (selected.length < 2) {
+      setError(t('distributedCost.selectProperties'))
+      return
+    }
+    if (!distributedDraft.providerId || !Number.isFinite(price)) {
+      setError(t('maintenanceBilling.lineRequired'))
+      return
+    }
+    await save({
+      month: selectedMonthId,
+      action: distributedDraft.distributionId
+        ? 'update-distributed'
+        : 'add-distributed',
+      distributionId: distributedDraft.distributionId || undefined,
+      title,
+      date: distributedDraft.date,
+      providerId: distributedDraft.providerId,
+      providerName: selectedProvider?.name || distributedDraft.providerName,
+      price,
+      hours: 0,
+      hoursDisabled: true,
+      billingStatus: distributedDraft.distributionId
+        ? distributedDraft.billingStatus
+        : 'WAITING_APPROVAL',
+      dismissed: distributedDraft.distributionId
+        ? distributedDraft.dismissed
+        : false,
+      properties: selected.map((property) => ({
+        propertyId: property.id,
+        property: propertyById.get(property.id) || getPropertyLabel(property),
+      })),
     })
     setIsFormOpen(false)
   }
@@ -1197,7 +1350,184 @@ export function MaintenanceBillingView({
                     <td colSpan={7}>{t('maintenanceBilling.emptyLines')}</td>
                   </tr>
                 ) : (
-                  filteredLines.map((line) => {
+                  displayRows.map((row) => {
+                    if (row.kind === 'distribution') {
+                      const members = row.members
+                      const first = members[0]
+                      const isExpanded = expandedRowIds.has(row.id)
+                      const total = distributionTotal(members)
+                      const dismissed = members.every((member) =>
+                        Boolean(member.dismissed),
+                      )
+                      const billingStatus = first?.billingStatus ?? 'WAITING_APPROVAL'
+                      const canAdvance = Boolean(nextBillingLineStatus(billingStatus))
+                      return (
+                        <Fragment key={row.id}>
+                          <tr className={dismissed ? 'muted-row' : ''}>
+                            <td>
+                              <div className="billing-title-cell">
+                                <div>
+                                  <p
+                                    className={`billing-group-title${
+                                      dismissed ? ' is-excluded' : ''
+                                    }`}
+                                  >
+                                    <span className="tag">
+                                      {t('distributedCost.tag')}
+                                    </span>
+                                    {first?.title || '—'}
+                                    {dismissed ? (
+                                      <span className="tag billing-excluded-badge">
+                                        {t('maintenanceBilling.dismissedTag')}
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <p className="card-meta billing-line-property">
+                                    {t('distributedCost.propertyCount', {
+                                      count: members.length,
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              {first
+                                ? formatDateOnlyLabel(first.date, i18n.language)
+                                : '—'}
+                            </td>
+                            <td>{t('distributedCost.source')}</td>
+                            <td>—</td>
+                            <td>{money.format(total)}</td>
+                            <td>
+                              <span className="tag">
+                                {lineStatusLabel(billingStatus)}
+                              </span>
+                            </td>
+                            <td>
+                              {month?.canEdit && !isSelecting ? (
+                                <div className="action-buttons">
+                                  {billingStatus === 'TO_ESTIMATE' ||
+                                  can(ACTION_KEYS.maintenanceCheckAfterEstimate) ? (
+                                    <button
+                                      className="btn-icon btn-icon-ghost"
+                                      type="button"
+                                      disabled={isSaving || !canAdvance}
+                                      aria-label={t('maintenanceBilling.check')}
+                                      title={t('maintenanceBilling.check')}
+                                      onClick={() =>
+                                        void save({
+                                          month: selectedMonthId,
+                                          action: 'advance-distributed',
+                                          distributionId: row.id,
+                                        })
+                                      }
+                                    >
+                                      <YlIcon name="checkmark" size={16} />
+                                    </button>
+                                  ) : null}
+                                  {can(ACTION_KEYS.maintenanceBillingEdit) ? (
+                                    <button
+                                      className="btn-icon btn-icon-ghost"
+                                      type="button"
+                                      aria-label={t('maintenanceSettings.edit')}
+                                      title={t('maintenanceSettings.edit')}
+                                      onClick={() => openDistributed(members)}
+                                    >
+                                      <YlIcon name="pencil" size={16} />
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    disabled={isSaving}
+                                    aria-label={t('common.delete')}
+                                    title={t('common.delete')}
+                                    onClick={() => {
+                                      void (async () => {
+                                        if (
+                                          await confirmAction({
+                                            title: t('common.delete'),
+                                            message: t('distributedCost.deleteConfirm'),
+                                            confirmLabel: t('common.delete'),
+                                            destructive: true,
+                                          })
+                                        ) {
+                                          void save({
+                                            month: selectedMonthId,
+                                            action: 'delete-distributed',
+                                            distributionId: row.id,
+                                          })
+                                        }
+                                      })()
+                                    }}
+                                  >
+                                    <YlIcon name="trash" size={16} />
+                                  </button>
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => toggleRow(row.id)}
+                                    aria-expanded={isExpanded}
+                                    aria-label={t('common.toggleDetails')}
+                                  >
+                                    <YlDisclosureIcon open={isExpanded} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon btn-icon-ghost"
+                                    type="button"
+                                    onClick={() => toggleRow(row.id)}
+                                    aria-expanded={isExpanded}
+                                    aria-label={t('common.toggleDetails')}
+                                  >
+                                    <YlDisclosureIcon open={isExpanded} />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded ? (
+                            <tr className="detail-row">
+                              <td colSpan={7}>
+                                <div className="detail-grid">
+                                  <div>
+                                    <p className="detail-label">
+                                      {t('maintenanceBilling.provider')}
+                                    </p>
+                                    <p className="detail-value">
+                                      {first?.providerName || '—'}
+                                    </p>
+                                  </div>
+                                  <div className="detail-span">
+                                    <p className="detail-label">
+                                      {t('distributedCost.members')}
+                                    </p>
+                                    <ul className="billing-group-members">
+                                      {members.map((member) => (
+                                        <li key={member.id}>
+                                          <span>
+                                            {propertyById.get(member.propertyId) ||
+                                              member.property}
+                                          </span>
+                                          <span className="card-meta">
+                                            {member.price === null
+                                              ? '—'
+                                              : money.format(member.price)}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      )
+                    }
+                    const line = row.line
                     const isExpanded = expandedRowIds.has(line.id)
                     const inline = inlineById[line.id] ?? {
                       hours: line.hours === null ? '' : String(line.hours),
@@ -1750,13 +2080,21 @@ export function MaintenanceBillingView({
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {draft.isGroup
-                    ? t('maintenanceBilling.editGroup')
-                    : draft.lineId
-                      ? t('maintenanceBilling.editLine')
-                      : t('maintenanceBilling.addManual')}
+                  {formMode === 'distributed'
+                    ? distributedDraft.distributionId
+                      ? t('distributedCost.edit')
+                      : t('distributedCost.add')
+                    : draft.isGroup
+                      ? t('maintenanceBilling.editGroup')
+                      : draft.lineId
+                        ? t('maintenanceBilling.editLine')
+                        : t('maintenanceBilling.addManual')}
                 </h3>
-                <p className="modal-subtitle">{t('maintenanceBilling.formSubtitle')}</p>
+                <p className="modal-subtitle">
+                  {formMode === 'distributed'
+                    ? t('distributedCost.formSubtitle')
+                    : t('maintenanceBilling.formSubtitle')}
+                </p>
               </div>
               <button
                 className="btn-icon"
@@ -1768,6 +2106,120 @@ export function MaintenanceBillingView({
               </button>
             </div>
             <div className="modal-body">
+              {formMode === 'distributed' ? (
+                <div className="filters-grid">
+                  <label>
+                    {t('distributedCost.description')}
+                    <input
+                      type="text"
+                      value={distributedDraft.title}
+                      onChange={(event) =>
+                        setDistributedDraft((current) => ({
+                          ...current,
+                          title: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {t('maintenanceBilling.date')}
+                    <input
+                      type="date"
+                      min={monthBounds(selectedMonthId).min}
+                      max={monthBounds(selectedMonthId).max}
+                      value={distributedDraft.date}
+                      onChange={(event) =>
+                        setDistributedDraft((current) => ({
+                          ...current,
+                          date: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {t('maintenanceBilling.provider')}
+                    <select
+                      value={distributedDraft.providerId}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        const selected = providers.find((item) => item.id === value)
+                        setDistributedDraft((current) => ({
+                          ...current,
+                          providerId: value,
+                          providerName: selected?.name ?? '',
+                        }))
+                      }}
+                    >
+                      <option value="">{t('maintenanceBilling.selectProvider')}</option>
+                      {providers
+                        .filter(
+                          (provider) =>
+                            provider.active ||
+                            provider.id === distributedDraft.providerId,
+                        )
+                        .map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <DistributedCostFields
+                    properties={formPropertyOptions}
+                    selectedIds={distributedDraft.propertyIds}
+                    onSelectedIdsChange={(propertyIds) =>
+                      setDistributedDraft((current) => ({
+                        ...current,
+                        propertyIds,
+                      }))
+                    }
+                    total={distributedDraft.price}
+                    onTotalChange={(price) =>
+                      setDistributedDraft((current) => ({
+                        ...current,
+                        price,
+                      }))
+                    }
+                  />
+                  {distributedDraft.distributionId ? (
+                    <label>
+                      {t('maintenanceBilling.billingStatus')}
+                      <select
+                        value={distributedDraft.billingStatus}
+                        onChange={(event) =>
+                          setDistributedDraft((current) => ({
+                            ...current,
+                            billingStatus: asLineStatus(event.target.value),
+                          }))
+                        }
+                      >
+                        {MAINTENANCE_BILLING_LINE_STATUSES.filter(
+                          (status) => status !== 'TO_ESTIMATE',
+                        ).map((status) => (
+                          <option key={status} value={status}>
+                            {lineStatusLabel(status)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {distributedDraft.distributionId ? (
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={distributedDraft.dismissed}
+                        onChange={(event) =>
+                          setDistributedDraft((current) => ({
+                            ...current,
+                            dismissed: event.target.checked,
+                          }))
+                        }
+                      />
+                      {t('maintenanceBilling.excludeFromReport')}
+                    </label>
+                  ) : null}
+                </div>
+              ) : (
               <div className="filters-grid">
                 {draft.isGroup ? (
                   <>
@@ -1967,8 +2419,27 @@ export function MaintenanceBillingView({
                   </label>
                 ) : null}
               </div>
+              )}
             </div>
             <div className="modal-footer">
+              {formMode === 'line' && draft.isManual && !draft.lineId && !draft.isGroup ? (
+                <button
+                  className="btn-secondary modal-footer-start"
+                  type="button"
+                  onClick={() => openDistributed()}
+                >
+                  {t('distributedCost.add')}
+                </button>
+              ) : null}
+              {formMode === 'distributed' && !distributedDraft.distributionId ? (
+                <button
+                  className="btn-secondary modal-footer-start"
+                  type="button"
+                  onClick={() => setFormMode('line')}
+                >
+                  {t('distributedCost.backToManual')}
+                </button>
+              ) : null}
               <button
                 className="btn-secondary"
                 type="button"
@@ -1980,7 +2451,11 @@ export function MaintenanceBillingView({
                 className="btn-primary"
                 type="button"
                 disabled={isSaving}
-                onClick={() => void submitDraft()}
+                onClick={() =>
+                  void (formMode === 'distributed'
+                    ? submitDistributed()
+                    : submitDraft())
+                }
               >
                 {t('common.save')}
               </button>

@@ -7598,6 +7598,23 @@ th {
   gap: 2px;
 }
 
+.distributed-cost-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distributed-cost-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.distributed-cost-toolbar .filter-title {
+  margin: 0;
+}
+
 .billing-inline-input {
   width: 5.75rem;
   max-width: 100%;

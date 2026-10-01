@@ -106,6 +106,7 @@ export type MaintenanceBillingLine = {
   billingStatus: MaintenanceBillingLineStatus
   isManual: boolean
   dismissed?: boolean
+  distributionId?: string
   members?: MaintenanceBillingMember[]
 }
 

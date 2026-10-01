@@ -71,6 +71,7 @@ const reportInputs = (
   otherIncomesIva: 0,
   bookingCount: 0,
   nights: 0,
+  guestCount: 0,
   fiveStarReviewCount: 0,
   underFiveStarReviewCount: 0,
   rescuedUnderFiveStarReviewPercent: 0,

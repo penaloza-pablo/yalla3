@@ -163,6 +163,7 @@ export type CleaningBillingLine = {
   isManual: boolean
   warnings: CleaningBillingWarning[]
   cleaningTypes: PropertyCleaningType[]
+  distributionId?: string
 }
 
 export const OTHER_CLEANING_TYPE_ID = '__other__'

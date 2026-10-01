@@ -48,6 +48,7 @@ export type ManualBillingLine = {
   cleaningTypeName: string;
   price: number;
   isOther: boolean;
+  distributionId?: string;
 };
 
 export type BillingLine = {
@@ -65,6 +66,7 @@ export type BillingLine = {
   isManual: boolean;
   warnings: BillingWarning[];
   cleaningTypes: CleaningTypeRecord[];
+  distributionId?: string;
   kit?: AmenitiesKit;
   kitPersisted?: boolean;
 };
@@ -156,6 +158,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
       if (!id || !date) {
         return null;
       }
+      const distributionId = asString(item.distributionId);
       return {
         id,
         date,
@@ -165,6 +168,7 @@ export const asManualLines = (value: unknown): ManualBillingLine[] => {
         cleaningTypeName: asString(item.cleaningTypeName),
         price: normalizeSignedPrice(item.price),
         isOther: Boolean(item.isOther) || asString(item.cleaningTypeId) === OTHER_CLEANING_TYPE_ID,
+        ...(distributionId ? { distributionId } : {}),
       } satisfies ManualBillingLine;
     })
     .filter((entry): entry is ManualBillingLine => Boolean(entry));
@@ -321,6 +325,7 @@ const linesForMonth = (
         isManual: true,
         warnings: warningsForLine(base),
         cleaningTypes: types,
+        ...(item.distributionId ? { distributionId: item.distributionId } : {}),
       };
     },
   );

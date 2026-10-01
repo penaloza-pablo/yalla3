@@ -12,6 +12,7 @@ import {
   type MetricCorrection,
 } from '../amplify/functions/shared/historic-metric-review.ts'
 import {
+  emptyActualItem,
   getHistoricItem,
   writeCurrentActual,
   type HistoricActualItem,
@@ -24,6 +25,13 @@ type SourceRecord = {
   metricReview?: unknown
   flags?: string[]
 }
+
+const AUTHORIZED_FILES = [
+  'almendro_historic_2025-01_2026-07.json',
+  'rodas_historic_2026-01_2026-07.json',
+  'mendizabal_historic_2026-05_2026-07.json',
+  'esperanza_9_historic_2025-02_2026-07.json',
+]
 
 const historicTable = process.env.HISTORIC_TABLE || 'yalla-finance-historic'
 const propertiesTable = process.env.PROPERTIES_TABLE || 'yalla-properties'
@@ -70,108 +78,144 @@ const asFlags = (value: unknown) =>
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : []
 
+type PackageFile = {
+  propertyNickname?: string
+  schemaVersion?: string
+  periodFrom?: string
+  periodThrough?: string
+  records?: SourceRecord[]
+}
+
 const main = async () => {
-  const file = JSON.parse(
-    readFileSync(
-      new URL('../almendro_historic_2025-01_2026-07.json', import.meta.url),
-      'utf8',
-    ),
-  ) as {
-    propertyNickname?: string
-    schemaVersion?: string
-    periodFrom?: string
-    periodThrough?: string
-    records?: SourceRecord[]
-  }
-  if (file.propertyNickname !== 'Almendro') {
-    throw new Error('El archivo no es el histórico de Almendro.')
-  }
-  const resolved = resolvePropertyByNickname(
-    'Almendro',
-    await readPropertyCandidates(),
-  )
-  if (resolved.resolution === 'ambiguous' || resolved.resolution === 'missing') {
-    throw new Error(`No se pudo resolver Almendro: ${resolved.resolution}.`)
-  }
-  const propertyId = resolved.property.id
-  const records = [...(file.records ?? [])].sort((left, right) =>
-    String(left.period).localeCompare(String(right.period)),
-  )
-  const changes: Record<string, unknown>[] = []
-  let revised = 0
-  for (const record of records) {
-    const period = record.period ?? ''
-    if (!/^\d{4}-\d{2}$/.test(period) || period >= EXTERNAL_PERIOD_EXCLUSIVE_END) {
-      throw new Error(`Periodo fuera del histórico importable: ${period}.`)
+  const candidates = await readPropertyCandidates()
+  const summaries = []
+  for (const fileName of AUTHORIZED_FILES) {
+    const file = JSON.parse(
+      readFileSync(new URL(`../${fileName}`, import.meta.url), 'utf8'),
+    ) as PackageFile
+    const nickname = file.propertyNickname ?? ''
+    if (file.schemaVersion !== 'yalla-historic-combined-v2') {
+      throw new Error(`${fileName} no es yalla-historic-combined-v2.`)
     }
-    if (period < (file.periodFrom ?? period) || period > (file.periodThrough ?? period)) {
-      throw new Error(`Periodo fuera del rango del archivo: ${period}.`)
+    const resolved = resolvePropertyByNickname(nickname, candidates)
+    if (resolved.resolution === 'ambiguous' || resolved.resolution === 'missing') {
+      throw new Error(`No se pudo resolver ${nickname}: ${resolved.resolution}.`)
     }
-    const existing = await getHistoricItem(
-      historicTable,
-      propertyId,
-      actualSortKey(period),
+    const propertyId = resolved.property.id
+    const records = [...(file.records ?? [])].sort((left, right) =>
+      String(left.period).localeCompare(String(right.period)),
     )
-    if (!existing || existing.dataOrigin !== 'legacy_excel') {
-      throw new Error(`No hay cierre Excel de Almendro para ${period}.`)
-    }
-    if ('bookingCount' in (record.metrics ?? {})) {
-      throw new Error('El archivo intenta escribir bookingCount.')
-    }
-    const mapped = mapCombinedHistoricRecord({
-      period,
-      metrics: record.metrics,
-      metricReview: record.metricReview,
-    })
-    const merged = mergeCombinedHistoricMonth({
-      schemaVersion: file.schemaVersion ?? '',
-      incoming: mapped,
-      corrections:
-        existing.metricCorrections && typeof existing.metricCorrections === 'object'
-          ? (existing.metricCorrections as Record<string, MetricCorrection>)
-          : undefined,
-    })
-    const before = asMetrics(existing.metrics)
-    const metrics = { ...before, ...merged.metrics }
-    const qualityFlags = [
-      ...new Set([...asFlags(existing.qualityFlags), ...(record.flags ?? [])]),
-    ]
-    changes.push({
-      period,
-      conflicts: merged.conflicts,
-      expensesAndServicesGross: metrics.expensesAndServicesGross ?? null,
-      checkInBookingCount: metrics.checkInBookingCount ?? null,
-      bookingCount: metrics.bookingCount ?? null,
-    })
-    if (!execute) continue
-    const status = await writeCurrentActual(historicTable, {
-      ...(existing as HistoricActualItem),
-      metrics,
-      metricReview: merged.metricReview,
-      metricCorrections: merged.corrections,
-      qualityFlags,
-      updatedAt: new Date().toISOString(),
-    })
-    if (status !== 'revise' && status !== 'skip') {
-      throw new Error(`Escritura inesperada en ${period}: ${status}.`)
-    }
-    if (status === 'revise') revised += 1
-  }
-  console.log(
-    JSON.stringify(
-      {
-        execute,
+    let inserted = 0
+    let revised = 0
+    let skipped = 0
+    const highlights: Record<string, unknown>[] = []
+    for (const record of records) {
+      const period = record.period ?? ''
+      if (!/^\d{4}-\d{2}$/.test(period) || period >= EXTERNAL_PERIOD_EXCLUSIVE_END) {
+        throw new Error(`Periodo fuera del histórico importable: ${period}.`)
+      }
+      if (period < (file.periodFrom ?? period) || period > (file.periodThrough ?? period)) {
+        throw new Error(`Periodo fuera del rango del archivo: ${period}.`)
+      }
+      if ('bookingCount' in (record.metrics ?? {})) {
+        throw new Error(`${fileName} intenta escribir bookingCount.`)
+      }
+      const existing = await getHistoricItem(
+        historicTable,
         propertyId,
-        nickname: resolved.property.nickname,
-        months: records.length,
-        revised,
-        keepsCheckInCountSeparate: true,
-        changes,
-      },
-      null,
-      2,
-    ),
-  )
+        actualSortKey(period),
+      )
+      if (existing && existing.dataOrigin === 'yalla_native') {
+        skipped += 1
+        continue
+      }
+      if (existing && existing.dataOrigin !== 'legacy_excel') {
+        throw new Error(`Origen no reconocido en ${nickname} ${period}.`)
+      }
+      const mapped = mapCombinedHistoricRecord({
+        period,
+        metrics: record.metrics,
+        metricReview: record.metricReview,
+      })
+      const merged = mergeCombinedHistoricMonth({
+        schemaVersion: file.schemaVersion,
+        incoming: mapped,
+        corrections:
+          existing?.metricCorrections && typeof existing.metricCorrections === 'object'
+            ? (existing.metricCorrections as Record<string, MetricCorrection>)
+            : undefined,
+      })
+      const metrics = { ...asMetrics(existing?.metrics), ...merged.metrics }
+      if ('bookingCount' in metrics && !existing) {
+        delete metrics.bookingCount
+      }
+      const qualityFlags = [
+        ...new Set([...asFlags(existing?.qualityFlags), ...(record.flags ?? [])]),
+      ]
+      const reviewCount = Object.values(merged.metricReview).filter(
+        (entry) => entry.needsReview,
+      ).length
+      if (
+        merged.conflicts.length > 0 ||
+        metrics.expensesAndServicesGross != null ||
+        reviewCount > 0
+      ) {
+        highlights.push({
+          period,
+          plan: existing ? 'revise' : 'insert',
+          conflicts: merged.conflicts,
+          expensesAndServicesGross: metrics.expensesAndServicesGross ?? null,
+          needsReview: reviewCount,
+          bookingCount: metrics.bookingCount ?? null,
+        })
+      }
+      if (!execute) continue
+      const provenance = {
+        ...(existing?.provenance && typeof existing.provenance === 'object'
+          ? (existing.provenance as Record<string, unknown>)
+          : {}),
+        combinedSchemaVersion: file.schemaVersion,
+        combinedFile: fileName,
+      }
+      const item = existing
+        ? {
+            ...(existing as HistoricActualItem),
+            metrics,
+            metricReview: merged.metricReview,
+            metricCorrections: merged.corrections,
+            qualityFlags,
+            provenance,
+            updatedAt: new Date().toISOString(),
+          }
+        : emptyActualItem({
+            propertyId,
+            period,
+            dataOrigin: 'legacy_excel',
+            metrics,
+            metricReview: merged.metricReview,
+            metricCorrections: merged.corrections,
+            qualityFlags,
+            nickname,
+            provenance,
+            updatedAt: new Date().toISOString(),
+          })
+      const status = await writeCurrentActual(historicTable, item)
+      if (status === 'insert') inserted += 1
+      else if (status === 'revise') revised += 1
+      else skipped += 1
+    }
+    summaries.push({
+      fileName,
+      nickname: resolved.property.nickname,
+      propertyId,
+      months: records.length,
+      inserted,
+      revised,
+      skipped,
+      highlights,
+    })
+  }
+  console.log(JSON.stringify({ execute, summaries }, null, 2))
 }
 
 main().catch((error: unknown) => {

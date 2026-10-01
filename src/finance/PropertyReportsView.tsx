@@ -94,6 +94,7 @@ type ReportBooking = {
   fareCleaning: number | null
   hostServiceFee: number | null
   currency: string
+  guestCount: number
 }
 
 type CleaningLine = {
@@ -557,6 +558,10 @@ export function PropertyReportsView({
     () => ({
       count: bookings.length,
       nights: payoutRows.reduce((sum, row) => sum + (row.nights ?? 0), 0),
+      guestCount: payoutRows.reduce(
+        (sum, row) => sum + (row.booking.guestCount || 0),
+        0,
+      ),
       payout: bookings.reduce((sum, booking) => sum + (booking.hostPayout ?? 0), 0),
       paidByGuest: roundMoney(
         bookings.reduce((sum, booking) => sum + (payoutGuestPay(booking) ?? 0), 0),
@@ -1380,6 +1385,7 @@ export function PropertyReportsView({
         otherIncomesIva: incomeTotals.totalIva,
         bookingCount: bookingTotals.count,
         nights: bookingTotals.nights,
+        guestCount: bookingTotals.guestCount,
         fiveStarReviewCount: reviewTotals.fiveStarReviewCount,
         underFiveStarReviewCount: reviewTotals.underFiveStarReviewCount,
         rescuedUnderFiveStarReviewPercent:
@@ -2034,6 +2040,7 @@ export function PropertyReportsView({
               guestName: row.booking.guestName || '—',
               guestPay: row.guestPay ?? 0,
               nights: row.nights ?? 0,
+              guestCount: row.booking.guestCount || 0,
               channelFee: row.booking.hostServiceFee ?? 0,
               cleaningFee: row.cleaningFee ?? 0,
               cleaningGross: row.cleaningGross ?? 0,
@@ -2103,6 +2110,10 @@ export function PropertyReportsView({
                     <p className="card-value">{bookingTotals.nights}</p>
                   </div>
                   <div className="report-metric">
+                    <p className="card-label">{t('propertyReports.guestCount')}</p>
+                    <p className="card-value">{bookingTotals.guestCount}</p>
+                  </div>
+                  <div className="report-metric">
                     <p className="card-label">{t('propertyReports.paidByGuest')}</p>
                     <p className="card-value">
                       {money.format(bookingTotals.paidByGuest)}
@@ -2137,6 +2148,7 @@ export function PropertyReportsView({
                       <th>{t('propertyReports.guestName')}</th>
                       <th>{t('propertyReports.checkIn')}</th>
                       <th>{t('propertyReports.nights')}</th>
+                      <th>{t('propertyReports.guestCount')}</th>
                       <th>{t('propertyReports.paidByGuest')}</th>
                       <th>{t('propertyReports.cleaningNet')}</th>
                       <th>{t('propertyReports.channelFee')}</th>
@@ -2146,7 +2158,7 @@ export function PropertyReportsView({
                   <tbody>
                     {payoutRows.length === 0 && !isLoading ? (
                       <tr>
-                        <td colSpan={7}>{t('propertyReports.emptyBookings')}</td>
+                        <td colSpan={8}>{t('propertyReports.emptyBookings')}</td>
                       </tr>
                     ) : (
                       payoutRows.map((row) => {
@@ -2161,6 +2173,7 @@ export function PropertyReportsView({
                               <td>{booking.guestName || '—'}</td>
                               <td>{dateLabel(booking.checkInDate)}</td>
                               <td>{row.nights ?? '—'}</td>
+                              <td>{booking.guestCount ?? '—'}</td>
                               <td>{moneyOrDash(row.guestPay)}</td>
                               <td>{moneyOrDash(row.cleaningNet)}</td>
                               <td>{moneyOrDash(booking.hostServiceFee)}</td>
@@ -2178,7 +2191,7 @@ export function PropertyReportsView({
                             </tr>
                             {isExpanded ? (
                               <tr className="detail-row">
-                                <td colSpan={7}>
+                                <td colSpan={8}>
                                   <div className="payout-detail-zones">
                                     <div className="payout-detail-zone">
                                       <div>

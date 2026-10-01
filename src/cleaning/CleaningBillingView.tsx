@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACTION_KEYS } from '../../amplify/functions/shared/rbac-catalog'
 import { usePermissions } from '../rbac/PermissionsProvider'
@@ -14,7 +14,7 @@ import { authFetch } from '../lib/auth-fetch'
 import { fetchJson } from '../operations/api'
 import { formatDateOnlyLabel, getTodayMadrid } from '../operations/dateHelpers'
 import {
-  filterPropertySelectOptions,
+  filterCleaningBillingPropertyOptions,
   getPropertyLabel,
   sortPropertyOptions,
 } from '../operations/propertyHelpers'
@@ -32,7 +32,12 @@ import {
   type PropertyCleaningDetailsRecord,
   type PropertyCleaningType,
 } from './types'
-import { YlIcon } from '../design/icons'
+import { YlDisclosureIcon, YlIcon } from '../design/icons'
+import { DistributedCostFields } from '../billing/DistributedCostFields'
+import {
+  distributionTotal,
+  groupDistributedRows,
+} from '../billing/distributed-lines'
 
 type Props = {
   getEndpoint: (key: string, fallback?: string) => string | undefined
@@ -53,6 +58,22 @@ type LineDraft = {
   price: string
   isOther: boolean
 }
+
+type DistributedDraft = {
+  distributionId: string
+  date: string
+  description: string
+  propertyIds: string[]
+  price: string
+}
+
+const emptyDistributedDraft = (monthId: string): DistributedDraft => ({
+  distributionId: '',
+  date: `${monthId}-01`,
+  description: '',
+  propertyIds: [],
+  price: '',
+})
 
 const emptyDraft = (monthId: string): LineDraft => ({
   lineId: '',
@@ -93,6 +114,10 @@ const mapLine = (item: Record<string, unknown>): CleaningBillingLine => ({
     item.price === null || item.price === undefined ? null : Number(item.price),
   isOther: Boolean(item.isOther),
   isManual: Boolean(item.isManual) || item.source === 'manual',
+  distributionId:
+    typeof item.distributionId === 'string' && item.distributionId.trim()
+      ? item.distributionId.trim()
+      : undefined,
   warnings: Array.isArray(item.warnings)
     ? (item.warnings as CleaningBillingWarning[])
     : [],
@@ -168,6 +193,13 @@ export function CleaningBillingView({
   const [groupFilter, setGroupFilter] =
     useState<CleaningBillingPropertyGroup | ''>('')
   const [draft, setDraft] = useState<LineDraft>(emptyDraft(''))
+  const [formMode, setFormMode] = useState<'line' | 'distributed'>('line')
+  const [distributedDraft, setDistributedDraft] = useState<DistributedDraft>(
+    emptyDistributedDraft(''),
+  )
+  const [expandedDistributionIds, setExpandedDistributionIds] = useState<
+    Set<string>
+  >(new Set())
   const [openVisitId, setOpenVisitId] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -189,7 +221,7 @@ export function CleaningBillingView({
     [propertyOptions],
   )
   const filterPropertyOptions = useMemo(
-    () => filterPropertySelectOptions(propertyOptions),
+    () => filterCleaningBillingPropertyOptions(propertyOptions),
     [propertyOptions],
   )
   const formPropertyOptions = useMemo(
@@ -377,9 +409,23 @@ export function CleaningBillingView({
   const activeFilterCount =
     propertyIds.length + (groupFilter ? 1 : 0) + cleaningTypeKeys.length
 
-  const filteredTotal = filteredLines
-    .filter((line) => line.warnings.length === 0)
-    .reduce((sum, line) => sum + (line.price ?? 0), 0)
+  const displayRows = useMemo(
+    () => groupDistributedRows(lines, filteredLines),
+    [filteredLines, lines],
+  )
+
+  const filteredTotal = displayRows.reduce((sum, row) => {
+    if (row.kind === 'line') {
+      if (row.line.warnings.length > 0) {
+        return sum
+      }
+      return sum + (row.line.price ?? 0)
+    }
+    if (row.members.some((member) => member.warnings.length > 0)) {
+      return sum
+    }
+    return sum + distributionTotal(row.members)
+  }, 0)
 
   const draftTypes: PropertyCleaningType[] = draft.visitId
     ? lines.find((line) => line.id === draft.lineId)?.cleaningTypes ?? []
@@ -417,14 +463,18 @@ export function CleaningBillingView({
         [t('cleaningBilling.property')]:
           propertyById.get(line.propertyId) || line.property,
         [t('cleaningBilling.date')]: line.date,
-        [t('cleaningBilling.visitStatus')]: line.isManual
-          ? t('cleaningBilling.manualStatus')
-          : translateVisitStatus(t, line.status),
+        [t('cleaningBilling.visitStatus')]: line.distributionId
+          ? t('distributedCost.source')
+          : line.isManual
+            ? t('cleaningBilling.manualStatus')
+            : translateVisitStatus(t, line.status),
         [t('cleaningBilling.cleaningType')]: line.cleaningTypeName || '',
         [t('cleaningBilling.price')]: line.price ?? '',
-        [t('cleaningBilling.source')]: line.isManual
-          ? t('cleaningBilling.sourceManual')
-          : t('cleaningBilling.sourceVisit'),
+        [t('cleaningBilling.source')]: line.distributionId
+          ? t('distributedCost.source')
+          : line.isManual
+            ? t('cleaningBilling.sourceManual')
+            : t('cleaningBilling.sourceVisit'),
       }))
       const response = await authFetch(endpoints.exportBilling, {
         method: 'POST',
@@ -471,11 +521,51 @@ export function CleaningBillingView({
       return
     }
     const bounds = monthBounds(selectedMonthId)
+    setFormMode('line')
     setDraft({ ...emptyDraft(selectedMonthId), date: bounds.min })
+    setDistributedDraft({
+      ...emptyDistributedDraft(selectedMonthId),
+      date: bounds.min,
+    })
+    setIsFormOpen(true)
+  }
+
+  const openDistributed = (members?: CleaningBillingLine[]) => {
+    if (!selectedMonthId) {
+      return
+    }
+    const bounds = monthBounds(selectedMonthId)
+    if (members && members.length > 0) {
+      const first = members[0]
+      setDistributedDraft({
+        distributionId: first.distributionId ?? '',
+        date: first.date,
+        description: first.cleaningTypeName,
+        propertyIds: members.map((member) => member.propertyId),
+        price: String(distributionTotal(members)),
+      })
+    } else {
+      setDistributedDraft({
+        distributionId: '',
+        date: draft.date || bounds.min,
+        description: draft.isOther ? draft.cleaningTypeName : '',
+        propertyIds: draft.propertyId ? [draft.propertyId] : [],
+        price: draft.price,
+      })
+    }
+    setFormMode('distributed')
     setIsFormOpen(true)
   }
 
   const openEdit = (line: CleaningBillingLine) => {
+    if (line.distributionId) {
+      const members = lines.filter(
+        (item) => item.distributionId === line.distributionId,
+      )
+      openDistributed(members.length > 0 ? members : [line])
+      return
+    }
+    setFormMode('line')
     setDraft({
       lineId: line.id,
       visitId: line.visitId,
@@ -527,6 +617,58 @@ export function CleaningBillingView({
       isOther,
     })
     setIsFormOpen(false)
+  }
+
+  const submitDistributed = async () => {
+    if (!selectedMonthId) {
+      return
+    }
+    const description = distributedDraft.description.trim()
+    const price = Number(String(distributedDraft.price).replace(',', '.'))
+    const selected = formPropertyOptions.filter((property) =>
+      distributedDraft.propertyIds.includes(property.id),
+    )
+    if (!description) {
+      setError(t('distributedCost.nameRequired'))
+      return
+    }
+    if (selected.length < 2) {
+      setError(t('distributedCost.selectProperties'))
+      return
+    }
+    if (!Number.isFinite(price)) {
+      setError(t('distributedCost.priceRequired'))
+      return
+    }
+    await save({
+      month: selectedMonthId,
+      action: distributedDraft.distributionId
+        ? 'update-distributed'
+        : 'add-distributed',
+      distributionId: distributedDraft.distributionId || undefined,
+      date: distributedDraft.date,
+      cleaningTypeName: description,
+      cleaningTypeId: OTHER_CLEANING_TYPE_ID,
+      price,
+      isOther: true,
+      properties: selected.map((property) => ({
+        propertyId: property.id,
+        property: propertyById.get(property.id) || getPropertyLabel(property),
+      })),
+    })
+    setIsFormOpen(false)
+  }
+
+  const toggleDistribution = (distributionId: string) => {
+    setExpandedDistributionIds((current) => {
+      const next = new Set(current)
+      if (next.has(distributionId)) {
+        next.delete(distributionId)
+      } else {
+        next.add(distributionId)
+      }
+      return next
+    })
   }
 
   const statusLabel = (
@@ -681,7 +823,7 @@ export function CleaningBillingView({
           ) : null}
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.recordsCard')}</p>
-            <p className="card-value">{filteredLines.length}</p>
+            <p className="card-value">{displayRows.length}</p>
             <p className="card-meta">{t('cleaningBilling.recordsCardMeta')}</p>
           </div>
           <div className="card card-compact">
@@ -787,7 +929,141 @@ export function CleaningBillingView({
                     </td>
                   </tr>
                 ) : (
-                  filteredLines.map((line) => (
+                  displayRows.map((row) => {
+                    if (row.kind === 'distribution') {
+                      const members = row.members
+                      const first = members[0]
+                      const isExpanded = expandedDistributionIds.has(row.id)
+                      const concept = first?.cleaningTypeName || '—'
+                      const total = distributionTotal(members)
+                      return (
+                        <Fragment key={row.id}>
+                          <tr>
+                            <td data-label={t('cleaningBilling.property')}>
+                              <div className="billing-title-cell">
+                                <button
+                                  className="btn-icon btn-icon-ghost"
+                                  type="button"
+                                  onClick={() => toggleDistribution(row.id)}
+                                  aria-expanded={isExpanded}
+                                  aria-label={t('common.toggleDetails')}
+                                >
+                                  <YlDisclosureIcon open={isExpanded} />
+                                </button>
+                                <div>
+                                  <p className="billing-group-title">
+                                    <span className="tag">
+                                      {t('distributedCost.tag')}
+                                    </span>
+                                    {concept}
+                                  </p>
+                                  <p className="card-meta billing-line-property">
+                                    {t('distributedCost.propertyCount', {
+                                      count: members.length,
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td data-label={t('cleaningBilling.date')}>
+                              {first
+                                ? formatDateOnlyLabel(first.date, i18n.language)
+                                : '—'}
+                            </td>
+                            <td data-label={t('cleaningBilling.visitStatus')}>
+                              {t('distributedCost.source')}
+                            </td>
+                            <td data-label={t('cleaningBilling.cleaningType')}>
+                              {concept}
+                            </td>
+                            {canSeePrices ? (
+                              <>
+                                <td data-label={t('cleaningBilling.price')}>
+                                  {money.format(total)}
+                                </td>
+                                <td data-label={t('cleaningBilling.source')}>
+                                  {t('distributedCost.source')}
+                                </td>
+                                <td data-label={t('common.actions')}>
+                                  {month?.canEdit ? (
+                                    <div className="table-actions">
+                                      {can(ACTION_KEYS.cleaningBillingEdit) ? (
+                                        <button
+                                          className="btn-icon btn-icon-ghost"
+                                          type="button"
+                                          aria-label={t('cleaningSettings.edit')}
+                                          title={t('cleaningSettings.edit')}
+                                          onClick={() => openDistributed(members)}
+                                        >
+                                          <YlIcon name="pencil" size={16} />
+                                        </button>
+                                      ) : null}
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => {
+                                          void (async () => {
+                                            if (
+                                              await confirmAction({
+                                                title: t('common.delete'),
+                                                message: t(
+                                                  'distributedCost.deleteConfirm',
+                                                ),
+                                                confirmLabel: t('common.delete'),
+                                                destructive: true,
+                                              })
+                                            ) {
+                                              void save({
+                                                month: selectedMonthId,
+                                                action: 'delete-distributed',
+                                                distributionId: row.id,
+                                              })
+                                            }
+                                          })()
+                                        }}
+                                      >
+                                        {t('common.delete')}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                              </>
+                            ) : null}
+                          </tr>
+                          {isExpanded ? (
+                            <tr className="detail-row">
+                              <td colSpan={canSeePrices ? 7 : 4}>
+                                <p className="detail-label">
+                                  {t('distributedCost.members')}
+                                </p>
+                                <ul className="billing-group-members">
+                                  {members.map((member) => (
+                                    <li key={member.id}>
+                                      <span>
+                                        {propertyById.get(member.propertyId) ||
+                                          member.property}
+                                      </span>
+                                      {canSeePrices ? (
+                                        <span className="card-meta">
+                                          {member.price === null
+                                            ? '—'
+                                            : money.format(member.price)}
+                                        </span>
+                                      ) : null}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      )
+                    }
+                    const line = row.line
+                    return (
                     <tr
                       key={line.id}
                       className={line.warnings.length ? 'billing-warning-row' : ''}
@@ -879,7 +1155,8 @@ export function CleaningBillingView({
                         </>
                       ) : null}
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -1062,11 +1339,19 @@ export function CleaningBillingView({
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {draft.lineId
-                    ? t('cleaningBilling.editLine')
-                    : t('cleaningBilling.addManual')}
+                  {formMode === 'distributed'
+                    ? distributedDraft.distributionId
+                      ? t('distributedCost.edit')
+                      : t('distributedCost.add')
+                    : draft.lineId
+                      ? t('cleaningBilling.editLine')
+                      : t('cleaningBilling.addManual')}
                 </h3>
-                <p className="modal-subtitle">{t('cleaningBilling.formSubtitle')}</p>
+                <p className="modal-subtitle">
+                  {formMode === 'distributed'
+                    ? t('distributedCost.formSubtitle')
+                    : t('cleaningBilling.formSubtitle')}
+                </p>
               </div>
               <button
                 className="btn-icon"
@@ -1078,6 +1363,55 @@ export function CleaningBillingView({
               </button>
             </div>
             <div className="modal-body">
+              {formMode === 'distributed' ? (
+                <div className="filters-grid">
+                  <label>
+                    {t('cleaningBilling.date')}
+                    <input
+                      type="date"
+                      min={monthBounds(selectedMonthId).min}
+                      max={monthBounds(selectedMonthId).max}
+                      value={distributedDraft.date}
+                      onChange={(event) =>
+                        setDistributedDraft((current) => ({
+                          ...current,
+                          date: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {t('distributedCost.description')}
+                    <input
+                      type="text"
+                      value={distributedDraft.description}
+                      onChange={(event) =>
+                        setDistributedDraft((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <DistributedCostFields
+                    properties={formPropertyOptions}
+                    selectedIds={distributedDraft.propertyIds}
+                    onSelectedIdsChange={(propertyIds) =>
+                      setDistributedDraft((current) => ({
+                        ...current,
+                        propertyIds,
+                      }))
+                    }
+                    total={distributedDraft.price}
+                    onTotalChange={(price) =>
+                      setDistributedDraft((current) => ({
+                        ...current,
+                        price,
+                      }))
+                    }
+                  />
+                </div>
+              ) : (
               <div className="filters-grid">
                 {draft.isManual ? (
                   <>
@@ -1183,8 +1517,27 @@ export function CleaningBillingView({
                   />
                 </label>
               </div>
+              )}
             </div>
             <div className="modal-footer">
+              {formMode === 'line' && draft.isManual && !draft.lineId ? (
+                <button
+                  className="btn-secondary modal-footer-start"
+                  type="button"
+                  onClick={() => openDistributed()}
+                >
+                  {t('distributedCost.add')}
+                </button>
+              ) : null}
+              {formMode === 'distributed' && !distributedDraft.distributionId ? (
+                <button
+                  className="btn-secondary modal-footer-start"
+                  type="button"
+                  onClick={() => setFormMode('line')}
+                >
+                  {t('distributedCost.backToManual')}
+                </button>
+              ) : null}
               <button
                 className="btn-secondary"
                 type="button"
@@ -1196,7 +1549,11 @@ export function CleaningBillingView({
                 className="btn-primary"
                 type="button"
                 disabled={isSaving}
-                onClick={() => void submitDraft()}
+                onClick={() =>
+                  void (formMode === 'distributed'
+                    ? submitDistributed()
+                    : submitDraft())
+                }
               >
                 {t('common.save')}
               </button>

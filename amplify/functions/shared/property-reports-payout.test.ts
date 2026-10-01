@@ -5,6 +5,7 @@ import {
   bookingHasPayout,
   includePayoutInReportMonth,
   mapReportBooking,
+  payoutGuestCount,
   PAYOUT_REPORT_MONTH_OVERRIDES,
   payoutOverrideReservationIdsForMonth,
   refreshPayoutBookingSnapshot,
@@ -96,6 +97,22 @@ test('Camilo: canceled with retained hostPayout is included', () => {
   assert.equal(mapped.hostPayout, 245.89);
   assert.equal(mapped.hostServiceFee, 45.11);
   assert.equal(mapped.fareCleaning, 48);
+});
+
+test('guestCount suma adultos, niños y bebés y usa Guests si la reserva no trae el dato', () => {
+  const counted = mapReportBooking(
+    { ...camilo.item, Guests: 1 },
+    {
+      ...camilo.reservation,
+      numberOfGuests: { adults: 2, children: 1, infants: 1 },
+    },
+  );
+  assert.equal(counted.guestCount, 4);
+  assert.equal(
+    payoutGuestCount({ Guests: 2 }, { numberOfGuests: 0 }),
+    2,
+  );
+  assert.equal(payoutGuestCount({ Guests: 3 }, null), 3);
 });
 
 test('full cancel with hostPayout 0 stays out of the report', () => {

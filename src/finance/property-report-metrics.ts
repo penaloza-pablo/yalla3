@@ -51,6 +51,7 @@ export type PropertyReportMetricInputs = {
   otherIncomesIva: number
   bookingCount: number
   nights: number
+  guestCount: number
   fiveStarReviewCount: number
   underFiveStarReviewCount: number
   rescuedUnderFiveStarReviewPercent: number
@@ -217,6 +218,12 @@ export const PROPERTY_REPORT_FIELD_CATALOG = [
     id: 'nights',
     unit: 'count',
     role: 'source',
+  },
+  {
+    id: 'guestCount',
+    unit: 'count',
+    role: 'source',
+    formula: 'sum(payout.guestCount)',
   },
   {
     id: 'averageRatePerNight',
@@ -651,6 +658,7 @@ export const computePropertyReportMetrics = (
     otherIncomesIva: roundMoney(inputs.otherIncomesIva),
     bookingCount: inputs.bookingCount,
     nights,
+    guestCount: inputs.guestCount,
     averageRatePerNight,
     fiveStarReviewCount,
     underFiveStarReviewCount,
@@ -762,6 +770,7 @@ export const computePropertyReportMetrics = (
     marketManagementCommission,
     bookingCount: inputs.bookingCount,
     nights,
+    guestCount: inputs.guestCount,
     averageRatePerNight,
     fiveStarReviewCount,
     underFiveStarReviewCount,

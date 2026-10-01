@@ -17,6 +17,12 @@ import {
   type ManualBillingLine,
 } from '../shared/cleaning-billing';
 import {
+  distributedLineId,
+  newDistributionId,
+  parseDistributionTargets,
+  splitMoneyEvenly,
+} from '../shared/split-money';
+import {
   buildHttpResponse,
   corsHeaders,
   isHttpRequest,
@@ -38,6 +44,8 @@ type Payload = {
   cleaningTypeName?: string;
   price?: number;
   isOther?: boolean;
+  distributionId?: string;
+  properties?: unknown;
 };
 
 const asString = (value: unknown) =>
@@ -230,6 +238,11 @@ export const handler = async (event: {
         if (index < 0) {
           return buildHttpResponse(404, { message: 'Manual line not found.' });
         }
+        if (manualLines[index].distributionId) {
+          return buildHttpResponse(400, {
+            message: 'Edit a distributed cost from its distributed form.',
+          });
+        }
         manualLines[index] = line;
       } else {
         manualLines.push(line);
@@ -245,18 +258,95 @@ export const handler = async (event: {
             ? `added manual billing line ${quoted(line.property)} in ${quoted(monthId)}`
             : `updated manual billing line ${quoted(line.property)} in ${quoted(monthId)}`,
       });
-    } else if (action === 'delete-manual') {
+    } else if (action === 'delete-manual' || action === 'delete-distributed') {
+      const existing = asManualLines(stored?.manualLines);
       const lineId = asString(payload.lineId);
-      const manualLines = asManualLines(stored?.manualLines).filter(
-        (item) => item.id !== lineId,
+      const distributionId =
+        asString(payload.distributionId) ||
+        existing.find((item) => item.id === lineId)?.distributionId ||
+        '';
+      if (action === 'delete-distributed' && !distributionId) {
+        return buildHttpResponse(400, { message: 'distributionId is required.' });
+      }
+      if (
+        distributionId &&
+        !existing.some((item) => item.distributionId === distributionId)
+      ) {
+        return buildHttpResponse(404, { message: 'Distributed cost not found.' });
+      }
+      const manualLines = existing.filter((item) =>
+        distributionId
+          ? item.distributionId !== distributionId
+          : item.id !== lineId,
       );
       await persistRecord(billingTable, monthId, { manualLines });
       await recordActivityLog(event, {
         feature: LOG_FEATURES.CLEANING_BILLING,
         action: 'delete',
-        entityId: lineId,
+        entityId: distributionId || lineId,
         entityName: monthId,
-        summary: `deleted manual billing line ${quoted(lineId)} in ${quoted(monthId)}`,
+        summary: distributionId
+          ? `deleted distributed cleaning cost ${quoted(distributionId)} in ${quoted(monthId)}`
+          : `deleted manual billing line ${quoted(lineId)} in ${quoted(monthId)}`,
+      });
+    } else if (action === 'add-distributed' || action === 'update-distributed') {
+      const date = asString(payload.date).slice(0, 10);
+      if (!date.startsWith(`${monthId}-`)) {
+        return buildHttpResponse(400, {
+          message: 'Manual lines need a date inside the selected month.',
+        });
+      }
+      const cleaningTypeName = asString(payload.cleaningTypeName);
+      const properties = parseDistributionTargets(payload.properties);
+      const rawPrice =
+        typeof payload.price === 'number' ? payload.price : Number(payload.price);
+      if (!cleaningTypeName || properties.length < 2 || !Number.isFinite(rawPrice)) {
+        return buildHttpResponse(400, {
+          message: 'Description, at least two properties, and a total cost are required.',
+        });
+      }
+      const existing = asManualLines(stored?.manualLines);
+      const distributionId =
+        action === 'update-distributed'
+          ? asString(payload.distributionId)
+          : newDistributionId();
+      if (!distributionId) {
+        return buildHttpResponse(400, { message: 'distributionId is required.' });
+      }
+      if (
+        action === 'update-distributed' &&
+        !existing.some((item) => item.distributionId === distributionId)
+      ) {
+        return buildHttpResponse(404, { message: 'Distributed cost not found.' });
+      }
+      const total = normalizeSignedPrice(rawPrice);
+      const shares = splitMoneyEvenly(total, properties.length);
+      const created: ManualBillingLine[] = properties.map((property, index) => ({
+        id: distributedLineId(distributionId, property.propertyId),
+        date,
+        propertyId: property.propertyId,
+        property: property.property,
+        cleaningTypeId: OTHER_CLEANING_TYPE_ID,
+        cleaningTypeName,
+        price: shares[index] ?? 0,
+        isOther: true,
+        distributionId,
+      }));
+      const manualLines = [
+        ...existing.filter((item) => item.distributionId !== distributionId),
+        ...created,
+      ];
+      await persistRecord(billingTable, monthId, { manualLines });
+      await recordActivityLog(event, {
+        feature: LOG_FEATURES.CLEANING_BILLING,
+        action: action === 'add-distributed' ? 'create' : 'update',
+        entityId: distributionId,
+        entityName: monthId,
+        summary: `${
+          action === 'add-distributed' ? 'added' : 'updated'
+        } distributed cleaning cost ${quoted(cleaningTypeName)} across ${
+          properties.length
+        } properties in ${quoted(monthId)}`,
       });
     } else {
       return buildHttpResponse(400, { message: 'Unknown action.' });

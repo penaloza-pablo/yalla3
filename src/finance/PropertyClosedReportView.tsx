@@ -37,6 +37,7 @@ const TAB_ICONS: Record<ReportTabId, YlIconName> = {
 const COUNT_IDS = new Set([
   'bookingCount',
   'nights',
+  'guestCount',
   'fiveStarReviewCount',
   'underFiveStarReviewCount',
 ])
