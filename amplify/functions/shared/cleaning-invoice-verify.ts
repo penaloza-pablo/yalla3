@@ -135,10 +135,20 @@ export const saveInvoiceMetadata = async (params: {
   }
   const stored = await getMonthRecord(tableName, params.monthId);
   const timestamp = nowIso();
+  const invoicesRaw =
+    stored?.invoices &&
+    typeof stored.invoices === 'object' &&
+    !Array.isArray(stored.invoices)
+      ? (stored.invoices as Record<string, unknown>)
+      : {};
+  const invoices = {
+    ...invoicesRaw,
+    [params.group]: params.meta,
+  };
   if (!stored) {
     await putItem(tableName, {
       id: params.monthId,
-      invoices: { [params.group]: params.meta },
+      invoices,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -148,10 +158,9 @@ export const saveInvoiceMetadata = async (params: {
     new UpdateCommand({
       TableName: tableName,
       Key: { id: params.monthId },
-      UpdateExpression: 'SET invoices.#group = :meta, updatedAt = :updatedAt',
-      ExpressionAttributeNames: { '#group': params.group },
+      UpdateExpression: 'SET invoices = :invoices, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
-        ':meta': params.meta,
+        ':invoices': invoices,
         ':updatedAt': timestamp,
       },
     }),
