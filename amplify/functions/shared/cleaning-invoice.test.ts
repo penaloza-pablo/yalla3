@@ -7,6 +7,8 @@ import {
   foldCompanyName,
   mapInvoiceDescription,
   moneyEquals,
+  yallaPropertyMatches,
+  yallaTypeMatches,
 } from './cleaning-invoice-equivalences';
 import {
   entityMatchesGroup,
@@ -171,10 +173,146 @@ test('apartments equivalences map studios, sofa bed and trastero', () => {
     mapInvoiceDescription('Limpiezas 1 habitación sofá cama', 'apartments')[0]?.typeKey,
     'one_bedroom_sofa',
   );
+  assert.deepEqual(mapInvoiceDescription('Trastero', 'apartments'), [
+    { propertyKey: '*', typeKey: 'storage' },
+  ]);
+  assert.equal(yallaTypeMatches('Regular', 'studio'), true);
+  assert.equal(yallaTypeMatches('Regular', 'one_bedroom'), true);
+  assert.equal(yallaTypeMatches('Refresh', 'p2_refresh'), true);
   assert.equal(
-    mapInvoiceDescription('Trastero', 'apartments')[0]?.typeKey,
-    'storage',
+    yallaPropertyMatches('Arenal Verdejo', 'arenal-verdejo', 'concepcion arenal'),
+    true,
   );
+});
+
+test('Regular visits and Trastero storage are grouped, leftovers stay compact', () => {
+  const invoice = parseCleaningInvoicePdf(
+    pdf('FACTURA LIMPIEZA SEPTIEMBRE  2026.pdf'),
+  );
+  const yalla = [
+    {
+      id: 'av1',
+      propertyId: 'av',
+      property: 'Arenal Verdejo',
+      cleaningTypeName: 'Regular',
+      price: 35,
+    },
+    {
+      id: 'e9',
+      propertyId: 'e9',
+      property: 'Esperanza 9',
+      cleaningTypeName: 'Regular',
+      price: 39,
+    },
+    {
+      id: 'r1',
+      propertyId: 'r1',
+      property: 'Rodas',
+      cleaningTypeName: 'Regular',
+      price: 39,
+    },
+    {
+      id: 'm1',
+      propertyId: 'm1',
+      property: 'Mendizabal',
+      cleaningTypeName: 'Regular',
+      price: 71,
+    },
+    {
+      id: 'a1',
+      propertyId: 'a1',
+      property: 'Aguila',
+      cleaningTypeName: 'Regular',
+      price: 44.5,
+    },
+    {
+      id: 'b1',
+      propertyId: 'b1',
+      property: 'Baranda',
+      cleaningTypeName: 'Regular',
+      price: 61,
+    },
+    {
+      id: 's1',
+      propertyId: 's1',
+      property: 'Aguila',
+      cleaningTypeName: 'Storage and WK assembling',
+      price: 20.61,
+    },
+    {
+      id: 's2',
+      propertyId: 's2',
+      property: 'Almendro',
+      cleaningTypeName: 'Storage and WK assembling',
+      price: 20.61,
+    },
+    {
+      id: 's3',
+      propertyId: 's3',
+      property: 'Fe',
+      cleaningTypeName: 'Storage and WK assembling',
+      price: 20.61,
+    },
+    {
+      id: 'x1',
+      propertyId: 'r1',
+      property: 'Rodas',
+      cleaningTypeName: 'Reparto cubrecama doble',
+      price: 11,
+    },
+  ];
+  const result = reconcileInvoiceAgainstYalla(
+    invoice.lines,
+    yalla,
+    'apartments',
+    invoice.subtotal,
+  );
+  const trastero = result.matched.find((entry) =>
+    /trastero/i.test(entry.invoiceDescription),
+  );
+  assert.equal(trastero?.yallaCount, 3);
+  assert.equal(trastero?.mode, 'map');
+  const concepcion = result.matched.find((entry) =>
+    /concepcion arenal/i.test(entry.invoiceDescription),
+  );
+  assert.equal(concepcion?.yallaCount, 1);
+  assert.equal(result.yallaOnly.length, 1);
+  assert.equal(result.yallaOnly[0]?.id, 'x1');
+  const groupedStorage = result.summary.find(
+    (row) =>
+      row.status !== 'yalla_only' && /trastero/i.test(row.invoiceLabel ?? ''),
+  );
+  assert.equal(groupedStorage?.yallaLabel, '3 × Storage and WK assembling');
+  const leftovers = result.summary.filter((row) => row.status === 'yalla_only');
+  assert.equal(leftovers.length, 1);
+  assert.equal(leftovers[0]?.yallaLabel, '1 × Reparto cubrecama doble');
+});
+
+test('P2 Refresh lines correlate with Repasos general', () => {
+  const result = reconcileInvoiceAgainstYalla(
+    [
+      {
+        description: 'Repasos general',
+        units: 6,
+        unitPrice: 28,
+        subtotal: 168,
+      },
+    ],
+    Array.from({ length: 7 }, (_, index) => ({
+      id: `r${index}`,
+      propertyId: 'p2',
+      property: 'P2',
+      cleaningTypeName: 'Refresh',
+      price: 28,
+    })),
+    'p2',
+    168,
+  );
+  assert.equal(result.matched.length, 1);
+  assert.equal(result.matched[0]?.yallaCount, 7);
+  assert.equal(result.invoiceOnly.length, 0);
+  assert.equal(result.yallaOnly.length, 0);
+  assert.equal(result.summary[0]?.status, 'mismatch');
 });
 
 test('billing filter keeps p2 rooms out of apartments', () => {

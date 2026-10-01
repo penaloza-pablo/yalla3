@@ -27,9 +27,9 @@ export const reconcileCleaningInvoiceTool: AgentTool = {
   id: 'reconcile_cleaning_invoice',
   name: 'reconcile_cleaning_invoice',
   description:
-    'Compares a stored cleaning invoice (ex-VAT subtotal) with Yalla Cleaning Billing lines for apartments or Planta 2. Matching uses the equivalence map, P2 Salida/Repaso fallbacks, quantity, price fallback and +X/-X netting. Returns discrepancies in favour of the supplier or Yalla.',
+    'Compares a stored cleaning invoice (ex-VAT subtotal) with Yalla Cleaning Billing lines for apartments or Planta 2. Matching uses the equivalence map, groups correlated invoice concepts (e.g. Trastero vs all Storage lines), P2 Salida/Repaso fallbacks, quantity, price fallback and +X/-X netting. Returns a compact summary of correlated vs leftover discrepancies.',
   outputDescription:
-    'JSON with matched[], netted[], invoiceOnly[], yallaOnly[] and totals { invoiceExVat, yallaExVat, delta, favor }.',
+    'JSON with summary[] (matched/mismatch/invoice_only/yalla_only/netted grouped rows), matched[], netted[], invoiceOnly[], yallaOnly[] and totals { invoiceExVat, yallaExVat, delta, favor }. Prefer summary[] when narrating.',
   riskLevel: 'read',
   requiresApproval: false,
   timeoutMs: 90_000,
@@ -39,6 +39,7 @@ export const reconcileCleaningInvoiceTool: AgentTool = {
   outputSchema: {
     type: 'object',
     properties: {
+      summary: { type: 'array' },
       matched: { type: 'array' },
       netted: { type: 'array' },
       invoiceOnly: { type: 'array' },
@@ -50,6 +51,7 @@ export const reconcileCleaningInvoiceTool: AgentTool = {
   parameters,
   execute: async (args): Promise<ToolResult> => {
     const content = await reconcileCleaningInvoice(args);
+    const review = content.summary.filter((row) => row.status !== 'matched');
     const planned: CoverageItem[] = [
       {
         id: 'totals',
@@ -57,21 +59,20 @@ export const reconcileCleaningInvoiceTool: AgentTool = {
         detail: content.totals.favor,
         source: 'reconcile_cleaning_invoice',
       },
-      ...content.invoiceOnly.map((line, index) => ({
-        id: `invoice-only-${index}`,
-        label: line.description,
-        detail: String(line.subtotal),
-        source: 'reconcile_cleaning_invoice',
-      })),
-      ...content.yallaOnly.map((line, index) => ({
-        id: `yalla-only-${index}`,
-        label: `${line.property} ${line.cleaningTypeName}`,
-        detail: String(line.price),
+      ...review.map((row, index) => ({
+        id: `summary-${index}`,
+        label: row.invoiceLabel || row.yallaLabel || row.status,
+        detail: `${row.status} ${row.invoiceAmount}/${row.yallaAmount}`,
         source: 'reconcile_cleaning_invoice',
       })),
     ];
+    const { yallaOnly: _rawYallaOnly, matched, ...rest } = content;
     return {
-      content,
+      content: {
+        ...rest,
+        matched: matched.map(({ yallaLines: _yallaLines, ...entry }) => entry),
+        yallaOnly: content.summary.filter((row) => row.status === 'yalla_only'),
+      },
       coverage: { planned, unchecked: [] },
     };
   },

@@ -73,10 +73,10 @@ const TYPE_SYNONYMS: Record<InvoiceTypeKey, string[]> = {
     'sofa bed',
   ],
   two_bedroom: ['2 bedroom', 'two bedroom', '2 habitaciones'],
-  room_regular: ['room regular'],
+  room_regular: ['room regular', 'regular'],
   room_refresh: ['room refresh'],
   p2_deep: ['p2 deep cleaning', 'deep cleaning'],
-  p2_refresh: ['p2 refresh'],
+  p2_refresh: ['p2 refresh', 'refresh'],
   refresh_bathrooms: [
     'refresh bathrooms',
     'refresh + bathrooms',
@@ -90,6 +90,23 @@ const TYPE_SYNONYMS: Record<InvoiceTypeKey, string[]> = {
   extra_hours: ['hora extra', 'horas extras', 'extra hour', 'extra hours'],
   emergency: ['emergencia', 'emergency'],
 };
+
+const PROPERTY_ALIASES: Record<string, string[]> = {
+  'concepcion arenal': [
+    'concepcion arenal',
+    'arenal verdejo',
+    'arenal jerez',
+    'arenal rioja',
+  ],
+  platano: ['platano', 'platano 7', 'platano 7a', 'platano 7b', 'platano b'],
+};
+
+const APARTMENT_REGULAR_TYPES = new Set<InvoiceTypeKey>([
+  'studio',
+  'one_bedroom',
+  'two_bedroom',
+  'room_regular',
+]);
 
 const p2Room = (room: string, typeKey: InvoiceTypeKey): InvoiceMappingTarget => ({
   propertyKey: room,
@@ -218,12 +235,12 @@ const APARTMENT_EXACT: InvoiceMappingRule[] = [
   {
     group: 'apartments',
     folded: foldInvoiceText('Limpieza Trastero'),
-    targets: [{ propertyKey: 'trastero', typeKey: 'storage' }],
+    targets: [{ propertyKey: '*', typeKey: 'storage' }],
   },
   {
     group: 'apartments',
     folded: foldInvoiceText('Trastero'),
-    targets: [{ propertyKey: 'trastero', typeKey: 'storage' }],
+    targets: [{ propertyKey: '*', typeKey: 'storage' }],
   },
   {
     group: 'apartments',
@@ -307,17 +324,37 @@ export const yallaTypeMatches = (cleaningTypeName: string, typeKey: InvoiceTypeK
   if (!folded) {
     return false;
   }
-  if (includesAny(folded, TYPE_SYNONYMS[typeKey])) {
-    if (typeKey === 'studio' && includesAny(folded, TYPE_SYNONYMS.studio_sofa)) {
+  const hasSofa = includesAny(folded, ['sofa', 'sofa cama', 'sofa bed']);
+  const isPlainRegular = folded === 'regular' || folded === 'room regular';
+  const isPlainRefresh = folded === 'refresh' || folded === 'p2 refresh';
+  if (APARTMENT_REGULAR_TYPES.has(typeKey)) {
+    if (hasSofa) {
       return false;
     }
-    if (
-      typeKey === 'one_bedroom' &&
-      includesAny(folded, TYPE_SYNONYMS.one_bedroom_sofa)
-    ) {
+    if (isPlainRegular) {
+      return true;
+    }
+  }
+  if (
+    (typeKey === 'p2_refresh' || typeKey === 'refresh') &&
+    isPlainRefresh &&
+    !folded.includes('room refresh') &&
+    !folded.includes('light') &&
+    !folded.includes('bath')
+  ) {
+    return true;
+  }
+  if (includesAny(folded, TYPE_SYNONYMS[typeKey])) {
+    if (typeKey === 'studio' && hasSofa) {
+      return false;
+    }
+    if (typeKey === 'one_bedroom' && hasSofa) {
       return false;
     }
     if (typeKey === 'refresh' && includesAny(folded, ['p2 refresh', 'room refresh'])) {
+      return false;
+    }
+    if (typeKey === 'p2_refresh' && includesAny(folded, ['room refresh', 'light', 'bath'])) {
       return false;
     }
     return true;
@@ -336,6 +373,13 @@ export const yallaPropertyMatches = (
   const foldedLabel = foldInvoiceText(propertyLabel);
   const foldedId = foldInvoiceText(propertyId);
   const foldedKey = foldInvoiceText(propertyKey);
+  const aliases = [
+    foldedKey,
+    ...(PROPERTY_ALIASES[foldedKey] ?? []).map((entry) => foldInvoiceText(entry)),
+  ];
+  if (aliases.some((alias) => foldedLabel === alias || foldedId === alias)) {
+    return true;
+  }
   if (foldedKey === 'p2') {
     return (
       foldedLabel === 'p2' ||
@@ -352,10 +396,12 @@ export const yallaPropertyMatches = (
       foldedId === foldedKey
     );
   }
-  return (
-    foldedLabel.includes(foldedKey) ||
-    foldedKey.includes(foldedLabel) ||
-    foldedId.includes(foldedKey)
+  return aliases.some(
+    (alias) =>
+      alias.length >= 4 &&
+      (foldedLabel.startsWith(`${alias} `) ||
+        foldedLabel.endsWith(` ${alias}`) ||
+        foldedId === alias),
   );
 };
 

@@ -18,6 +18,16 @@ type VerifyOutput = {
   subtotal?: number
 }
 
+type ReconcileSummaryRow = {
+  status?: 'matched' | 'mismatch' | 'invoice_only' | 'yalla_only' | 'netted'
+  invoiceLabel?: string
+  yallaLabel?: string
+  invoiceUnits?: number
+  yallaCount?: number
+  invoiceAmount?: number
+  yallaAmount?: number
+}
+
 type ReconcileOutput = {
   invoiceNumber?: string
   matched?: unknown[]
@@ -28,6 +38,7 @@ type ReconcileOutput = {
     cleaningTypeName?: string
     price?: number
   }>
+  summary?: ReconcileSummaryRow[]
   totals?: {
     invoiceExVat?: number
     yallaExVat?: number
@@ -195,6 +206,40 @@ export function CleaningInvoicePanel({
     return t('cleaningBilling.invoiceFavorEven')
   }
 
+  const formatSummaryRow = (row: ReconcileSummaryRow) => {
+    const invoice = row.invoiceLabel ?? ''
+    const yalla = row.yallaLabel ?? ''
+    if (row.status === 'matched' || row.status === 'mismatch') {
+      const counts =
+        row.invoiceUnits != null &&
+        row.yallaCount != null &&
+        row.invoiceUnits !== row.yallaCount &&
+        Math.max(row.invoiceUnits, row.yallaCount) /
+          Math.max(1, Math.min(row.invoiceUnits, row.yallaCount)) <=
+          2
+          ? ` · ${row.invoiceUnits} vs ${row.yallaCount}`
+          : ''
+      return `${invoice} → ${yalla}${counts} · ${t('cleaningBilling.invoiceExVatShort')} ${money.format(Number(row.invoiceAmount ?? 0))} / ${t('cleaningBilling.yallaExVatShort')} ${money.format(Number(row.yallaAmount ?? 0))}`
+    }
+    if (row.status === 'invoice_only') {
+      return `${invoice} — ${money.format(Number(row.invoiceAmount ?? 0))}`
+    }
+    if (row.status === 'yalla_only') {
+      return `${yalla} — ${money.format(Number(row.yallaAmount ?? 0))}`
+    }
+    return `${invoice || yalla} — ${money.format(Number(row.invoiceAmount ?? 0))}`
+  }
+
+  const summaryRows = reconcile?.summary ?? []
+  const correlated = summaryRows.filter((row) => row.status === 'matched')
+  const review = summaryRows.filter(
+    (row) =>
+      row.status === 'mismatch' ||
+      row.status === 'invoice_only' ||
+      row.status === 'yalla_only',
+  )
+  const nettedRows = summaryRows.filter((row) => row.status === 'netted')
+
   return (
     <>
       {showTrigger && canEdit ? (
@@ -259,42 +304,65 @@ export function CleaningInvoicePanel({
                 {money.format(Number(reconcile.totals.delta ?? 0))} —{' '}
                 {favorLabel(reconcile.totals.favor)}
               </p>
-              {(reconcile.invoiceOnly?.length ?? 0) > 0 ? (
+              {correlated.length > 0 ? (
                 <>
-                  <h3 className="card-title">{t('cleaningBilling.invoiceOnly')}</h3>
+                  <h3 className="card-title">
+                    {t('cleaningBilling.invoiceCorrelated')}
+                  </h3>
                   <ul>
-                    {reconcile.invoiceOnly?.map((line, index) => (
-                      <li key={`inv-${index}`}>
-                        {line.description} — {money.format(Number(line.subtotal ?? 0))}
-                      </li>
+                    {correlated.map((row, index) => (
+                      <li key={`matched-${index}`}>{formatSummaryRow(row)}</li>
                     ))}
                   </ul>
                 </>
               ) : null}
-              {(reconcile.yallaOnly?.length ?? 0) > 0 ? (
+              {review.length > 0 ? (
                 <>
-                  <h3 className="card-title">{t('cleaningBilling.yallaOnly')}</h3>
+                  <h3 className="card-title">{t('cleaningBilling.invoiceReview')}</h3>
                   <ul>
-                    {reconcile.yallaOnly?.map((line, index) => (
-                      <li key={`yalla-${index}`}>
-                        {line.property} · {line.cleaningTypeName} —{' '}
-                        {money.format(Number(line.price ?? 0))}
-                      </li>
+                    {review.map((row, index) => (
+                      <li key={`review-${index}`}>{formatSummaryRow(row)}</li>
                     ))}
                   </ul>
                 </>
               ) : null}
-              {(reconcile.netted?.length ?? 0) > 0 ? (
+              {nettedRows.length > 0 ? (
                 <>
                   <h3 className="card-title">{t('cleaningBilling.invoiceNetted')}</h3>
                   <ul>
-                    {reconcile.netted?.map((entry, index) => (
-                      <li key={`net-${index}`}>
-                        {(entry.descriptions ?? []).join(' / ')} —{' '}
-                        {money.format(Number(entry.amount ?? 0))}
-                      </li>
+                    {nettedRows.map((row, index) => (
+                      <li key={`net-${index}`}>{formatSummaryRow(row)}</li>
                     ))}
                   </ul>
+                </>
+              ) : null}
+              {summaryRows.length === 0 ? (
+                <>
+                  {(reconcile.invoiceOnly?.length ?? 0) > 0 ? (
+                    <>
+                      <h3 className="card-title">{t('cleaningBilling.invoiceOnly')}</h3>
+                      <ul>
+                        {reconcile.invoiceOnly?.map((line, index) => (
+                          <li key={`inv-${index}`}>
+                            {line.description} — {money.format(Number(line.subtotal ?? 0))}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {(reconcile.yallaOnly?.length ?? 0) > 0 ? (
+                    <>
+                      <h3 className="card-title">{t('cleaningBilling.yallaOnly')}</h3>
+                      <ul>
+                        {reconcile.yallaOnly?.map((line, index) => (
+                          <li key={`yalla-${index}`}>
+                            {line.property} · {line.cleaningTypeName} —{' '}
+                            {money.format(Number(line.price ?? 0))}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </>
               ) : null}
             </div>
