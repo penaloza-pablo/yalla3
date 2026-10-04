@@ -34,6 +34,8 @@ import {
   visitHasOpenTasks,
 } from './visit-task-utils';
 import {
+  clockMinutesDiff,
+  formatSnoozeDuration,
   isAllowedSnoozeTime,
   notStartedResolvedInYallaText,
   overdueCompletedInYallaText,
@@ -43,11 +45,15 @@ import {
   SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
   SLACK_OVERDUE_TS_FIELD,
+  SLACK_SNOOZE_END_ORIGIN_FIELD,
+  SLACK_SNOOZE_START_ORIGIN_FIELD,
   snoozeTimeOptions,
 } from './slack-overdue';
 
 export {
   addClockMinutes,
+  clockMinutesDiff,
+  formatSnoozeDuration,
   isPastOverdueGrace,
   isPastStartGrace,
   notStartedResolvedInYallaText,
@@ -61,6 +67,8 @@ export {
   SLACK_OVERDUE_CHANNEL_FIELD,
   SLACK_OVERDUE_FIELD,
   SLACK_OVERDUE_TS_FIELD,
+  SLACK_SNOOZE_END_ORIGIN_FIELD,
+  SLACK_SNOOZE_START_ORIGIN_FIELD,
   snoozeTimeOptions,
 } from './slack-overdue';
 
@@ -163,6 +171,7 @@ const visitActionText = (
     | 'postponed_end'
     | 'postponed_start',
   time?: string,
+  duration?: string,
 ) => {
   const maintenance = slackVisitKind(visit) === 'maintenance';
   const subject = visitSubject(visit, nickname);
@@ -184,18 +193,25 @@ const visitActionText = (
         ? `${subject} se marcó como iniciado.`
         : `${subject} se marcó como iniciada.`;
     case 'postponed_end':
-      return `${subject} se pospuso. Nueva hora de finalización: ${time}.`;
+      return duration
+        ? `${subject} se pospuso ${duration}. Nueva hora de finalización: ${time}.`
+        : `${subject} se pospuso. Nueva hora de finalización: ${time}.`;
     case 'postponed_start':
-      return `${subject} se pospuso. Nueva hora de inicio: ${time}.`;
+      return duration
+        ? `${subject} se pospuso ${duration}. Nueva hora de inicio: ${time}.`
+        : `${subject} se pospuso. Nueva hora de inicio: ${time}.`;
   }
 };
 
-const appendMotivo = (text: string, reason?: string) => {
+const appendMotivo = (text: string, reason: string) =>
+  `${text}\nMotivo: ${escapeMrkdwn(reason)}`;
+
+export const requireSnoozeReason = (reason?: string) => {
   const motivo = asString(reason);
   if (!motivo) {
-    return text;
+    return { ok: false as const, message: 'El motivo es obligatorio.' };
   }
-  return `${text}\nMotivo: ${escapeMrkdwn(motivo)}`;
+  return { ok: true as const, reason: motivo };
 };
 
 const DEFAULT_APP_BASE_URL = 'https://main.dd8kh4wy2zlme.amplifyapp.com';
@@ -491,12 +507,17 @@ export const snoozeModalView = (options: {
     {
       type: 'input',
       block_id: 'reason',
-      optional: true,
+      optional: false,
       label: { type: 'plain_text', text: 'Motivo' },
+      hint: {
+        type: 'plain_text',
+        text: 'Obligatorio. Explica por qué se pospone.',
+      },
       element: {
         type: 'plain_text_input',
         action_id: 'motivo',
         multiline: true,
+        min_length: 1,
         placeholder: { type: 'plain_text', text: 'Motivo' },
       },
     },
@@ -759,29 +780,43 @@ export const snoozeCleaningFromSlack = async (options: {
   reason?: string;
   anchorTime?: string;
 }) => {
+  const required = requireSnoozeReason(options.reason);
+  if (!required.ok) {
+    return { ...required, errorBlock: 'reason' as const };
+  }
   const endTime = normalizeStartTime(options.newEndTime);
   if (!endTime) {
-    return { ok: false, message: 'Hora no válida.' };
+    return { ok: false, message: 'Hora no válida.', errorBlock: 'end_time' as const };
   }
   const anchorTime = normalizeStartTime(options.anchorTime || '') || endTime;
   if (!isAllowedSnoozeTime(anchorTime, endTime)) {
     return {
       ok: false,
       message: 'Solo se puede posponer hasta 1 hora, en intervalos de 15 minutos.',
+      errorBlock: 'end_time' as const,
     };
   }
   if (endTime < getNowTimeInMadrid()) {
     return {
       ok: false,
       message: 'Elige una hora posterior a ahora (hora de Madrid).',
+      errorBlock: 'end_time' as const,
     };
   }
   const visit = await loadVisit(options.visitsTable, options.visitId);
   if (!visit || !isOpenCleaningVisit(visit)) {
     return { ok: false, message: 'La visita ya no está abierta.' };
   }
+  const origin =
+    normalizeStartTime(asString(visit[SLACK_SNOOZE_END_ORIGIN_FIELD])) ||
+    normalizeStartTime(asString(visit.scheduledEndTime)) ||
+    endTime;
+  const duration = formatSnoozeDuration(clockMinutesDiff(origin, endTime));
   await patchUserOriginatedRecord(options.visitsTable, options.visitId, {
-    set: { scheduledEndTime: endTime },
+    set: {
+      scheduledEndTime: endTime,
+      [SLACK_SNOOZE_END_ORIGIN_FIELD]: origin,
+    },
     remove: [SLACK_OVERDUE_FIELD],
   });
   const nickname = await loadPropertyNickname(
@@ -789,8 +824,14 @@ export const snoozeCleaningFromSlack = async (options: {
     visit,
   );
   const text = appendMotivo(
-    visitActionText(visit, escapeMrkdwn(nickname), 'postponed_end', endTime),
-    options.reason,
+    visitActionText(
+      visit,
+      escapeMrkdwn(nickname),
+      'postponed_end',
+      endTime,
+      duration,
+    ),
+    required.reason,
   );
   await replaceMessage(options.channelId, options.messageTs, text);
   return { ok: true, message: text };
@@ -979,21 +1020,27 @@ export const snoozeCleaningStartFromSlack = async (options: {
   reason?: string;
   anchorTime?: string;
 }) => {
+  const required = requireSnoozeReason(options.reason);
+  if (!required.ok) {
+    return { ...required, errorBlock: 'reason' as const };
+  }
   const startTime = normalizeStartTime(options.newStartTime);
   if (!startTime) {
-    return { ok: false, message: 'Hora no válida.' };
+    return { ok: false, message: 'Hora no válida.', errorBlock: 'end_time' as const };
   }
   const anchorTime = normalizeStartTime(options.anchorTime || '') || startTime;
   if (!isAllowedSnoozeTime(anchorTime, startTime)) {
     return {
       ok: false,
       message: 'Solo se puede posponer hasta 1 hora, en intervalos de 15 minutos.',
+      errorBlock: 'end_time' as const,
     };
   }
   if (startTime < getNowTimeInMadrid()) {
     return {
       ok: false,
       message: 'Elige una hora posterior a ahora (hora de Madrid).',
+      errorBlock: 'end_time' as const,
     };
   }
   const visit = await loadVisit(options.visitsTable, options.visitId);
@@ -1003,7 +1050,15 @@ export const snoozeCleaningStartFromSlack = async (options: {
   const previousStart = clockMinutes(asString(visit.scheduledStartTime));
   const previousEnd = clockMinutes(asString(visit.scheduledEndTime));
   const nextStart = clockMinutes(startTime);
-  const setFields: Record<string, string> = { scheduledStartTime: startTime };
+  const origin =
+    normalizeStartTime(asString(visit[SLACK_SNOOZE_START_ORIGIN_FIELD])) ||
+    normalizeStartTime(asString(visit.scheduledStartTime)) ||
+    startTime;
+  const duration = formatSnoozeDuration(clockMinutesDiff(origin, startTime));
+  const setFields: Record<string, string> = {
+    scheduledStartTime: startTime,
+    [SLACK_SNOOZE_START_ORIGIN_FIELD]: origin,
+  };
   if (
     previousStart !== null &&
     previousEnd !== null &&
@@ -1023,8 +1078,14 @@ export const snoozeCleaningStartFromSlack = async (options: {
     visit,
   );
   const text = appendMotivo(
-    visitActionText(visit, escapeMrkdwn(nickname), 'postponed_start', startTime),
-    options.reason,
+    visitActionText(
+      visit,
+      escapeMrkdwn(nickname),
+      'postponed_start',
+      startTime,
+      duration,
+    ),
+    required.reason,
   );
   await replaceMessage(options.channelId, options.messageTs, text);
   return { ok: true, message: text };

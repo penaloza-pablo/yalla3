@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   addClockMinutes,
+  clockMinutesDiff,
+  formatSnoozeDuration,
   isAllowedSnoozeTime,
   isPastOverdueGrace,
   isPastStartGrace,
@@ -72,6 +74,16 @@ test('notify key stays unique per visit schedule', () => {
     overdueCompletedInYallaText('Clean Fe'),
     'Clean Fe: esta visita fue completada en Yalla.',
   );
+});
+
+test('postpone duration accumulates from the original scheduled time', () => {
+  assert.equal(clockMinutesDiff('11:00', '11:15'), 15);
+  assert.equal(clockMinutesDiff('11:00', '11:45'), 45);
+  assert.equal(clockMinutesDiff('11:00', '12:15'), 75);
+  assert.equal(formatSnoozeDuration(15), '15 minutos');
+  assert.equal(formatSnoozeDuration(60), '1 hora');
+  assert.equal(formatSnoozeDuration(75), '1 hora 15 minutos');
+  assert.equal(formatSnoozeDuration(120), '2 horas');
 });
 
 test('postpone options start at the Slack fire time and stop at one hour', () => {

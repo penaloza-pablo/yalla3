@@ -4,6 +4,7 @@ import {
   completeCleaningFromSlack,
   DONE_ACTION_ID,
   loadVisit,
+  requireSnoozeReason,
   SNOOZE_ACTION_ID,
   SNOOZE_MODAL_CALLBACK,
   snoozeCleaningFromSlack,
@@ -182,6 +183,13 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
   const reason = asString(
     asRecord(asRecord(values?.reason)?.motivo)?.value,
   );
+  const required = requireSnoozeReason(reason);
+  if (!required.ok) {
+    return slackJsonResponse(200, {
+      response_action: 'errors',
+      errors: { reason: required.message },
+    });
+  }
   const result =
     asString(meta.kind) === 'start'
       ? await snoozeCleaningStartFromSlack({
@@ -190,7 +198,7 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
           newStartTime: selectedTime,
           channelId: asString(meta.channelId),
           messageTs: asString(meta.messageTs),
-          reason,
+          reason: required.reason,
           anchorTime: asString(meta.anchorTime),
         })
       : await snoozeCleaningFromSlack({
@@ -199,13 +207,17 @@ const handleViewSubmission = async (payload: Record<string, unknown>) => {
           newEndTime: selectedTime,
           channelId: asString(meta.channelId),
           messageTs: asString(meta.messageTs),
-          reason,
+          reason: required.reason,
           anchorTime: asString(meta.anchorTime),
         });
   if (!result.ok) {
+    const errorBlock =
+      'errorBlock' in result && result.errorBlock === 'reason'
+        ? 'reason'
+        : 'end_time';
     return slackJsonResponse(200, {
       response_action: 'errors',
-      errors: { end_time: result.message },
+      errors: { [errorBlock]: result.message },
     });
   }
   return slackJsonResponse(200, { response_action: 'clear' });

@@ -65,6 +65,39 @@ export const snoozeTimeOptions = (anchorTime: string) => {
 export const isAllowedSnoozeTime = (anchorTime: string, selectedTime: string) =>
   snoozeTimeOptions(anchorTime).includes(selectedTime);
 
+export const SLACK_SNOOZE_START_ORIGIN_FIELD = 'slackSnoozeStartOrigin';
+export const SLACK_SNOOZE_END_ORIGIN_FIELD = 'slackSnoozeEndOrigin';
+
+export const clockMinutesDiff = (from: string, to: string) => {
+  const start = timeToMinutes(from);
+  const end = timeToMinutes(to);
+  if (start === null || end === null || end < start) {
+    return 0;
+  }
+  return end - start;
+};
+
+export const formatSnoozeDuration = (minutes: number) => {
+  const total = Math.max(0, Math.round(minutes));
+  if (total <= 0) {
+    return '';
+  }
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  const parts: string[] = [];
+  if (hours === 1) {
+    parts.push('1 hora');
+  } else if (hours > 1) {
+    parts.push(`${hours} horas`);
+  }
+  if (mins === 1) {
+    parts.push('1 minuto');
+  } else if (mins > 0) {
+    parts.push(`${mins} minutos`);
+  }
+  return parts.join(' ');
+};
+
 export const isPastOverdueGrace = (options: {
   scheduledDate: string;
   endTime: string;
