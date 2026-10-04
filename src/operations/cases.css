@@ -72,6 +72,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+}
+
+.cases-card-actions .btn-icon {
+  margin-left: auto;
 }
 
 .cases-cost {
@@ -103,11 +108,6 @@
 .cases-error {
   color: var(--yl-danger);
   margin: 0;
-}
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
 }
 
 .cases-inline-form {

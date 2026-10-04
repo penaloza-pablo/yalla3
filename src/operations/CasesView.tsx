@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useConfirm } from '../design/ConfirmDialog'
 import { YlIcon } from '../design/icons'
 import { MobileBodyPortal } from '../MobileBodyPortal'
 import { DismissibleNotice } from './DismissibleNotice'
@@ -64,6 +65,7 @@ const formatDay = (value: string | undefined, locale: string) => {
 
 export function CasesView({ getEndpoint, propertyOptions }: Props) {
   const { t, i18n } = useTranslation()
+  const confirmAction = useConfirm()
   const { can } = usePermissions()
   const canEdit = can(ACTION_KEYS.unassignedTasksEdit)
   const destinations = useMemo(
@@ -164,6 +166,27 @@ export function CasesView({ getEndpoint, propertyOptions }: Props) {
       })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('cases.loadError'))
+    }
+  }
+
+  const deleteInboxTask = async (task: TaskRecord) => {
+    if (!canEdit) return
+    const confirmed = await confirmAction({
+      title: t('operations.deleteTask'),
+      message: t('operations.deleteTaskConfirm'),
+      confirmLabel: t('operations.deleteTask'),
+      destructive: true,
+    })
+    if (!confirmed) return
+    if (!endpoints.upsertTask) {
+      setError(t('cases.saveError'))
+      return
+    }
+    try {
+      await saveTask(endpoints.upsertTask, { id: task.id, action: 'delete' })
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('cases.saveError'))
     }
   }
 
@@ -402,6 +425,15 @@ export function CasesView({ getEndpoint, propertyOptions }: Props) {
                       }}
                     >
                       {t('cases.addToCase')}
+                    </button>
+                    <button
+                      className="btn-icon btn-icon-ghost"
+                      type="button"
+                      title={t('operations.deleteTask')}
+                      aria-label={t('operations.deleteTask')}
+                      onClick={() => void deleteInboxTask(task)}
+                    >
+                      <YlIcon name="trash" size={16} />
                     </button>
                   </div>
                 ) : null}
