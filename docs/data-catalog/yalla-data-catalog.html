@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es" data-lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catálogo de datos Yalla</title>
+  <meta name="description" content="Catálogo completo de los datos de Yalla y de la API de solo lectura.">
+  <style>
+    :root {
+      --ink: #1c1915;
+      --muted: #5e584f;
+      --line: #e3d9cc;
+      --paper: #f6f1e8;
+      --card: #fffdf8;
+      --accent: #8c3a28;
+      --accent-soft: #f6e7e1;
+      --nav: 248px;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    a { color: var(--accent); }
+    header.top {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 28px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+    header.top h1 { margin: 0; font-size: 18px; font-weight: 650; }
+    header.top p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .lang {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--paper);
+    }
+    .lang button {
+      border: 0;
+      background: transparent;
+      padding: 7px 14px;
+      font: inherit;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .lang button[aria-pressed="true"] {
+      background: var(--accent);
+      color: white;
+    }
+    .layout { display: grid; grid-template-columns: var(--nav) 1fr; }
+    nav {
+      position: sticky;
+      top: 64px;
+      align-self: start;
+      height: calc(100vh - 64px);
+      overflow: auto;
+      padding: 18px 14px 40px;
+      border-right: 1px solid var(--line);
+    }
+    nav a {
+      display: block;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 5px 8px;
+      border-radius: 8px;
+    }
+    nav a:hover, nav a[aria-current="true"] { background: var(--accent-soft); }
+    nav .group {
+      margin: 16px 8px 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    main { padding: 28px 36px 80px; max-width: 980px; }
+    section { margin: 0 0 42px; }
+    h2 { font-size: 28px; margin: 0 0 10px; letter-spacing: -0.03em; }
+    h3 { font-size: 18px; margin: 22px 0 8px; }
+    p, li { color: var(--ink); }
+    .muted, .note { color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin: 12px 0;
+    }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 12px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .badge.dev { background: #efe6c8; color: #6a5410; }
+    .badge.done { background: #e3efe4; color: #1f5c32; }
+    .badge.wait { background: #eeeae4; color: #5e584f; }
+    .tree { margin: 14px 0 4px; padding: 0; list-style: none; }
+    .tree ul { margin: 6px 0 6px 18px; padding: 0 0 0 16px; list-style: none; border-left: 1px solid var(--line); }
+    .tree li { margin: 6px 0; }
+    .node {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+    .node.root { border-color: var(--accent); background: var(--accent-soft); }
+    code, pre {
+      font-family: "SF Mono", ui-monospace, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #241e1a;
+      color: #f6f1e8;
+      border-radius: 12px;
+      padding: 14px 16px;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0 16px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; }
+    body [data-lang="en"] { display: none; }
+    html[data-lang="en"] body [data-lang="es"] { display: none; }
+    html[data-lang="en"] body [data-lang="en"] { display: block; }
+    html[data-lang="en"] body span[data-lang="en"] { display: inline; }
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      main { padding: 20px 16px 64px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Yalla</h1>
+      <p data-lang="es">Catálogo de datos. Octubre 2026.</p>
+      <p data-lang="en">Data catalog. October 2026.</p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" id="lang-es" aria-pressed="true">Español</button>
+      <button type="button" id="lang-en" aria-pressed="false">English</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav>
+      <div class="group" data-lang="es">Catálogo</div>
+      <div class="group" data-lang="en">Catalog</div>
+      <a href="#inicio"><span data-lang="es">Sobre Yalla</span><span data-lang="en">About Yalla</span></a>
+      <a href="#lectura"><span data-lang="es">Cómo leerlo</span><span data-lang="en">How to read</span></a>
+      <a href="#relaciones"><span data-lang="es">Relaciones</span><span data-lang="en">Relationships</span></a>
+      <a href="#guesty"><span data-lang="es">Origen Guesty</span><span data-lang="en">Guesty origin</span></a>
+      <a href="#fases"><span data-lang="es">Fases de construcción</span><span data-lang="en">Build phases</span></a>
+      <a href="#dominios"><span data-lang="es">Dominios</span><span data-lang="en">Domains</span></a>
+      <div class="group" data-lang="es">Acceso y sistema</div>
+      <div class="group" data-lang="en">Access and system</div>
+      <a href="#api"><span data-lang="es">API de lectura</span><span data-lang="en">Read API</span></a>
+      <a href="#arquitectura"><span data-lang="es">Arquitectura</span><span data-lang="en">Architecture</span></a>
+      <a href="#agentes">Agent Studio</a>
+      <a href="#slack">Slack</a>
+      <a href="#tablas"><span data-lang="es">Tablas</span><span data-lang="en">Tables</span></a>
+      <a href="#lecturas"><span data-lang="es">Lecturas del personal</span><span data-lang="en">Staff reads</span></a>
+    </nav>
+    <main>
+      <section id="inicio">
+        <div data-lang="es">
+          <h2>Sobre Yalla</h2>
+          <p>Yalla agrupa la data de diferentes sistemas, centraliza los procesos específicos de nuestra operación, automatiza todos los pasos que son calculables e involucra agentes de IA en los procesos que requieren razonamiento.</p>
+          <p>La data sigue existiendo en sus puntos originales de creación. Yalla la interpreta, la automatiza y la reescribe cuando hace falta para mantener la coherencia entre todos los sistemas.</p>
+          <div class="card">
+            <strong>Qué se comparte.</strong> Datos operativos de inmuebles, reservas, huéspedes, visitas, limpieza, mantenimiento, casos, inventario, compras y usuarios de operación.
+            <br><strong>Qué no se comparte.</strong> Finanzas, porque esa sección sigue en desarrollo. Credenciales, permisos internos, avisos de Slack y ejecuciones de agentes.
+          </div>
+        </div>
+        <div data-lang="en">
+          <h2>About Yalla</h2>
+          <p>Yalla groups data from different systems, centralizes the specific processes of our operation, automates every step that can be calculated, and brings in AI agents for processes that require reasoning.</p>
+          <p>The data still lives at its original points of creation. Yalla interprets it, automates it, and writes it back when that is needed to keep the data coherent across all systems.</p>
+          <div class="card">
+            <strong>What is shared.</strong> Operational data for properties, bookings, guests, visits, cleaning, maintenance, cases, inventory, purchases, and operations users.
+            <br><strong>What is not shared.</strong> Finance, because that section is still in development. Credentials, internal permissions, Slack notices, and agent runs.
+          </div>
+        </div>
+      </section>
+
+      <section id="lectura">
+        <div data-lang="es">
+          <h2>Cómo leerlo</h2>
+          <p>Cada dominio indica de dónde sale el dato y si la API de lectura lo sirve.</p>
+          <div class="badges">
+            <span class="badge">Espejo Guesty</span>
+            <span class="badge">Híbrido</span>
+            <span class="badge">Nativo Yalla</span>
+            <span class="badge">Accesible: solo lectura</span>
+            <span class="badge dev">En desarrollo</span>
+          </div>
+          <p><strong>Accesible: solo lectura</strong> significa que el recurso está en la API y se puede consultar, sin escritura. No hay un nivel restringido: si el dato operativo se comparte, se comparte entero.</p>
+          <p><strong>En desarrollo</strong> se usa solo para finanzas. Esas tablas existen, pero la API no las lee.</p>
+        </div>
+        <div data-lang="en">
+          <h2>How to read this</h2>
+          <p>Each domain states where the data comes from and whether the read API serves it.</p>
+          <div class="badges">
+            <span class="badge">Guesty mirror</span>
+            <span class="badge">Hybrid</span>
+            <span class="badge">Yalla native</span>
+            <span class="badge">Accessible: read-only</span>
+            <span class="badge dev">In development</span>
+          </div>
+          <p><strong>Accessible: read-only</strong> means the resource is on the API and can be queried, with no writes. There is no restricted tier: shared operational data is shared in full.</p>
+          <p><strong>In development</strong> applies only to finance. Those tables exist, but the API does not read them.</p>
+        </div>
+      </section>
+
+      <section id="relaciones">
+        <div data-lang="es">
+          <h2>Relaciones</h2>
+          <p>El inmueble es el centro. El huésped no tiene tabla: vive en la reserva y en la reseña. El check-in son marcas de la reserva. El caso puede colgar de una reserva, de un inmueble o de una visita.</p>
+          <ul class="tree">
+            <li><span class="node root">Inmueble</span>
+              <ul>
+                <li><span class="node">Reserva</span>
+                  <ul>
+                    <li><span class="node">Huésped, en la reserva</span></li>
+                    <li><span class="node">Check-in</span></li>
+                    <li><span class="node">Reseña</span>, con el huésped otra vez</li>
+                  </ul>
+                </li>
+                <li><span class="node">Visita</span>, puede citar una reserva
+                  <ul><li><span class="node">Tareas</span></li></ul>
+                </li>
+                <li><span class="node">Caso</span>, desde reserva, inmueble o visita</li>
+                <li><span class="node">Limpieza</span>: plan del día y ficha del inmueble</li>
+                <li><span class="node">Mantenimiento</span>: plan del día y ficha del inmueble</li>
+                <li><span class="node">Inventario</span>
+                  <ul>
+                    <li><span class="node">Compras</span></li>
+                    <li><span class="node">Bajas</span></li>
+                  </ul>
+                </li>
+                <li><span class="node">Finanzas</span> <span class="badge dev">En desarrollo</span>: inmueble y mes</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+        <div data-lang="en">
+          <h2>Relationships</h2>
+          <p>The property is the center. There is no guest table: the guest lives on the booking and on the review. Check-in is a set of flags on the booking. A case can hang from a booking, a property, or a visit.</p>
+          <ul class="tree">
+            <li><span class="node root">Property</span>
+              <ul>
+                <li><span class="node">Booking</span>
+                  <ul>
+                    <li><span class="node">Guest, on the booking</span></li>
+                    <li><span class="node">Check-in</span></li>
+                    <li><span class="node">Review</span>, with the guest again</li>
+                  </ul>
+                </li>
+                <li><span class="node">Visit</span>, may cite a booking
+                  <ul><li><span class="node">Tasks</span></li></ul>
+                </li>
+                <li><span class="node">Case</span>, from a booking, a property, or a visit</li>
+                <li><span class="node">Cleaning</span>: day plan and property card</li>
+                <li><span class="node">Maintenance</span>: day plan and property card</li>
+                <li><span class="node">Inventory</span>
+                  <ul>
+                    <li><span class="node">Purchases</span></li>
+                    <li><span class="node">Subtractions</span></li>
+                  </ul>
+                </li>
+                <li><span class="node">Finance</span> <span class="badge dev">In development</span>: property and month</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="guesty">
+        <div data-lang="es">
+          <h2>Origen Guesty</h2>
+          <p>Guesty es el origen de inmuebles, reservas, reseñas y de una parte de las tareas. Yalla copia esos registros a sus tablas y les añade campos propios: planificación, check-in, limpieza, mantenimiento, casos e inventario. El identificador de conversación se guarda; el texto del inbox no.</p>
+          <p>La API de lectura sirve la copia que Yalla ya tiene. Guesty no es una segunda puerta de este catálogo.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Guesty origin</h2>
+          <p>Guesty is the origin of properties, bookings, reviews, and part of the tasks. Yalla copies those records into its tables and adds its own fields: planning, check-in, cleaning, maintenance, cases, and inventory. The conversation id is stored; inbox text is not.</p>
+          <p>The read API serves the copy Yalla already holds. Guesty is not a second door in this catalog.</p>
+        </div>
+      </section>
+
+      <section id="fases">
+        <div data-lang="es">
+          <h2>Fases de construcción</h2>
+          <ol>
+            <li>Integración con nuestras fuentes de datos actuales <span class="badge done">Listo</span></li>
+            <li>Uso en producción y mejora continua de tareas operacionales <span class="badge done">Listo</span></li>
+            <li>Arquitectura inicial de agentes de IA (Agent Runtime, versiones) <span class="badge done">Listo</span></li>
+            <li>Incorporación de agentes de IA sobre datos de operaciones <span class="badge dev">En curso</span></li>
+            <li>Uso en producción y mejora continua de finanzas <span class="badge dev">En curso</span></li>
+            <li>Incorporación de agentes de IA sobre datos de finanzas <span class="badge wait">Pendiente</span></li>
+            <li>Uso en producción y mejora continua de contabilidad <span class="badge wait">Pendiente</span></li>
+            <li>Incorporación de agentes de IA sobre datos de contabilidad <span class="badge wait">Pendiente</span></li>
+          </ol>
+        </div>
+        <div data-lang="en">
+          <h2>Build phases</h2>
+          <ol>
+            <li>Integration with our current data sources <span class="badge done">Done</span></li>
+            <li>Production use and continuous improvement of operational tasks <span class="badge done">Done</span></li>
+            <li>Initial AI agent architecture (Agent Runtime, versions) <span class="badge done">Done</span></li>
+            <li>Incorporating AI agents on operations data <span class="badge dev">In progress</span></li>
+            <li>Production use and continuous improvement of finance <span class="badge dev">In progress</span></li>
+            <li>Incorporating AI agents on finance data <span class="badge wait">Pending</span></li>
+            <li>Production use and continuous improvement of accounting <span class="badge wait">Pending</span></li>
+            <li>Incorporating AI agents on accounting data <span class="badge wait">Pending</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="dominios">
+        <div data-lang="es">
+          <h2>Dominios</h2>
+          <h3>Inmuebles <span class="badge">Espejo Guesty</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recurso <code>properties</code>. Identificador, título, alias, activo, tipo, capacidad, dormitorios, baños, ciudad, barrio, abreviatura y miembros.</p>
+          <h3>Reservas <span class="badge">Híbrido</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recurso <code>bookings</code>. Fechas, estado, inmueble, canal, huésped (nombre, email, teléfono), confirmación, conversación, importes pagados, nota de acceso, ropa de cama, tarjeta regalo, early check-in y marcas de check-in. El texto del inbox no está almacenado.</p>
+          <h3>Reseñas <span class="badge">Espejo Guesty</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recurso <code>reviews</code>. Puntuaciones, texto público, texto privado, compensación, huésped e importes de la estancia.</p>
+          <h3>Visitas y planificación <span class="badge">Nativo Yalla</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recursos <code>visits</code>, <code>tasks</code>, <code>visit-types</code>, <code>teams</code>, <code>visit-templates</code>, <code>planner-settings</code>, <code>users</code>, <code>job-scheduler</code>. Incluyen asignado, comentarios y reglas del programador.</p>
+          <h3>Check-in <span class="badge">Híbrido</span></h3>
+          <p>No es una tabla propia. Las marcas van en la reserva: acceso concedido, huésped dentro, hora y fuente.</p>
+          <h3>Limpieza <span class="badge">Nativo Yalla</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recursos <code>cleaning-plans</code>, <code>cleaning-incidents</code>, <code>property-cleaning-details</code>, <code>cleaners</code>. Incluyen precio, limpiador e incidencias.</p>
+          <h3>Mantenimiento <span class="badge">Nativo Yalla</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recursos <code>maintenance-plans</code>, <code>maintenance-incidents</code>, <code>maintenance-providers</code>, <code>maintenance-agents</code>. Incluyen técnico y proveedor.</p>
+          <h3>Casos <span class="badge">Nativo Yalla</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recursos <code>cases</code> y <code>case-events</code>. Estado, prioridad, vínculos y notas, con autor del evento.</p>
+          <h3>Inventario y compras <span class="badge">Nativo Yalla</span> <span class="badge">Accesible: solo lectura</span></h3>
+          <p>Recursos <code>inventory</code>, <code>purchases</code>, <code>subtractions</code>. Stock, proveedor, precios, IVA y bajas.</p>
+          <h3>Finanzas <span class="badge dev">En desarrollo</span></h3>
+          <p>Servicios, movimientos, informe por inmueble e histórico mensual existen en la aplicación, con datos nativos desde agosto de 2026 y Excel anterior. La API de lectura no los sirve mientras el cierre sigue en construcción. Contabilidad a propietario no está construida.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Domains</h2>
+          <h3>Properties <span class="badge">Guesty mirror</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resource <code>properties</code>. Id, title, nickname, active, type, capacity, bedrooms, bathrooms, city, neighborhood, abbreviation, and members.</p>
+          <h3>Bookings <span class="badge">Hybrid</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resource <code>bookings</code>. Dates, status, property, channel, guest (name, email, phone), confirmation, conversation, paid amounts, access note, linen, gift card, early check-in, and check-in flags. Inbox text is not stored.</p>
+          <h3>Reviews <span class="badge">Guesty mirror</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resource <code>reviews</code>. Scores, public text, private text, compensation, guest, and stay amounts.</p>
+          <h3>Visits and planning <span class="badge">Yalla native</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resources <code>visits</code>, <code>tasks</code>, <code>visit-types</code>, <code>teams</code>, <code>visit-templates</code>, <code>planner-settings</code>, <code>users</code>, <code>job-scheduler</code>. They include assignee, comments, and scheduler rules.</p>
+          <h3>Check-in <span class="badge">Hybrid</span></h3>
+          <p>Not its own table. Flags live on the booking: access granted, guest inside, time, and source.</p>
+          <h3>Cleaning <span class="badge">Yalla native</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resources <code>cleaning-plans</code>, <code>cleaning-incidents</code>, <code>property-cleaning-details</code>, <code>cleaners</code>. They include price, cleaner, and incidents.</p>
+          <h3>Maintenance <span class="badge">Yalla native</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resources <code>maintenance-plans</code>, <code>maintenance-incidents</code>, <code>maintenance-providers</code>, <code>maintenance-agents</code>. They include technician and provider.</p>
+          <h3>Cases <span class="badge">Yalla native</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resources <code>cases</code> and <code>case-events</code>. Status, priority, links, and notes, with the event author.</p>
+          <h3>Inventory and purchases <span class="badge">Yalla native</span> <span class="badge">Accessible: read-only</span></h3>
+          <p>Resources <code>inventory</code>, <code>purchases</code>, <code>subtractions</code>. Stock, vendor, prices, VAT, and write-offs.</p>
+          <h3>Finance <span class="badge dev">In development</span></h3>
+          <p>Services, movements, the per-property report, and monthly history exist in the app, with native data from August 2026 and Excel before that. The read API does not serve them while the close is still being built. Owner accounting is not built.</p>
+        </div>
+      </section>
+
+      <section id="api">
+        <div data-lang="es">
+          <h2>API de lectura</h2>
+          <p>Todos los dominios accesibles usan la misma llamada. Cambia solo el nombre del recurso. Base: <code>https://1imz55h7b2.execute-api.eu-central-1.amazonaws.com/prod/v1</code></p>
+          <p>Solo <code>GET</code>. Cabecera obligatoria: <code>x-api-key</code>. La clave se entrega aparte y no está en este documento. Tope: 5 peticiones por segundo, ráfaga 10, 10.000 al día. Sin clave la respuesta es 403. Un nombre que no esté en la lista responde 404.</p>
+          <p>No hay filtro por inmueble, fecha ni identificador. Cada llamada devuelve una página de toda la tabla. Por defecto 50 filas, máximo 100. Si <code>nextCursor</code> no es <code>null</code>, la página siguiente repite la misma ruta con <code>cursor</code> igual a ese valor.</p>
+          <h3>Ejemplo: reservas</h3>
+          <pre>curl -s \
+  -H "x-api-key: TU_CLAVE" \
+  "https://1imz55h7b2.execute-api.eu-central-1.amazonaws.com/prod/v1/bookings?limit=50"</pre>
+          <pre>{
+  "resource": "bookings",
+  "items": [
+    {
+      "ReservationID": "ejemplo",
+      "ListingID": "ejemplo",
+      "GuestName": "Huésped de ejemplo",
+      "Status": "confirmed",
+      "CheckInDate": "2026-10-06"
+    }
+  ],
+  "nextCursor": "token-opaco"
+}</pre>
+          <p>La página siguiente:</p>
+          <pre>GET /v1/bookings?limit=50&amp;cursor=token-opaco</pre>
+          <p>El check-in va dentro de <code>bookings</code>. Finanzas no tiene ruta. El resto de dominios accesibles se pide igual, cambiando el último segmento:</p>
+          <ul>
+            <li>Inmuebles: <code>/v1/properties</code></li>
+            <li>Reservas: <code>/v1/bookings</code></li>
+            <li>Reseñas: <code>/v1/reviews</code></li>
+            <li>Visitas y planificación: <code>/v1/visits</code>, <code>/tasks</code>, <code>/visit-types</code>, <code>/teams</code>, <code>/visit-templates</code>, <code>/planner-settings</code>, <code>/users</code>, <code>/job-scheduler</code></li>
+            <li>Limpieza: <code>/v1/cleaning-plans</code>, <code>/cleaning-incidents</code>, <code>/property-cleaning-details</code>, <code>/cleaners</code></li>
+            <li>Mantenimiento: <code>/v1/maintenance-plans</code>, <code>/maintenance-incidents</code>, <code>/maintenance-providers</code>, <code>/maintenance-agents</code></li>
+            <li>Casos: <code>/v1/cases</code>, <code>/case-events</code></li>
+            <li>Inventario y compras: <code>/v1/inventory</code>, <code>/purchases</code>, <code>/subtractions</code></li>
+          </ul>
+          <p><code>GET /v1</code> devuelve esa misma lista de nombres y los límites de página.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Read API</h2>
+          <p>Every accessible domain uses the same call. Only the resource name changes. Base: <code>https://1imz55h7b2.execute-api.eu-central-1.amazonaws.com/prod/v1</code></p>
+          <p><code>GET</code> only. Required header: <code>x-api-key</code>. The key is delivered separately and is not in this document. Limits: 5 requests per second, burst 10, 10,000 per day. Without a key the response is 403. A name that is not in the list returns 404.</p>
+          <p>There is no filter by property, date, or id. Each call returns one page of the whole table. Default 50 rows, maximum 100. When <code>nextCursor</code> is not <code>null</code>, the next page repeats the same path with <code>cursor</code> set to that value.</p>
+          <h3>Example: bookings</h3>
+          <pre>curl -s \
+  -H "x-api-key: YOUR_KEY" \
+  "https://1imz55h7b2.execute-api.eu-central-1.amazonaws.com/prod/v1/bookings?limit=50"</pre>
+          <pre>{
+  "resource": "bookings",
+  "items": [
+    {
+      "ReservationID": "example",
+      "ListingID": "example",
+      "GuestName": "Example guest",
+      "Status": "confirmed",
+      "CheckInDate": "2026-10-06"
+    }
+  ],
+  "nextCursor": "opaque-token"
+}</pre>
+          <p>The next page:</p>
+          <pre>GET /v1/bookings?limit=50&amp;cursor=opaque-token</pre>
+          <p>Check-in is inside <code>bookings</code>. Finance has no path. The other accessible domains use the same call, with a different last segment:</p>
+          <ul>
+            <li>Properties: <code>/v1/properties</code></li>
+            <li>Bookings: <code>/v1/bookings</code></li>
+            <li>Reviews: <code>/v1/reviews</code></li>
+            <li>Visits and planning: <code>/v1/visits</code>, <code>/tasks</code>, <code>/visit-types</code>, <code>/teams</code>, <code>/visit-templates</code>, <code>/planner-settings</code>, <code>/users</code>, <code>/job-scheduler</code></li>
+            <li>Cleaning: <code>/v1/cleaning-plans</code>, <code>/cleaning-incidents</code>, <code>/property-cleaning-details</code>, <code>/cleaners</code></li>
+            <li>Maintenance: <code>/v1/maintenance-plans</code>, <code>/maintenance-incidents</code>, <code>/maintenance-providers</code>, <code>/maintenance-agents</code></li>
+            <li>Cases: <code>/v1/cases</code>, <code>/case-events</code></li>
+            <li>Inventory and purchases: <code>/v1/inventory</code>, <code>/purchases</code>, <code>/subtractions</code></li>
+          </ul>
+          <p><code>GET /v1</code> returns that same list of names and the page limits.</p>
+        </div>
+      </section>
+
+      <section id="arquitectura">
+        <div data-lang="es">
+          <h2>Arquitectura</h2>
+          <p>La aplicación es Amplify Gen2 en <code>eu-central-1</code>. El personal entra con Cognito. Casi todas las lecturas y escrituras del día son Lambdas con URL pública y un JWT comprobado en el código. DynamoDB es el almacén. Guesty, las cerraduras y Slack entran por Lambdas externas al pipeline de Amplify. OpenAI se usa en Agent Studio. La API de este catálogo es otro API Gateway, solo lectura, con clave propia, y no usa el usuario de Cognito del personal.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Architecture</h2>
+          <p>The app is Amplify Gen2 in <code>eu-central-1</code>. Staff sign in with Cognito. Most day-to-day reads and writes are Lambdas with a public URL and a JWT checked in code. DynamoDB is the store. Guesty, the door systems, and Slack arrive through Lambdas outside the Amplify pipeline. OpenAI is used in Agent Studio. The API in this catalog is a separate API Gateway, read-only, with its own key, and it does not use a staff Cognito user.</p>
+        </div>
+      </section>
+
+      <section id="agentes">
+        <div data-lang="es">
+          <h2>Agent Studio</h2>
+          <p>Aquí se agrupan los agentes que Yalla utilizará y la lista de tools con las que automatizan los procesos que requieren razonamiento. Está en una fase de desarrollo preliminar, hasta que los datos generados de la operación y de las finanzas tengan la consistencia que se busca. Estas ejecuciones no salen por la API de lectura.</p>
+          <h3>Agent Runtime</h3>
+          <p>Cada ejecución toma una versión del agente. Una prueba usa el borrador. La producción usa la versión publicada. El runtime envía al modelo las instrucciones, las reglas y solo las tools permitidas para ese agente. El modelo responde o pide una tool. El runtime la ejecuta, guarda el paso y devuelve el resultado al modelo. El ciclo sigue hasta una respuesta final o hasta un límite: 8 turnos, 90 segundos, 0,50 USD y 12 llamadas a tools. Si una tool escribe hacia fuera, como un mensaje al inbox, la ejecución se detiene y espera aprobación.</p>
+          <h3>Agentes, versiones y memoria</h3>
+          <p>Cada agente conserva un borrador y las versiones publicadas. Publicar fija una versión. Esa versión incluye instrucciones, reglas, tools permitidas, modelo y política de memoria. La memoria puede ser ninguna, o equivalencias aprendidas. La revisión de facturas de limpieza guarda, entre ejecuciones, qué concepto de la factura corresponde a qué tipo de limpieza en Yalla, y las conciliaciones siguientes reutilizan ese mapa. Cada ejecución queda registrada con sus pasos.</p>
+          <p>Hoy hay tres agentes publicados: el relato de llegadas en Madrid, el briefing de llegadas de hoy y la revisión de facturas de limpieza.</p>
+          <h3>Tools</h3>
+          <p>La lista es común. Cada agente solo puede llamar a las que tiene permitidas. Hoy: huéspedes con check-in hoy, avisos de reservas próximas, lectura del hilo de una reserva, envío de un mensaje a ese hilo con aprobación, verificación de una factura de limpieza y conciliación de esa factura. La conciliación es la que persiste la memoria de equivalencias.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Agent Studio</h2>
+          <p>This is where Yalla groups the agents it will use, and the tool list those agents use to automate processes that require reasoning. It is in a preliminary development phase, until the data generated from operations and from finance has the consistency being sought. These runs are not on the read API.</p>
+          <h3>Agent Runtime</h3>
+          <p>Each run takes one version of an agent. A test uses the draft. Production uses the published version. The runtime sends the model the instructions, the rules, and only the tools allowed for that agent. The model answers or asks for a tool. The runtime runs it, stores the step, and returns the result to the model. The loop continues until a final answer or a limit: 8 turns, 90 seconds, 0.50 USD, and 12 tool calls. If a tool writes outward, such as an inbox message, the run stops and waits for approval.</p>
+          <h3>Agents, versions, and memory</h3>
+          <p>Each agent keeps a draft and its published versions. Publishing freezes a version. That version includes instructions, rules, allowed tools, model, and memory policy. Memory can be none, or learned equivalences. Cleaning invoice review stores, across runs, which invoice concept matches which Yalla cleaning type, and later reconciliations reuse that map. Every run is stored with its steps.</p>
+          <p>Three agents are published today: the Madrid arrivals story, today's arrivals brief, and cleaning invoice review.</p>
+          <h3>Tools</h3>
+          <p>The list is shared. Each agent can call only the tools it is allowed to use. Today: guests checking in today, upcoming reservation warnings, reading a reservation thread, sending a message on that thread with approval, verifying a cleaning invoice, and reconciling that invoice. Reconciliation is what persists the equivalence memory.</p>
+        </div>
+      </section>
+
+      <section id="slack">
+        <div data-lang="es">
+          <h2>Slack</h2>
+          <p>Avisos operativos, no un almacén de datos. Limpieza atrasada, limpieza no empezada, visita cerrada con comentarios, resumen del día, reaperturas y cambios del plan, early check-in listo desde las 11:00, plan listo con visita después de las 13:01, cierre de limpieza y mantenimiento a las 17:30, y entregas de inventario tarde a las 10:00. La hora es Europe/Madrid. El comando <code>/yalla hoy</code> pide el resumen. Los canales y el token no se comparten.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Slack</h2>
+          <p>Operational notices, not a data store. Overdue cleaning, cleaning not started, visit closed with comments, daily summary, plan reopenings and changes, early check-in ready from 11:00, plan ready with a visit after 13:01, cleaning and maintenance close at 17:30, and late inventory deliveries at 10:00. Time is Europe/Madrid. The <code>/yalla hoy</code> command asks for the summary. Channels and the token are not shared.</p>
+        </div>
+      </section>
+
+      <section id="tablas">
+        <div data-lang="es">
+          <h2>Tablas</h2>
+          <p>Nombres lógicos. Las de limpieza, mantenimiento y usuarios de oficio tienen un nombre físico generado por CloudFormation en la rama principal.</p>
+          <table>
+            <thead><tr><th>Tabla</th><th>Dominio</th><th>API</th></tr></thead>
+            <tbody>
+              <tr><td>yalla-properties</td><td>Inmuebles</td><td>properties</td></tr>
+              <tr><td>yalla-bookings</td><td>Reservas y check-in</td><td>bookings</td></tr>
+              <tr><td>yalla-reviews</td><td>Reseñas</td><td>reviews</td></tr>
+              <tr><td>yalla-visits</td><td>Visitas</td><td>visits</td></tr>
+              <tr><td>yalla-tasks</td><td>Tareas</td><td>tasks</td></tr>
+              <tr><td>yalla-visit_types</td><td>Tipos de visita</td><td>visit-types</td></tr>
+              <tr><td>yalla-teams</td><td>Equipos</td><td>teams</td></tr>
+              <tr><td>yalla-visit-templates</td><td>Plantillas</td><td>visit-templates</td></tr>
+              <tr><td>yalla-bookings-planner-settings</td><td>Planificador</td><td>planner-settings</td></tr>
+              <tr><td>yalla-users</td><td>Usuarios de operación</td><td>users</td></tr>
+              <tr><td>yalla-job-scheduler-rules</td><td>Programador</td><td>job-scheduler</td></tr>
+              <tr><td>yalla-cases / yalla-case-events</td><td>Casos</td><td>cases, case-events</td></tr>
+              <tr><td>yalla-inventory</td><td>Inventario</td><td>inventory</td></tr>
+              <tr><td>yalla-purchases / yalla-substractions</td><td>Compras y bajas</td><td>purchases, subtractions</td></tr>
+              <tr><td>Planes, incidencias, fichas y limpiadores</td><td>Limpieza</td><td>cleaning-*</td></tr>
+              <tr><td>Planes, incidencias, proveedores y técnicos</td><td>Mantenimiento</td><td>maintenance-*</td></tr>
+              <tr><td>yalla-finance-historic y tablas de movimientos</td><td>Finanzas</td><td>No</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div data-lang="en">
+          <h2>Tables</h2>
+          <p>Logical names. Cleaning, maintenance, and trade-user tables have a physical CloudFormation name on the main branch.</p>
+          <table>
+            <thead><tr><th>Table</th><th>Domain</th><th>API</th></tr></thead>
+            <tbody>
+              <tr><td>yalla-properties</td><td>Properties</td><td>properties</td></tr>
+              <tr><td>yalla-bookings</td><td>Bookings and check-in</td><td>bookings</td></tr>
+              <tr><td>yalla-reviews</td><td>Reviews</td><td>reviews</td></tr>
+              <tr><td>yalla-visits</td><td>Visits</td><td>visits</td></tr>
+              <tr><td>yalla-tasks</td><td>Tasks</td><td>tasks</td></tr>
+              <tr><td>yalla-visit_types</td><td>Visit types</td><td>visit-types</td></tr>
+              <tr><td>yalla-teams</td><td>Teams</td><td>teams</td></tr>
+              <tr><td>yalla-visit-templates</td><td>Templates</td><td>visit-templates</td></tr>
+              <tr><td>yalla-bookings-planner-settings</td><td>Planner</td><td>planner-settings</td></tr>
+              <tr><td>yalla-users</td><td>Operations users</td><td>users</td></tr>
+              <tr><td>yalla-job-scheduler-rules</td><td>Scheduler</td><td>job-scheduler</td></tr>
+              <tr><td>yalla-cases / yalla-case-events</td><td>Cases</td><td>cases, case-events</td></tr>
+              <tr><td>yalla-inventory</td><td>Inventory</td><td>inventory</td></tr>
+              <tr><td>yalla-purchases / yalla-substractions</td><td>Purchases and write-offs</td><td>purchases, subtractions</td></tr>
+              <tr><td>Plans, incidents, cards, and cleaners</td><td>Cleaning</td><td>cleaning-*</td></tr>
+              <tr><td>Plans, incidents, providers, and technicians</td><td>Maintenance</td><td>maintenance-*</td></tr>
+              <tr><td>yalla-finance-historic and movement tables</td><td>Finance</td><td>No</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="lecturas">
+        <div data-lang="es">
+          <h2>Lecturas del personal</h2>
+          <p>Las funciones <code>get-properties</code>, <code>get-bookings</code>, <code>get-visits</code> y el resto de lecturas de la aplicación son del personal. Exigen un usuario de Cognito. Un proveedor no las llama y no recibe un usuario de ese grupo.</p>
+          <p>La lectura compartida es solo la API de este documento: <code>GET /v1/{recurso}</code> con clave. Esas dos puertas no son intercambiables.</p>
+        </div>
+        <div data-lang="en">
+          <h2>Staff reads</h2>
+          <p>The functions <code>get-properties</code>, <code>get-bookings</code>, <code>get-visits</code>, and the rest of the app reads belong to staff. They require a Cognito user. A provider does not call them and does not receive a user in that group.</p>
+          <p>Shared reading is only the API in this document: <code>GET /v1/{resource}</code> with a key. The two doors are not interchangeable.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const root = document.documentElement;
+    const es = document.getElementById('lang-es');
+    const en = document.getElementById('lang-en');
+    const setLang = (lang) => {
+      const next = lang === 'en' ? 'en' : 'es';
+      root.dataset.lang = next;
+      root.lang = next;
+      es.setAttribute('aria-pressed', next === 'es' ? 'true' : 'false');
+      en.setAttribute('aria-pressed', next === 'en' ? 'true' : 'false');
+      try { localStorage.setItem('yalla-data-catalog-lang', next); } catch (error) { /* archivo local */ }
+      try {
+        const url = new URL(location.href);
+        if (next === 'en') url.searchParams.set('lang', 'en');
+        else url.searchParams.delete('lang');
+        history.replaceState(null, '', url);
+      } catch (error) { /* archivo local */ }
+    };
+    es.addEventListener('click', () => setLang('es'));
+    en.addEventListener('click', () => setLang('en'));
+    let stored = null;
+    try { stored = localStorage.getItem('yalla-data-catalog-lang'); } catch (error) { stored = null; }
+    const initial = new URL(location.href).searchParams.get('lang') || stored || 'es';
+    setLang(initial);
+    const links = [...document.querySelectorAll('nav a')];
+    const mark = () => {
+      const y = window.scrollY + 90;
+      let current = links[0];
+      for (const link of links) {
+        const id = link.getAttribute('href').slice(1);
+        const section = document.getElementById(id);
+        if (section && section.offsetTop <= y) current = link;
+      }
+      for (const link of links) link.removeAttribute('aria-current');
+      current.setAttribute('aria-current', 'true');
+    };
+    document.addEventListener('scroll', mark, { passive: true });
+    mark();
+  </script>
+</body>
+</html>

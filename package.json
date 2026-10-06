@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && mkdir -p dist/read-api && cp docs/data-catalog/yalla-data-catalog.html dist/read-api/index.html",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "sync:outputs": "node scripts/sync-amplify-outputs.mjs"
