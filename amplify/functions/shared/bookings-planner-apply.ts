@@ -18,6 +18,7 @@ import {
   shouldWritePlannerToGuesty,
   toDateOnly,
 } from './bookings-planner';
+import { applyGuestyLockCodeToBooking } from './guesty-lock-access';
 import { applyVikeyOpeningLinkToBooking } from './vikey-access';
 import { listPlannerWindowBookings } from './bookings-planner-window';
 import { nowIso } from './dynamo-http';
@@ -241,7 +242,10 @@ export const applyPlannerToReservation = async ({
   if (!hydrated) {
     return { ok: false as const, reason: 'not_found' };
   }
-  const current = applyVikeyOpeningLinkToBooking(hydrated);
+  let current = applyVikeyOpeningLinkToBooking(hydrated);
+  if (isActivePlannerStatus(current.Status) || overrides) {
+    current = await applyGuestyLockCodeToBooking(current);
+  }
 
   const reopenFromBookingContext = async () => {
     if (!notifyCleaningPlan || overrides) {

@@ -54,6 +54,23 @@ export const isGuestyNotFound = (error: unknown) => {
   return /\b404\b/.test(message) || /not found/i.test(message);
 };
 
+export const isGuestyNoContent = (error: unknown) => {
+  if (!error || typeof error !== 'object') {
+    const text = String(error ?? '');
+    return /\b204\b/.test(text) || /no content/i.test(text);
+  }
+  const record = error as Record<string, unknown>;
+  if (record.status === 204 || record.statusCode === 204) {
+    return true;
+  }
+  const nested = asRecord(record.response) ?? asRecord(record.error);
+  if (nested?.status === 204 || nested?.statusCode === 204) {
+    return true;
+  }
+  const message = String(record.message ?? error);
+  return /\b204\b/.test(message) || /no content/i.test(message);
+};
+
 export const loadGuestyClient = async (): Promise<GuestyClient | null> => {
   try {
     const loaded = (await import(GUESTY_CLIENT_PATH)) as Record<string, unknown>;
