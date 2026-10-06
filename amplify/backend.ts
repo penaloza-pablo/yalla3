@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Aws, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Function as LambdaFunction, FunctionUrlAuthType, LayerVersion, Runtime, StartingPosition } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -969,11 +969,17 @@ bookingsPlannerSettingsTable.grantReadData(aiAgentsFn);
 aiAgentsFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['lambda:InvokeFunction'],
-    resources: [aiAgentsFn.functionArn, `${aiAgentsFn.functionArn}:*`],
+    resources: [
+      `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:amplify-dd8kh4wy2zlme-main-branch-AiAgents*`,
+      `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:amplify-dd8kh4wy2zlme-main-branch-AiAgents*:*`,
+    ],
   }),
 );
+const aiAgentsUrl = aiAgentsFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
 const warningCleanerScheduleRole = new Role(
-  aiAgentsStack,
+  plannerScheduleStack,
   'WarningCleanerScheduleRole',
   {
     assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
@@ -985,7 +991,7 @@ warningCleanerScheduleRole.addToPolicy(
     resources: [aiAgentsFn.functionArn, `${aiAgentsFn.functionArn}:*`],
   }),
 );
-new CfnSchedule(aiAgentsStack, 'BookingPlanWarningCleanerDaily', {
+new CfnSchedule(plannerScheduleStack, 'BookingPlanWarningCleanerDaily', {
   flexibleTimeWindow: { mode: 'OFF' },
   scheduleExpression: 'cron(0 6 * * ? *)',
   scheduleExpressionTimezone: 'Europe/Madrid',
@@ -994,9 +1000,6 @@ new CfnSchedule(aiAgentsStack, 'BookingPlanWarningCleanerDaily', {
     roleArn: warningCleanerScheduleRole.roleArn,
     input: JSON.stringify({ agentId: 'booking-plan-warning-cleaner' }),
   },
-});
-const aiAgentsUrl = aiAgentsFn.addFunctionUrl({
-  authType: FunctionUrlAuthType.NONE,
 });
 
 backend.upsertVisit.addEnvironment(
