@@ -2299,6 +2299,10 @@
       "notify_cleaning_plan_visit_change": {
         "name": "Guesty changes a visit on a ready plan",
         "description": "If Guesty moves or cancels a visit that belongs to a ready cleaning plan, the plan is reopened and a message is posted in #cleanings-aptos with a link to review and close it again. A same-day time-only change does not trigger this."
+      },
+      "notify_booking_plan_warning_cleared": {
+        "name": "Booking Plan warning cleared by agent",
+        "description": "Posts in #yalla-warnings when the Booking Plan Warning Cleaner agent writes a plan field (sofa bed, double/twin, or 1 guest) because the guest confirmed it in chat."
       }
     }
   },

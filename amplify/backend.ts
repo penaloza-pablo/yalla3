@@ -961,6 +961,40 @@ aiAgentsFn.addToRolePolicy(
 aiAgentsFn.addLayers(guestyAuthLayer);
 aiAgentsFn.addToRolePolicy(guestySecretsPolicy);
 aiAgentsFn.addToRolePolicy(guestySsmPolicy);
+aiAgentsFn.addEnvironment(
+  'BOOKINGS_PLANNER_SETTINGS_TABLE',
+  bookingsPlannerSettingsTable.tableName,
+);
+bookingsPlannerSettingsTable.grantReadData(aiAgentsFn);
+aiAgentsFn.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [aiAgentsFn.functionArn, `${aiAgentsFn.functionArn}:*`],
+  }),
+);
+const warningCleanerScheduleRole = new Role(
+  aiAgentsStack,
+  'WarningCleanerScheduleRole',
+  {
+    assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
+  },
+);
+warningCleanerScheduleRole.addToPolicy(
+  new PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [aiAgentsFn.functionArn, `${aiAgentsFn.functionArn}:*`],
+  }),
+);
+new CfnSchedule(aiAgentsStack, 'BookingPlanWarningCleanerDaily', {
+  flexibleTimeWindow: { mode: 'OFF' },
+  scheduleExpression: 'cron(0 6 * * ? *)',
+  scheduleExpressionTimezone: 'Europe/Madrid',
+  target: {
+    arn: aiAgentsFn.functionArn,
+    roleArn: warningCleanerScheduleRole.roleArn,
+    input: JSON.stringify({ agentId: 'booking-plan-warning-cleaner' }),
+  },
+});
 const aiAgentsUrl = aiAgentsFn.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
@@ -1348,6 +1382,7 @@ slackSecret.grantRead(backend.upsertVisit.resources.lambda);
 slackSecret.grantRead(backend.upsertCleaningPlan.resources.lambda);
 slackSecret.grantRead(backend.upsertMaintenancePlan.resources.lambda);
 slackSecret.grantRead(backend.applyBookingsPlanner.resources.lambda);
+slackSecret.grantRead(aiAgentsFn);
 
 const slackNotificationsTable = new Table(dataStack, 'SlackNotificationsTable', {
   partitionKey: { name: 'id', type: AttributeType.STRING },
@@ -1385,6 +1420,12 @@ for (const lambdaFunction of slackNotificationReaders) {
 slackNotificationsTable.grantReadWriteData(
   backend.notifyCleaningOverdue.resources.lambda,
 );
+aiAgentsFn.addEnvironment('SLACK_SECRET_ID', 'yalla/slack');
+aiAgentsFn.addEnvironment(
+  'SLACK_NOTIFICATIONS_TABLE',
+  slackNotificationsTable.tableName,
+);
+slackNotificationsTable.grantReadData(aiAgentsFn);
 
 const reopenCleaningPlanFromVisitFn = new NodejsFunction(
   jobSchedulerStack,

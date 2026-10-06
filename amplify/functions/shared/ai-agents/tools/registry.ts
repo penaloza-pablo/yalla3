@@ -1,3 +1,4 @@
+import { applyBookingPlannerResolutionTool } from './apply-booking-planner-resolution';
 import { getUpcomingReservationAlertsTool } from './get-upcoming-reservation-alerts';
 import { listBookingConversationTool } from './list-booking-conversation';
 import { listTodayCheckinGuestsTool } from './list-today-checkin-guests';
@@ -11,6 +12,7 @@ const TOOLS: Record<string, AgentTool> = {
   [listTodayCheckinGuestsTool.name]: listTodayCheckinGuestsTool,
   [getUpcomingReservationAlertsTool.name]: getUpcomingReservationAlertsTool,
   [listBookingConversationTool.name]: listBookingConversationTool,
+  [applyBookingPlannerResolutionTool.name]: applyBookingPlannerResolutionTool,
   [sendBookingConversationMessageTool.name]: sendBookingConversationMessageTool,
   [verifyCleaningInvoiceTool.name]: verifyCleaningInvoiceTool,
   [reconcileCleaningInvoiceTool.name]: reconcileCleaningInvoiceTool,

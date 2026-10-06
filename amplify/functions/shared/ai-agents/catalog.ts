@@ -2,11 +2,12 @@ import { DEFAULT_OPENAI_MODEL } from './models';
 import { DEFAULT_RUNTIME_LIMITS } from './limits';
 import type { AgentDefinition } from './types';
 
-export const AI_AGENTS_CATALOG_VERSION = 6;
+export const AI_AGENTS_CATALOG_VERSION = 7;
 
 const MADRID_ARRIVAL_STORY_ID = 'madrid-arrival-story';
 const TODAY_ARRIVALS_BRIEF_ID = 'today-arrivals-brief';
 const CLEANING_INVOICE_REVIEW_ID = 'cleaning-invoice-review';
+const BOOKING_PLAN_WARNING_CLEANER_ID = 'booking-plan-warning-cleaner';
 
 const sharedSchedule = {
   kind: 'manual' as const,
@@ -128,6 +129,87 @@ Proceso:
     approvalPolicy: { requireApprovalFor: [] },
     knowledgeSources: [],
   },
+  {
+    id: BOOKING_PLAN_WARNING_CLEANER_ID,
+    name: 'Booking Plan Warning Cleaner',
+    purpose:
+      'Cada mañana a las 6:00 (Madrid) lee el chat de Guesty de reservas del Booking Plan con warning de sofá cama, cama doble/individual o 1 guest, y solo si el huésped lo confirma de forma explícita escribe el campo, deja log y avisa en Slack.',
+    instructions: `Eres un agente operativo de Yalla. No eres un asistente de código.
+
+Tu trabajo es resolver UN warning del Booking Plan leyendo el hilo de Guesty. La interpretación es tuya: no hay keywords ni parsers. Ante cualquier duda, no escribas.
+
+Proceso:
+1. Usa el reservationId del input. Si no hay reservationId, di que falta y para. No inventes reservas.
+2. Llama list_booking_conversation con ese reservationId (includeLogs false).
+3. Distingue posts del guest vs host vs nota interna vs log. Solo es evidencia un mensaje del guest. Preguntas del host, plantillas y logs no cuentan.
+4. El huésped puede escribir en cualquier idioma. Traduce e interpreta el significado.
+5. Si un mensaje del guest confirma de forma explícita el warning abierto, llama apply_booking_planner_resolution UNA vez con confidence "high" y quote igual a esa cita del guest.
+6. Si no hay confirmación explícita, no llames al tool de escritura. Resume en una frase que no cambiaste nada.
+
+Valores canónicos (el tool rechaza cualquier otra cosa):
+- linen_ask_guest → value "Sofa cama: si" o "Sofa cama: no"
+- double_or_two_singles_ask → value "Double" o "Single"
+- single_guest → no hace falta value; el tool descarta el warning
+- confidence debe ser exactamente "high"
+
+Criterios:
+- linen_ask_guest: el guest acepta o rechaza sofá cama / cama extra / linen del sofá. “Quizá” o “al llegar” = no escribir.
+- double_or_two_singles_ask: el guest elige cama de matrimonio vs dos individuales. Si pide ambas o no elige = no escribir.
+- single_guest: el guest confirma que viaja solo / es una persona. Si implica más ocupantes, no dismiss.
+- gift_card_access_missing y cualquier otro warning: ignóralos.
+- No envíes mensajes al huésped. No uses send_booking_conversation_message.
+
+Ejemplos de tipo de decisión (no copies frases; el hilo se lee en vivo):
+- linen_ask_guest resuelto a "Sofa cama: no": HMQJPWMTYC, HMFQSC3YY2
+- linen_ask_guest resuelto a "Sofa cama: si": HMQ25X83M9
+- double_or_two_singles_ask resuelto a Double: HMY2EWK9TC, HM28SX5W3X
+- double_or_two_singles_ask pendiente de interpretar: HM3JHR9C8M
+- single_guest (dismiss si el guest confirma 1 persona): HMENPNJTRD, HMSZTWWQP5, HMYAHFEWCP
+
+Responde en español: qué warning viste, si escribiste o no, y por qué.`,
+    rules: [
+      'Usa solo list_booking_conversation y apply_booking_planner_resolution.',
+      'Solo evidencia: mensajes del guest. Host, notas y logs no cuentan.',
+      'Escribe solo con confidence high y una cita literal del guest.',
+      'Si dudas, no llames a apply_booking_planner_resolution.',
+      'No envíes mensajes al huésped.',
+      'value debe ser exactamente Sofa cama: si, Sofa cama: no, Double o Single.',
+    ],
+    allowedTools: [
+      'list_booking_conversation',
+      'apply_booking_planner_resolution',
+    ],
+    provider: 'openai',
+    model: DEFAULT_OPENAI_MODEL,
+    schedule: {
+      kind: 'cron',
+      expression: 'cron(0 6 * * ? *)',
+      timezone: 'Europe/Madrid',
+      description:
+        'Daily at 06:00 Europe/Madrid. One run per reservation with a resolvable Booking Plan warning.',
+    },
+    coveragePolicy: { type: 'tool_declared' },
+    enabled: true,
+    catalogVersion: AI_AGENTS_CATALOG_VERSION,
+    status: 'published',
+    draftVersion: 1,
+    publishedVersion: 1,
+    runtimeLimits: {
+      maxTurns: 6,
+      timeoutMs: 90_000,
+      maxCostUsd: 0.5,
+      maxToolCalls: 4,
+    },
+    memoryPolicy: { kind: 'none' },
+    permissionPolicy: {
+      allowedTools: [
+        'list_booking_conversation',
+        'apply_booking_planner_resolution',
+      ],
+    },
+    approvalPolicy: { requireApprovalFor: [] },
+    knowledgeSources: [],
+  },
 ];
 
 export const getCatalogAgent = (id: string) =>
@@ -136,3 +218,5 @@ export const getCatalogAgent = (id: string) =>
 export const MADRID_ARRIVAL_STORY_AGENT_ID = MADRID_ARRIVAL_STORY_ID;
 export const TODAY_ARRIVALS_BRIEF_AGENT_ID = TODAY_ARRIVALS_BRIEF_ID;
 export const CLEANING_INVOICE_REVIEW_AGENT_ID = CLEANING_INVOICE_REVIEW_ID;
+export const BOOKING_PLAN_WARNING_CLEANER_AGENT_ID =
+  BOOKING_PLAN_WARNING_CLEANER_ID;

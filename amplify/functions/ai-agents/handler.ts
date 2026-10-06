@@ -13,6 +13,13 @@ import { normalizeAgentUpsert } from '../shared/ai-agents/agent-config';
 import { TOOL_DEBUG_AGENT_ID } from '../shared/ai-agents/limits';
 import { OPENAI_MODELS } from '../shared/ai-agents/models';
 import {
+  BOOKING_PLAN_WARNING_CLEANER_ID,
+  buildWarningCleanerInput,
+  isResolvableWarningCode,
+  type WarningCleanerAlert,
+} from '../shared/booking-plan-warning-cleaner';
+import { fanOutBookingPlanWarningCleaner } from '../shared/ai-agents/warning-cleaner-fanout';
+import {
   allocateAgentId,
   getAgent,
   getAgentVersion,
@@ -42,6 +49,11 @@ type HttpEvent = {
   queryStringParameters?: Record<string, string | undefined>;
   body?: string;
   agentId?: string;
+  reservationId?: string;
+  guestName?: string;
+  property?: string;
+  confirmationCode?: string;
+  alerts?: Array<{ code?: string; warning?: string; value?: string }>;
   source?: string;
 };
 
@@ -74,6 +86,27 @@ const asToolArguments = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+const cleanerAlertsFromEvent = (
+  value: HttpEvent['alerts'],
+): WarningCleanerAlert[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const alerts: WarningCleanerAlert[] = [];
+  for (const entry of value) {
+    const code = typeof entry?.code === 'string' ? entry.code : '';
+    if (!isResolvableWarningCode(code)) {
+      continue;
+    }
+    alerts.push({
+      code,
+      warning: typeof entry.warning === 'string' ? entry.warning : '',
+      value: typeof entry.value === 'string' ? entry.value : '',
+    });
+  }
+  return alerts;
+};
+
 const withoutFilePayload = (args: Record<string, unknown>) => {
   if (typeof args.fileBase64 !== 'string') {
     return args;
@@ -101,12 +134,31 @@ export const handler = async (event: HttpEvent) => {
     const query = event.queryStringParameters ?? {};
     const scheduledAgentId = event.agentId;
     if (!isHttp && scheduledAgentId) {
+      if (
+        scheduledAgentId === BOOKING_PLAN_WARNING_CLEANER_ID &&
+        !event.reservationId
+      ) {
+        const fanout = await fanOutBookingPlanWarningCleaner();
+        return { ok: true, fanout };
+      }
+      const cleanerInput =
+        scheduledAgentId === BOOKING_PLAN_WARNING_CLEANER_ID &&
+        event.reservationId
+          ? buildWarningCleanerInput({
+              reservationId: event.reservationId,
+              guestName: event.guestName,
+              property: event.property,
+              confirmationCode: event.confirmationCode,
+              alerts: cleanerAlertsFromEvent(event.alerts),
+            })
+          : undefined;
       const run = await runAgent({
         agentId: scheduledAgentId,
         trigger: 'schedule',
         actor: 'scheduler',
         source: 'scheduler',
         executionMode: 'production',
+        input: cleanerInput,
       });
       return { ok: true, run };
     }

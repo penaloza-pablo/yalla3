@@ -28,7 +28,7 @@ export const listBookingConversationTool: AgentTool = {
   description:
     'Reads the live Guesty inbox thread for a reservation. Uses Booking.ConversationID as a pointer and fetches posts from Guesty on demand. A thread may cover more than one reservation.',
   outputDescription:
-    'JSON with conversationId, relatedReservationIds, fetchedAt, and posts[{id, body, moduleType, fromName, createdAt, isNote, isLog}].',
+    'JSON with conversationId, relatedReservationIds, fetchedAt, and posts[{id, body, moduleType, sentBy, fromName, createdAt, isNote, isLog}].',
   riskLevel: 'read',
   requiresApproval: false,
   timeoutMs: 20_000,
@@ -75,6 +75,7 @@ export const listBookingConversationTool: AgentTool = {
           id: post.id,
           body: post.body,
           moduleType: post.moduleType,
+          sentBy: post.sentBy,
           fromName: post.fromName,
           createdAt: post.createdAt,
           isNote: post.isNote,
