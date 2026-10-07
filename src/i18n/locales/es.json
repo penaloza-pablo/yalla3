@@ -1432,6 +1432,8 @@
     "required": "Propiedad, nombre, intervalo y al menos una plantilla son obligatorios.",
     "createVisit": "Crear visita",
     "createVisitHelp": "Crear una visita para {{property}} con la regla {{rule}}.",
+    "assignToManagement": "Asignar a Management",
+    "assignToManagementHelp": "La visita queda en el equipo Management. Cuenta para el Job scheduler, no para billing ni para los planes de cleaning o maintenance.",
     "usingTemplate": "Plantilla: {{name}}",
     "cleaningDate": "Limpieza el {{date}}",
     "manualDate": "Elegir otra fecha",

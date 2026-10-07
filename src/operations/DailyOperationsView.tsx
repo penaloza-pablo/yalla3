@@ -384,6 +384,10 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   guestyTaskId:
     typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
+  sourceTemplateId:
+    typeof item.sourceTemplateId === 'string' && item.sourceTemplateId.trim()
+      ? item.sourceTemplateId.trim()
+      : undefined,
   taskCountTotal:
     typeof item.taskCountTotal === 'number'
       ? item.taskCountTotal
@@ -694,7 +698,10 @@ export function DailyOperationsView({
       .map(overlayVisitWithPlanAssignee)
       .filter((visit) => {
       if (filters.teamIds.length === 0) {
-        if (isManagementTeam(visit.teamId, teamById)) {
+        if (
+          isManagementTeam(visit.teamId, teamById) &&
+          !visit.sourceTemplateId
+        ) {
           return false
         }
       } else if (!filters.teamIds.includes(visit.teamId)) {

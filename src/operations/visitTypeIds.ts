@@ -1,4 +1,6 @@
 export const CLEANING_VISIT_TYPE_ID = 'visit_type_cleaning'
+export const MANAGEMENT_VISIT_TYPE_ID = 'visit_type_management'
+export const MANAGEMENT_TEAM_ID = 'team_management'
 
 export const isCleaningVisitType = (visitTypeId?: string) => {
   const id = String(visitTypeId ?? '').trim().toLowerCase()

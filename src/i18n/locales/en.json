@@ -1432,6 +1432,8 @@
     "required": "Property, name, interval, and at least one template are required.",
     "createVisit": "Create visit",
     "createVisitHelp": "Create a visit for {{property}} using the {{rule}} rule.",
+    "assignToManagement": "Assign to Management",
+    "assignToManagementHelp": "The visit is assigned to the Management team. It counts for Job scheduler, not for billing or cleaning/maintenance plans.",
     "usingTemplate": "Template: {{name}}",
     "cleaningDate": "Cleaning on {{date}}",
     "manualDate": "Choose another date",

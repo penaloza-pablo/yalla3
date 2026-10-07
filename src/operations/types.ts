@@ -42,6 +42,7 @@ export type VisitRecord = {
   startedAt?: string
   closedAt?: string
   guestyTaskId?: string
+  sourceTemplateId?: string
   taskCountTotal?: number
   taskCountCompleted?: number
 }

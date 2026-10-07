@@ -27,6 +27,10 @@ import {
   mapVisitTemplate,
   templateTasksPayload,
 } from './visitTemplateHelpers'
+import {
+  MANAGEMENT_TEAM_ID,
+  MANAGEMENT_VISIT_TYPE_ID,
+} from './visitTypeIds'
 import type {
   JobSchedulerRule,
   JobSchedulerRuleStatus,
@@ -65,6 +69,7 @@ type CreateForm = {
   dateMode: 'cleaning' | 'manual'
   cleaningDate: string
   manualDate: string
+  assignToManagement: boolean
 }
 
 type ProgressTone = 'ok' | 'soon' | 'overdue'
@@ -91,6 +96,7 @@ const emptyCreateForm = (): CreateForm => ({
   dateMode: 'cleaning',
   cleaningDate: '',
   manualDate: '',
+  assignToManagement: false,
 })
 
 const emptyStatus = (): JobSchedulerRuleStatus => ({
@@ -391,6 +397,7 @@ export function JobSchedulerView({
       dateMode: dates.length > 0 ? 'cleaning' : 'manual',
       cleaningDate: dates[0] ?? '',
       manualDate: today,
+      assignToManagement: false,
     })
     setIsCreateOpen(true)
     setMessage(null)
@@ -510,18 +517,23 @@ export function JobSchedulerView({
     setIsCreating(true)
     setError(null)
     try {
+      const assignToManagement = createForm.assignToManagement
       await saveVisit(endpoints.upsertVisit, {
         propertyId: createForm.propertyId,
-        visitTypeId: template.visitTypeId,
-        teamId: template.teamId,
-        assignedUserId: template.assignedUserId,
+        visitTypeId: assignToManagement
+          ? MANAGEMENT_VISIT_TYPE_ID
+          : template.visitTypeId,
+        teamId: assignToManagement ? MANAGEMENT_TEAM_ID : template.teamId,
+        assignedUserId: assignToManagement ? '' : template.assignedUserId,
         scheduledDate,
         scheduledStartTime: template.scheduledStartTime,
         scheduledEndTime: template.scheduledEndTime,
         title: template.title || template.name,
         description: template.description,
         estimatedDurationMinutes: template.estimatedDurationMinutes,
-        appliesToHourBank: template.appliesToHourBank,
+        appliesToHourBank: assignToManagement
+          ? false
+          : template.appliesToHourBank,
         sourceTemplateId: template.id,
         tasks: templateTasksPayload(template),
       })
@@ -1172,6 +1184,22 @@ export function JobSchedulerView({
                   ) : null}
                 </fieldset>
               ) : null}
+              <div className="form-field-span planner-switch compact">
+                <YallaSwitch
+                  on={createForm.assignToManagement}
+                  label={t('jobScheduler.assignToManagement')}
+                  onToggle={() =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      assignToManagement: !current.assignToManagement,
+                    }))
+                  }
+                />
+                <span>{t('jobScheduler.assignToManagement')}</span>
+              </div>
+              <p className="form-field-span table-help">
+                {t('jobScheduler.assignToManagementHelp')}
+              </p>
             </div>
             <div className="modal-footer">
               <button

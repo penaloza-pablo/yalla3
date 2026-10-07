@@ -155,6 +155,10 @@ const mapVisit = (item: Record<string, unknown>): VisitRecord => ({
       : undefined,
   guestyTaskId:
     typeof item.guestyTaskId === 'string' ? item.guestyTaskId : undefined,
+  sourceTemplateId:
+    typeof item.sourceTemplateId === 'string' && item.sourceTemplateId.trim()
+      ? item.sourceTemplateId.trim()
+      : undefined,
 })
 
 const mapTask = (item: Record<string, unknown>): TaskRecord => ({
