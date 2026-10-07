@@ -12,9 +12,11 @@ import {
   ROLE_SEEDS,
   allPermissionKeys,
   withDefaultCleaningPlanOverride,
+  withDefaultDailyOpsAgendaResize,
 } from './rbac-catalog'
 
 const key = ACTION_KEYS.cleaningPlanOverrideSchedule
+const agendaKey = ACTION_KEYS.dailyOpsAgendaResize
 
 test('locks a ready plan from 10:30 on the plan day onward', () => {
   assert.equal(isPastCleaningPlanEditCutoff('2026-09-25', '2026-09-25', '10:29'), false)
@@ -34,7 +36,7 @@ test('restricted start times stay between 11:00 and 16:00', () => {
 })
 
 test('catalog v8 grants the override only to admin and Knock-Knock supervisor by default', () => {
-  assert.equal(PERMISSIONS_CATALOG_VERSION, 9)
+  assert.equal(PERMISSIONS_CATALOG_VERSION, 10)
   assert.equal(allPermissionKeys().includes(key), true)
   assert.equal(
     withDefaultCleaningPlanOverride(ADMIN_ROLE_ID, ['page:Cleaning Plan'], 7).includes(key),
@@ -69,4 +71,49 @@ test('catalog v8 grants the override only to admin and Knock-Knock supervisor by
   assert.equal(supervisor?.permissions.includes(key), true)
   assert.equal(cleaner?.permissions.includes(key), false)
   assert.equal(cleaningSupervisor?.permissions.includes(key), false)
+})
+
+test('catalog v10 grants agenda resize only to admin and Knock-Knock supervisor by default', () => {
+  assert.equal(allPermissionKeys().includes(agendaKey), true)
+  assert.equal(
+    withDefaultDailyOpsAgendaResize(ADMIN_ROLE_ID, ['page:Daily Operations'], 9).includes(
+      agendaKey,
+    ),
+    true,
+  )
+  assert.equal(
+    withDefaultDailyOpsAgendaResize(
+      KNOCK_KNOCK_SUPERVISOR_ROLE_ID,
+      ['page:Daily Operations'],
+      9,
+    ).includes(agendaKey),
+    true,
+  )
+  assert.equal(
+    withDefaultDailyOpsAgendaResize('cleaner', ['page:Daily Operations'], 9).includes(
+      agendaKey,
+    ),
+    false,
+  )
+  assert.equal(
+    withDefaultDailyOpsAgendaResize(
+      'cleaning-supervisor',
+      ['page:Daily Operations'],
+      9,
+    ).includes(agendaKey),
+    false,
+  )
+  assert.equal(
+    withDefaultDailyOpsAgendaResize(ADMIN_ROLE_ID, ['page:Daily Operations'], 10).includes(
+      agendaKey,
+    ),
+    false,
+  )
+
+  const supervisor = ROLE_SEEDS.find((role) => role.id === KNOCK_KNOCK_SUPERVISOR_ROLE_ID)
+  const cleaner = ROLE_SEEDS.find((role) => role.id === 'cleaner')
+  const cleaningSupervisor = ROLE_SEEDS.find((role) => role.id === 'cleaning-supervisor')
+  assert.equal(supervisor?.permissions.includes(agendaKey), true)
+  assert.equal(cleaner?.permissions.includes(agendaKey), false)
+  assert.equal(cleaningSupervisor?.permissions.includes(agendaKey), false)
 })

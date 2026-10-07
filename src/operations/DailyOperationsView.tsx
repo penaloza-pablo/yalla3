@@ -23,7 +23,6 @@ import { TodayDashboardView } from '../dashboard/TodayDashboardView'
 import { buildMtlDisplayRows } from './mtlPropertyHelpers'
 import {
   AGENDA_DAY_COUNT,
-  addHoursToTimeString,
   formatAgendaDayLabel,
   formatMinutesAsTime,
   getAgendaDateRange,
@@ -164,29 +163,12 @@ type CleaningPlanDayLookup = {
   status: 'READY' | 'DRAFT'
   typeNameByVisitId: Record<string, string>
   cleanerIdByVisitId: Record<string, string>
-  startTimeByVisitId: Record<string, string>
-  durationHoursByVisitId: Record<string, number>
 }
 
 type MaintenancePlanDayLookup = {
   status: 'READY' | 'DRAFT'
   agentIdByVisitId: Record<string, string>
   visitIds: string[]
-}
-
-const durationHoursFromPlanRow = (item: Record<string, unknown>) => {
-  const direct = Number(item.durationHours)
-  if (Number.isFinite(direct) && direct > 0) {
-    return direct
-  }
-  const types = Array.isArray(item.cleaningTypes) ? item.cleaningTypes : []
-  const typeId = String(item.cleaningTypeId ?? '').trim()
-  const matched = types.find((entry) => {
-    const row = (entry ?? {}) as Record<string, unknown>
-    return String(row.id ?? '').trim() === typeId
-  }) as Record<string, unknown> | undefined
-  const fromType = Number(matched?.durationHours)
-  return Number.isFinite(fromType) && fromType > 0 ? fromType : 0
 }
 
 const cleaningTypeNameFromPlanRow = (item: Record<string, unknown>) => {
@@ -557,6 +539,7 @@ export function DailyOperationsView({
   const isCreatingTask = !taskForm.id
   const canCreateTasks = can(ACTION_KEYS.createTasks)
   const canActOnOthers = can(ACTION_KEYS.actOnOthersVisits)
+  const canAdjustAgendaTimes = can(ACTION_KEYS.dailyOpsAgendaResize)
   const [tasksRevealed, setTasksRevealed] = useState(false)
   const visitDetailBodyRef = useRef<HTMLDivElement>(null)
 
@@ -678,40 +661,6 @@ export function DailyOperationsView({
     [visitTypes],
   )
 
-  const overlayVisitWithCleaningPlan = useCallback(
-    (visit: VisitRecord) => {
-      const plan = cleaningPlansByDate[visit.scheduledDate]
-      if (!plan) {
-        return visit
-      }
-      const plannedStart = plan.startTimeByVisitId[visit.id]?.trim()
-      const durationHours = plan.durationHoursByVisitId[visit.id] ?? 0
-      const shouldApplyStart = plan.status === 'READY' && Boolean(plannedStart)
-      const shouldApplyDuration = durationHours > 0
-      if (!shouldApplyStart && !shouldApplyDuration) {
-        return visit
-      }
-      const startTime = shouldApplyStart
-        ? plannedStart
-        : visit.scheduledStartTime
-      if (!startTime) {
-        return visit
-      }
-      const endTime = shouldApplyDuration
-        ? addHoursToTimeString(startTime, durationHours)
-        : visit.scheduledEndTime
-      return {
-        ...visit,
-        scheduledStartTime: startTime,
-        scheduledEndTime: endTime || visit.scheduledEndTime,
-        estimatedDurationMinutes: shouldApplyDuration
-          ? Math.round(durationHours * 60)
-          : visit.estimatedDurationMinutes,
-      }
-    },
-    [cleaningPlansByDate],
-  )
-
   const overlayVisitWithPlanAssignee = useCallback(
     (visit: VisitRecord): VisitRecord => {
       const date = visit.scheduledDate
@@ -742,7 +691,6 @@ export function DailyOperationsView({
 
   const filteredVisits = useMemo(() => {
     return visits
-      .map(overlayVisitWithCleaningPlan)
       .map(overlayVisitWithPlanAssignee)
       .filter((visit) => {
       if (filters.teamIds.length === 0) {
@@ -782,7 +730,6 @@ export function DailyOperationsView({
     visits,
     filters,
     teamById,
-    overlayVisitWithCleaningPlan,
     overlayVisitWithPlanAssignee,
     dashboardViewMode,
     sessionEmail,
@@ -815,13 +762,10 @@ export function DailyOperationsView({
 
   const selectedVisit = useMemo(() => {
     const match = visits.find((visit) => visit.id === selectedVisitId)
-    return match
-      ? overlayVisitWithPlanAssignee(overlayVisitWithCleaningPlan(match))
-      : null
+    return match ? overlayVisitWithPlanAssignee(match) : null
   }, [
     visits,
     selectedVisitId,
-    overlayVisitWithCleaningPlan,
     overlayVisitWithPlanAssignee,
   ])
 
@@ -1321,8 +1265,6 @@ export function DailyOperationsView({
         .then((payload) => {
           const typeNameByVisitId: Record<string, string> = {}
           const cleanerIdByVisitId: Record<string, string> = {}
-          const startTimeByVisitId: Record<string, string> = {}
-          const durationHoursByVisitId: Record<string, number> = {}
           for (const row of payload.rows ?? []) {
             const visitId = String(row.visitId ?? '').trim()
             if (!visitId) {
@@ -1336,14 +1278,6 @@ export function DailyOperationsView({
             if (cleanerId) {
               cleanerIdByVisitId[visitId] = cleanerId
             }
-            const startTime = String(row.startTime ?? '').trim()
-            if (startTime) {
-              startTimeByVisitId[visitId] = startTime
-            }
-            const durationHours = durationHoursFromPlanRow(row)
-            if (durationHours > 0) {
-              durationHoursByVisitId[visitId] = durationHours
-            }
           }
           setCleaningPlansByDate((current) => ({
             ...current,
@@ -1354,8 +1288,6 @@ export function DailyOperationsView({
                   : 'DRAFT',
               typeNameByVisitId,
               cleanerIdByVisitId,
-              startTimeByVisitId,
-              durationHoursByVisitId,
             },
           }))
         })
@@ -1366,8 +1298,6 @@ export function DailyOperationsView({
               status: 'DRAFT',
               typeNameByVisitId: {},
               cleanerIdByVisitId: {},
-              startTimeByVisitId: {},
-              durationHoursByVisitId: {},
             },
           }))
         })
@@ -1821,7 +1751,7 @@ export function DailyOperationsView({
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => {
-    if (!endpoints.upsertVisit) {
+    if (!canAdjustAgendaTimes || !endpoints.upsertVisit) {
       return
     }
     const visit = visits.find((entry) => entry.id === visitId)
@@ -2836,6 +2766,7 @@ export function DailyOperationsView({
               onVisitTimeChange={handleVisitTimeChange}
               onEarlyCheckInChange={handleEarlyCheckInChange}
               onCheckInTimeChange={handleCheckInTimeChange}
+              canAdjustVisitTimes={canAdjustAgendaTimes}
               canCreateVisit={can(ACTION_KEYS.dailyOpsCreate)}
               onCreateVisit={openCreateVisit}
               onOpenFilters={openFilters}
@@ -3619,6 +3550,7 @@ export function DailyOperationsView({
                 <input
                   type="time"
                   value={visitForm.scheduledStartTime}
+                  disabled={Boolean(visitForm.id) && !canAdjustAgendaTimes}
                   onChange={(event) =>
                     setVisitForm((c) => ({
                       ...c,
@@ -3632,6 +3564,7 @@ export function DailyOperationsView({
                 <input
                   type="time"
                   value={visitForm.scheduledEndTime}
+                  disabled={Boolean(visitForm.id) && !canAdjustAgendaTimes}
                   onChange={(event) =>
                     setVisitForm((c) => ({
                       ...c,

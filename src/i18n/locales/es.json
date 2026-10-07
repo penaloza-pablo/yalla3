@@ -2376,7 +2376,8 @@
       "createTasks": "Crear tareas",
       "dashboardConfigureWidgets": "Configurar widgets del panel",
       "actOnOthersVisits": "Iniciar y completar visitas o tareas asignadas a otro usuario",
-      "cleaningPlanOverrideSchedule": "Cambiar el Cleaning Plan después de las 10:30 y definir cualquier hora de inicio"
+      "cleaningPlanOverrideSchedule": "Cambiar el Cleaning Plan después de las 10:30 y definir cualquier hora de inicio",
+      "dailyOpsAgendaResize": "Arrastrar y estirar visitas en la agenda"
     }
   },
   "spotCheck": {

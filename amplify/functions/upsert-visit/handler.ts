@@ -37,6 +37,9 @@ import {
   notifyVisitClosedWithComments,
 } from '../shared/slack-cleaning';
 import { applyVisitTemplateAutoAssign } from '../shared/visit-template-auto-assign';
+import { getActorEmail } from '../shared/cognito-auth';
+import { ACTION_KEYS } from '../shared/rbac-catalog';
+import { resolvePermissions } from '../shared/rbac-store';
 
 type VisitPayload = {
   id?: string;
@@ -73,6 +76,26 @@ type VisitPayload = {
   }>;
   createdAt?: string;
   updatedAt?: string;
+};
+
+const callerCanAdjustVisitTimes = async (event: {
+  headers?: Record<string, string | string[] | undefined>;
+}) => {
+  const tableName = process.env.RBAC_TABLE_NAME;
+  if (!tableName) {
+    return false;
+  }
+  try {
+    const email = await getActorEmail(event);
+    if (!email || email === 'system') {
+      return true;
+    }
+    const resolved = await resolvePermissions(tableName, email);
+    return resolved.permissions.includes(ACTION_KEYS.dailyOpsAgendaResize);
+  } catch (error) {
+    console.error('Failed to resolve agenda resize permission', error);
+    return false;
+  }
 };
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
@@ -336,6 +359,29 @@ export const handler = async (event: {
       : '');
   if (!mergedScheduledDate) {
     return buildHttpResponse(400, { message: 'scheduledDate is required.' });
+  }
+
+  if (isUpdate && existing) {
+    const nextStart = payload.scheduledStartTime?.trim();
+    const nextEnd = payload.scheduledEndTime?.trim();
+    const currentStart =
+      typeof existing.scheduledStartTime === 'string'
+        ? existing.scheduledStartTime
+        : '';
+    const currentEnd =
+      typeof existing.scheduledEndTime === 'string'
+        ? existing.scheduledEndTime
+        : '';
+    const startChanged = Boolean(nextStart) && nextStart !== currentStart;
+    const endChanged = Boolean(nextEnd) && nextEnd !== currentEnd;
+    if (startChanged || endChanged) {
+      const allowed = await callerCanAdjustVisitTimes(event);
+      if (!allowed) {
+        return buildHttpResponse(403, {
+          message: 'You cannot change visit times from Daily Operations.',
+        });
+      }
+    }
   }
 
   if (

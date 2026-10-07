@@ -120,6 +120,7 @@ export const ACTION_KEYS = {
   dashboardConfigureWidgets: 'action:dashboard.configureWidgets',
   actOnOthersVisits: 'action:visits.actOnOthers',
   cleaningPlanOverrideSchedule: 'action:cleaningPlan.overrideSchedule',
+  dailyOpsAgendaResize: 'action:dailyOps.agendaResize',
 } as const
 
 export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -185,6 +186,10 @@ export const ACTION_DEFINITIONS: { key: string; i18nKey: string }[] = [
     key: ACTION_KEYS.cleaningPlanOverrideSchedule,
     i18nKey: 'rbac.actions.cleaningPlanOverrideSchedule',
   },
+  {
+    key: ACTION_KEYS.dailyOpsAgendaResize,
+    i18nKey: 'rbac.actions.dailyOpsAgendaResize',
+  },
 ]
 
 export const DASHBOARD_CARD_DEFINITIONS: { key: string; i18nKey: string }[] = [
@@ -238,7 +243,7 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 9
+export const PERMISSIONS_CATALOG_VERSION = 10
 
 const ACT_ON_OTHERS_ROLE_IDS = [
   ADMIN_ROLE_ID,
@@ -294,6 +299,33 @@ export const withDefaultCleaningPlanOverride = (
     return permissions
   }
   return [...permissions, ACTION_KEYS.cleaningPlanOverrideSchedule]
+}
+
+const AGENDA_RESIZE_ROLE_IDS = [
+  ADMIN_ROLE_ID,
+  KNOCK_KNOCK_SUPERVISOR_ROLE_ID,
+] as const
+
+/** Roles saved before catalog v10 keep this action only for admin and Knock-Knock supervisor. */
+export const withDefaultDailyOpsAgendaResize = (
+  roleId: string,
+  permissions: string[],
+  storedVersion?: unknown,
+) => {
+  const from =
+    typeof storedVersion === 'number' && Number.isFinite(storedVersion)
+      ? Math.floor(storedVersion)
+      : 1
+  if (from >= 10) {
+    return permissions
+  }
+  if (!(AGENDA_RESIZE_ROLE_IDS as readonly string[]).includes(roleId)) {
+    return permissions
+  }
+  if (permissions.includes(ACTION_KEYS.dailyOpsAgendaResize)) {
+    return permissions
+  }
+  return [...permissions, ACTION_KEYS.dailyOpsAgendaResize]
 }
 
 export const applyPermissionCatalog = (

@@ -15,6 +15,7 @@ import {
   withAdminLockedPages,
   withDefaultActOnOthers,
   withDefaultCleaningPlanOverride,
+  withDefaultDailyOpsAgendaResize,
 } from './rbac-catalog';
 import {
   DEFAULT_TODAY_VIEWS,
@@ -125,12 +126,16 @@ export const toRoleRecord = (item: Record<string, unknown>): RoleRecord => {
   const id = typeof item.id === 'string' ? item.id : '';
   const permissions = withAdminLockedPages(
     id,
-    withDefaultCleaningPlanOverride(
+    withDefaultDailyOpsAgendaResize(
       id,
-      withDefaultActOnOthers(
+      withDefaultCleaningPlanOverride(
         id,
-        applyPermissionCatalog(
-          asStringArray(item.permissions),
+        withDefaultActOnOthers(
+          id,
+          applyPermissionCatalog(
+            asStringArray(item.permissions),
+            item.permissionsCatalogVersion,
+          ),
           item.permissionsCatalogVersion,
         ),
         item.permissionsCatalogVersion,

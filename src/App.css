@@ -5042,6 +5042,11 @@ th {
   overflow: hidden;
 }
 
+.operations-day-visit-block.is-click-expand .operations-day-block-body,
+.operations-day-visit-block.is-click-expand .operations-day-block-body:active {
+  cursor: pointer;
+}
+
 .operations-day-block-body:active {
   cursor: grabbing;
 }

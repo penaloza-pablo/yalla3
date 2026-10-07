@@ -294,6 +294,7 @@ export function VisitDetailModal({
   const [editingDraftIndex, setEditingDraftIndex] = useState<number | null>(null)
   const canCreateTasks = can(ACTION_KEYS.createTasks)
   const canActOnOthers = can(ACTION_KEYS.actOnOthersVisits)
+  const canAdjustAgendaTimes = can(ACTION_KEYS.dailyOpsAgendaResize)
 
   const endpoints = useMemo(
     () => ({
@@ -1750,6 +1751,7 @@ export function VisitDetailModal({
               <input
                 type="time"
                 value={visitForm.scheduledStartTime}
+                disabled={!canAdjustAgendaTimes}
                 onChange={(event) =>
                   setVisitForm((current) =>
                     current
@@ -1764,6 +1766,7 @@ export function VisitDetailModal({
               <input
                 type="time"
                 value={visitForm.scheduledEndTime}
+                disabled={!canAdjustAgendaTimes}
                 onChange={(event) =>
                   setVisitForm((current) =>
                     current

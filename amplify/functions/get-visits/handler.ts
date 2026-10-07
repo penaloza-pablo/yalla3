@@ -13,7 +13,6 @@ import {
   docClient,
   persistVisitStatusIfNeeded,
 } from '../shared/visit-task-utils';
-import { overlayVisitsWithReadyCleaningPlans } from '../shared/cleaning-plan';
 
 type HttpEvent = {
   requestContext?: { http?: { method?: string } };
@@ -106,13 +105,9 @@ export const handler = async (event: HttpEvent) => {
         visitsTable,
         result.Item as Record<string, unknown>,
       );
-      const [withPlanTime] = await overlayVisitsWithReadyCleaningPlans(
-        process.env.CLEANING_PLANS_TABLE,
-        [normalized],
-      );
-      let item: Record<string, unknown> = withPlanTime;
+      let item: Record<string, unknown> = normalized;
       if (tasksTable && includeTaskCounts) {
-        const [withCount] = await enrichWithTaskCounts(tasksTable, [withPlanTime]);
+        const [withCount] = await enrichWithTaskCounts(tasksTable, [normalized]);
         item = withCount;
       }
       return buildHttpResponse(200, { item });
@@ -157,14 +152,10 @@ export const handler = async (event: HttpEvent) => {
           typeof b.scheduledStartTime === 'string' ? b.scheduledStartTime : '';
         return timeA.localeCompare(timeB);
       });
-      const withPlanTimes = await overlayVisitsWithReadyCleaningPlans(
-        process.env.CLEANING_PLANS_TABLE,
-        items,
-      );
       const enriched =
         tasksTable && includeTaskCounts
-          ? await enrichWithTaskCounts(tasksTable, withPlanTimes)
-          : withPlanTimes;
+          ? await enrichWithTaskCounts(tasksTable, items)
+          : items;
       return buildHttpResponse(200, {
         items: enriched,
         count: enriched.length,
@@ -191,13 +182,9 @@ export const handler = async (event: HttpEvent) => {
           ),
         ),
       );
-      const withPlanTimes = await overlayVisitsWithReadyCleaningPlans(
-        process.env.CLEANING_PLANS_TABLE,
-        items,
-      );
       return buildHttpResponse(200, {
-        items: withPlanTimes,
-        count: withPlanTimes.length,
+        items,
+        count: items.length,
         propertyId,
       });
     }

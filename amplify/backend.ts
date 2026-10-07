@@ -1006,6 +1006,8 @@ backend.upsertVisit.addEnvironment(
   'TEMPLATES_TABLE',
   'yalla-visit-templates',
 );
+backend.upsertVisit.addEnvironment('RBAC_TABLE_NAME', rbacTable.tableName);
+rbacTable.grantReadWriteData(backend.upsertVisit.resources.lambda);
 backend.upsertVisit.addEnvironment(
   'AUTO_ASSIGN_TABLE',
   visitTemplateAutoAssignTable.tableName,

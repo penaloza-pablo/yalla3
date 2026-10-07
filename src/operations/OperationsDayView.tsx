@@ -118,6 +118,7 @@ type Props = {
     checkInStartMinutes: number,
   ) => Promise<void> | void
   canCreateVisit?: boolean
+  canAdjustVisitTimes?: boolean
   onCreateVisit?: () => void
   onOpenFilters?: () => void
   activeFilterCount?: number
@@ -154,6 +155,7 @@ export function OperationsDayView({
   onEarlyCheckInChange,
   onCheckInTimeChange,
   canCreateVisit = false,
+  canAdjustVisitTimes = false,
   onCreateVisit,
   onOpenFilters,
   activeFilterCount = 0,
@@ -477,6 +479,7 @@ export function OperationsDayView({
                 propertiesById={propertiesById}
                 teamById={teamById}
                 syncingVisitIds={syncingVisitIds}
+                canAdjustVisitTimes={canAdjustVisitTimes}
                 onToggleMtlGroup={toggleMtlGroup}
                 onVisitClick={onVisitClick}
                 onVisitTimeChange={onVisitTimeChange}
@@ -574,6 +577,7 @@ type DayPropertyRowProps = {
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
+  canAdjustVisitTimes: boolean
   onCheckInLayoutChange: (
     booking: DayBookingEvent,
     layout: StoredCheckInLayout,
@@ -591,6 +595,7 @@ function DayPropertyRow({
   onToggleMtlGroup,
   onVisitClick,
   onVisitTimeChange,
+  canAdjustVisitTimes,
   onCheckInLayoutChange,
   onBookingClick,
 }: DayPropertyRowProps) {
@@ -760,6 +765,7 @@ function DayPropertyRow({
           }}
           onVisitClick={onVisitClick}
           onVisitTimeChange={onVisitTimeChange}
+          canAdjustVisitTimes={canAdjustVisitTimes}
           onCheckInLayoutChange={onCheckInLayoutChange}
           onBookingClick={onBookingClick}
         />
@@ -789,6 +795,7 @@ type DayTimelineTrackProps = {
     scheduledStartTime: string,
     scheduledEndTime: string,
   ) => void
+  canAdjustVisitTimes: boolean
   onCheckInLayoutChange: (
     booking: DayBookingEvent,
     layout: StoredCheckInLayout,
@@ -823,6 +830,7 @@ function DayTimelineTrack({
   onExpandOverlapCluster,
   onVisitClick,
   onVisitTimeChange,
+  canAdjustVisitTimes,
   onCheckInLayoutChange,
   onBookingClick,
 }: DayTimelineTrackProps) {
@@ -962,7 +970,12 @@ function DayTimelineTrack({
     mode: DragMode,
   ) => {
     const visit = entry.visit
-    if (isTerminalVisit(visit) || syncingVisitIds.has(visit.id) || entry.isSameTeamMerge) {
+    if (
+      !canAdjustVisitTimes ||
+      isTerminalVisit(visit) ||
+      syncingVisitIds.has(visit.id) ||
+      entry.isSameTeamMerge
+    ) {
       return
     }
     const hitsOverlap = compact
@@ -1082,7 +1095,11 @@ function DayTimelineTrack({
             syncingVisitIds={syncingVisitIds}
             previewRange={previewRange}
             expandMtlOnVisitClick={expandMtlOnVisitClick}
-            lockDrag={expandMtlOnVisitClick || entry.isSameTeamMerge}
+            lockDrag={
+              !canAdjustVisitTimes ||
+              expandMtlOnVisitClick ||
+              entry.isSameTeamMerge
+            }
             beginDrag={beginDrag}
             handleBlockClick={handleBlockClick}
           />

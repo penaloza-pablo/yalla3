@@ -250,6 +250,7 @@ const asPlanScheduleItems = (value: unknown) =>
       )
     : [];
 
+/** Applies a closed plan's hours onto a visit. Daily Ops must not use this for display: the closed plan stays a snapshot, and the agenda shows the visit clock. */
 export const overlayVisitWithCleaningPlanItem = (
   visit: Record<string, unknown>,
   planItem?: Record<string, unknown>,
