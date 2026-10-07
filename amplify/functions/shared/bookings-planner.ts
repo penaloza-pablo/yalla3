@@ -394,6 +394,19 @@ export const isPropertyExcluded = (rule: PlannerRule, listingId: string) => {
   return rule.excludedPropertyIds.includes(id);
 };
 
+/** Excluded listings still get "Sin tarjeta" after freeze if the field is empty. */
+export const shouldFillExcludedGiftCardOff = (
+  item: BookingPlannerItem,
+  settings: PlannerSettings,
+) => {
+  const giftRule = getPlannerRule(settings, 'giftCard');
+  return (
+    giftRule.enabled &&
+    isPropertyExcluded(giftRule, asString(item.ListingID)) &&
+    !asString(item.GiftCard)
+  );
+};
+
 export const formatGiftCardValue = (guestCount: number, checkOutDate: string) => {
   const date = toDateOnly(checkOutDate);
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -915,7 +928,7 @@ export const computePlannerFields = ({
 
   if (giftRule.enabled) {
     if (isPropertyExcluded(giftRule, listingId)) {
-      if (!notesFrozen) {
+      if (!notesFrozen || !giftCard) {
         giftCard = GIFT_CARD_OFF;
         giftCardOn = false;
       }

@@ -679,7 +679,7 @@ async function applyPlannerInline(item) {
   }
 
   if (giftRule.enabled && giftRule.excluded.includes(listingId)) {
-    if (!notesFrozen) {
+    if (!notesFrozen || !giftCard) {
       giftCard = GIFT_CARD_OFF;
       giftCardOn = false;
     }
@@ -705,6 +705,7 @@ async function applyPlannerInline(item) {
   }
 
   if (notesFrozen) {
+    const currentGiftCard = String(item.GiftCard?.S || "");
     const currentWarnings = (item.PlannerWarnings?.L || [])
       .map((value) => value?.S)
       .filter(Boolean)
@@ -712,14 +713,16 @@ async function applyPlannerInline(item) {
       .sort()
       .join("|");
     const nextWarnings = warnings.slice().sort().join("|");
-    if (currentWarnings === nextWarnings) {
+    if (currentGiftCard === giftCard && currentWarnings === nextWarnings) {
       return;
     }
     await ddb.send(new UpdateItemCommand({
       TableName: TABLE_NAME,
       Key: { ReservationID: item.ReservationID },
-      UpdateExpression: "SET PlannerWarnings = :warnings, PlannerWarningCount = :count, UpdatedAt = :updatedAt",
+      UpdateExpression: "SET GiftCard = :giftCard, GiftCardOn = :giftCardOn, PlannerWarnings = :warnings, PlannerWarningCount = :count, UpdatedAt = :updatedAt",
       ExpressionAttributeValues: {
+        ":giftCard": s(giftCard),
+        ":giftCardOn": { BOOL: giftCardOn === true },
         ":warnings": { L: warnings.map((code) => ({ S: code })) },
         ":count": n(warnings.length),
         ":updatedAt": s(new Date().toISOString())

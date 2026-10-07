@@ -15,6 +15,7 @@ import {
   normalizePlannerSettings,
   plannerFieldsChanged,
   plannerStateChanged,
+  shouldFillExcludedGiftCardOff,
   shouldWritePlannerToGuesty,
   toDateOnly,
 } from './bookings-planner';
@@ -332,12 +333,14 @@ export const applyPlannerToReservation = async ({
     !overrides &&
     isGiftCardFrozen(toDateOnly(current.CheckInDate), today, nowTime);
   const original = hydrated as BookingPlannerItem;
+  const giftCardNotesFrozen =
+    notesFrozen && !shouldFillExcludedGiftCardOff(original, settings);
   const fieldsChanged = plannerFieldsChanged(original, patch);
   const stateChanged = plannerStateChanged(original, patch);
   const hasOverrides = Boolean(overrides);
   const canTouchGuesty =
     syncGuesty &&
-    !notesFrozen &&
+    !giftCardNotesFrozen &&
     (hasOverrides ||
       (settings.plannerEnabled &&
         isInPlannerWindow(toDateOnly(current.CheckInDate), today)));
@@ -365,7 +368,7 @@ export const applyPlannerToReservation = async ({
   }
   const shouldWriteGuesty = shouldWritePlannerToGuesty({
     syncGuesty,
-    notesFrozen,
+    notesFrozen: giftCardNotesFrozen,
     status: current.Status,
     plannerEnabled: settings.plannerEnabled,
     inWindow: isInPlannerWindow(toDateOnly(current.CheckInDate), today),

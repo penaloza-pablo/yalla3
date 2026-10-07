@@ -135,6 +135,53 @@ test('freezes gift card and sofa from 08:00 on check-in day', () => {
   assert.equal(patch.linen, LINEN_VALUES.NO);
 });
 
+test('excluded listings get Sin tarjeta after freeze when gift card is empty', () => {
+  const settings = {
+    ...enabledSettings,
+    rules: enabledSettings.rules.map((rule) =>
+      rule.id === 'giftCard'
+        ? { ...rule, excludedPropertyIds: ['listing-open'] }
+        : rule,
+    ),
+  };
+  const patch = computePlannerFields({
+    item: {
+      ...baseItem,
+      CheckInDate: '2026-09-15',
+      GiftCard: '',
+      GiftCardOn: true,
+    },
+    settings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(patch.giftCard, GIFT_CARD_OFF);
+  assert.equal(patch.giftCardOn, false);
+});
+
+test('excluded listings keep an existing gift card after freeze', () => {
+  const settings = {
+    ...enabledSettings,
+    rules: enabledSettings.rules.map((rule) =>
+      rule.id === 'giftCard'
+        ? { ...rule, excludedPropertyIds: ['listing-open'] }
+        : rule,
+    ),
+  };
+  const patch = computePlannerFields({
+    item: {
+      ...baseItem,
+      CheckInDate: '2026-09-15',
+      GiftCard: '2 - 20/09',
+      GiftCardOn: true,
+    },
+    settings,
+    today: '2026-09-15',
+    nowTime: '10:00',
+  });
+  assert.equal(patch.giftCard, '2 - 20/09');
+});
+
 test('updates gift card before 08:00 on check-in day', () => {
   const patch = computePlannerFields({
     item: {
