@@ -177,6 +177,7 @@ export type CleaningBillingLine = {
   price: number | null
   isOther: boolean
   isManual: boolean
+  qualityReview: boolean
   warnings: CleaningBillingWarning[]
   cleaningTypes: PropertyCleaningType[]
   distributionId?: string

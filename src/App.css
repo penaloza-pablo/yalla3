@@ -408,7 +408,8 @@
   flex-shrink: 0;
 }
 
-.page-title-row .cleaning-status-tag {
+.page-title-row .cleaning-status-tag,
+.page-title-row .status {
   flex-shrink: 0;
 }
 

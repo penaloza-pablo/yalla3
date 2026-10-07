@@ -64,6 +64,7 @@ export type BillingLine = {
   price: number | null;
   isOther: boolean;
   isManual: boolean;
+  qualityReview: boolean;
   warnings: BillingWarning[];
   cleaningTypes: CleaningTypeRecord[];
   distributionId?: string;
@@ -293,6 +294,7 @@ const linesForMonth = (
       price,
       isOther,
       isManual: false,
+      qualityReview: Boolean(planItem?.qualityReview),
       warnings: warningsForLine(base),
       cleaningTypes: types,
       ...(persistedKit
@@ -323,6 +325,7 @@ const linesForMonth = (
         price: base.price,
         isOther: item.isOther,
         isManual: true,
+        qualityReview: false,
         warnings: warningsForLine(base),
         cleaningTypes: types,
         ...(item.distributionId ? { distributionId: item.distributionId } : {}),
@@ -361,7 +364,55 @@ const snapshotLinesOf = (stored?: Record<string, unknown>) => {
   }
   return (stored.snapshotLines as BillingLine[]).map((line) => ({
     ...line,
+    qualityReview: Boolean(line.qualityReview),
     kit: kitFromUnknown(line.kit),
+  }));
+};
+
+const qualityReviewByVisitId = async (
+  lines: BillingLine[],
+  plansTable: string,
+) => {
+  const dates = [
+    ...new Set(
+      lines
+        .filter((line) => line.source === 'visit' && line.date)
+        .map((line) => line.date),
+    ),
+  ];
+  const plans = await Promise.all(
+    dates.map(
+      async (date) => [date, await getPlanByDate(plansTable, date)] as const,
+    ),
+  );
+  const byVisitId = new Map<string, boolean>();
+  for (const [, plan] of plans) {
+    const items = Array.isArray(plan?.items) ? plan.items : [];
+    for (const entry of items) {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      const visitId = asString(item.visitId);
+      if (visitId) {
+        byVisitId.set(visitId, Boolean(item.qualityReview));
+      }
+    }
+  }
+  return byVisitId;
+};
+
+const withPlanQualityReview = async (
+  lines: BillingLine[],
+  plansTable: string,
+) => {
+  if (!plansTable || lines.length === 0) {
+    return lines;
+  }
+  const reviews = await qualityReviewByVisitId(lines, plansTable);
+  return lines.map((line) => ({
+    ...line,
+    qualityReview:
+      line.source === 'visit'
+        ? (reviews.get(line.visitId) ?? Boolean(line.qualityReview))
+        : false,
   }));
 };
 
@@ -450,11 +501,12 @@ export const buildMonthDetail = async (params: {
   const today = getTodayInMadrid();
 
   if (status === 'CLOSED') {
+    const snapshot = snapshotLinesOf(stored).filter((line) =>
+      matchesPropertyScope(line.propertyId, propertyIds),
+    );
     return {
       month: closedMonthView(monthId, stored),
-      lines: snapshotLinesOf(stored).filter((line) =>
-        matchesPropertyScope(line.propertyId, propertyIds),
-      ),
+      lines: await withPlanQualityReview(snapshot, plansTable),
       stored,
     };
   }

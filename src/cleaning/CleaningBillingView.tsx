@@ -150,6 +150,7 @@ const mapLine = (item: Record<string, unknown>): CleaningBillingLine => ({
     item.price === null || item.price === undefined ? null : Number(item.price),
   isOther: Boolean(item.isOther),
   isManual: Boolean(item.isManual) || item.source === 'manual',
+  qualityReview: Boolean(item.qualityReview),
   distributionId:
     typeof item.distributionId === 'string' && item.distributionId.trim()
       ? item.distributionId.trim()
@@ -467,6 +468,11 @@ export function CleaningBillingView({
     return sum + distributionTotal(row.members)
   }, 0)
 
+  const visitLines = filteredLines.filter((line) => line.source === 'visit')
+  const cleaningJobsTotal = visitLines.length
+  const cleaningJobsReviewed = visitLines.filter((line) => line.qualityReview).length
+  const extraJobsCount = filteredLines.filter((line) => line.source === 'manual').length
+
   const draftTypes: PropertyCleaningType[] = draft.visitId
     ? lines.find((line) => line.id === draft.lineId)?.cleaningTypes ?? []
     : detailsByPropertyId.get(draft.propertyId)?.cleaningTypes ?? []
@@ -726,6 +732,17 @@ export function CleaningBillingView({
 
   const visitStatusLabel = (status: string) => translateVisitStatus(t, status)
 
+  const statusTagClass = (
+    status: CleaningBillingMonth['status'],
+    canClose?: boolean,
+  ) => {
+    if (status === 'CURRENT') return 'status-info'
+    if (status === 'PENDING_TO_CLOSE') {
+      return canClose ? 'status-success' : 'status-warning'
+    }
+    return 'status-neutral'
+  }
+
   return (
     <>
       <header className="page-header">
@@ -756,6 +773,13 @@ export function CleaningBillingView({
                 ? formatMonthLabel(selectedMonthId)
                 : t('pages.Cleaning Billing')}
             </h1>
+            {selectedMonthId && month ? (
+              <span
+                className={`status ${statusTagClass(month.status, month.canClose)}`}
+              >
+                {statusLabel(month.status, month.canClose)}
+              </span>
+            ) : null}
             <button
               type="button"
               className={`btn-page-info ${isSummaryInfoOpen ? 'is-active' : ''}`}
@@ -859,11 +883,6 @@ export function CleaningBillingView({
         <section
           className={`summary-cards ${canSeePrices ? 'summary-cards-4' : ''} ${isSummaryInfoOpen ? 'is-open' : ''}`}
         >
-          <div className="card card-compact">
-            <p className="card-label">{t('cleaningBilling.status')}</p>
-            <p className="card-value">{statusLabel(month.status, month.canClose)}</p>
-            <p className="card-meta">{t('cleaningBilling.statusMeta')}</p>
-          </div>
           {canSeePrices ? (
             <div className="card card-compact">
               <p className="card-label">{t('cleaningBilling.totalCard')}</p>
@@ -872,9 +891,19 @@ export function CleaningBillingView({
             </div>
           ) : null}
           <div className="card card-compact">
-            <p className="card-label">{t('cleaningBilling.recordsCard')}</p>
-            <p className="card-value">{displayRows.length}</p>
-            <p className="card-meta">{t('cleaningBilling.recordsCardMeta')}</p>
+            <p className="card-label">{t('cleaningBilling.cleaningJobsCard')}</p>
+            <p className="card-value">
+              {t('cleaningBilling.cleaningJobsOf', {
+                reviewed: cleaningJobsReviewed,
+                total: cleaningJobsTotal,
+              })}
+            </p>
+            <p className="card-meta">{t('cleaningBilling.cleaningJobsCardMeta')}</p>
+          </div>
+          <div className="card card-compact">
+            <p className="card-label">{t('cleaningBilling.extraJobsCard')}</p>
+            <p className="card-value">{extraJobsCount}</p>
+            <p className="card-meta">{t('cleaningBilling.extraJobsCardMeta')}</p>
           </div>
           <div className="card card-compact">
             <p className="card-label">{t('cleaningBilling.warningsCard')}</p>
