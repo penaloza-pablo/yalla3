@@ -36,7 +36,7 @@ test('restricted start times stay between 11:00 and 16:00', () => {
 })
 
 test('catalog v8 grants the override only to admin and Knock-Knock supervisor by default', () => {
-  assert.equal(PERMISSIONS_CATALOG_VERSION, 10)
+  assert.equal(PERMISSIONS_CATALOG_VERSION, 11)
   assert.equal(allPermissionKeys().includes(key), true)
   assert.equal(
     withDefaultCleaningPlanOverride(ADMIN_ROLE_ID, ['page:Cleaning Plan'], 7).includes(key),

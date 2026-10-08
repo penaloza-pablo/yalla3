@@ -195,6 +195,21 @@ export const completionDateForVisit = (visit: Record<string, unknown>) => {
   return typeof visit.scheduledDate === 'string' ? visit.scheduledDate.trim() : '';
 };
 
+export const isOpenVisitScheduledInWindow = (
+  scheduledDate: string,
+  status: string,
+  today: string,
+  horizon: string,
+) => {
+  const date = scheduledDate.trim();
+  if (!date) {
+    return false;
+  }
+  const normalized = normalizeStatus(status);
+  const isOpen = normalized !== 'COMPLETED' && normalized !== 'CANCELLED';
+  return isOpen && date >= today && date <= horizon;
+};
+
 export const statusForRule = (
   rule: JobSchedulerRule,
   lastVisit: Record<string, unknown> | undefined,
@@ -348,12 +363,7 @@ export const collectSchedulerPropertyStatus = async (
     ) {
       upcomingSet.add(scheduledDate);
     }
-    const isOpen = status !== 'COMPLETED' && status !== 'CANCELLED';
-    if (
-      isOpen &&
-      scheduledDate > today &&
-      scheduledDate <= horizon
-    ) {
+    if (isOpenVisitScheduledInWindow(scheduledDate, status, today, horizon)) {
       for (const rule of rules) {
         if (!visitMatchesRule(visit, rule, templatesById)) {
           continue;

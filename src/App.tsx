@@ -86,6 +86,7 @@ import { AgentsPanel } from './agents/AgentsPanel'
 import { RuntimePanel } from './agents/RuntimePanel'
 import { ToolsStudio } from './agents/ToolsStudio'
 import { GlobalVariablesView } from './settings/GlobalVariablesView'
+import { YallaServicesView } from './settings/YallaServicesView'
 import { usePermissions } from './rbac/PermissionsProvider'
 import {
   DashboardNavContext,
@@ -9113,6 +9114,8 @@ function App() {
           />
         ) : activePage === 'Slack' ? (
           <SlackPanel getEndpoint={getEndpoint} />
+        ) : activePage === 'Yalla Services' ? (
+          <YallaServicesView getEndpoint={getEndpoint} />
         ) : activePage === 'Agent Catalog' || activePage === 'Agents' ? (
           <AgentsPanel getEndpoint={getEndpoint} />
         ) : activePage === 'Tools' ? (

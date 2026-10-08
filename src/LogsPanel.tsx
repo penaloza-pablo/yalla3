@@ -74,6 +74,7 @@ const FEATURE_OPTIONS = [
   'Movements',
   'Services & Subscriptions',
   'Slack',
+  'Yalla Services',
   'Agent Studio',
 ] as const
 

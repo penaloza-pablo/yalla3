@@ -696,6 +696,7 @@ export const PAGE_ICON: Record<string, YlIconName> = {
   Users: 'person.crop.circle',
   Roles: 'person.2',
   Slack: 'bubble.left',
+  'Yalla Services': 'checkmark.circle',
   'Agent Catalog': 'star',
   Tools: 'wrench.and.screwdriver',
   'Agent Runtime': 'clock',

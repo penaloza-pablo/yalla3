@@ -32,6 +32,7 @@ export const LOG_FEATURES = {
   MOVEMENTS: 'Movements',
   SERVICES: 'Services & Subscriptions',
   SLACK: 'Slack',
+  YALLA_SERVICES: 'Yalla Services',
   AGENTS: 'Agents',
   AGENT_STUDIO: 'Agent Studio',
 } as const;

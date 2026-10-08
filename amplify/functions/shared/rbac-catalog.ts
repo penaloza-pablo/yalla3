@@ -50,7 +50,7 @@ export const NAVIGATION: NavGroup[] = [
   },
   {
     section: 'Settings',
-    items: ['Logs', 'Users', 'Roles', 'Slack', 'Global Variables'],
+    items: ['Logs', 'Users', 'Roles', 'Slack', 'Yalla Services', 'Global Variables'],
   },
   {
     section: 'Agent Studio',
@@ -243,7 +243,7 @@ export const ADMIN_LOCKED_PAGES = ['Roles'] as const
 export const isAdminLockedPage = (page: string) =>
   (ADMIN_LOCKED_PAGES as readonly string[]).includes(page)
 
-export const PERMISSIONS_CATALOG_VERSION = 10
+export const PERMISSIONS_CATALOG_VERSION = 11
 
 const ACT_ON_OTHERS_ROLE_IDS = [
   ADMIN_ROLE_ID,
@@ -407,6 +407,16 @@ export const applyPermissionCatalog = (
       if (!next.includes(pagePermission(page))) {
         next.push(pagePermission(page))
       }
+    }
+  }
+  if (from < 11) {
+    const hasAdminSettings =
+      next.includes(pagePermission('Slack')) ||
+      next.includes(pagePermission('Logs')) ||
+      next.includes(pagePermission('Roles')) ||
+      next.includes(pagePermission('Global Variables'))
+    if (hasAdminSettings && !next.includes(pagePermission('Yalla Services'))) {
+      next.push(pagePermission('Yalla Services'))
     }
   }
   return next

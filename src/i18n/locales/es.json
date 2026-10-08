@@ -565,6 +565,70 @@
       "calendarADR": "Tarifa media de alojamiento. No es el pago medio del huésped. Solo usa noches con alojamiento identificado y deja fuera las estancias gratuitas."
     }
   },
+  "yallaServices": {
+    "eyebrow": "Administración / Yalla Services",
+    "subtitle": "Diagnóstico de servicios críticos a las 08:00, 14:00 y 20:00 (Madrid). Si un servicio monitorizado falla, se avisa en #yalla-warnings.",
+    "loading": "Cargando servicios...",
+    "missingEndpoint": "Falta el endpoint de Yalla Services. Vuelve a desplegar el backend.",
+    "missingDiagnose": "Falta el endpoint de diagnóstico. Vuelve a desplegar el backend.",
+    "loadError": "No se pudieron cargar los servicios.",
+    "diagnoseError": "No se pudo ejecutar el diagnóstico.",
+    "diagnoseNow": "Diagnosticar ahora",
+    "diagnosing": "Diagnosticando...",
+    "diagnosed": "Diagnóstico ejecutado.",
+    "okCard": "Operativos",
+    "okCardMeta": "Servicios monitorizados en estado correcto",
+    "errorCard": "Con error",
+    "errorCardMeta": "Requieren atención inmediata",
+    "scheduleCard": "Horario",
+    "scheduleCardMeta": "Europe/Madrid, tres veces al día",
+    "monitoredTitle": "Servicios monitorizados",
+    "monitoredHelp": "Estos chequeos se ejecutan a las 08:00, 14:00 y 20:00. Si uno falla, se avisa en #yalla-warnings.",
+    "proposedTitle": "Propuestos (pendiente de aprobación)",
+    "proposedHelp": "No se diagnostican todavía. Indica cuáles tienen sentido incluir.",
+    "emptyMonitored": "No hay servicios monitorizados.",
+    "service": "Servicio",
+    "validation": "Método de validación",
+    "lastCheck": "Último diagnóstico",
+    "statusOk": "Operativo",
+    "statusError": "Error",
+    "statusUnknown": "Sin diagnóstico",
+    "statusProposed": "Propuesto",
+    "items": {
+      "guesty-bookings-receiver": {
+        "name": "Guesty → Yalla (reservas)",
+        "validation": "Lee el estado de la Lambda yalla-bookingsReceiver e invoca un POST vacío. Está operativo si arranca y responde 400 Missing ReservationID o 401 Unauthorized. Un Init Error (módulo ausente) se marca como caída."
+      },
+      "guesty-openapi": {
+        "name": "Conexión Guesty Open API",
+        "validation": "Autentica contra Guesty Open API y hace un GET ligero (listings o token). Exige HTTP 200; un 401 o 5xx indica que Yalla no puede hablar con Guesty."
+      },
+      "guesty-tasks-receiver": {
+        "name": "Guesty → Yalla (tareas)",
+        "validation": "Igual que el receptor de reservas: configuración de yalla-tasksReceiver más un Invoke POST vacío. Debe arrancar y rechazar el payload sin Init Error."
+      },
+      "yalla-sync-task-to-guesty": {
+        "name": "Yalla → Guesty (tareas)",
+        "validation": "Comprueba que yalla-syncTaskToGuesty está Active y que un invoke de sonda no devuelve Unhandled. Cubre el camino inverso de tareas hacia Guesty."
+      },
+      "slack-bot": {
+        "name": "Bot de Slack",
+        "validation": "Llama auth.test con el token de yalla/slack. Si el bot no autentica, no salen avisos a #yalla-warnings ni el resto de automatizaciones."
+      },
+      "check-in-access-cron": {
+        "name": "Cron de acceso y avisos de visita",
+        "validation": "Comprueba que NotifyCleaningOverdue está Active. No se invoca el cron para no disparar avisos; un estado distinto de Active se marca como caída."
+      },
+      "akiles-lock-events": {
+        "name": "Cerraduras Akiles",
+        "validation": "Comprueba que receive-akiles-events está Active y que un POST de sonda no produce Init Error, o que ha llegado un evento reciente."
+      },
+      "dynamodb-ops-tables": {
+        "name": "Tablas operativas DynamoDB",
+        "validation": "DescribeTable de yalla-bookings, yalla-visits y tablas hermanas. Deben estar ACTIVE; ResourceNotFound u otro estado se marca como error."
+      }
+    }
+  },
   "cases": {
     "eyebrow": "Ops / Cases",
     "subtitle": "Situaciones que agrupan tareas, visitas y gastos hasta que dejan de repetirse.",
@@ -684,6 +748,7 @@
     "Agent Catalog": "Catálogo de agentes",
     "Tools": "Tools",
     "Agent Runtime": "Agent Runtime",
+    "Yalla Services": "Yalla Services",
     "Global Variables": "Variables globales",
     "Tech solution 2": "Solución Tech 2",
     "Tech solution 3": "Solución Tech 3",
@@ -858,6 +923,7 @@
     "Users": "Usuarios",
     "Roles": "Roles",
     "Slack": "Slack",
+    "Yalla Services": "Yalla Services",
     "Agents": "Agentes",
     "Agent Catalog": "Catálogo",
     "Tools": "Tools",
@@ -2305,6 +2371,10 @@
       "notify_booking_plan_warning_cleared": {
         "name": "Booking Plan warning resuelto por agente",
         "description": "Avisa en #yalla-warnings cuando el agente Booking Plan Warning Cleaner escribe un campo del plan (sofá cama, cama doble/individual o 1 guest) porque el huésped lo confirmó en el chat."
+      },
+      "notify_yalla_services_health": {
+        "name": "Yalla Services no operativo",
+        "description": "A las 08:00, 14:00 y 20:00 (Madrid) diagnostica los servicios críticos. Si alguno falla, avisa en #yalla-warnings con el error encontrado."
       }
     }
   },
