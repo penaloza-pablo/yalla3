@@ -37,7 +37,8 @@ import {
 } from '../../amplify/functions/shared/property-identity'
 import { sortVisitTypes } from './visitTypeHelpers'
 import { appendUrgentTaskTitles } from '../../amplify/functions/shared/visit-title'
-import { isCleaningVisitType, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
+import { isCleaningVisitType, isInventoryVisitType, isMaintenanceVisitType, requiresCompleteVisitWizard, resolveTeamIdForVisitType } from './visitTypeIds'
+import { isStartTimeWithinRestrictedWindow } from '../../amplify/functions/shared/cleaning-plan-edit-policy'
 import { VisitTemplatesPanel, type VisitTemplatesPanelHandle } from './VisitTemplatesPanel'
 import { VisitUseTemplateControls } from './VisitUseTemplateControls'
 import { CollapsibleVisitTasks } from './CollapsibleVisitTasks'
@@ -65,6 +66,7 @@ import {
 import type { DashboardNavigateOptions } from '../dashboard/dashboard-navigation'
 import {
   linkedPersonById,
+  mapLinkedOpsPerson,
   yallaUserLabel,
   type LinkedOpsPerson,
 } from './planAssignee'
@@ -191,6 +193,7 @@ const emptyVisitForm = () => ({
   visitTypeId: '',
   teamId: '',
   assignedUserId: '',
+  planAssigneeId: '',
   scheduledDate: getTodayMadrid(),
   scheduledStartTime: '11:00',
   scheduledEndTime: '12:00',
@@ -200,6 +203,192 @@ const emptyVisitForm = () => ({
   estimatedDurationMinutes: '',
   appliesToHourBank: false,
 })
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+
+const sortLinkedPeople = (people: LinkedOpsPerson[]) =>
+  [...people].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  )
+
+const activeLinkedPeople = (items: Record<string, unknown>[]) =>
+  sortLinkedPeople(
+    items
+      .filter((item) => item.active !== false)
+      .map(mapLinkedOpsPerson)
+      .filter((entry): entry is LinkedOpsPerson => Boolean(entry)),
+  )
+
+const planAssigneeKindForVisitType = (
+  visitTypeId: string,
+  visitType: VisitTypeRecord | undefined,
+  teams: TeamRecord[],
+): 'cleaner' | 'agent' | null => {
+  if (!visitTypeId) {
+    return null
+  }
+  if (isCleaningVisitType(visitTypeId)) {
+    return 'cleaner'
+  }
+  if (
+    isMaintenanceVisitType(visitTypeId) ||
+    isInventoryVisitType(visitTypeId, visitType?.name)
+  ) {
+    return 'agent'
+  }
+  const teamId = resolveTeamIdForVisitType(visitType, teams, '')
+  const teamName =
+    teams.find((team) => team.id === teamId)?.name.toLowerCase() ?? ''
+  if (teamName.includes('clean')) {
+    return 'cleaner'
+  }
+  if (teamName.includes('maintenance') || teamName.includes('manten')) {
+    return 'agent'
+  }
+  return null
+}
+
+const fetchPlanForDate = (endpoint: string, date: string) =>
+  fetchJson<{ status?: string; rows?: Record<string, unknown>[] }>(
+    `${endpoint}?date=${encodeURIComponent(date)}`,
+    { cache: 'no-store' },
+  )
+
+const waitForVisitOnPlan = async (
+  endpoint: string,
+  date: string,
+  visitId: string,
+) => {
+  let payload = await fetchPlanForDate(endpoint, date)
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const found = (payload.rows ?? []).some(
+      (row) => String(row.visitId ?? '').trim() === visitId,
+    )
+    if (found) {
+      return payload
+    }
+    await delay(400 * (attempt + 1))
+    payload = await fetchPlanForDate(endpoint, date)
+  }
+  return payload
+}
+
+const saveAssignedVisitOnPlan = async (input: {
+  kind: 'cleaner' | 'agent'
+  visit: VisitRecord
+  assigneeId: string
+  cleaningPlan?: string
+  upsertCleaningPlan?: string
+  maintenancePlan?: string
+  upsertMaintenancePlan?: string
+}) => {
+  const { kind, visit, assigneeId } = input
+  const date = visit.scheduledDate.trim()
+  if (!date || !assigneeId || !visit.id) {
+    return
+  }
+
+  if (kind === 'cleaner') {
+    if (!input.cleaningPlan || !input.upsertCleaningPlan) {
+      return
+    }
+    const payload = await waitForVisitOnPlan(input.cleaningPlan, date, visit.id)
+    if (String(payload.status ?? '').toUpperCase() === 'READY') {
+      return
+    }
+    const rows = [...(payload.rows ?? [])]
+    const existingIndex = rows.findIndex(
+      (row) => String(row.visitId ?? '').trim() === visit.id,
+    )
+    const startTimeCandidate = visit.scheduledStartTime.trim()
+    const startTime = isStartTimeWithinRestrictedWindow(startTimeCandidate)
+      ? startTimeCandidate
+      : ''
+    const nextRow = {
+      visitId: visit.id,
+      cleanerId: assigneeId,
+      startTime:
+        existingIndex >= 0
+          ? String(rows[existingIndex].startTime ?? '').trim() || startTime
+          : startTime,
+      qualityReview:
+        existingIndex >= 0 ? Boolean(rows[existingIndex].qualityReview) : false,
+      cleaningTypeId:
+        existingIndex >= 0
+          ? String(rows[existingIndex].cleaningTypeId ?? '').trim()
+          : '',
+    }
+    if (existingIndex >= 0) {
+      rows[existingIndex] = { ...rows[existingIndex], ...nextRow }
+    } else {
+      rows.push(nextRow)
+    }
+    await fetchJson(input.upsertCleaningPlan, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        plannedDate: date,
+        action: 'save',
+        items: rows.map((row) => ({
+          visitId: String(row.visitId ?? '').trim(),
+          cleanerId: String(row.cleanerId ?? '').trim(),
+          startTime: String(row.startTime ?? '').trim(),
+          qualityReview: Boolean(row.qualityReview),
+          cleaningTypeId: String(row.cleaningTypeId ?? '').trim(),
+        })),
+      }),
+    })
+    return
+  }
+
+  if (!input.maintenancePlan || !input.upsertMaintenancePlan) {
+    return
+  }
+  const payload = await waitForVisitOnPlan(input.maintenancePlan, date, visit.id)
+  if (String(payload.status ?? '').toUpperCase() === 'READY') {
+    return
+  }
+  const rows = [...(payload.rows ?? [])]
+  const existingIndex = rows.findIndex(
+    (row) => String(row.visitId ?? '').trim() === visit.id,
+  )
+  const nextRow = {
+    visitId: visit.id,
+    agentId: assigneeId,
+    startTime:
+      existingIndex >= 0
+        ? String(rows[existingIndex].startTime ?? '').trim() ||
+          visit.scheduledStartTime.trim()
+        : visit.scheduledStartTime.trim(),
+    endTime:
+      existingIndex >= 0
+        ? String(rows[existingIndex].endTime ?? '').trim() ||
+          visit.scheduledEndTime.trim()
+        : visit.scheduledEndTime.trim(),
+  }
+  if (existingIndex >= 0) {
+    rows[existingIndex] = { ...rows[existingIndex], ...nextRow }
+  } else {
+    rows.push(nextRow)
+  }
+  await fetchJson(input.upsertMaintenancePlan, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      plannedDate: date,
+      action: 'save',
+      items: rows.map((row) => ({
+        visitId: String(row.visitId ?? '').trim(),
+        agentId: String(row.agentId ?? '').trim(),
+        startTime: String(row.startTime ?? '').trim(),
+        endTime: String(row.endTime ?? '').trim(),
+      })),
+    }),
+  })
+}
 
 const emptyTaskForm = () => ({
   id: '',
@@ -452,6 +641,8 @@ export function DailyOperationsView({
   const [agentById, setAgentById] = useState<Map<string, LinkedOpsPerson>>(
     () => new Map(),
   )
+  const [cleanerOptions, setCleanerOptions] = useState<LinkedOpsPerson[]>([])
+  const [agentOptions, setAgentOptions] = useState<LinkedOpsPerson[]>([])
   const [sessionEmail, setSessionEmail] = useState('')
   const [internalDashboardViewMode, setInternalDashboardViewMode] =
     useState<TodayViewMode>('board')
@@ -540,6 +731,16 @@ export function DailyOperationsView({
   const [commentsDraft, setCommentsDraft] = useState('')
 
   const isCreatingVisit = !visitForm.id
+  const createVisitPlanAssigneeKind = useMemo(() => {
+    if (!isCreatingVisit) {
+      return null
+    }
+    return planAssigneeKindForVisitType(
+      visitForm.visitTypeId,
+      visitTypes.find((entry) => entry.id === visitForm.visitTypeId),
+      teams,
+    )
+  }, [isCreatingVisit, teams, visitForm.visitTypeId, visitTypes])
   const isCreatingTask = !taskForm.id
   const canCreateTasks = can(ACTION_KEYS.createTasks)
   const canActOnOthers = can(ACTION_KEYS.actOnOthersVisits)
@@ -606,6 +807,10 @@ export function DailyOperationsView({
         'getCleanersUrl',
         import.meta.env.VITE_GET_CLEANERS_URL,
       ),
+      upsertCleaningPlan: getEndpoint(
+        'upsertCleaningPlanUrl',
+        import.meta.env.VITE_UPSERT_CLEANING_PLAN_URL,
+      ),
       maintenancePlan: getEndpoint(
         'getMaintenancePlanUrl',
         import.meta.env.VITE_GET_MAINTENANCE_PLAN_URL,
@@ -613,6 +818,10 @@ export function DailyOperationsView({
       maintenanceAgents: getEndpoint(
         'getMaintenanceAgentsUrl',
         import.meta.env.VITE_GET_MAINTENANCE_AGENTS_URL,
+      ),
+      upsertMaintenancePlan: getEndpoint(
+        'upsertMaintenancePlanUrl',
+        import.meta.env.VITE_UPSERT_MAINTENANCE_PLAN_URL,
       ),
     }),
     [getEndpoint],
@@ -844,36 +1053,77 @@ export function DailyOperationsView({
     return null
   }, [agentById, maintenancePlansByDate, selectedVisit, t])
 
+  const loadVisitTypes = useCallback(async () => {
+    if (!endpoints.visitTypes) {
+      return
+    }
+    const typesPayload = await getReferenceList(endpoints.visitTypes)
+    setVisitTypes(
+      (typesPayload.items ?? [])
+        .map(mapVisitType)
+        .filter((type) => type.id),
+    )
+  }, [endpoints.visitTypes])
+
   const loadReferenceData = useCallback(async () => {
     if (!endpoints.teams || !endpoints.users || !endpoints.visitTypes) {
       setError(t('operations.missingOperationsEndpoints'))
-      return
     }
-    const [teamsPayload, usersPayload, typesPayload] = await Promise.all([
-      getReferenceList(endpoints.teams),
-      getReferenceList(endpoints.users),
-      getReferenceList(endpoints.visitTypes),
+    const [teamsResult, usersResult, typesResult] = await Promise.allSettled([
+      endpoints.teams
+        ? getReferenceList(endpoints.teams)
+        : Promise.reject(new Error('missing teams')),
+      endpoints.users
+        ? getReferenceList(endpoints.users)
+        : Promise.reject(new Error('missing users')),
+      endpoints.visitTypes
+        ? getReferenceList(endpoints.visitTypes)
+        : Promise.reject(new Error('missing visit types')),
     ])
-    setTeams((teamsPayload.items ?? []).map(mapTeam))
-    setUsers((usersPayload.items ?? []).map(mapUser))
-    setVisitTypes((typesPayload.items ?? []).map(mapVisitType))
+    if (teamsResult.status === 'fulfilled') {
+      setTeams(
+        (teamsResult.value.items ?? [])
+          .map(mapTeam)
+          .filter((team) => team.id),
+      )
+    }
+    if (usersResult.status === 'fulfilled') {
+      setUsers(
+        (usersResult.value.items ?? [])
+          .map(mapUser)
+          .filter((user) => user.id),
+      )
+    }
+    if (typesResult.status === 'fulfilled') {
+      setVisitTypes(
+        (typesResult.value.items ?? [])
+          .map(mapVisitType)
+          .filter((type) => type.id),
+      )
+    } else if (endpoints.visitTypes) {
+      setError(t('operations.unableLoadVisitTypes'))
+    }
 
     if (propertyOptionsProp.length === 0 && endpoints.properties) {
-      const propertiesPayload = await fetchJson<{ items?: Record<string, unknown>[] }>(
-        endpoints.properties,
-      )
-      const mapped = (propertiesPayload.items ?? [])
-        .map(mapProperty)
-        .filter((row) => row.id)
-        .filter((row) => {
-          const source = propertiesPayload.items?.find(
-            (item) => String(item.id) === row.id,
-          )
-          return source?.active !== false
-        })
-      setPropertyOptions(mapped)
+      try {
+        const propertiesPayload = await fetchJson<{
+          items?: Record<string, unknown>[]
+        }>(endpoints.properties)
+        const mapped = (propertiesPayload.items ?? [])
+          .map(mapProperty)
+          .filter((row) => row.id)
+          .filter((row) => {
+            const source = propertiesPayload.items?.find(
+              (item) => String(item.id) === row.id,
+            )
+            return source?.active !== false
+          })
+        setPropertyOptions(mapped)
+      } catch {
+        // Properties usually come from the parent catalog.
+      }
     }
-  }, [endpoints, propertyOptionsProp.length])
+  }, [endpoints, propertyOptionsProp.length, t])
 
   const loadVisits = useCallback(async () => {
     if (!endpoints.visits) {
@@ -1174,11 +1424,14 @@ export function DailyOperationsView({
         if (cancelled) {
           return
         }
-        setCleanerById(linkedPersonById(payload.items ?? []))
+        const items = payload.items ?? []
+        setCleanerById(linkedPersonById(items))
+        setCleanerOptions(activeLinkedPeople(items))
       })
       .catch(() => {
         if (!cancelled) {
           setCleanerById(new Map())
+          setCleanerOptions([])
         }
       })
     return () => {
@@ -1199,11 +1452,14 @@ export function DailyOperationsView({
         if (cancelled) {
           return
         }
-        setAgentById(linkedPersonById(payload.items ?? []))
+        const items = payload.items ?? []
+        setAgentById(linkedPersonById(items))
+        setAgentOptions(activeLinkedPeople(items))
       })
       .catch(() => {
         if (!cancelled) {
           setAgentById(new Map())
+          setAgentOptions([])
         }
       })
     return () => {
@@ -1409,6 +1665,11 @@ export function DailyOperationsView({
     setLoadedTemplatePropertyId('')
     setCreateTemplatesLoading(false)
     setIsVisitFormOpen(true)
+    if (visitTypes.length === 0) {
+      void loadVisitTypes().catch(() => {
+        setError(t('operations.unableLoadVisitTypes'))
+      })
+    }
   }
 
   const openFilters = () => {
@@ -1437,6 +1698,11 @@ export function DailyOperationsView({
     setLoadedTemplatePropertyId('')
     setCreateTemplatesLoading(false)
     setIsVisitFormOpen(true)
+    if (visitTypes.length === 0) {
+      void loadVisitTypes().catch(() => {
+        setError(t('operations.unableLoadVisitTypes'))
+      })
+    }
   }
 
   const goToDayView = (date: string) => {
@@ -1455,6 +1721,7 @@ export function DailyOperationsView({
       visitTypeId: current.visitTypeId || template.visitTypeId,
       teamId: template.teamId,
       assignedUserId: template.assignedUserId,
+      planAssigneeId: '',
       scheduledStartTime: template.scheduledStartTime,
       scheduledEndTime: template.scheduledEndTime,
       title: template.title,
@@ -1514,6 +1781,7 @@ export function DailyOperationsView({
       visitTypeId: visit.visitTypeId,
       teamId: visit.teamId,
       assignedUserId: visit.assignedUserId,
+      planAssigneeId: '',
       scheduledDate: visit.scheduledDate,
       scheduledStartTime: visit.scheduledStartTime,
       scheduledEndTime: visit.scheduledEndTime,
@@ -1568,6 +1836,7 @@ export function DailyOperationsView({
         ? {
             description: '',
             assignedUserId: '',
+            planAssigneeId: '',
             scheduledStartTime: '11:00',
             scheduledEndTime: '12:00',
           }
@@ -1652,6 +1921,43 @@ export function DailyOperationsView({
           const withoutDuplicate = current.filter((visit) => visit.id !== mapped.id)
           return [...withoutDuplicate, mapped]
         })
+        const planAssigneeId = visitForm.planAssigneeId.trim()
+        const planKind = planAssigneeKindForVisitType(
+          visitForm.visitTypeId,
+          visitType,
+          teams,
+        )
+        if (planAssigneeId && planKind) {
+          try {
+            await saveAssignedVisitOnPlan({
+              kind: planKind,
+              visit: mapped,
+              assigneeId: planAssigneeId,
+              cleaningPlan: endpoints.cleaningPlan,
+              upsertCleaningPlan: endpoints.upsertCleaningPlan,
+              maintenancePlan: endpoints.maintenancePlan,
+              upsertMaintenancePlan: endpoints.upsertMaintenancePlan,
+            })
+            const date = mapped.scheduledDate.trim()
+            if (planKind === 'cleaner') {
+              cleaningPlanInflight.current.delete(date)
+              setCleaningPlansByDate((current) => {
+                const next = { ...current }
+                delete next[date]
+                return next
+              })
+            } else {
+              maintenancePlanInflight.current.delete(date)
+              setMaintenancePlansByDate((current) => {
+                const next = { ...current }
+                delete next[date]
+                return next
+              })
+            }
+          } catch {
+            setError(t('operations.unableAssignPlanResource'))
+          }
+        }
       }
 
       if (!isCreatingVisit && endpoints.upsertTask) {
@@ -3434,7 +3740,9 @@ export function DailyOperationsView({
 
       {isVisitFormOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal modal-wide modal-scrollable">
+          <div
+            className={`modal modal-wide modal-scrollable${isCreatingVisit ? ' visit-create-modal' : ''}`}
+          >
             <div className="modal-header">
               <h3 className="modal-title">
                 {visitForm.id ? t('operations.editVisit') : t('operations.createVisit')}
@@ -3474,6 +3782,7 @@ export function DailyOperationsView({
                         ...current,
                         propertyId,
                         assignedUserId: '',
+                        planAssigneeId: '',
                         description: '',
                         scheduledStartTime: '11:00',
                         scheduledEndTime: '12:00',
@@ -3500,6 +3809,7 @@ export function DailyOperationsView({
                 {t('operations.visitType')}
                 <select
                   value={visitForm.visitTypeId}
+                  required={isCreatingVisit}
                   onChange={(event) => handleVisitTypeChange(event.target.value)}
                 >
                   <option value="">{t('operations.selectType')}</option>
@@ -3510,6 +3820,39 @@ export function DailyOperationsView({
                   ))}
                 </select>
               </label>
+              {isCreatingVisit && sortedVisitTypes.length === 0 ? (
+                <p className="subtitle">{t('operations.unableLoadVisitTypes')}</p>
+              ) : null}
+              {isCreatingVisit && createVisitPlanAssigneeKind ? (
+                <label>
+                  {createVisitPlanAssigneeKind === 'cleaner'
+                    ? t('cleaningPlan.cleaner')
+                    : t('maintenancePlan.agent')}
+                  <select
+                    value={visitForm.planAssigneeId}
+                    onChange={(event) =>
+                      setVisitForm((current) => ({
+                        ...current,
+                        planAssigneeId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      {createVisitPlanAssigneeKind === 'cleaner'
+                        ? t('cleaningPlan.selectCleaner')
+                        : t('maintenancePlan.selectAgent')}
+                    </option>
+                    {(createVisitPlanAssigneeKind === 'cleaner'
+                      ? cleanerOptions
+                      : agentOptions
+                    ).map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {createVisitTemplates.length > 0 ? (
                 <label>
                   {t('operations.useTemplate')}

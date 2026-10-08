@@ -3970,6 +3970,14 @@ th {
   margin-top: 0;
 }
 
+.modal-scrollable.visit-create-modal {
+  overflow: visible;
+}
+
+.modal-scrollable.visit-create-modal .modal-body {
+  overflow: visible;
+}
+
 .template-tasks-editor h4 {
   margin: 0 0 12px;
 }

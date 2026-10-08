@@ -1274,6 +1274,8 @@
     "unableLoadVisits": "Unable to load visits.",
     "unableLoadTasks": "Unable to load tasks.",
     "unableSaveVisit": "Unable to save visit.",
+    "unableLoadVisitTypes": "Unable to load visit types.",
+    "unableAssignPlanResource": "The visit was created, but the cleaner or agent could not be assigned to the day plan.",
     "unableSaveTask": "Unable to save task.",
     "priorityLow": "Low",
     "priorityMedium": "Medium",

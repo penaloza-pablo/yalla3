@@ -1274,6 +1274,8 @@
     "unableLoadVisits": "No se pudieron cargar las visitas.",
     "unableLoadTasks": "No se pudieron cargar las tareas.",
     "unableSaveVisit": "No se pudo guardar la visita.",
+    "unableLoadVisitTypes": "No se pudieron cargar los tipos de visita.",
+    "unableAssignPlanResource": "La visita se creó, pero no se pudo asignar el cleaner o el agente al plan del día.",
     "unableSaveTask": "No se pudo guardar la tarea.",
     "priorityLow": "Baja",
     "priorityMedium": "Media",
