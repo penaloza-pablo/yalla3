@@ -100,8 +100,6 @@ import { processSlackHoy } from './functions/process-slack-hoy/resource';
 import { notifyCleaningOverdue } from './functions/notify-cleaning-overdue/resource';
 import { getSlackNotifications } from './functions/get-slack-notifications/resource';
 import { upsertSlackNotification } from './functions/upsert-slack-notification/resource';
-import { getYallaServices } from './functions/get-yalla-services/resource';
-import { diagnoseYallaServices } from './functions/diagnose-yalla-services/resource';
 
 const backend = defineBackend({
   auth,
@@ -190,8 +188,6 @@ const backend = defineBackend({
   notifyCleaningOverdue,
   getSlackNotifications,
   upsertSlackNotification,
-  getYallaServices,
-  diagnoseYallaServices,
 });
 
 const userPoolId = backend.auth.resources.userPool.userPoolId;
@@ -276,8 +272,6 @@ const lambdaFunctionsWithHttp = [
   backend.getTodaySummary,
   backend.getSlackNotifications,
   backend.upsertSlackNotification,
-  backend.getYallaServices,
-  backend.diagnoseYallaServices,
 ];
 
 for (const lambdaFunction of lambdaFunctionsWithHttp) {
@@ -598,7 +592,6 @@ for (const fn of [
   backend.applyBookingsPlanner,
   backend.upsertBookingPlannerFields,
   backend.getPropertyReport,
-  backend.diagnoseYallaServices,
 ]) {
   const lambdaFn = fn.resources.lambda as LambdaFunction;
   lambdaFn.addLayers(guestyAuthLayer);
@@ -1121,7 +1114,6 @@ const activityLogWriters = [
   backend.upsertMaintenancePlan,
   backend.upsertMaintenanceAgent,
   backend.upsertSlackNotification,
-  backend.diagnoseYallaServices,
 ];
 for (const lambdaFunction of activityLogWriters) {
   lambdaFunction.addEnvironment('LOGS_TABLE', activityLogsTable.tableName);
@@ -1433,41 +1425,75 @@ for (const lambdaFunction of slackNotificationReaders) {
 slackNotificationsTable.grantReadWriteData(
   backend.notifyCleaningOverdue.resources.lambda,
 );
-const yallaServiceHealthTable = new Table(dataStack, 'YallaServiceHealthTable', {
-  tableName: 'yalla-service-health',
-  partitionKey: { name: 'serviceId', type: AttributeType.STRING },
-  billingMode: BillingMode.PAY_PER_REQUEST,
-  removalPolicy: RemovalPolicy.RETAIN,
-});
-backend.getYallaServices.addEnvironment(
-  'TABLE_NAME',
-  yallaServiceHealthTable.tableName,
+const yallaServiceHealthTable = new Table(
+  jobSchedulerStack,
+  'YallaServiceHealthTable',
+  {
+    tableName: 'yalla-service-health',
+    partitionKey: { name: 'serviceId', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
 );
-backend.diagnoseYallaServices.addEnvironment(
-  'TABLE_NAME',
-  yallaServiceHealthTable.tableName,
+const getYallaServicesFn = new NodejsFunction(
+  jobSchedulerStack,
+  'GetYallaServices',
+  {
+    entry: path.join(jobSchedulerHandlerRoot, 'get-yalla-services/handler.ts'),
+    handler: 'handler',
+    runtime: Runtime.NODEJS_22_X,
+    timeout: Duration.seconds(20),
+    memorySize: 512,
+    depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+    bundling: jobSchedulerBundling,
+    environment: {
+      ...jobSchedulerAuthEnv,
+      TABLE_NAME: yallaServiceHealthTable.tableName,
+    },
+  },
 );
-yallaServiceHealthTable.grantReadData(backend.getYallaServices.resources.lambda);
-yallaServiceHealthTable.grantReadWriteData(
-  backend.diagnoseYallaServices.resources.lambda,
+const notifyCleaningOverdueName =
+  'amplify-dd8kh4wy2zlme-mai-NotifyCleaningOverduelam-czGCjJ6pMMkJ';
+const notifyCleaningOverdueArn = `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:${notifyCleaningOverdueName}`;
+const diagnoseYallaServicesFn = new NodejsFunction(
+  jobSchedulerStack,
+  'DiagnoseYallaServices',
+  {
+    entry: path.join(
+      jobSchedulerHandlerRoot,
+      'diagnose-yalla-services/handler.ts',
+    ),
+    handler: 'handler',
+    runtime: Runtime.NODEJS_22_X,
+    timeout: Duration.seconds(120),
+    memorySize: 512,
+    depsLockFilePath: path.join(process.cwd(), 'package-lock.json'),
+    bundling: jobSchedulerBundling,
+    environment: {
+      ...jobSchedulerAuthEnv,
+      TABLE_NAME: yallaServiceHealthTable.tableName,
+      SLACK_SECRET_ID: 'yalla/slack',
+      SLACK_NOTIFICATIONS_TABLE: slackNotificationsTable.tableName,
+      LOGS_TABLE: activityLogsTable.tableName,
+      BOOKINGS_RECEIVER_FUNCTION: 'yalla-bookingsReceiver',
+      TASKS_RECEIVER_FUNCTION: 'yalla-tasksReceiver',
+      SYNC_TASK_TO_GUESTY_FUNCTION: 'yalla-syncTaskToGuesty',
+      OPS_TABLES: 'yalla-bookings,yalla-visits,yalla-tasks,yalla-properties',
+      APP_BASE_URL: 'https://main.dd8kh4wy2zlme.amplifyapp.com',
+      NOTIFY_CLEANING_OVERDUE_FUNCTION: notifyCleaningOverdueName,
+      RECEIVE_AKILES_FUNCTION: receiveAkilesEventsFn.functionName,
+    },
+  },
 );
-backend.diagnoseYallaServices.addEnvironment(
-  'SLACK_NOTIFICATIONS_TABLE',
-  slackNotificationsTable.tableName,
-);
-slackNotificationsTable.grantReadData(
-  backend.diagnoseYallaServices.resources.lambda,
-);
-slackSecret.grantRead(backend.diagnoseYallaServices.resources.lambda);
-backend.diagnoseYallaServices.addEnvironment(
-  'NOTIFY_CLEANING_OVERDUE_FUNCTION',
-  backend.notifyCleaningOverdue.resources.lambda.functionName,
-);
-backend.diagnoseYallaServices.addEnvironment(
-  'RECEIVE_AKILES_FUNCTION',
-  receiveAkilesEventsFn.functionName,
-);
-backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
+yallaServiceHealthTable.grantReadData(getYallaServicesFn);
+yallaServiceHealthTable.grantReadWriteData(diagnoseYallaServicesFn);
+slackNotificationsTable.grantReadData(diagnoseYallaServicesFn);
+slackSecret.grantRead(diagnoseYallaServicesFn);
+activityLogsTable.grantWriteData(diagnoseYallaServicesFn);
+diagnoseYallaServicesFn.addLayers(guestyAuthLayer);
+diagnoseYallaServicesFn.addToRolePolicy(guestySecretsPolicy);
+diagnoseYallaServicesFn.addToRolePolicy(guestySsmPolicy);
+diagnoseYallaServicesFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['lambda:GetFunctionConfiguration'],
     resources: [
@@ -1477,14 +1503,14 @@ backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
       `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:yalla-tasksReceiver:*`,
       `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:yalla-syncTaskToGuesty`,
       `arn:aws:lambda:${Aws.REGION}:${Aws.ACCOUNT_ID}:function:yalla-syncTaskToGuesty:*`,
-      backend.notifyCleaningOverdue.resources.lambda.functionArn,
-      `${backend.notifyCleaningOverdue.resources.lambda.functionArn}:*`,
+      notifyCleaningOverdueArn,
+      `${notifyCleaningOverdueArn}:*`,
       receiveAkilesEventsFn.functionArn,
       `${receiveAkilesEventsFn.functionArn}:*`,
     ],
   }),
 );
-backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
+diagnoseYallaServicesFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['lambda:InvokeFunction'],
     resources: [
@@ -1499,7 +1525,7 @@ backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
     ],
   }),
 );
-backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
+diagnoseYallaServicesFn.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:DescribeTable'],
     resources: [
@@ -1511,7 +1537,7 @@ backend.diagnoseYallaServices.resources.lambda.addToRolePolicy(
   }),
 );
 const yallaServicesScheduleRole = new Role(
-  dataStack,
+  jobSchedulerStack,
   'YallaServicesDiagnoseScheduleRole',
   {
     assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
@@ -1521,21 +1547,27 @@ yallaServicesScheduleRole.addToPolicy(
   new PolicyStatement({
     actions: ['lambda:InvokeFunction'],
     resources: [
-      backend.diagnoseYallaServices.resources.lambda.functionArn,
-      `${backend.diagnoseYallaServices.resources.lambda.functionArn}:*`,
+      diagnoseYallaServicesFn.functionArn,
+      `${diagnoseYallaServicesFn.functionArn}:*`,
     ],
   }),
 );
-new CfnSchedule(dataStack, 'YallaServicesDiagnoseThriceDaily', {
+new CfnSchedule(jobSchedulerStack, 'YallaServicesDiagnoseThriceDaily', {
   name: 'yalla-services-diagnose-thrice-daily',
   flexibleTimeWindow: { mode: 'OFF' },
   scheduleExpression: 'cron(0 8,14,20 * * ? *)',
   scheduleExpressionTimezone: 'Europe/Madrid',
   target: {
-    arn: backend.diagnoseYallaServices.resources.lambda.functionArn,
+    arn: diagnoseYallaServicesFn.functionArn,
     roleArn: yallaServicesScheduleRole.roleArn,
     input: JSON.stringify({ source: 'yalla-services-schedule' }),
   },
+});
+const getYallaServicesUrl = getYallaServicesFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+});
+const diagnoseYallaServicesUrl = diagnoseYallaServicesFn.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
 });
 aiAgentsFn.addEnvironment('SLACK_SECRET_ID', 'yalla/slack');
 aiAgentsFn.addEnvironment(
@@ -2658,14 +2690,6 @@ const getSlackNotificationsUrl =
   });
 const upsertSlackNotificationUrl =
   backend.upsertSlackNotification.resources.lambda.addFunctionUrl({
-    authType: FunctionUrlAuthType.NONE,
-  });
-const getYallaServicesUrl =
-  backend.getYallaServices.resources.lambda.addFunctionUrl({
-    authType: FunctionUrlAuthType.NONE,
-  });
-const diagnoseYallaServicesUrl =
-  backend.diagnoseYallaServices.resources.lambda.addFunctionUrl({
     authType: FunctionUrlAuthType.NONE,
   });
 
